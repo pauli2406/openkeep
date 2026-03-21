@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.env.local
+.turbo
+coverage
+dist
+node_modules
+tmp
+data
+openapi.json
+pnpm-lock.yaml
+

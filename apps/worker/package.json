@@ -1,0 +1,21 @@
+{
+  "name": "@openkeep/worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "scripts": {
+    "build": "tsup src/main.ts --format cjs --target node22 --out-dir dist",
+    "dev": "tsx watch src/main.ts",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "echo \"No tests for @openkeep/worker\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.8",
+    "@nestjs/core": "^11.1.8",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  }
+}
+

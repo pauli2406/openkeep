@@ -1,0 +1,12 @@
+{
+  "name": "@openkeep/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"const fs=require('node:fs');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/.keep','mobile placeholder\\n');console.log('Mobile app not implemented yet');\"",
+    "dev": "echo \"Mobile app not implemented yet\"",
+    "lint": "echo \"Mobile app not implemented yet\"",
+    "test": "echo \"Mobile app not implemented yet\"",
+    "typecheck": "echo \"Mobile app not implemented yet\""
+  }
+}

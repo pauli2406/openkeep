@@ -1,0 +1,8 @@
+Example Telecom Ltd.
+Invoice
+Invoice Date: 03/02/2025
+Due Date: 03/20/2025
+Invoice Number: INV-2025-901
+Amount Due: USD 89.90
+Thank you for your business.
+

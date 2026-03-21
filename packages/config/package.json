@@ -1,0 +1,19 @@
+{
+  "name": "@openkeep/config",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --dts",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "echo \"No tests for @openkeep/config\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@openkeep/types": "workspace:*",
+    "zod": "^3.24.1"
+  }
+}
+

@@ -1,0 +1,12 @@
+{
+  "name": "@openkeep/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"const fs=require('node:fs');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/.keep','desktop placeholder\\n');console.log('Desktop app not implemented yet');\"",
+    "dev": "echo \"Desktop app not implemented yet\"",
+    "lint": "echo \"Desktop app not implemented yet\"",
+    "test": "echo \"Desktop app not implemented yet\"",
+    "typecheck": "echo \"Desktop app not implemented yet\""
+  }
+}

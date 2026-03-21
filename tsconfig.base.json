@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": ".",
+    "paths": {
+      "@openkeep/config": ["packages/config/src"],
+      "@openkeep/db": ["packages/db/src"],
+      "@openkeep/types": ["packages/types/src"],
+      "@openkeep/sdk": ["packages/sdk/src"]
+    }
+  }
+}
+

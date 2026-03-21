@@ -1,0 +1,28 @@
+{
+  "name": "openkeep",
+  "private": true,
+  "packageManager": "pnpm@10.26.2",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:api:unit": "pnpm --filter @openkeep/api test:unit",
+    "test:api:integration": "pnpm --filter @openkeep/api test:integration",
+    "test:api:ocr": "pnpm --filter @openkeep/api test:ocr",
+    "typecheck": "turbo run typecheck",
+    "openapi:generate": "pnpm --filter @openkeep/api openapi:generate",
+    "db:migrate": "pnpm --filter @openkeep/db db:migrate"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.13.5",
+    "@types/node": "^24.10.1",
+    "tsup": "^8.3.6",
+    "tsx": "^4.20.6",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3"
+  }
+}
