@@ -1,8 +1,16 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { HealthResponse, ProcessingStatusResponse, ReadinessResponse } from "@openkeep/types";
-import { api } from "@/lib/api";
+import type {
+  Correspondent,
+  DocumentType,
+  HealthResponse,
+  ProcessingStatusResponse,
+  ReadinessResponse,
+  Tag,
+  WatchFolderScanResponse,
+} from "@openkeep/types";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +33,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Key,
   Plus,
   Trash2,
@@ -37,6 +52,15 @@ import {
   Activity,
   Layers,
   RefreshCw,
+  Edit2,
+  Download,
+  Upload,
+  Tags,
+  Users,
+  FileType,
+  Check,
+  X,
+  FolderSearch,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
@@ -65,9 +89,6 @@ interface CreateTokenResponse {
 }
 
 function SettingsPage() {
-  const auth = useAuth();
-  const queryClient = useQueryClient();
-
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       {/* Header */}
@@ -85,6 +106,14 @@ function SettingsPage() {
 
       {/* API Tokens */}
       <ApiTokensSection />
+
+      <Separator />
+
+      <TaxonomyManagementSection />
+
+      <Separator />
+
+      <ArchiveOperationsSection />
 
       <Separator />
 
@@ -441,6 +470,569 @@ function ApiTokensSection() {
               </div>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type TaxonomyEntity = Tag | Correspondent | DocumentType;
+type TaxonomyKind = "tags" | "correspondents" | "document-types";
+
+function TaxonomyManagementSection() {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Layers className="h-5 w-5" />
+          Taxonomy Management
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Curate AI-generated labels for tags, correspondents, and document types.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <TaxonomySection
+          kind="tags"
+          title="Tags"
+          description="Lightweight categories used across the archive."
+        />
+        <TaxonomySection
+          kind="correspondents"
+          title="Correspondents"
+          description="Organizations and people detected as senders or counterparties."
+        />
+        <TaxonomySection
+          kind="document-types"
+          title="Document Types"
+          description="Stable type labels such as invoice, contract, or statement."
+        />
+      </div>
+    </div>
+  );
+}
+
+function TaxonomySection({
+  kind,
+  title,
+  description,
+}: {
+  kind: TaxonomyKind;
+  title: string;
+  description: string;
+}) {
+  const queryClient = useQueryClient();
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+
+  const basePath = `/api/taxonomies/${kind}`;
+
+  const listQuery = useQuery({
+    queryKey: ["taxonomies", kind],
+    queryFn: async () => {
+      const { data, error } = await api.GET(basePath as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, `Failed to load ${title.toLowerCase()}`));
+      }
+      return (data ?? []) as TaxonomyEntity[];
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await api.POST(basePath as never, {
+        body: { name },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, `Failed to create ${title.toLowerCase()}`));
+      }
+    },
+    onSuccess: () => {
+      setNewName("");
+      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (params: { id: string; name: string }) => {
+      const { error } = await api.PATCH(`${basePath}/{id}` as never, {
+        params: { path: { id: params.id } },
+        body: { name: params.name },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, `Failed to update ${title.toLowerCase()}`));
+      }
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      setEditingName("");
+      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await api.DELETE(`${basePath}/{id}` as never, {
+        params: { path: { id } },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, `Failed to delete ${title.toLowerCase()}`));
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
+    },
+  });
+
+  const mergeMutation = useMutation({
+    mutationFn: async (params: { id: string; targetId: string }) => {
+      const { error } = await api.POST(`${basePath}/{id}/merge` as never, {
+        params: { path: { id: params.id } },
+        body: { targetId: params.targetId },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, `Failed to merge ${title.toLowerCase()}`));
+      }
+    },
+    onSuccess: () => {
+      setMergeSourceId(null);
+      setMergeTargetId("");
+      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
+    },
+  });
+
+  const items = listQuery.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form
+          className="flex gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!newName.trim()) {
+              return;
+            }
+            createMutation.mutate(newName.trim());
+          }}
+        >
+          <Input
+            value={newName}
+            onChange={(event) => setNewName(event.target.value)}
+            placeholder={`Create ${title.slice(0, -1).toLowerCase()}...`}
+          />
+          <Button
+            type="submit"
+            disabled={createMutation.isPending || !newName.trim()}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Add
+              </>
+            )}
+          </Button>
+        </form>
+
+        {createMutation.isError && (
+          <p className="text-sm text-destructive">
+            {createMutation.error instanceof Error
+              ? createMutation.error.message
+              : `Failed to create ${title.toLowerCase()}.`}
+          </p>
+        )}
+
+        {listQuery.isLoading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {listQuery.isError && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            Failed to load {title.toLowerCase()}.
+          </div>
+        )}
+
+        {listQuery.isSuccess && items.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            No {title.toLowerCase()} created yet.
+          </p>
+        )}
+
+        {items.length > 0 && (
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.id} className="rounded-lg border p-3">
+                {editingId === item.id ? (
+                  <div className="space-y-3">
+                    <Input
+                      value={editingName}
+                      onChange={(event) => setEditingName(event.target.value)}
+                      aria-label={`${title} name`}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          updateMutation.mutate({
+                            id: item.id,
+                            name: editingName.trim(),
+                          })
+                        }
+                        disabled={updateMutation.isPending || !editingName.trim()}
+                      >
+                        {updateMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditingName("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.slug}
+                        {"description" in item && item.description
+                          ? ` · ${item.description}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingId(item.id);
+                          setEditingName(item.name);
+                        }}
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setMergeSourceId(item.id);
+                          setMergeTargetId(
+                            items.find((candidate) => candidate.id !== item.id)?.id ?? "",
+                          );
+                        }}
+                        disabled={items.length < 2}
+                      >
+                        Merge
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteMutation.mutate(item.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {mergeSourceId === item.id && editingId !== item.id && (
+                  <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
+                    <div className="space-y-2">
+                      <Label>Merge Into</Label>
+                      <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {items
+                            .filter((candidate) => candidate.id !== item.id)
+                            .map((candidate) => (
+                              <SelectItem key={candidate.id} value={candidate.id}>
+                                {candidate.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          mergeMutation.mutate({
+                            id: item.id,
+                            targetId: mergeTargetId,
+                          })
+                        }
+                        disabled={mergeMutation.isPending || !mergeTargetId}
+                      >
+                        {mergeMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          "Confirm Merge"
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setMergeSourceId(null);
+                          setMergeTargetId("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(updateMutation.isError || deleteMutation.isError || mergeMutation.isError) && (
+          <p className="text-sm text-destructive">
+            {updateMutation.error instanceof Error
+              ? updateMutation.error.message
+              : deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : mergeMutation.error instanceof Error
+                  ? mergeMutation.error.message
+                  : `Failed to update ${title.toLowerCase()}.`}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ArchiveOperationsSection() {
+  const [snapshotText, setSnapshotText] = useState("");
+  const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
+  const [watchDryRun, setWatchDryRun] = useState(true);
+  const [lastImportResult, setLastImportResult] = useState<string | null>(null);
+  const [watchResult, setWatchResult] = useState<WatchFolderScanResponse | null>(null);
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.GET("/api/archive/export" as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to export archive"));
+      }
+      return data as Record<string, unknown>;
+    },
+    onSuccess: (data) => {
+      setSnapshotText(JSON.stringify(data, null, 2));
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const snapshot = JSON.parse(snapshotText) as Record<string, unknown>;
+      const { data, error } = await api.POST("/api/archive/import" as never, {
+        body: {
+          mode: importMode,
+          snapshot,
+        },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to import archive"));
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      setLastImportResult(JSON.stringify(data, null, 2));
+    },
+  });
+
+  const watchMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/archive/watch-folder/scan" as never,
+        { body: { dryRun: watchDryRun } } as never,
+      );
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to scan watch folder"));
+      }
+      return data as unknown as WatchFolderScanResponse;
+    },
+    onSuccess: (data) => {
+      setWatchResult(data);
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Archive Portability</CardTitle>
+        <CardDescription>
+          Export snapshots, restore them, and trigger watch-folder ingestion.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
+            {exportMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Export Snapshot
+          </Button>
+          <Button
+            variant={watchDryRun ? "outline" : "secondary"}
+            onClick={() => setWatchDryRun((value) => !value)}
+          >
+            {watchDryRun ? "Dry Run Enabled" : "Dry Run Disabled"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => watchMutation.mutate()}
+            disabled={watchMutation.isPending}
+          >
+            {watchMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            Scan Watch Folder
+          </Button>
+        </div>
+
+        {exportMutation.isError && (
+          <p className="text-sm text-destructive">
+            {exportMutation.error instanceof Error
+              ? exportMutation.error.message
+              : "Failed to export archive."}
+          </p>
+        )}
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="archive-snapshot">Snapshot JSON</Label>
+            <Select
+              value={importMode}
+              onValueChange={(value: "replace" | "merge") => setImportMode(value)}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="replace">Replace</SelectItem>
+                <SelectItem value="merge">Merge</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <textarea
+            id="archive-snapshot"
+            value={snapshotText}
+            onChange={(event) => setSnapshotText(event.target.value)}
+            placeholder="Export a snapshot or paste one here for import"
+            className="min-h-56 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => importMutation.mutate()}
+              disabled={importMutation.isPending || !snapshotText.trim()}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Import Snapshot
+            </Button>
+          </div>
+          {importMutation.isError && (
+            <p className="text-sm text-destructive">
+              {importMutation.error instanceof Error
+                ? importMutation.error.message
+                : "Failed to import archive."}
+            </p>
+          )}
+        </div>
+
+        {lastImportResult && (
+          <div className="space-y-2">
+            <Label>Last Import Result</Label>
+            <pre className="overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono">
+              {lastImportResult}
+            </pre>
+          </div>
+        )}
+
+        {watchResult && (
+          <div className="space-y-3 rounded-lg border p-3">
+            <div>
+              <p className="text-sm font-medium">Watch Folder Scan</p>
+              <p className="text-xs text-muted-foreground">
+                Path: {watchResult.configuredPath}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <QueueCard
+                label="Imported"
+                value={watchResult.importedDocumentIds.length}
+                active={watchResult.importedDocumentIds.length > 0}
+              />
+              <QueueCard
+                label="Skipped"
+                value={watchResult.skippedFiles.length}
+                active={watchResult.skippedFiles.length > 0}
+              />
+              <QueueCard
+                label="Errors"
+                value={watchResult.errors.length}
+                active={watchResult.errors.length > 0}
+                variant="warning"
+              />
+            </div>
+            {(watchResult.skippedFiles.length > 0 || watchResult.errors.length > 0) && (
+              <pre className="overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono">
+                {JSON.stringify(
+                  {
+                    skippedFiles: watchResult.skippedFiles,
+                    errors: watchResult.errors,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {watchMutation.isError && (
+          <p className="text-sm text-destructive">
+            {watchMutation.error instanceof Error
+              ? watchMutation.error.message
+              : "Failed to scan watch folder."}
+          </p>
         )}
       </CardContent>
     </Card>

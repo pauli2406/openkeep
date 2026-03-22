@@ -93,18 +93,49 @@ describe("review smoke", () => {
   });
 });
 
+/** Common MSW handlers for the settings page */
+function settingsHandlers(overrides?: {
+  tags?: unknown[];
+  correspondents?: unknown[];
+  documentTypes?: unknown[];
+}) {
+  return [
+    http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
+    http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json({ tokens: [] })),
+    http.get(apiUrl("/api/taxonomies/tags"), () =>
+      HttpResponse.json(
+        overrides?.tags ?? [{ id: "1", name: "Important", slug: "important" }],
+      ),
+    ),
+    http.get(apiUrl("/api/taxonomies/correspondents"), () =>
+      HttpResponse.json(
+        overrides?.correspondents ?? [{ id: "2", name: "Acme Corp", slug: "acme-corp" }],
+      ),
+    ),
+    http.get(apiUrl("/api/taxonomies/document-types"), () =>
+      HttpResponse.json(
+        overrides?.documentTypes ?? [
+          {
+            id: "3",
+            name: "Invoice",
+            slug: "invoice",
+            description: "Billing documents",
+          },
+        ],
+      ),
+    ),
+    http.get(apiUrl("/api/health/status"), () =>
+      HttpResponse.json(makeProcessingStatusResponse()),
+    ),
+    http.get(apiUrl("/api/health/ready"), () =>
+      HttpResponse.json(makeReadinessResponse()),
+    ),
+  ];
+}
+
 describe("settings smoke", () => {
   it("renders processing activity and system health data without raw object output", async () => {
-    server.use(
-      http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
-      http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json({ tokens: [] })),
-      http.get(apiUrl("/api/health/status"), () =>
-        HttpResponse.json(makeProcessingStatusResponse()),
-      ),
-      http.get(apiUrl("/api/health/ready"), () =>
-        HttpResponse.json(makeReadinessResponse()),
-      ),
-    );
+    server.use(...settingsHandlers());
 
     renderAuthenticatedApp({
       route: "/settings",
@@ -115,6 +146,8 @@ describe("settings smoke", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Processing Activity")).toBeInTheDocument();
     expect(screen.getByText("System Health")).toBeInTheDocument();
+    expect(screen.getByText("Taxonomy Management")).toBeInTheDocument();
+    expect(screen.getByText("Archive Portability")).toBeInTheDocument();
     expect(await screen.findByText("OCR Queue")).toBeInTheDocument();
     expect(await screen.findByText("Readiness Checks")).toBeInTheDocument();
     expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();
@@ -124,6 +157,9 @@ describe("settings smoke", () => {
     server.use(
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
       http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json({ tokens: [] })),
+      http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([])),
+      http.get(apiUrl("/api/taxonomies/correspondents"), () => HttpResponse.json([])),
+      http.get(apiUrl("/api/taxonomies/document-types"), () => HttpResponse.json([])),
       http.get(apiUrl("/api/health/status"), () =>
         HttpResponse.json(
           { message: "Processing status failed" },
@@ -142,5 +178,166 @@ describe("settings smoke", () => {
     expect(
       await screen.findByText("Failed to load processing status."),
     ).toBeInTheDocument();
+  });
+
+  it("runs a watch-folder scan from settings", async () => {
+    server.use(
+      ...settingsHandlers(),
+      http.post(apiUrl("/api/archive/watch-folder/scan"), async ({ request }) => {
+        const body = (await request.json()) as { dryRun: boolean };
+        expect(body).toEqual({ dryRun: true });
+        return HttpResponse.json({
+          configuredPath: "/watch-folder",
+          importedDocumentIds: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+          skippedFiles: ["duplicate.pdf"],
+          errors: [],
+        });
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: /scan watch folder/i }),
+    );
+
+    expect(await screen.findByText("Watch Folder Scan")).toBeInTheDocument();
+    expect(screen.getByText("Path: /watch-folder")).toBeInTheDocument();
+  });
+
+  it("creates a new tag via taxonomy management", async () => {
+    const createCalls: unknown[] = [];
+
+    server.use(
+      ...settingsHandlers({ tags: [] }),
+      http.post(apiUrl("/api/taxonomies/tags"), async ({ request }) => {
+        const body = await request.json();
+        createCalls.push(body);
+        return HttpResponse.json({
+          id: "new-tag-id",
+          name: (body as { name: string }).name,
+          slug: "urgent",
+        });
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+    });
+
+    expect(await screen.findByText("Taxonomy Management")).toBeInTheDocument();
+
+    const tagInputs = await screen.findAllByPlaceholderText(/create tag/i);
+    await user.type(tagInputs[0], "Urgent");
+    await user.click(screen.getAllByRole("button", { name: /add/i })[0]);
+
+    await waitFor(() => {
+      expect(createCalls).toEqual([{ name: "Urgent" }]);
+    });
+  });
+
+  it("deletes a correspondent via taxonomy management", async () => {
+    const deleteCalls: string[] = [];
+
+    server.use(
+      ...settingsHandlers(),
+      http.delete(apiUrl("/api/taxonomies/correspondents/:id"), ({ params }) => {
+        deleteCalls.push(params.id as string);
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+    });
+
+    expect(await screen.findByText("Acme Corp")).toBeInTheDocument();
+
+    // Find the delete button within the correspondents section
+    const deleteButtons = screen.getAllByRole("button", { name: /delete/i });
+    // The correspondents delete button — Acme Corp is the second taxonomy section
+    // Each taxonomy item has Edit, Merge, Delete buttons
+    // Tags section has "Important" with 3 buttons, correspondents section has "Acme Corp" with 3 buttons
+    // We need the delete button for "Acme Corp"
+    await user.click(deleteButtons[1]);
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual(["2"]);
+    });
+  });
+
+  it("exports and displays the archive snapshot", async () => {
+    server.use(
+      ...settingsHandlers(),
+      http.get(apiUrl("/api/archive/export"), () =>
+        HttpResponse.json({
+          version: 1,
+          exportedAt: "2026-03-22T12:00:00.000Z",
+          documents: [{ id: "doc-1", title: "Test Document" }],
+          taxonomies: { tags: [], correspondents: [], documentTypes: [] },
+        }),
+      ),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+    });
+
+    expect(await screen.findByText("Archive Portability")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /export snapshot/i }));
+
+    // The exported JSON should be displayed in the textarea
+    await waitFor(() => {
+      const textarea = screen.getByPlaceholderText(
+        /export a snapshot or paste one here/i,
+      ) as HTMLTextAreaElement;
+      expect(textarea.value).toContain('"version": 1');
+      expect(textarea.value).toContain('"Test Document"');
+    });
+  });
+
+  it("imports an archive snapshot and shows the result", async () => {
+    const importCalls: unknown[] = [];
+
+    server.use(
+      ...settingsHandlers(),
+      http.post(apiUrl("/api/archive/import"), async ({ request }) => {
+        const body = await request.json();
+        importCalls.push(body);
+        return HttpResponse.json({
+          imported: 1,
+          skipped: 0,
+          errors: [],
+        });
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+    });
+
+    expect(await screen.findByText("Archive Portability")).toBeInTheDocument();
+
+    const textarea = screen.getByPlaceholderText(
+      /export a snapshot or paste one here/i,
+    ) as HTMLTextAreaElement;
+
+    const snapshotJson = JSON.stringify({ version: 1, documents: [] });
+    await user.clear(textarea);
+    // user.type() interprets `{` as a keyboard modifier; use click + paste instead
+    await user.click(textarea);
+    await user.paste(snapshotJson);
+
+    await user.click(screen.getByRole("button", { name: /import snapshot/i }));
+
+    await waitFor(() => {
+      expect(importCalls.length).toBe(1);
+      expect((importCalls[0] as { mode: string }).mode).toBe("replace");
+    });
+
+    expect(await screen.findByText("Last Import Result")).toBeInTheDocument();
   });
 });

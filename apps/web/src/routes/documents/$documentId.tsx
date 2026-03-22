@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { HealthProvidersResponse, ParseProvider } from "@openkeep/types";
+import type {
+  DocumentHistoryResponse,
+  HealthProvidersResponse,
+  ManualOverrideField,
+  ManualOverrides,
+  ParseProvider,
+} from "@openkeep/types";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +53,9 @@ import {
   FileQuestion,
   ScanText,
   Braces,
+  History,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -98,6 +107,7 @@ interface DocumentMetadata {
   chunkCount?: number;
   pageCount?: number;
   reviewEvidence?: ReviewEvidence;
+  manual?: ManualOverrides;
   [key: string]: unknown;
 }
 
@@ -155,6 +165,17 @@ interface TextBlock {
   lineIndex: number;
   boundingBox: { x: number; y: number; width: number; height: number };
   text: string;
+}
+
+interface AuditEvent {
+  id: string;
+  actorUserId: string | null;
+  actorDisplayName?: string | null;
+  actorEmail?: string | null;
+  documentId: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
 }
 
 // --- Helpers ---
@@ -223,6 +244,37 @@ function formatDateTime(dateStr: string | null | undefined): string {
   } catch {
     return dateStr;
   }
+}
+
+function formatManualOverrideField(field: ManualOverrideField): string {
+  switch (field) {
+    case "issueDate":
+      return "Issue Date";
+    case "dueDate":
+      return "Due Date";
+    case "amount":
+      return "Amount";
+    case "currency":
+      return "Currency";
+    case "referenceNumber":
+      return "Reference Number";
+    case "correspondentId":
+      return "Correspondent";
+    case "documentTypeId":
+      return "Document Type";
+    case "tagIds":
+      return "Tags";
+    default:
+      return field;
+  }
+}
+
+function formatHistoryEventType(eventType: string): string {
+  return eventType
+    .split(".")
+    .flatMap((segment) => segment.split("_"))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 type PreviewCategory = "pdf" | "image" | "text" | "video" | "audio" | "unsupported";
@@ -299,6 +351,39 @@ function embeddingProviderLabel(id: string | null | undefined): string {
   return EMBEDDING_PROVIDER_LABELS[id] ?? id;
 }
 
+function renderManualOverrideValue(
+  doc: Document,
+  field: ManualOverrideField,
+): string {
+  switch (field) {
+    case "issueDate":
+      return formatDate(doc.issueDate);
+    case "dueDate":
+      return formatDate(doc.dueDate);
+    case "amount":
+      return doc.amount !== null
+        ? `${doc.amount.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} ${doc.currency ?? ""}`.trim()
+        : "-";
+    case "currency":
+      return doc.currency ?? "-";
+    case "referenceNumber":
+      return doc.referenceNumber ?? "-";
+    case "correspondentId":
+      return doc.correspondent?.name ?? "Removed";
+    case "documentTypeId":
+      return doc.documentType?.name ?? "Removed";
+    case "tagIds":
+      return doc.tags.length > 0
+        ? doc.tags.map((tag) => tag.name).join(", ")
+        : "No tags";
+    default:
+      return "-";
+  }
+}
+
 // --- Component ---
 
 function DocumentDetailPage() {
@@ -341,6 +426,18 @@ function DocumentDetailPage() {
       });
       if (error) throw new Error("Failed to load document text");
       return data as unknown as { documentId: string; blocks: TextBlock[] };
+    },
+    enabled: documentQuery.isSuccess,
+  });
+
+  const historyQuery = useQuery({
+    queryKey: ["document-history", documentId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/documents/{id}/history" as never, {
+        params: { path: { id: documentId } },
+      } as never);
+      if (error) throw new Error("Failed to load document history");
+      return data as unknown as DocumentHistoryResponse;
     },
     enabled: documentQuery.isSuccess,
   });
@@ -469,6 +566,23 @@ function DocumentDetailPage() {
     },
   });
 
+  const clearOverrideMutation = useMutation({
+    mutationFn: async (field: ManualOverrideField) => {
+      const { data, error } = await api.PATCH("/api/documents/{id}" as never, {
+        params: { path: { id: documentId } },
+        body: { clearLockedFields: [field] },
+      } as never);
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to clear manual override"));
+      }
+      return data as unknown as Document;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
+    },
+  });
+
   // --- Handlers ---
 
   function startEditing() {
@@ -561,6 +675,8 @@ function DocumentDetailPage() {
   }
 
   const doc = documentQuery.data;
+  const manualOverrides = doc.metadata.manual;
+  const lockedFields = manualOverrides?.lockedFields ?? [];
 
   // Group text blocks by page
   const textBlocksByPage: Record<number, TextBlock[]> = {};
@@ -625,6 +741,10 @@ function DocumentDetailPage() {
               <TabsTrigger value="details" className="gap-1.5">
                 <Hash className="h-3.5 w-3.5" />
                 Details
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1.5">
+                <History className="h-3.5 w-3.5" />
+                History
               </TabsTrigger>
             </TabsList>
 
@@ -812,6 +932,58 @@ function DocumentDetailPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="history">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Document History</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {historyQuery.isLoading && (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {historyQuery.isError && (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                      Failed to load document history.
+                    </div>
+                  )}
+                  {historyQuery.isSuccess && historyQuery.data.items.length === 0 && (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No audit events recorded for this document yet.
+                    </p>
+                  )}
+                  {historyQuery.data?.items.map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {formatHistoryEventType(event.eventType)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {event.actorDisplayName ||
+                              event.actorEmail ||
+                              "System"}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(event.createdAt)}
+                        </p>
+                      </div>
+                      {Object.keys(event.payload ?? {}).length > 0 && (
+                        <pre className="mt-3 overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono leading-relaxed">
+                          {JSON.stringify(event.payload, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </div>
 
@@ -891,7 +1063,24 @@ function DocumentDetailPage() {
               <div className="flex items-start gap-2">
                 <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Issue Date</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Issue Date</p>
+                    {lockedFields.includes("issueDate") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("issueDate")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
                   {isEditing ? (
                     <Input
                       type="date"
@@ -909,7 +1098,24 @@ function DocumentDetailPage() {
               <div className="flex items-start gap-2">
                 <Clock className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Due Date</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Due Date</p>
+                    {lockedFields.includes("dueDate") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("dueDate")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
                   {isEditing ? (
                     <Input
                       type="date"
@@ -927,7 +1133,27 @@ function DocumentDetailPage() {
               <div className="flex items-start gap-2">
                 <DollarSign className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Amount</p>
+                    {(lockedFields.includes("amount") || lockedFields.includes("currency")) && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => {
+                            if (lockedFields.includes("amount")) clearOverrideMutation.mutate("amount");
+                            if (lockedFields.includes("currency")) clearOverrideMutation.mutate("currency");
+                          }}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
                   {isEditing ? (
                     <div className="flex gap-2 mt-1">
                       <Input
@@ -962,7 +1188,24 @@ function DocumentDetailPage() {
               <div className="flex items-start gap-2">
                 <Hash className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
-                  <p className="text-xs text-muted-foreground">Reference Number</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Reference Number</p>
+                    {lockedFields.includes("referenceNumber") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("referenceNumber")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
                   {isEditing ? (
                     <Input
                       value={editForm.referenceNumber}
@@ -992,6 +1235,66 @@ function DocumentDetailPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Manual Overrides</p>
+                    <p className="text-sm font-medium">
+                      {lockedFields.length > 0
+                        ? `${lockedFields.length} field${lockedFields.length === 1 ? "" : "s"} locked`
+                        : "None"}
+                    </p>
+                  </div>
+                  {manualOverrides?.updatedAt && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatDateTime(manualOverrides.updatedAt)}
+                    </span>
+                  )}
+                </div>
+
+                {lockedFields.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Edits to supported fields create sticky manual overrides that survive reprocessing.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {lockedFields.map((field) => (
+                      <div
+                        key={field}
+                        className="flex items-start justify-between gap-3 rounded-md border px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {formatManualOverrideField(field)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {renderManualOverrideValue(doc, field)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => clearOverrideMutation.mutate(field)}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    ))}
+                    {clearOverrideMutation.isError && (
+                      <p className="text-xs text-destructive">
+                        {clearOverrideMutation.error instanceof Error
+                          ? clearOverrideMutation.error.message
+                          : "Failed to clear manual override."}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <Separator />

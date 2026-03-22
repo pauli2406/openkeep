@@ -8,6 +8,7 @@ flowchart TD
     API --> Auth["Auth Service"]
     API --> Docs["Documents Service"]
     API --> Search["Search API"]
+    API --> ArchiveApi["Archive API"]
     API --> Health["Health / Metrics"]
 
     Docs --> DB[("PostgreSQL")]
@@ -48,7 +49,9 @@ flowchart TD
     API --> Download["Original / searchable download"]
     Download --> S3
     Search --> Hybrid["Hybrid semantic ranking"]
+    Search --> Answer["Grounded answer provider"]
     Hybrid --> DB
+    Answer --> DB
 ```
 
 ## Runtime Components
@@ -81,7 +84,7 @@ flowchart TD
   - `google-gemini`
   - `voyage`
   - `mistral`
-- Answer provider interface exists but is currently backed by a no-op implementation.
+- Answer provider interface is backed by an extractive grounded-answer implementation over semantic retrieval results.
 - Config supports one globally active parse provider plus an optional fallback provider for hard failures.
 - Config supports one globally active embedding provider and explicit model selection for semantic indexing.
 
@@ -146,6 +149,7 @@ flowchart TD
   - vector similarity over chunk embeddings
   - weighted reciprocal rank fusion
 - Semantic responses stay document-centric and include matched chunks as explainability data.
+- `POST /api/search/answer` reuses the retrieval stack, returns grounded citations, and can explicitly decline to answer when evidence is too weak.
 - Embedding summary fields on documents include:
   - `embeddingStatus`
   - `embeddingProvider`
@@ -161,11 +165,14 @@ flowchart TD
 - Processing lifecycle status is limited to `pending`, `processing`, `ready`, and `failed`.
 - Review state is persisted separately with `reviewStatus`, `reviewReasons`, `reviewedAt`, and `reviewNote`.
 - Documents expose structured `metadata.reviewEvidence` so review callers can inspect missing invoice fields, OCR text length, thresholds, and active review reasons.
-- Documents also expose `parseProvider`, `chunkCount`, embedding summaries, and provider-aware `metadata.parse` / `metadata.chunking` namespaces for future debugging and review UI.
+- Documents also expose `parseProvider`, `chunkCount`, embedding summaries, provider-aware `metadata.parse` / `metadata.chunking` namespaces, and `metadata.manual` for sticky user overrides.
 - `GET /api/documents/review` returns the review queue.
+- `GET /api/documents/:id/history` returns audit history for document lifecycle and user changes.
 - `POST /api/documents/:id/review/resolve` marks manual review complete.
 - `POST /api/documents/:id/review/requeue` clears review state and publishes a fresh processing job.
 - `GET /api/documents/:id/download/searchable` returns the derived searchable PDF when one exists.
+- `GET /api/archive/export`, `POST /api/archive/import`, and `POST /api/archive/watch-folder/scan` expose portability and automated-ingestion primitives.
+- `GET/POST/PATCH/DELETE` plus merge endpoints under `/api/taxonomies/*` expose curation flows for tags, correspondents, and document types.
 - `GET /api/health` exposes provider configuration metadata including the active parse provider, active embedding provider, and available credential-backed capabilities.
 - `GET /api/health/live`, `GET /api/health/ready`, and `GET /api/metrics` expose process health and runtime metrics.
 - Metrics include processing outcomes, parse outcomes by provider, embedding outcomes by provider, durations, queue depth for both queues, pending-review gauges by reason, and stale-embedding gauges.
@@ -185,6 +192,7 @@ flowchart TD
   - `GET /api/documents`
   - `GET /api/documents/facets`
   - `GET /api/documents/review`
+  - `GET /api/documents/:id/history`
   - `GET /api/documents/:id`
   - `GET /api/documents/:id/text`
   - `GET /api/documents/:id/download`
@@ -199,6 +207,27 @@ flowchart TD
 - Search:
   - `GET /api/search/documents`
   - `POST /api/search/semantic`
+  - `POST /api/search/answer`
+- Taxonomies:
+  - `GET /api/taxonomies/tags`
+  - `POST /api/taxonomies/tags`
+  - `PATCH /api/taxonomies/tags/:id`
+  - `DELETE /api/taxonomies/tags/:id`
+  - `POST /api/taxonomies/tags/:id/merge`
+  - `GET /api/taxonomies/correspondents`
+  - `POST /api/taxonomies/correspondents`
+  - `PATCH /api/taxonomies/correspondents/:id`
+  - `DELETE /api/taxonomies/correspondents/:id`
+  - `POST /api/taxonomies/correspondents/:id/merge`
+  - `GET /api/taxonomies/document-types`
+  - `POST /api/taxonomies/document-types`
+  - `PATCH /api/taxonomies/document-types/:id`
+  - `DELETE /api/taxonomies/document-types/:id`
+  - `POST /api/taxonomies/document-types/:id/merge`
+- Archive:
+  - `GET /api/archive/export`
+  - `POST /api/archive/import`
+  - `POST /api/archive/watch-folder/scan`
 - Ops:
   - `GET /api/health`
   - `GET /api/health/live`
@@ -220,6 +249,6 @@ flowchart TD
 
 ## Remaining Backend Gaps
 
-- Answer generation is still not implemented.
 - Retrieval evaluation is present in test coverage but not yet exposed as a dedicated operator-facing benchmark command.
-- Web, mobile, and desktop clients are still future phases on top of this backend.
+- Email ingestion, workflow automation, and richer custom fields are still future phases.
+- Mobile and desktop clients are still future phases on top of the current backend and web app.

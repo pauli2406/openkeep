@@ -1,18 +1,18 @@
 # OpenKeep
 
-OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation delivers the backend foundation first: a NestJS API, async processing worker, PostgreSQL plus pgvector, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, chunk-level embeddings, hybrid semantic search, and the monorepo layout for the future web, mobile, and desktop clients.
+OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation includes a NestJS API, async processing worker, PostgreSQL plus pgvector, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, chunk-level embeddings, grounded document Q&A, archive governance flows, and a connected web client on top of the backend APIs.
 
 ## Workspace Layout
 
 - `apps/api`: NestJS REST API with auth, document upload, search, and archive metadata APIs.
 - `apps/worker`: background processing worker for OCR and metadata extraction jobs.
-- `apps/web`: reserved placeholder for the future web client.
+- `apps/web`: TanStack Router web client for search, review, document detail, admin settings, and archive operations.
 - `apps/mobile`: reserved placeholder for the future React Native client.
 - `apps/desktop`: reserved placeholder for the future Electron client.
 - `packages/config`: shared environment parsing and provider configuration.
 - `packages/db`: Drizzle schema and migrations.
 - `packages/types`: shared Zod schemas and public API types.
-- `packages/sdk`: future generated API client package.
+- `packages/sdk`: generated API client package consumed by the web app.
 
 ## Backend Capabilities
 
@@ -27,12 +27,18 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 - Embedding-provider registry with OpenAI, Gemini, Voyage, and Mistral adapters.
 - Chunk-level embedding storage in PostgreSQL via pgvector-compatible `halfvec`.
 - `POST /api/search/semantic` hybrid search combining structured filters, PostgreSQL full-text search, and vector similarity.
+- `POST /api/search/answer` grounded archive Q&A with chunk-level citations and insufficient-evidence fallback.
 - Manual embedding reindex flows through `POST /api/embeddings/reindex` and `POST /api/documents/:id/reembed`.
 - Explicit review workflow with `reviewStatus`, `reviewReasons`, structured review evidence, resolve/requeue endpoints, and latest processing-job summaries on documents.
+- Manual override persistence for key metadata fields so user corrections survive reprocessing.
+- Document history and audit APIs for upload, review, reprocess, reembed, and metadata changes.
+- Taxonomy CRUD and merge flows for tags, correspondents, and document types.
+- Archive export/import plus watch-folder scan ingestion endpoints.
 - Retry-aware processing with bounded `pg-boss` backoff, structured JSON worker logs, and searchable-PDF artifact storage.
 - PostgreSQL full-text search plus structured filters for year, dates, status, correspondent, document type, and tags.
 - Virtual archive browsing via facet endpoints instead of a real nested folder tree.
 - Ops endpoints for liveness, readiness, Prometheus-style metrics, and a dedicated searchable-PDF download route.
+- Web admin surfaces for answer search, document history, manual overrides, taxonomies, and archive operations.
 
 ## Local Development
 
@@ -42,7 +48,8 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 4. Start infrastructure with `docker compose up postgres minio`.
 5. Run the API with `pnpm --filter @openkeep/api dev`.
 6. Run the worker with `pnpm --filter @openkeep/worker dev`.
-7. Wait for `GET /api/health/ready` to report all checks green before using the stack.
+7. Run the web app with `pnpm --filter @openkeep/web dev`.
+8. Wait for `GET /api/health/ready` to report all checks green before using the stack.
 
 For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`. To enable semantic indexing, also set `ACTIVE_EMBEDDING_PROVIDER` and the matching embedding model/key values.
 
