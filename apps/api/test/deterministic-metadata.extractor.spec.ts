@@ -8,7 +8,7 @@ import { DeterministicMetadataExtractor } from "../src/processing/deterministic-
 const fixturePath = (name: string) =>
   resolve(__dirname, "../../../tests/fixtures", name);
 
-const buildOcrInput = async (name: string) => {
+const buildParsedInput = async (name: string) => {
   const text = await readFile(fixturePath(name), "utf8");
   const lines = text
     .split("\n")
@@ -29,17 +29,24 @@ const buildOcrInput = async (name: string) => {
     documentId: "11111111-1111-1111-1111-111111111111",
     title: name,
     mimeType: "application/pdf",
-    ocr: {
+    parsed: {
+      provider: "local-ocr" as const,
+      parseStrategy: "fixture",
       text,
       language: null,
+      tables: [],
+      keyValues: [],
+      chunkHints: [],
+      warnings: [],
+      providerMetadata: {},
       reviewReasons: [],
-      normalizationStrategy: "fixture",
       pages: [
         {
           pageNumber: 1,
           width: null,
           height: null,
           lines,
+          blocks: [],
         },
       ],
     },
@@ -50,7 +57,7 @@ describe("DeterministicMetadataExtractor", () => {
   const extractor = new DeterministicMetadataExtractor();
 
   it("extracts German invoice metadata and due dates", async () => {
-    const result = await extractor.extract(await buildOcrInput("invoice.de.txt"));
+    const result = await extractor.extract(await buildParsedInput("invoice.de.txt"));
 
     expect(result.documentTypeName).toBe("Invoice");
     expect(result.correspondentName).toBe("Stadtwerke Berlin GmbH");
@@ -63,7 +70,7 @@ describe("DeterministicMetadataExtractor", () => {
   });
 
   it("extracts English invoice metadata", async () => {
-    const result = await extractor.extract(await buildOcrInput("invoice.en.txt"));
+    const result = await extractor.extract(await buildParsedInput("invoice.en.txt"));
 
     expect(result.documentTypeName).toBe("Invoice");
     expect(result.correspondentName).toBe("Example Telecom Ltd.");
@@ -95,17 +102,24 @@ describe("DeterministicMetadataExtractor", () => {
       documentId: "11111111-1111-1111-1111-111111111111",
       title: "missing-currency",
       mimeType: "application/pdf",
-      ocr: {
+      parsed: {
+        provider: "local-ocr",
+        parseStrategy: "fixture",
         text: "Invoice\nExample Energy GmbH\nInvoice Date: 2025-05-03\nPayment reference pending\n",
         language: "en",
+        tables: [],
+        keyValues: [],
+        chunkHints: [],
+        warnings: [],
+        providerMetadata: {},
         reviewReasons: [],
-        normalizationStrategy: "fixture",
         pages: [
           {
             pageNumber: 1,
             width: null,
             height: null,
             lines,
+            blocks: [],
           },
         ],
       },

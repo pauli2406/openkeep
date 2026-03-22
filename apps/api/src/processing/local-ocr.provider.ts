@@ -3,9 +3,13 @@ import { mkdtemp, readFile, readdir } from "fs/promises";
 import { extname, join } from "path";
 import { tmpdir } from "os";
 import { execa } from "execa";
+import type { ParsedDocument } from "@openkeep/types";
 
 import { AppConfigService } from "../common/config/app-config.service";
-import type { OcrInput, OcrPage, OcrProvider, OcrResult } from "./provider.types";
+import type {
+  DocumentParseInput,
+  DocumentParseProvider,
+} from "./provider.types";
 
 interface NormalizedImageSet {
   pageImagePaths: string[];
@@ -13,13 +17,15 @@ interface NormalizedImageSet {
 }
 
 @Injectable()
-export class LocalOcrProvider implements OcrProvider {
+export class LocalDocumentParseProvider implements DocumentParseProvider {
+  readonly provider = "local-ocr" as const;
+
   constructor(@Inject(AppConfigService) private readonly configService: AppConfigService) {}
 
-  async extract(input: OcrInput): Promise<OcrResult> {
+  async parse(input: DocumentParseInput): Promise<ParsedDocument> {
     if (input.mimeType.startsWith("text/")) {
       return this.fromText(await readFile(input.filePath, "utf8"), {
-        normalizationStrategy: "plain-text",
+        parseStrategy: "plain-text",
       });
     }
 
@@ -45,12 +51,20 @@ export class LocalOcrProvider implements OcrProvider {
       );
 
       return {
+        provider: this.provider,
+        parseStrategy: normalized.strategy,
         text,
         language: this.detectLanguage(text),
         pages,
+        tables: [],
+        keyValues: [],
+        chunkHints: [],
         searchablePdfPath,
         reviewReasons: [],
-        normalizationStrategy: normalized.strategy,
+        warnings: [],
+        providerMetadata: {
+          normalizationStrategy: normalized.strategy,
+        },
         temporaryPaths,
       };
     }
@@ -58,7 +72,7 @@ export class LocalOcrProvider implements OcrProvider {
     const fallback = await readFile(input.filePath).catch(() => Buffer.from(""));
     return this.fromText(fallback.toString("utf8"), {
       reviewReasons: ["unsupported_format"],
-      normalizationStrategy: "unsupported-format",
+      parseStrategy: "unsupported-format",
       temporaryPaths,
     });
   }
@@ -66,7 +80,7 @@ export class LocalOcrProvider implements OcrProvider {
   private async tryPdfOcr(
     filePath: string,
     temporaryPaths: string[],
-  ): Promise<OcrResult | null> {
+  ): Promise<ParsedDocument | null> {
     const workingDir = await this.makeTempDir();
     temporaryPaths.push(workingDir);
     const searchablePdfPath = join(workingDir, "searchable.pdf");
@@ -87,7 +101,7 @@ export class LocalOcrProvider implements OcrProvider {
       if (text.trim().length >= this.configService.get("OCR_EMPTY_TEXT_THRESHOLD")) {
         return {
           ...this.fromText(text, {
-            normalizationStrategy: "ocrmypdf-sidecar",
+            parseStrategy: "ocrmypdf-sidecar",
             temporaryPaths,
           }),
           searchablePdfPath,
@@ -110,18 +124,26 @@ export class LocalOcrProvider implements OcrProvider {
       .trim();
 
     return {
+      provider: this.provider,
+      parseStrategy: "pdf-rasterized",
       text,
       language: this.detectLanguage(text),
       pages,
+      tables: [],
+      keyValues: [],
+      chunkHints: [],
       searchablePdfPath,
       reviewReasons: [],
-      normalizationStrategy: "pdf-rasterized",
+      warnings: [],
+      providerMetadata: {
+        normalizationStrategy: "pdf-rasterized",
+      },
       temporaryPaths,
     };
   }
 
   private async normalizeToPageImages(
-    input: OcrInput,
+    input: DocumentParseInput,
     temporaryPaths: string[],
   ): Promise<NormalizedImageSet | null> {
     if (this.isDirectImage(input)) {
@@ -177,8 +199,8 @@ export class LocalOcrProvider implements OcrProvider {
     return null;
   }
 
-  private async ocrPageImages(pageImagePaths: string[]): Promise<OcrPage[]> {
-    const pages: OcrPage[] = [];
+  private async ocrPageImages(pageImagePaths: string[]): Promise<ParsedDocument["pages"]> {
+    const pages: ParsedDocument["pages"] = [];
 
     for (const [index, pageImagePath] of pageImagePaths.entries()) {
       try {
@@ -197,6 +219,7 @@ export class LocalOcrProvider implements OcrProvider {
           width: null,
           height: null,
           lines: [],
+          blocks: [],
         });
       }
     }
@@ -235,25 +258,34 @@ export class LocalOcrProvider implements OcrProvider {
   private fromText(
     text: string,
     options?: {
-      reviewReasons?: OcrResult["reviewReasons"];
-      normalizationStrategy?: string;
+      reviewReasons?: ParsedDocument["reviewReasons"];
+      parseStrategy?: string;
       temporaryPaths?: string[];
+      warnings?: string[];
     },
-  ): OcrResult {
+  ): ParsedDocument {
     const normalized = text.replace(/\r\n/g, "\n").trim();
     const pages = normalized.length === 0 ? [] : this.splitTextIntoPages(normalized);
 
     return {
+      provider: this.provider,
+      parseStrategy: options?.parseStrategy ?? "text-fallback",
       text: normalized,
       language: this.detectLanguage(normalized),
       pages,
+      tables: [],
+      keyValues: [],
+      chunkHints: [],
       reviewReasons: options?.reviewReasons ?? [],
-      normalizationStrategy: options?.normalizationStrategy ?? "text-fallback",
+      warnings: options?.warnings ?? [],
+      providerMetadata: {
+        normalizationStrategy: options?.parseStrategy ?? "text-fallback",
+      },
       temporaryPaths: options?.temporaryPaths ?? [],
     };
   }
 
-  private splitTextIntoPages(text: string): OcrPage[] {
+  private splitTextIntoPages(text: string): ParsedDocument["pages"] {
     return text.split(/\f+/).map((pageText, pageIndex) => {
       const lines = pageText
         .split("\n")
@@ -275,11 +307,22 @@ export class LocalOcrProvider implements OcrProvider {
         width: null,
         height: null,
         lines,
+        blocks: lines.map((line, blockIndex) => ({
+          blockIndex,
+          role: blockIndex === 0 && line.text.length < 160 ? "heading" : "paragraph",
+          text: line.text,
+          boundingBox: line.boundingBox,
+          lineIndices: [line.lineIndex],
+          metadata: {},
+        })),
       };
     });
   }
 
-  private parseSinglePageTesseractTsv(tsv: string, pageNumber: number): OcrPage {
+  private parseSinglePageTesseractTsv(
+    tsv: string,
+    pageNumber: number,
+  ): ParsedDocument["pages"][number] {
     const rows = tsv.split(/\r?\n/).slice(1);
     const grouped = new Map<
       number,
@@ -351,6 +394,22 @@ export class LocalOcrProvider implements OcrProvider {
             height: line.bottom - line.top,
           },
         })),
+      blocks: [...grouped.values()]
+        .sort((a, b) => a.lineIndex - b.lineIndex)
+        .map((line, blockIndex) => ({
+          blockIndex,
+          role:
+            blockIndex === 0 && line.words.join(" ").length < 160 ? "heading" : "paragraph",
+          text: line.words.join(" "),
+          boundingBox: {
+            x: line.left,
+            y: line.top,
+            width: line.right - line.left,
+            height: line.bottom - line.top,
+          },
+          lineIndices: [line.lineIndex],
+          metadata: {},
+        })),
     };
   }
 
@@ -380,11 +439,11 @@ export class LocalOcrProvider implements OcrProvider {
     return germanScore >= englishScore ? "de" : "en";
   }
 
-  private isPdf(input: OcrInput): boolean {
+  private isPdf(input: DocumentParseInput): boolean {
     return input.mimeType === "application/pdf" || extname(input.filename).toLowerCase() === ".pdf";
   }
 
-  private isDirectImage(input: OcrInput): boolean {
+  private isDirectImage(input: DocumentParseInput): boolean {
     return [
       "image/jpeg",
       "image/png",
@@ -393,11 +452,11 @@ export class LocalOcrProvider implements OcrProvider {
     ].includes(input.mimeType);
   }
 
-  private isTiff(input: OcrInput): boolean {
+  private isTiff(input: DocumentParseInput): boolean {
     return ["image/tiff", "image/tif"].includes(input.mimeType) || [".tif", ".tiff"].includes(extname(input.filename).toLowerCase());
   }
 
-  private isHeif(input: OcrInput): boolean {
+  private isHeif(input: DocumentParseInput): boolean {
     return ["image/heic", "image/heif"].includes(input.mimeType) || [".heic", ".heif"].includes(extname(input.filename).toLowerCase());
   }
 
@@ -421,3 +480,5 @@ export class LocalOcrProvider implements OcrProvider {
     }
   }
 }
+
+export { LocalDocumentParseProvider as LocalOcrProvider };

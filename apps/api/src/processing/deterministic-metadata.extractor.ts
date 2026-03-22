@@ -16,24 +16,24 @@ import {
 @Injectable()
 export class DeterministicMetadataExtractor implements MetadataExtractor {
   async extract(input: MetadataExtractionInput): Promise<MetadataExtractionResult> {
-    const text = input.ocr.text;
+    const text = input.parsed.text;
     const documentTypeName = this.detectDocumentType(text);
     const correspondentName = this.detectCorrespondent(input);
     const issueDate =
-      this.findDateByLabels(text, ["invoice date", "rechnungsdatum", "datum"]) ??
+      this.findDateByLabels(input, ["invoice date", "rechnungsdatum", "datum"]) ??
       this.findFirstDate(text);
-    const dueDate = this.findDateByLabels(text, [
+    const dueDate = this.findDateByLabels(input, [
       "due date",
       "payment due",
       "fällig",
       "faellig",
       "zahlbar bis",
     ]);
-    const amount = this.findAmount(text);
-    const referenceNumber = this.findReferenceNumber(text);
+    const amount = this.findAmount(input);
+    const referenceNumber = this.findReferenceNumber(input);
     const tags = this.detectTags(text, documentTypeName, dueDate);
     const penalties: number[] = [];
-    const reviewReasons = new Set<ReviewReason>(input.ocr.reviewReasons);
+    const reviewReasons = new Set<ReviewReason>(input.parsed.reviewReasons);
     const isInvoice = documentTypeName === "Invoice";
     const requiredFields: ReviewEvidenceField[] = isInvoice
       ? ["correspondent", "issueDate", "amount", "currency"]
@@ -50,7 +50,7 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
       penalties.push(0.12);
     }
 
-    if (input.ocr.pages.length === 0) {
+    if (input.parsed.pages.length === 0) {
       penalties.push(0.2);
     }
 
@@ -73,7 +73,7 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
     });
 
     return {
-      language: input.ocr.language,
+      language: input.parsed.language,
       issueDate,
       dueDate,
       amount: amount?.value ?? null,
@@ -88,7 +88,7 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
         extractionStrategy: "deterministic",
         documentTypeName,
         detectedKeywords: tags,
-        normalizationStrategy: input.ocr.normalizationStrategy,
+        normalizationStrategy: input.parsed.parseStrategy,
         reviewEvidence: {
           documentClass: isInvoice ? "invoice" : "generic",
           requiredFields,
@@ -102,7 +102,7 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
   }
 
   private detectCorrespondent(input: MetadataExtractionInput): string | null {
-    const lines = input.ocr.pages
+    const lines = input.parsed.pages
       .flatMap((page) => page.lines)
       .map((line) => line.text.trim())
       .filter(Boolean)
@@ -151,7 +151,23 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
     return [...tags];
   }
 
-  private findAmount(text: string): { value: number; currency: string | null } | null {
+  private findAmount(
+    input: MetadataExtractionInput,
+  ): { value: number; currency: string | null } | null {
+    for (const field of input.parsed.keyValues) {
+      if (/betrag|gesamt|summe|total|amount due/i.test(field.key)) {
+        const value = normalizeAmountValue(field.value);
+        const currency = normalizeCurrencyCode(field.value);
+        if (value !== null) {
+          return {
+            value,
+            currency: currency ?? null,
+          };
+        }
+      }
+    }
+
+    const text = input.parsed.text;
     const patterns = [
       /(?:betrag|gesamt(?:betrag)?|summe|total(?: due)?|amount due)\s*[:\-]?\s*(€|eur|\$|usd)?\s*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))/i,
       /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))\s*(€|eur|\$|usd)/i,
@@ -182,15 +198,36 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
     return null;
   }
 
-  private findReferenceNumber(text: string): string | null {
-    const match = text.match(
+  private findReferenceNumber(input: MetadataExtractionInput): string | null {
+    const structuredField = input.parsed.keyValues.find((field) =>
+      /invoice number|invoice no\.?|reference|referenz|kundennummer|rechnungsnummer/i.test(
+        field.key,
+      ),
+    );
+
+    if (structuredField?.value) {
+      return structuredField.value.trim();
+    }
+
+    const match = input.parsed.text.match(
       /(?:invoice number|invoice no\.?|reference|referenz|kundennummer|rechnungsnummer)\s*[:#-]?\s*([A-Z0-9\-\/]+)/i,
     );
 
     return match?.[1] ?? null;
   }
 
-  private findDateByLabels(text: string, labels: string[]): Date | null {
+  private findDateByLabels(input: MetadataExtractionInput, labels: string[]): Date | null {
+    const structuredField = input.parsed.keyValues.find((field) =>
+      labels.some((label) => field.key.toLowerCase().includes(label.toLowerCase())),
+    );
+    if (structuredField?.value) {
+      const parsedDate = parseDateOnly(structuredField.value);
+      if (parsedDate) {
+        return parsedDate;
+      }
+    }
+
+    const text = input.parsed.text;
     const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     const match = text.match(
       new RegExp(`(?:${escaped.join("|")})\\s*[:\\-]?\\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{2,4}|[A-Za-z]+\\s+[0-9]{1,2},\\s+[0-9]{4})`, "i"),

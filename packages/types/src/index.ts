@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 export const processingModes = ["local-only", "hybrid", "cloud-assisted"] as const;
+export const parseProviders = [
+  "local-ocr",
+  "google-document-ai-enterprise-ocr",
+  "google-document-ai-gemini-layout-parser",
+  "amazon-textract",
+  "azure-ai-document-intelligence",
+  "mistral-ocr",
+] as const;
 export const documentSources = ["upload", "watch-folder", "email", "api"] as const;
 export const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
 export const reviewStatuses = ["not_required", "pending", "resolved"] as const;
@@ -14,6 +22,7 @@ export const reviewReasons = [
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
 export const ProcessingModeSchema = z.enum(processingModes);
+export const ParseProviderSchema = z.enum(parseProviders);
 export const DocumentSourceSchema = z.enum(documentSources);
 export const DocumentStatusSchema = z.enum(documentStatuses);
 export const ReviewStatusSchema = z.enum(reviewStatuses);
@@ -25,6 +34,96 @@ export const BoundingBoxSchema = z.object({
   y: z.number().nonnegative(),
   width: z.number().nonnegative(),
   height: z.number().nonnegative(),
+});
+
+export const ParsedDocumentLineSchema = z.object({
+  lineIndex: z.number().int().nonnegative(),
+  text: z.string(),
+  boundingBox: BoundingBoxSchema,
+});
+
+export const ParsedDocumentBlockSchema = z.object({
+  blockIndex: z.number().int().nonnegative(),
+  role: z.enum(["paragraph", "heading", "table", "key_value", "other"]).default("paragraph"),
+  text: z.string(),
+  boundingBox: BoundingBoxSchema.nullable().optional(),
+  lineIndices: z.array(z.number().int().nonnegative()).default([]),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ParsedDocumentTableCellSchema = z.object({
+  row: z.number().int().positive(),
+  column: z.number().int().positive(),
+  text: z.string(),
+  rowSpan: z.number().int().positive().default(1),
+  columnSpan: z.number().int().positive().default(1),
+  boundingBox: BoundingBoxSchema.nullable().optional(),
+  kind: z.enum(["header", "body", "footer"]).default("body"),
+});
+
+export const ParsedDocumentTableSchema = z.object({
+  tableIndex: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  title: z.string().nullable().optional(),
+  boundingBox: BoundingBoxSchema.nullable().optional(),
+  cells: z.array(ParsedDocumentTableCellSchema),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ParsedDocumentKeyValueSchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  page: z.number().int().positive().nullable().optional(),
+  keyBoundingBox: BoundingBoxSchema.nullable().optional(),
+  valueBoundingBox: BoundingBoxSchema.nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ParsedDocumentChunkHintSchema = z.object({
+  chunkIndex: z.number().int().nonnegative(),
+  heading: z.string().nullable().optional(),
+  text: z.string(),
+  pageFrom: z.number().int().positive().nullable().optional(),
+  pageTo: z.number().int().positive().nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ParsedDocumentPageSchema = z.object({
+  pageNumber: z.number().int().positive(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  lines: z.array(ParsedDocumentLineSchema),
+  blocks: z.array(ParsedDocumentBlockSchema).default([]),
+});
+
+export const ParsedDocumentSchema = z.object({
+  provider: ParseProviderSchema,
+  parseStrategy: z.string().min(1),
+  text: z.string(),
+  language: z.string().nullable(),
+  pages: z.array(ParsedDocumentPageSchema),
+  tables: z.array(ParsedDocumentTableSchema).default([]),
+  keyValues: z.array(ParsedDocumentKeyValueSchema).default([]),
+  chunkHints: z.array(ParsedDocumentChunkHintSchema).default([]),
+  searchablePdfPath: z.string().optional(),
+  reviewReasons: z.array(ReviewReasonSchema),
+  warnings: z.array(z.string()).default([]),
+  providerMetadata: z.record(z.string(), z.unknown()).default({}),
+  temporaryPaths: z.array(z.string()).optional(),
+});
+
+export const DocumentChunkSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  chunkIndex: z.number().int().nonnegative(),
+  heading: z.string().nullable(),
+  text: z.string(),
+  pageFrom: z.number().int().positive().nullable(),
+  pageTo: z.number().int().positive().nullable(),
+  strategyVersion: z.string().min(1),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string().min(1),
 });
 
 export const TagSchema = z.object({
@@ -82,11 +181,32 @@ export const DocumentMetadataSchema = z
   .object({
     extractionStrategy: z.string().optional(),
     normalizationStrategy: z.string().optional(),
+    parseProvider: ParseProviderSchema.optional(),
+    parseStrategy: z.string().optional(),
     documentTypeName: z.string().nullable().optional(),
     detectedKeywords: z.array(z.string()).optional(),
     pageCount: z.number().int().nonnegative().optional(),
+    chunkCount: z.number().int().nonnegative().optional(),
     searchablePdfGenerated: z.boolean().optional(),
     reviewReasons: z.array(ReviewReasonSchema).optional(),
+    parse: z
+      .object({
+        provider: ParseProviderSchema,
+        strategy: z.string(),
+        fallbackUsed: z.boolean().optional(),
+        warnings: z.array(z.string()).optional(),
+        keyValueCount: z.number().int().nonnegative().optional(),
+        tableCount: z.number().int().nonnegative().optional(),
+        providerMetadata: z.record(z.string(), z.unknown()).optional(),
+      })
+      .optional(),
+    chunking: z
+      .object({
+        strategy: z.string(),
+        chunkCount: z.number().int().nonnegative(),
+        usedProviderHints: z.boolean().optional(),
+      })
+      .optional(),
     reviewEvidence: ReviewEvidenceSchema.optional(),
   })
   .passthrough();
@@ -125,6 +245,8 @@ export const DocumentSchema = z.object({
   reviewedAt: z.string().nullable(),
   reviewNote: z.string().nullable(),
   searchablePdfAvailable: z.boolean(),
+  parseProvider: ParseProviderSchema.nullable().optional(),
+  chunkCount: z.number().int().nonnegative().default(0),
   lastProcessingError: z.string().nullable(),
   latestProcessingJob: ProcessingJobSummarySchema.nullable(),
   metadata: DocumentMetadataSchema,
@@ -221,10 +343,16 @@ export const AuthTokensSchema = z.object({
 
 export const ProviderConfigSchema = z.object({
   mode: ProcessingModeSchema,
+  activeParseProvider: ParseProviderSchema,
+  fallbackParseProvider: ParseProviderSchema.nullable().optional(),
   openaiModel: z.string().optional(),
   geminiModel: z.string().optional(),
   hasOpenAiKey: z.boolean().default(false),
   hasGeminiKey: z.boolean().default(false),
+  hasGoogleCloudConfig: z.boolean().default(false),
+  hasAwsTextractConfig: z.boolean().default(false),
+  hasAzureDocumentIntelligenceConfig: z.boolean().default(false),
+  hasMistralOcrConfig: z.boolean().default(false),
 });
 
 export const QueueDocumentProcessingPayloadSchema = z.object({
@@ -232,6 +360,8 @@ export const QueueDocumentProcessingPayloadSchema = z.object({
   force: z.boolean().default(false),
   processingJobId: z.string().uuid().optional(),
   retryCount: z.number().int().nonnegative().default(0),
+  parseProvider: ParseProviderSchema.optional(),
+  fallbackParseProvider: ParseProviderSchema.nullable().optional(),
 });
 
 export const ReadinessResponseSchema = z.object({
@@ -244,6 +374,16 @@ export const ReadinessResponseSchema = z.object({
 });
 
 export type BoundingBox = z.infer<typeof BoundingBoxSchema>;
+export type ParseProvider = z.infer<typeof ParseProviderSchema>;
+export type ParsedDocumentLine = z.infer<typeof ParsedDocumentLineSchema>;
+export type ParsedDocumentBlock = z.infer<typeof ParsedDocumentBlockSchema>;
+export type ParsedDocumentTableCell = z.infer<typeof ParsedDocumentTableCellSchema>;
+export type ParsedDocumentTable = z.infer<typeof ParsedDocumentTableSchema>;
+export type ParsedDocumentKeyValue = z.infer<typeof ParsedDocumentKeyValueSchema>;
+export type ParsedDocumentChunkHint = z.infer<typeof ParsedDocumentChunkHintSchema>;
+export type ParsedDocumentPage = z.infer<typeof ParsedDocumentPageSchema>;
+export type ParsedDocument = z.infer<typeof ParsedDocumentSchema>;
+export type DocumentChunk = z.infer<typeof DocumentChunkSchema>;
 export type Tag = z.infer<typeof TagSchema>;
 export type Correspondent = z.infer<typeof CorrespondentSchema>;
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;

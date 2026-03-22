@@ -135,6 +135,12 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   });
 
   it("exposes readiness and metrics endpoints", async () => {
+    const healthResponse = await request(app.getHttpServer()).get("/api/health");
+    expect(healthResponse.status).toBe(200);
+    expect(healthResponse.body.status).toBe("ok");
+    expect(healthResponse.body.provider.activeParseProvider).toBe("local-ocr");
+    expect(healthResponse.body.provider.fallbackParseProvider).toBeNull();
+
     const readinessResponse = await request(app.getHttpServer()).get("/api/health/ready");
     expect(readinessResponse.status).toBe(200);
     expect(readinessResponse.body.status).toBe("ok");
@@ -227,8 +233,20 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
         mimeType: "application/pdf",
         status: "ready",
         reviewStatus: "not_required",
+        parseProvider: "local-ocr",
+        chunkCount: 2,
         fullText: "Invoice 2025 paid amount due",
         issueDate: new Date(Date.UTC(2025, 0, 10)),
+        metadata: {
+          parse: {
+            strategy: "plain-text",
+            warnings: [],
+          },
+          chunking: {
+            strategyVersion: "normalized-parse-v1",
+            chunkCount: 2,
+          },
+        },
         processedAt: new Date(),
       })
       .returning();
@@ -276,9 +294,12 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       });
 
     expect(searchResponse.status).toBe(200);
-    expect(searchResponse.body.items.some((item: { id: string }) => item.id === readyDocument.id)).toBe(
-      true,
+    const matchingItem = searchResponse.body.items.find(
+      (item: { id: string }) => item.id === readyDocument.id,
     );
+    expect(Boolean(matchingItem)).toBe(true);
+    expect(matchingItem.parseProvider).toBe("local-ocr");
+    expect(matchingItem.chunkCount).toBe(2);
 
     const facetsResponse = await request(app.getHttpServer())
       .get("/api/documents/facets")

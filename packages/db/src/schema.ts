@@ -1,6 +1,7 @@
 import {
   documentSources,
   documentStatuses,
+  parseProviders,
   processingJobStatuses,
   reviewStatuses,
 } from "@openkeep/types";
@@ -24,6 +25,7 @@ import {
 
 export const documentSourceEnum = pgEnum("document_source", documentSources);
 export const documentStatusEnum = pgEnum("document_status", documentStatuses);
+export const parseProviderEnum = pgEnum("parse_provider", parseProviders);
 export const reviewStatusEnum = pgEnum("review_status", reviewStatuses);
 export const processingJobStatusEnum = pgEnum(
   "processing_job_status",
@@ -158,6 +160,8 @@ export const documents = pgTable(
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewNote: text("review_note"),
     searchablePdfStorageKey: text("searchable_pdf_storage_key"),
+    parseProvider: parseProviderEnum("parse_provider"),
+    chunkCount: integer("chunk_count").notNull().default(0),
     lastProcessingError: text("last_processing_error"),
     correspondentId: uuid("correspondent_id").references(() => correspondents.id, {
       onDelete: "set null",
@@ -178,6 +182,7 @@ export const documents = pgTable(
     fileIdx: index("documents_file_idx").on(table.fileId),
     statusIdx: index("documents_status_idx").on(table.status),
     reviewStatusIdx: index("documents_review_status_idx").on(table.reviewStatus),
+    parseProviderIdx: index("documents_parse_provider_idx").on(table.parseProvider),
     createdAtIdx: index("documents_created_at_idx").on(table.createdAt),
     issueDateIdx: index("documents_issue_date_idx").on(table.issueDate),
     dueDateIdx: index("documents_due_date_idx").on(table.dueDate),
@@ -241,6 +246,34 @@ export const documentTagLinks = pgTable(
   (table) => ({
     pk: primaryKey({ columns: [table.documentId, table.tagId] }),
     tagIdx: index("document_tag_links_tag_idx").on(table.tagId),
+  }),
+);
+
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    heading: text("heading"),
+    text: text("text").notNull(),
+    pageFrom: integer("page_from"),
+    pageTo: integer("page_to"),
+    strategyVersion: varchar("strategy_version", { length: 64 }).notNull(),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    documentChunkIdx: uniqueIndex("document_chunks_document_chunk_idx").on(
+      table.documentId,
+      table.chunkIndex,
+    ),
+    documentIdx: index("document_chunks_document_idx").on(table.documentId),
   }),
 );
 

@@ -1,6 +1,6 @@
 # OpenKeep
 
-OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation delivers the backend foundation first: a NestJS API, async processing worker, PostgreSQL schema, object storage integration, OCR/extraction providers, and the monorepo layout for the future web, mobile, and desktop clients.
+OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation delivers the backend foundation first: a NestJS API, async processing worker, PostgreSQL schema, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, and the monorepo layout for the future web, mobile, and desktop clients.
 
 ## Workspace Layout
 
@@ -19,8 +19,11 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 - Single-user owner auth with JWT access/refresh tokens and long-lived API tokens.
 - `POST /api/documents` multipart upload with content-hash deduplication for stored binaries.
 - Async processing via `pg-boss`.
+- Provider-driven parsing pipeline with one globally active parse provider and optional fallback provider.
 - Local-first OCR pipeline with normalization for scanned PDFs, TIFF, HEIC/HEIF, and direct raster uploads.
+- Cloud parse adapters for Google Cloud Document AI Enterprise OCR, Google Cloud Document AI Gemini layout parser, Amazon Textract, Azure AI Document Intelligence, and Mistral OCR.
 - Deterministic metadata extraction with shared normalization for correspondents, invoice dates, due dates, amounts, currencies, reference numbers, document types, and tags.
+- Persisted document chunks generated from normalized parse output for future embedding and semantic retrieval phases.
 - Explicit review workflow with `reviewStatus`, `reviewReasons`, structured review evidence, resolve/requeue endpoints, and latest processing-job summaries on documents.
 - Retry-aware processing with bounded `pg-boss` backoff, structured JSON worker logs, and searchable-PDF artifact storage.
 - PostgreSQL full-text search plus structured filters for year, dates, status, correspondent, document type, and tags.
@@ -37,15 +40,23 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 6. Run the worker with `pnpm --filter @openkeep/worker dev`.
 7. Wait for `GET /api/health/ready` to report all checks green before using the stack.
 
+For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`.
+
 ## Verification Commands
 
 - `pnpm typecheck`
 - `pnpm test:api:unit`
 - `pnpm test:api:integration`
 - `pnpm test:api:ocr`
+- `pnpm test:e2e:google`
+- `pnpm test:e2e:google:gemini`
+- `pnpm test:e2e:aws`
+- `pnpm test:e2e:azure`
+- `pnpm test:e2e:mistral`
 - `pnpm build`
 
 `test:integration` requires a Docker-capable environment for Testcontainers. `test:ocr` requires a worker-capable environment with `ocrmypdf`, `tesseract`, German and English Tesseract language data, Poppler, and ImageMagick available, or an equivalent container image based on the worker runtime.
+The provider-specific `test:e2e:*` commands perform live cloud parse calls and require matching credentials in `.env`. Start from `.env.google.example`, `.env.aws.example`, `.env.azure.example`, or `.env.mistral.example` and copy the needed values into `.env`.
 
 ## Docker Compose
 
@@ -58,3 +69,12 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 - OpenKeep worker
 
 The worker image includes OCR dependencies for `ocrmypdf`, `tesseract`, the required language data, Poppler, and ImageMagick so scanned PDFs and phone-native raster formats can be processed without extra host setup. The compose boot path is `postgres -> migrate -> api/worker`.
+
+## Parse Provider IDs
+
+- `local-ocr`
+- `google-document-ai-enterprise-ocr`
+- `google-document-ai-gemini-layout-parser`
+- `amazon-textract`
+- `azure-ai-document-intelligence`
+- `mistral-ocr`

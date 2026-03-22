@@ -42,7 +42,7 @@ describe.skipIf(!shouldRun)("LocalOcrProvider acceptance", () => {
     );
     await runImagemagick([imagePath, pdfPath]);
 
-    const result = await provider.extract({
+    const result = await provider.parse({
       filePath: pdfPath,
       filename: "invoice.pdf",
       mimeType: "application/pdf",
@@ -62,14 +62,14 @@ describe.skipIf(!shouldRun)("LocalOcrProvider acceptance", () => {
     await createAnnotatedImage(pageTwo, "Invoice Number: TIFF-2\nDue Date: 2025-02-15");
     await runImagemagick([pageOne, pageTwo, tiffPath]);
 
-    const result = await provider.extract({
+    const result = await provider.parse({
       filePath: tiffPath,
       filename: "multipage.tiff",
       mimeType: "image/tiff",
     });
 
     expect(result.pages.length).toBeGreaterThanOrEqual(2);
-    expect(result.normalizationStrategy).toBe("tiff-to-png");
+    expect(result.parseStrategy).toBe("tiff-to-png");
   });
 
   it("handles HEIC normalization", async () => {
@@ -79,14 +79,14 @@ describe.skipIf(!shouldRun)("LocalOcrProvider acceptance", () => {
     await createAnnotatedImage(imagePath, "Invoice Number: HEIC-1\nAmount Due: USD 19.99");
     await runImagemagick([imagePath, heicPath]);
 
-    const result = await provider.extract({
+    const result = await provider.parse({
       filePath: heicPath,
       filename: "phone.heic",
       mimeType: "image/heic",
     });
 
     expect(result.pages.length).toBeGreaterThan(0);
-    expect(result.normalizationStrategy).toBe("heif-to-png");
+    expect(result.parseStrategy).toBe("heif-to-png");
   });
 });
 

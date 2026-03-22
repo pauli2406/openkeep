@@ -1,6 +1,9 @@
 .DS_Store
 .env
 .env.local
+.env.*
+!.env.example
+!.env.*.example
 .turbo
 coverage
 dist
@@ -9,4 +12,3 @@ tmp
 data
 openapi.json
 pnpm-lock.yaml
-

@@ -66,6 +66,8 @@ interface DocumentRow {
   reviewedAt: Date | null;
   reviewNote: string | null;
   searchablePdfStorageKey: string | null;
+  parseProvider: Document["parseProvider"];
+  chunkCount: number;
   lastProcessingError: string | null;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -635,6 +637,8 @@ export class DocumentsService {
         reviewedAt: documents.reviewedAt,
         reviewNote: documents.reviewNote,
         searchablePdfStorageKey: documents.searchablePdfStorageKey,
+        parseProvider: documents.parseProvider,
+        chunkCount: documents.chunkCount,
         lastProcessingError: documents.lastProcessingError,
         metadata: documents.metadata,
         createdAt: documents.createdAt,
@@ -837,6 +841,8 @@ export class DocumentsService {
       reviewedAt: row.reviewedAt?.toISOString() ?? null,
       reviewNote: row.reviewNote,
       searchablePdfAvailable: Boolean(row.searchablePdfStorageKey),
+      parseProvider: row.parseProvider ?? null,
+      chunkCount: row.chunkCount ?? 0,
       lastProcessingError: row.lastProcessingError,
       latestProcessingJob,
       metadata: this.toDocumentMetadata(row.metadata),
@@ -859,6 +865,7 @@ export class DocumentsService {
     return {
       detectedKeywords: [],
       reviewReasons: [],
+      chunkCount: 0,
       ...(metadata ?? {}),
     };
   }

@@ -13,6 +13,11 @@
     "test:api:unit": "pnpm --filter @openkeep/api test:unit",
     "test:api:integration": "pnpm --filter @openkeep/api test:integration",
     "test:api:ocr": "pnpm --filter @openkeep/api test:ocr",
+    "test:e2e:google": "pnpm --filter @openkeep/api test:e2e:google",
+    "test:e2e:google:gemini": "pnpm --filter @openkeep/api test:e2e:google:gemini",
+    "test:e2e:aws": "pnpm --filter @openkeep/api test:e2e:aws",
+    "test:e2e:azure": "pnpm --filter @openkeep/api test:e2e:azure",
+    "test:e2e:mistral": "pnpm --filter @openkeep/api test:e2e:mistral",
     "typecheck": "turbo run typecheck",
     "openapi:generate": "pnpm --filter @openkeep/api openapi:generate",
     "db:migrate": "pnpm --filter @openkeep/db db:migrate"

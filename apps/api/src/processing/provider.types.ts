@@ -1,43 +1,27 @@
 import type {
-  BoundingBox,
+  DocumentChunk,
+  ParsedDocument,
   QueueDocumentProcessingPayload,
   ReviewReason,
 } from "@openkeep/types";
 
-export interface OcrLine {
-  lineIndex: number;
-  text: string;
-  boundingBox: BoundingBox;
-}
-
-export interface OcrPage {
-  pageNumber: number;
-  width: number | null;
-  height: number | null;
-  lines: OcrLine[];
-}
-
-export interface OcrInput {
+export interface DocumentParseInput {
   filePath: string;
   mimeType: string;
   filename: string;
+  sizeBytes?: number;
 }
 
-export interface OcrResult {
-  text: string;
-  language: string | null;
-  pages: OcrPage[];
-  searchablePdfPath?: string;
-  reviewReasons: ReviewReason[];
-  normalizationStrategy: string;
-  temporaryPaths?: string[];
+export interface ChunkingInput {
+  documentId: string;
+  parsed: ParsedDocument;
 }
 
 export interface MetadataExtractionInput {
   documentId: string;
   title: string;
   mimeType: string;
-  ocr: OcrResult;
+  parsed: ParsedDocument;
 }
 
 export interface MetadataExtractionResult {
@@ -55,12 +39,17 @@ export interface MetadataExtractionResult {
   metadata: Record<string, unknown>;
 }
 
-export interface OcrProvider {
-  extract(input: OcrInput): Promise<OcrResult>;
+export interface DocumentParseProvider {
+  readonly provider: ParsedDocument["provider"];
+  parse(input: DocumentParseInput): Promise<ParsedDocument>;
 }
 
 export interface MetadataExtractor {
   extract(input: MetadataExtractionInput): Promise<MetadataExtractionResult>;
+}
+
+export interface Chunker {
+  chunk(input: ChunkingInput): Promise<Array<Omit<DocumentChunk, "id" | "createdAt">>>;
 }
 
 export interface EmbeddingProvider {

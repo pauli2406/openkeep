@@ -26,7 +26,7 @@ describe("LocalOcrProvider", () => {
       "utf8",
     );
 
-    const result = await provider.extract({
+    const result = await provider.parse({
       filePath,
       filename: "sample.txt",
       mimeType: "text/plain",
@@ -36,7 +36,8 @@ describe("LocalOcrProvider", () => {
     expect(result.pages).toHaveLength(1);
     expect(result.pages[0]?.lines).toHaveLength(3);
     expect(result.reviewReasons).toEqual([]);
-    expect(result.normalizationStrategy).toBe("plain-text");
+    expect(result.parseStrategy).toBe("plain-text");
+    expect(result.provider).toBe("local-ocr");
 
     await rm(directory, { recursive: true, force: true });
   });

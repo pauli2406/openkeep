@@ -1,4 +1,4 @@
-import { ProcessingModeSchema } from "@openkeep/types";
+import { ParseProviderSchema, ProcessingModeSchema } from "@openkeep/types";
 import { z } from "zod";
 
 const BooleanFromEnv = z.preprocess((value) => {
@@ -49,6 +49,15 @@ const DecimalFromEnv = z.preprocess((value) => {
   return value;
 }, z.number().min(0).max(1));
 
+const EmptyStringToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((value) => {
+    if (typeof value === "string" && value.trim().length === 0) {
+      return undefined;
+    }
+
+    return value;
+  }, schema);
+
 export const AppEnvSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: PortFromEnv.default(3000),
@@ -73,11 +82,31 @@ export const AppEnvSchema = z.object({
   OWNER_NAME: z.string().min(1).default("OpenKeep Owner"),
   SKIP_EXTERNAL_INIT: BooleanFromEnv.default(false),
   PROVIDER_MODE: ProcessingModeSchema.default("hybrid"),
-  OPENAI_API_KEY: z.string().optional(),
+  ACTIVE_PARSE_PROVIDER: ParseProviderSchema.default("local-ocr"),
+  FALLBACK_PARSE_PROVIDER: EmptyStringToUndefined(ParseProviderSchema.nullable().optional()),
+  OPENAI_API_KEY: EmptyStringToUndefined(z.string().optional()),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
-  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: EmptyStringToUndefined(z.string().optional()),
   GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+  GOOGLE_CLOUD_PROJECT_ID: EmptyStringToUndefined(z.string().optional()),
+  GOOGLE_CLOUD_LOCATION: z.string().default("eu"),
+  GOOGLE_CLOUD_ACCESS_TOKEN: EmptyStringToUndefined(z.string().optional()),
+  GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON: EmptyStringToUndefined(z.string().optional()),
+  GOOGLE_DOCUMENT_AI_ENTERPRISE_PROCESSOR_ID: EmptyStringToUndefined(z.string().optional()),
+  GOOGLE_DOCUMENT_AI_GEMINI_PROCESSOR_ID: EmptyStringToUndefined(z.string().optional()),
+  AWS_REGION: EmptyStringToUndefined(z.string().optional()),
+  AWS_ACCESS_KEY_ID: EmptyStringToUndefined(z.string().optional()),
+  AWS_SECRET_ACCESS_KEY: EmptyStringToUndefined(z.string().optional()),
+  AWS_SESSION_TOKEN: EmptyStringToUndefined(z.string().optional()),
+  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: EmptyStringToUndefined(z.string().url().optional()),
+  AZURE_DOCUMENT_INTELLIGENCE_API_KEY: EmptyStringToUndefined(z.string().optional()),
+  MISTRAL_API_KEY: EmptyStringToUndefined(z.string().optional()),
+  MISTRAL_OCR_BASE_URL: z.string().url().default("https://api.mistral.ai"),
+  MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
   OCR_LANGUAGES: z.string().default("deu+eng"),
+  PARSE_PROVIDER_TIMEOUT_SECONDS: NumberFromEnv.default(120),
+  PARSE_PROVIDER_MAX_PAGES: NumberFromEnv.default(300),
+  PARSE_PROVIDER_MAX_BYTES: NumberFromEnv.default(52_428_800),
   REVIEW_CONFIDENCE_THRESHOLD: DecimalFromEnv.default(0.65),
   OCR_EMPTY_TEXT_THRESHOLD: NumberFromEnv.default(20),
   PROCESSING_RETRY_LIMIT: NumberFromEnv.default(2),
@@ -100,8 +129,24 @@ export const minioEndpoint = (config: AppConfig): string =>
 
 export const providerConfig = (config: AppConfig) => ({
   mode: config.PROVIDER_MODE,
+  activeParseProvider: config.ACTIVE_PARSE_PROVIDER,
+  fallbackParseProvider: config.FALLBACK_PARSE_PROVIDER ?? null,
   openaiModel: config.OPENAI_MODEL,
   geminiModel: config.GEMINI_MODEL,
   hasOpenAiKey: Boolean(config.OPENAI_API_KEY),
   hasGeminiKey: Boolean(config.GEMINI_API_KEY),
+  hasGoogleCloudConfig: Boolean(
+    config.GOOGLE_CLOUD_PROJECT_ID &&
+      (config.GOOGLE_CLOUD_ACCESS_TOKEN || config.GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON) &&
+      (config.GOOGLE_DOCUMENT_AI_ENTERPRISE_PROCESSOR_ID ||
+        config.GOOGLE_DOCUMENT_AI_GEMINI_PROCESSOR_ID),
+  ),
+  hasAwsTextractConfig: Boolean(
+    config.AWS_REGION && config.AWS_ACCESS_KEY_ID && config.AWS_SECRET_ACCESS_KEY,
+  ),
+  hasAzureDocumentIntelligenceConfig: Boolean(
+    config.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT &&
+      config.AZURE_DOCUMENT_INTELLIGENCE_API_KEY,
+  ),
+  hasMistralOcrConfig: Boolean(config.MISTRAL_API_KEY),
 });

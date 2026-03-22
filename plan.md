@@ -111,13 +111,23 @@ Status: complete
 - Add explicit unit, integration, and OCR acceptance test entrypoints.
 - Validate the backend in a real Docker/OCR-capable environment.
 
-### Phase 2: AI Search and Retrieval
+### Phase 2: Provider Platform and Chunking
+
+Status: complete
+
+- Add a normalized parsed-document model shared across parse providers.
+- Add a provider registry with one globally active parse provider plus optional fallback provider.
+- Implement parse adapters for local OCR, Google Cloud Document AI Enterprise OCR, Google Cloud Document AI Gemini layout parser, Amazon Textract, Azure AI Document Intelligence, and Mistral OCR.
+- Keep one shared OpenKeep metadata extractor on top of normalized parse output.
+- Persist document chunks as part of successful processing.
+- Extend health, metrics, and audit data with provider-aware metadata.
+
+### Phase 2.5: AI Search and Retrieval
 
 Status: planned
 
-- Add chunk generation on top of line-level OCR text.
-- Introduce embeddings storage and retrieval for semantic document search.
-- Add provider adapters for OpenAI and Gemini and Anthropic and Mistral behind existing interfaces.
+- Add embeddings storage and retrieval for semantic document search.
+- Add real embedding and answer-generation providers behind existing interfaces.
 - Support prompts such as “show all invoices from 2025” with retrieval-first behavior.
 - Keep classic filters and exact search as a first-class path, not a fallback.
 
@@ -161,10 +171,13 @@ Status: planned
 - Testcontainers integration coverage for auth, upload, deduplication, search, review workflows, metrics, and searchable-PDF download.
 - OCR acceptance tests for scanned PDFs, TIFF, and HEIC/HEIF normalization.
 - Successful local execution of the Docker-backed integration suite and OCR acceptance suite.
+- Provider platform with a normalized parse model and a registry-based active/fallback parse selection flow.
+- Cloud parse adapters for Google Cloud Document AI Enterprise OCR, Google Cloud Document AI Gemini layout parser, Amazon Textract, Azure AI Document Intelligence, and Mistral OCR.
 - Explicit review state on documents plus resolve/requeue API endpoints.
 - Structured review evidence in document metadata for missing required invoice fields and threshold context.
+- Persisted document chunks and provider-aware parse metadata on processed documents.
 - Searchable-PDF download endpoint separate from original-binary download.
-- Readiness and metrics endpoints, including pending-review gauges by reason.
+- Readiness and metrics endpoints, including provider metadata, parse metrics, and pending-review gauges by reason.
 - Migration-first Docker Compose startup path.
 - OpenAPI generation output in `openapi.json`.
 
@@ -179,10 +192,10 @@ Status: planned
 
 ### Immediate next steps
 
-1. Start the Phase 3 web client on top of the hardened review and search APIs.
+1. Start the Phase 3 web client on top of the hardened review, search, provider, and chunk-aware APIs.
 2. Add richer review evidence and missing-field detection for more document classes beyond invoice-like mail.
 3. Add deeper operational metrics and queue dashboards once real deployment telemetry is available.
-4. Add client-facing derived-file metadata only if the web app needs more than `searchablePdfAvailable`.
+4. Add embeddings on top of persisted chunks when semantic retrieval work begins.
 5. Keep the Docker/OCR test commands as part of the standard backend verification workflow.
 
 ### After backend hardening
@@ -201,7 +214,7 @@ Status: planned
 ### Recommended implementation order from here
 
 1. Web archive UI.
-2. Semantic retrieval and provider integrations.
+2. Semantic retrieval on top of the existing provider platform and persisted chunks.
 3. Mobile capture app.
 4. Desktop utility app.
 
@@ -219,5 +232,5 @@ Status: planned
 - PostgreSQL plus S3-compatible object storage.
 - Docker Compose on one home server first.
 - Virtual archive browsing instead of real nested folders.
-- Local OCR first with provider abstraction for later hybrid AI.
-- Semantic search as a second major phase, not part of the first archive milestone.
+- Local OCR first, then a provider platform with optional cloud parsing.
+- Semantic search after archive stability, not part of the first archive milestone.
