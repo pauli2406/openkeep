@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   auditEvents,
+  documentChunkEmbeddings,
   correspondents,
   documentChunks,
   documentFiles,
@@ -12,8 +13,14 @@ import {
   processingJobs,
   tags,
 } from "@openkeep/db";
-import type { DocumentMetadata, ReviewEvidence, ReviewReason } from "@openkeep/types";
-import { and, eq, sql } from "drizzle-orm";
+import type {
+  DocumentMetadata,
+  EmbeddingProvider as EmbeddingProviderId,
+  QueueDocumentEmbeddingPayload,
+  ReviewEvidence,
+  ReviewReason,
+} from "@openkeep/types";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { readFile } from "fs/promises";
 import slugify from "slugify";
 
@@ -25,18 +32,21 @@ import {
   ANSWER_PROVIDER,
   CHUNKER,
   DOCUMENT_PARSE_PROVIDER,
+  DOCUMENT_EMBEDDING_QUEUE,
   DOCUMENT_PROCESSING_QUEUE,
-  EMBEDDING_PROVIDER,
+  EMBEDDING_PROVIDER_REGISTRY,
   METADATA_EXTRACTOR,
 } from "./constants";
 import { BossService } from "./boss.service";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
+import { EmbeddingProviderRegistry } from "./embedding-provider.registry";
+import { padEmbedding, serializeHalfVector } from "./embedding.util";
 import type {
   AnswerProvider,
   Chunker,
   ChunkingInput,
   DocumentParseInput,
-  EmbeddingProvider,
+  EmbeddingJobInput,
   MetadataExtractor,
 } from "./provider.types";
 
@@ -47,6 +57,12 @@ interface DocumentProcessingPayload {
   retryCount?: number;
   parseProvider?: DocumentMetadata["parseProvider"];
   fallbackParseProvider?: DocumentMetadata["parseProvider"] | null;
+}
+
+export interface EmbeddingJobQueueResult {
+  queued: true;
+  documentId: string;
+  embeddingJobId: string;
 }
 
 @Injectable()
@@ -61,9 +77,10 @@ export class ProcessingService {
     @Inject(MetricsService) private readonly metricsService: MetricsService,
     @Inject(DOCUMENT_PARSE_PROVIDER)
     private readonly parseProviderRegistry: DocumentParseProviderRegistry,
+    @Inject(EMBEDDING_PROVIDER_REGISTRY)
+    private readonly embeddingProviderRegistry: EmbeddingProviderRegistry,
     @Inject(METADATA_EXTRACTOR) private readonly metadataExtractor: MetadataExtractor,
     @Inject(CHUNKER) private readonly chunker: Chunker,
-    @Inject(EMBEDDING_PROVIDER) private readonly embeddingProvider: EmbeddingProvider,
     @Inject(ANSWER_PROVIDER) private readonly answerProvider: AnswerProvider,
   ) {}
 
@@ -143,7 +160,6 @@ export class ProcessingService {
     const processStartedAt = Date.now();
 
     try {
-      void this.embeddingProvider;
       void this.answerProvider;
 
       const parseStartedAt = Date.now();
@@ -209,6 +225,9 @@ export class ProcessingService {
         reviewReasons,
         fallbackUsed,
         fallbackProvider,
+        embeddingConfigured: this.embeddingProviderRegistry.isConfigured(),
+        embeddingProvider: this.embeddingProviderRegistry.getActiveProviderId(),
+        embeddingModel: this.embeddingProviderRegistry.getActiveProviderModel(),
       });
 
       await this.databaseService.db.transaction(async (tx) => {
@@ -264,6 +283,13 @@ export class ProcessingService {
             confidence: metadata.confidence.toFixed(2),
             parseProvider: parsed.provider,
             chunkCount: chunks.length,
+            embeddingStatus: this.embeddingProviderRegistry.isConfigured()
+              ? chunks.length > 0
+                ? "queued"
+                : "ready"
+              : "not_configured",
+            embeddingProvider: this.embeddingProviderRegistry.getActiveProviderId(),
+            embeddingModel: this.embeddingProviderRegistry.getActiveProviderModel(),
             reviewStatus,
             reviewReasons,
             reviewedAt: null,
@@ -320,6 +346,25 @@ export class ProcessingService {
       if (fallbackUsed) {
         this.metricsService.incrementParseFallbackUsageTotal();
       }
+      await this.enqueueDocumentEmbedding(record.documentId, Boolean(payload.force)).catch(
+        async (error) => {
+          const message =
+            error instanceof Error ? error.message : "Unknown embedding enqueue failure";
+          await this.databaseService.db
+            .update(documents)
+            .set({
+              embeddingStatus: "failed",
+              embeddingProvider: this.embeddingProviderRegistry.getActiveProviderId(),
+              embeddingModel: this.embeddingProviderRegistry.getActiveProviderModel(),
+              updatedAt: new Date(),
+            })
+            .where(eq(documents.id, record.documentId));
+          this.logStructured("error", "document.embedding_enqueue_failed", {
+            documentId: record.documentId,
+            error: message,
+          });
+        },
+      );
       this.logStructured(
         "log",
         reviewStatus === "pending"
@@ -376,6 +421,352 @@ export class ProcessingService {
       throw error;
     } finally {
       await Promise.all(tempPaths.map((path) => this.storageService.removeTempFile(path)));
+    }
+  }
+
+  isSemanticIndexingConfigured(): boolean {
+    return this.embeddingProviderRegistry.isConfigured();
+  }
+
+  getActiveEmbeddingConfiguration(): {
+    provider: EmbeddingProviderId | null;
+    model: string | null;
+  } {
+    return {
+      provider: this.embeddingProviderRegistry.getActiveProviderId(),
+      model: this.embeddingProviderRegistry.getActiveProviderModel(),
+    };
+  }
+
+  async embedQuery(text: string) {
+    return this.embeddingProviderRegistry.embed({
+      texts: [text],
+      inputType: "query",
+    });
+  }
+
+  async enqueueDocumentEmbedding(
+    documentId: string,
+    force: boolean,
+  ): Promise<EmbeddingJobQueueResult | null> {
+    if (!this.embeddingProviderRegistry.isConfigured()) {
+      return null;
+    }
+
+    const embeddingProvider = this.embeddingProviderRegistry.getActiveProviderId();
+    const embeddingModel = this.embeddingProviderRegistry.getActiveProviderModel();
+    if (!embeddingProvider || !embeddingModel) {
+      return null;
+    }
+
+    const [document] = await this.databaseService.db
+      .select({
+        id: documents.id,
+        status: documents.status,
+        chunkCount: documents.chunkCount,
+      })
+      .from(documents)
+      .where(eq(documents.id, documentId))
+      .limit(1);
+
+    if (!document || document.status !== "ready" || document.chunkCount === 0) {
+      return null;
+    }
+
+    const [job] = await this.databaseService.db
+      .insert(processingJobs)
+      .values({
+        documentId,
+        queueName: DOCUMENT_EMBEDDING_QUEUE,
+        status: "queued",
+        payload: {
+          documentId,
+          force,
+          retryCount: 0,
+          embeddingProvider,
+          embeddingModel,
+        } satisfies QueueDocumentEmbeddingPayload,
+      })
+      .returning();
+
+    await this.databaseService.db
+      .update(documents)
+      .set({
+        embeddingStatus: "queued",
+        embeddingProvider,
+        embeddingModel,
+        updatedAt: new Date(),
+      })
+      .where(eq(documents.id, documentId));
+
+    await this.bossService.publish(DOCUMENT_EMBEDDING_QUEUE, {
+      documentId,
+      force,
+      embeddingJobId: job.id,
+      retryCount: 0,
+      embeddingProvider,
+      embeddingModel,
+    } satisfies QueueDocumentEmbeddingPayload);
+
+    this.logStructured("log", "document.embedding_enqueued", {
+      documentId,
+      embeddingJobId: job.id,
+      force,
+      embeddingProvider,
+      embeddingModel,
+    });
+
+    return {
+      queued: true,
+      documentId,
+      embeddingJobId: job.id,
+    };
+  }
+
+  async processDocumentEmbedding(payload: EmbeddingJobInput): Promise<void> {
+    const retryCount = payload.retryCount ?? 0;
+    const activeProvider = this.embeddingProviderRegistry.getActiveProviderId();
+    const activeModel = this.embeddingProviderRegistry.getActiveProviderModel();
+    const embeddingProvider = activeProvider ?? payload.embeddingProvider;
+    const embeddingModel = activeModel ?? payload.embeddingModel;
+
+    if (!embeddingProvider || !embeddingModel || !this.embeddingProviderRegistry.isConfigured()) {
+      throw new Error("Semantic indexing is not configured");
+    }
+
+    const [document] = await this.databaseService.db
+      .select({
+        id: documents.id,
+        status: documents.status,
+        chunkCount: documents.chunkCount,
+      })
+      .from(documents)
+      .where(eq(documents.id, payload.documentId))
+      .limit(1);
+
+    if (!document) {
+      throw new NotFoundException("Document not found");
+    }
+
+    const chunks = await this.databaseService.db
+      .select({
+        documentId: documentChunks.documentId,
+        chunkIndex: documentChunks.chunkIndex,
+        heading: documentChunks.heading,
+        text: documentChunks.text,
+        pageFrom: documentChunks.pageFrom,
+        pageTo: documentChunks.pageTo,
+        strategyVersion: documentChunks.strategyVersion,
+        contentHash: documentChunks.contentHash,
+        metadata: documentChunks.metadata,
+      })
+      .from(documentChunks)
+      .where(eq(documentChunks.documentId, payload.documentId))
+      .orderBy(documentChunks.chunkIndex);
+
+    await this.markEmbeddingIndexing(payload.documentId, payload.embeddingJobId, retryCount);
+
+    if (document.status !== "ready" || chunks.length === 0) {
+      await this.completeEmbeddingJobWithoutChanges(payload, retryCount, embeddingProvider, embeddingModel);
+      return;
+    }
+
+    const existingEmbeddings = await this.databaseService.db
+      .select({
+        chunkIndex: documentChunkEmbeddings.chunkIndex,
+        contentHash: documentChunkEmbeddings.contentHash,
+      })
+      .from(documentChunkEmbeddings)
+      .where(
+        and(
+          eq(documentChunkEmbeddings.documentId, payload.documentId),
+          eq(documentChunkEmbeddings.provider, embeddingProvider),
+          eq(documentChunkEmbeddings.model, embeddingModel),
+        ),
+      );
+
+    const existingByChunkIndex = new Map(
+      existingEmbeddings.map((item) => [item.chunkIndex, item.contentHash]),
+    );
+    const chunksToEmbed = payload.force
+      ? chunks
+      : chunks.filter((chunk) => existingByChunkIndex.get(chunk.chunkIndex) !== chunk.contentHash);
+    const removedChunkIndexes = existingEmbeddings
+      .map((item) => item.chunkIndex)
+      .filter((chunkIndex) => !chunks.some((chunk) => chunk.chunkIndex === chunkIndex));
+    const startedAt = Date.now();
+
+    try {
+      if (chunksToEmbed.length > 0) {
+        const embedded = await this.embeddingProviderRegistry.embed({
+          texts: chunksToEmbed.map((chunk) => chunk.text),
+          inputType: "document",
+        });
+
+        if (
+          embedded.provider !== embeddingProvider ||
+          embedded.model !== embeddingModel
+        ) {
+          throw new Error("Embedding provider returned mismatched provider metadata");
+        }
+
+        await this.databaseService.db.transaction(async (tx) => {
+          for (let index = 0; index < chunksToEmbed.length; index += 1) {
+            const chunk = chunksToEmbed[index];
+            const embedding = padEmbedding(embedded.embeddings[index] ?? []);
+            await tx.execute(sql`
+              INSERT INTO document_chunk_embeddings (
+                document_id,
+                chunk_index,
+                provider,
+                model,
+                dimensions,
+                embedding,
+                content_hash,
+                created_at,
+                updated_at
+              )
+              VALUES (
+                ${payload.documentId}::uuid,
+                ${chunk.chunkIndex},
+                ${embeddingProvider}::embedding_provider,
+                ${embeddingModel},
+                ${embedded.dimensions},
+                ${serializeHalfVector(embedding)}::halfvec,
+                ${chunk.contentHash},
+                now(),
+                now()
+              )
+              ON CONFLICT (document_id, chunk_index, provider, model)
+              DO UPDATE SET
+                dimensions = EXCLUDED.dimensions,
+                embedding = EXCLUDED.embedding,
+                content_hash = EXCLUDED.content_hash,
+                updated_at = now()
+            `);
+          }
+
+          if (removedChunkIndexes.length > 0) {
+            await tx
+              .delete(documentChunkEmbeddings)
+              .where(
+                and(
+                  eq(documentChunkEmbeddings.documentId, payload.documentId),
+                  eq(documentChunkEmbeddings.provider, embeddingProvider),
+                  eq(documentChunkEmbeddings.model, embeddingModel),
+                  inArray(documentChunkEmbeddings.chunkIndex, removedChunkIndexes),
+                ),
+              );
+          }
+
+          await tx
+            .update(documents)
+            .set({
+              embeddingStatus: "ready",
+              embeddingProvider,
+              embeddingModel,
+              updatedAt: new Date(),
+            })
+            .where(eq(documents.id, payload.documentId));
+
+          await tx
+            .update(processingJobs)
+            .set({
+              status: "completed",
+              attempts: retryCount + 1,
+              lastError: null,
+              finishedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(this.embeddingJobWhere(payload));
+
+          await tx.insert(auditEvents).values({
+            documentId: payload.documentId,
+            eventType: "document.embeddings_indexed",
+            payload: {
+              embeddingProvider,
+              embeddingModel,
+              retryCount,
+              embeddedChunkCount: chunksToEmbed.length,
+              totalChunkCount: chunks.length,
+            },
+          });
+        });
+      } else {
+        await this.databaseService.db.transaction(async (tx) => {
+          await tx
+            .update(documents)
+            .set({
+              embeddingStatus: "ready",
+              embeddingProvider,
+              embeddingModel,
+              updatedAt: new Date(),
+            })
+            .where(eq(documents.id, payload.documentId));
+
+          await tx
+            .update(processingJobs)
+            .set({
+              status: "completed",
+              attempts: retryCount + 1,
+              lastError: null,
+              finishedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(this.embeddingJobWhere(payload));
+        });
+      }
+
+      this.metricsService.incrementEmbeddingJobsTotal(embeddingProvider, "completed");
+      this.metricsService.observeEmbeddingDuration(
+        embeddingProvider,
+        (Date.now() - startedAt) / 1000,
+      );
+      this.metricsService.incrementEmbeddedChunksTotal(embeddingProvider, chunksToEmbed.length);
+      this.logStructured("log", "document.embedding_completed", {
+        documentId: payload.documentId,
+        embeddingJobId: payload.embeddingJobId,
+        embeddingProvider,
+        embeddingModel,
+        retryCount,
+        embeddedChunkCount: chunksToEmbed.length,
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown embedding failure";
+      const finalFailure = retryCount >= this.configService.get("PROCESSING_RETRY_LIMIT");
+
+      if (finalFailure) {
+        await this.handleFinalEmbeddingFailure(payload, retryCount, message, embeddingProvider, embeddingModel);
+        this.metricsService.incrementEmbeddingJobsTotal(embeddingProvider, "failed");
+        this.logStructured("error", "document.embedding_failed_final", {
+          documentId: payload.documentId,
+          embeddingJobId: payload.embeddingJobId,
+          retryCount,
+          embeddingProvider,
+          embeddingModel,
+          error: message,
+        });
+      } else {
+        await this.handleRetryableEmbeddingFailure(
+          payload,
+          retryCount,
+          message,
+          embeddingProvider,
+          embeddingModel,
+        );
+        this.metricsService.incrementEmbeddingJobsTotal(embeddingProvider, "retry");
+        this.logStructured("warn", "document.embedding_retry_scheduled", {
+          documentId: payload.documentId,
+          embeddingJobId: payload.embeddingJobId,
+          retryCount,
+          embeddingProvider,
+          embeddingModel,
+          error: message,
+        });
+      }
+
+      throw error;
     }
   }
 
@@ -508,6 +899,78 @@ export class ProcessingService {
     });
   }
 
+  private async handleRetryableEmbeddingFailure(
+    payload: EmbeddingJobInput,
+    retryCount: number,
+    message: string,
+    embeddingProvider: EmbeddingProviderId,
+    embeddingModel: string,
+  ): Promise<void> {
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx
+        .update(documents)
+        .set({
+          embeddingStatus: "queued",
+          embeddingProvider,
+          embeddingModel,
+          updatedAt: new Date(),
+        })
+        .where(eq(documents.id, payload.documentId));
+
+      await tx
+        .update(processingJobs)
+        .set({
+          status: "running",
+          attempts: retryCount + 1,
+          lastError: message,
+          updatedAt: new Date(),
+        })
+        .where(this.embeddingJobWhere(payload));
+    });
+  }
+
+  private async handleFinalEmbeddingFailure(
+    payload: EmbeddingJobInput,
+    retryCount: number,
+    message: string,
+    embeddingProvider: EmbeddingProviderId,
+    embeddingModel: string,
+  ): Promise<void> {
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx
+        .update(documents)
+        .set({
+          embeddingStatus: "failed",
+          embeddingProvider,
+          embeddingModel,
+          updatedAt: new Date(),
+        })
+        .where(eq(documents.id, payload.documentId));
+
+      await tx
+        .update(processingJobs)
+        .set({
+          status: "failed",
+          attempts: retryCount + 1,
+          lastError: message,
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(this.embeddingJobWhere(payload));
+
+      await tx.insert(auditEvents).values({
+        documentId: payload.documentId,
+        eventType: "document.embedding_failed",
+        payload: {
+          error: message,
+          retryCount,
+          embeddingProvider,
+          embeddingModel,
+        },
+      });
+    });
+  }
+
   private async markProcessing(
     documentId: string,
     processingJobId: string | undefined,
@@ -539,6 +1002,37 @@ export class ProcessingService {
       );
   }
 
+  private async markEmbeddingIndexing(
+    documentId: string,
+    embeddingJobId: string | undefined,
+    retryCount: number,
+  ): Promise<void> {
+    await this.databaseService.db
+      .update(documents)
+      .set({
+        embeddingStatus: "indexing",
+        updatedAt: new Date(),
+      })
+      .where(eq(documents.id, documentId));
+
+    await this.databaseService.db
+      .update(processingJobs)
+      .set({
+        status: "running",
+        attempts: retryCount + 1,
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        embeddingJobId
+          ? eq(processingJobs.id, embeddingJobId)
+          : and(
+              eq(processingJobs.documentId, documentId),
+              eq(processingJobs.queueName, DOCUMENT_EMBEDDING_QUEUE),
+            ),
+      );
+  }
+
   private processingJobWhere(payload: DocumentProcessingPayload) {
     return payload.processingJobId
       ? eq(processingJobs.id, payload.processingJobId)
@@ -546,6 +1040,45 @@ export class ProcessingService {
           eq(processingJobs.documentId, payload.documentId),
           eq(processingJobs.queueName, DOCUMENT_PROCESSING_QUEUE),
         );
+  }
+
+  private embeddingJobWhere(payload: EmbeddingJobInput) {
+    return payload.embeddingJobId
+      ? eq(processingJobs.id, payload.embeddingJobId)
+      : and(
+          eq(processingJobs.documentId, payload.documentId),
+          eq(processingJobs.queueName, DOCUMENT_EMBEDDING_QUEUE),
+        );
+  }
+
+  private async completeEmbeddingJobWithoutChanges(
+    payload: EmbeddingJobInput,
+    retryCount: number,
+    embeddingProvider: EmbeddingProviderId,
+    embeddingModel: string,
+  ): Promise<void> {
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx
+        .update(documents)
+        .set({
+          embeddingStatus: "ready",
+          embeddingProvider,
+          embeddingModel,
+          updatedAt: new Date(),
+        })
+        .where(eq(documents.id, payload.documentId));
+
+      await tx
+        .update(processingJobs)
+        .set({
+          status: "completed",
+          attempts: retryCount + 1,
+          lastError: null,
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(this.embeddingJobWhere(payload));
+    });
   }
 
   private async ensureCorrespondent(name: string): Promise<string> {
@@ -662,6 +1195,9 @@ export class ProcessingService {
     reviewReasons: ReviewReason[];
     fallbackUsed: boolean;
     fallbackProvider: DocumentMetadata["parseProvider"] | null;
+    embeddingConfigured: boolean;
+    embeddingProvider: EmbeddingProviderId | null;
+    embeddingModel: string | null;
   }): DocumentMetadata {
     const reviewEvidenceRecord =
       input.metadata.metadata.reviewEvidence &&
@@ -733,6 +1269,12 @@ export class ProcessingService {
         strategy: "normalized-parse-v1",
         chunkCount: input.chunks.length,
         usedProviderHints: input.parsed.chunkHints.length > 0,
+      },
+      embedding: {
+        provider: input.embeddingProvider ?? undefined,
+        model: input.embeddingModel ?? undefined,
+        configured: input.embeddingConfigured,
+        chunkCount: input.chunks.length,
       },
       reviewReasons: input.reviewReasons,
       reviewEvidence,

@@ -1,6 +1,8 @@
 import {
   documentSources,
   documentStatuses,
+  embeddingProviders,
+  embeddingStatuses,
   parseProviders,
   processingJobStatuses,
   reviewStatuses,
@@ -9,6 +11,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  halfvec,
   index,
   integer,
   jsonb,
@@ -26,7 +29,9 @@ import {
 export const documentSourceEnum = pgEnum("document_source", documentSources);
 export const documentStatusEnum = pgEnum("document_status", documentStatuses);
 export const parseProviderEnum = pgEnum("parse_provider", parseProviders);
+export const embeddingProviderEnum = pgEnum("embedding_provider", embeddingProviders);
 export const reviewStatusEnum = pgEnum("review_status", reviewStatuses);
+export const embeddingStatusEnum = pgEnum("embedding_status", embeddingStatuses);
 export const processingJobStatusEnum = pgEnum(
   "processing_job_status",
   processingJobStatuses,
@@ -162,6 +167,11 @@ export const documents = pgTable(
     searchablePdfStorageKey: text("searchable_pdf_storage_key"),
     parseProvider: parseProviderEnum("parse_provider"),
     chunkCount: integer("chunk_count").notNull().default(0),
+    embeddingStatus: embeddingStatusEnum("embedding_status")
+      .notNull()
+      .default("not_configured"),
+    embeddingProvider: embeddingProviderEnum("embedding_provider"),
+    embeddingModel: varchar("embedding_model", { length: 255 }),
     lastProcessingError: text("last_processing_error"),
     correspondentId: uuid("correspondent_id").references(() => correspondents.id, {
       onDelete: "set null",
@@ -183,6 +193,7 @@ export const documents = pgTable(
     statusIdx: index("documents_status_idx").on(table.status),
     reviewStatusIdx: index("documents_review_status_idx").on(table.reviewStatus),
     parseProviderIdx: index("documents_parse_provider_idx").on(table.parseProvider),
+    embeddingStatusIdx: index("documents_embedding_status_idx").on(table.embeddingStatus),
     createdAtIdx: index("documents_created_at_idx").on(table.createdAt),
     issueDateIdx: index("documents_issue_date_idx").on(table.issueDate),
     dueDateIdx: index("documents_due_date_idx").on(table.dueDate),
@@ -262,6 +273,7 @@ export const documentChunks = pgTable(
     pageFrom: integer("page_from"),
     pageTo: integer("page_to"),
     strategyVersion: varchar("strategy_version", { length: 64 }).notNull(),
+    contentHash: varchar("content_hash", { length: 64 }).notNull(),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
       .notNull()
@@ -274,6 +286,33 @@ export const documentChunks = pgTable(
       table.chunkIndex,
     ),
     documentIdx: index("document_chunks_document_idx").on(table.documentId),
+  }),
+);
+
+export const documentChunkEmbeddings = pgTable(
+  "document_chunk_embeddings",
+  {
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunk_index").notNull(),
+    provider: embeddingProviderEnum("provider").notNull(),
+    model: varchar("model", { length: 255 }).notNull(),
+    dimensions: integer("dimensions").notNull(),
+    embedding: halfvec("embedding", { dimensions: 3072 }).notNull(),
+    contentHash: varchar("content_hash", { length: 64 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.documentId, table.chunkIndex, table.provider, table.model],
+    }),
+    documentIdx: index("document_chunk_embeddings_document_idx").on(table.documentId),
+    providerModelIdx: index("document_chunk_embeddings_provider_model_idx").on(
+      table.provider,
+      table.model,
+    ),
   }),
 );
 

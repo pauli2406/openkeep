@@ -1,4 +1,8 @@
-import { ParseProviderSchema, ProcessingModeSchema } from "@openkeep/types";
+import {
+  EmbeddingProviderSchema,
+  ParseProviderSchema,
+  ProcessingModeSchema,
+} from "@openkeep/types";
 import { z } from "zod";
 
 const BooleanFromEnv = z.preprocess((value) => {
@@ -84,10 +88,18 @@ export const AppEnvSchema = z.object({
   PROVIDER_MODE: ProcessingModeSchema.default("hybrid"),
   ACTIVE_PARSE_PROVIDER: ParseProviderSchema.default("local-ocr"),
   FALLBACK_PARSE_PROVIDER: EmptyStringToUndefined(ParseProviderSchema.nullable().optional()),
+  ACTIVE_EMBEDDING_PROVIDER: EmptyStringToUndefined(
+    EmbeddingProviderSchema.nullable().optional(),
+  ),
   OPENAI_API_KEY: EmptyStringToUndefined(z.string().optional()),
   OPENAI_MODEL: z.string().default("gpt-4.1-mini"),
+  OPENAI_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   GEMINI_API_KEY: EmptyStringToUndefined(z.string().optional()),
   GEMINI_MODEL: z.string().default("gemini-2.0-flash"),
+  GEMINI_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
+  VOYAGE_API_KEY: EmptyStringToUndefined(z.string().optional()),
+  VOYAGE_API_BASE_URL: z.string().url().default("https://api.voyageai.com/v1"),
+  VOYAGE_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   GOOGLE_CLOUD_PROJECT_ID: EmptyStringToUndefined(z.string().optional()),
   GOOGLE_CLOUD_LOCATION: z.string().default("eu"),
   GOOGLE_CLOUD_ACCESS_TOKEN: EmptyStringToUndefined(z.string().optional()),
@@ -103,6 +115,7 @@ export const AppEnvSchema = z.object({
   MISTRAL_API_KEY: EmptyStringToUndefined(z.string().optional()),
   MISTRAL_OCR_BASE_URL: z.string().url().default("https://api.mistral.ai"),
   MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
+  MISTRAL_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   OCR_LANGUAGES: z.string().default("deu+eng"),
   PARSE_PROVIDER_TIMEOUT_SECONDS: NumberFromEnv.default(120),
   PARSE_PROVIDER_MAX_PAGES: NumberFromEnv.default(300),
@@ -131,10 +144,16 @@ export const providerConfig = (config: AppConfig) => ({
   mode: config.PROVIDER_MODE,
   activeParseProvider: config.ACTIVE_PARSE_PROVIDER,
   fallbackParseProvider: config.FALLBACK_PARSE_PROVIDER ?? null,
+  activeEmbeddingProvider: config.ACTIVE_EMBEDDING_PROVIDER ?? null,
   openaiModel: config.OPENAI_MODEL,
   geminiModel: config.GEMINI_MODEL,
+  openaiEmbeddingModel: config.OPENAI_EMBEDDING_MODEL,
+  geminiEmbeddingModel: config.GEMINI_EMBEDDING_MODEL,
+  voyageEmbeddingModel: config.VOYAGE_EMBEDDING_MODEL,
+  mistralEmbeddingModel: config.MISTRAL_EMBEDDING_MODEL,
   hasOpenAiKey: Boolean(config.OPENAI_API_KEY),
   hasGeminiKey: Boolean(config.GEMINI_API_KEY),
+  hasVoyageKey: Boolean(config.VOYAGE_API_KEY),
   hasGoogleCloudConfig: Boolean(
     config.GOOGLE_CLOUD_PROJECT_ID &&
       (config.GOOGLE_CLOUD_ACCESS_TOKEN || config.GOOGLE_CLOUD_SERVICE_ACCOUNT_JSON) &&
@@ -149,4 +168,5 @@ export const providerConfig = (config: AppConfig) => ({
       config.AZURE_DOCUMENT_INTELLIGENCE_API_KEY,
   ),
   hasMistralOcrConfig: Boolean(config.MISTRAL_API_KEY),
+  hasMistralEmbeddingConfig: Boolean(config.MISTRAL_API_KEY),
 });

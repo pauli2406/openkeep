@@ -9,9 +9,18 @@ export const parseProviders = [
   "azure-ai-document-intelligence",
   "mistral-ocr",
 ] as const;
+export const embeddingProviders = ["openai", "google-gemini", "voyage", "mistral"] as const;
 export const documentSources = ["upload", "watch-folder", "email", "api"] as const;
 export const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
 export const reviewStatuses = ["not_required", "pending", "resolved"] as const;
+export const embeddingStatuses = [
+  "not_configured",
+  "queued",
+  "indexing",
+  "ready",
+  "stale",
+  "failed",
+] as const;
 export const reviewReasons = [
   "low_confidence",
   "processing_failed",
@@ -23,9 +32,11 @@ export const processingJobStatuses = ["queued", "running", "completed", "failed"
 
 export const ProcessingModeSchema = z.enum(processingModes);
 export const ParseProviderSchema = z.enum(parseProviders);
+export const EmbeddingProviderSchema = z.enum(embeddingProviders);
 export const DocumentSourceSchema = z.enum(documentSources);
 export const DocumentStatusSchema = z.enum(documentStatuses);
 export const ReviewStatusSchema = z.enum(reviewStatuses);
+export const EmbeddingStatusSchema = z.enum(embeddingStatuses);
 export const ReviewReasonSchema = z.enum(reviewReasons);
 export const ProcessingJobStatusSchema = z.enum(processingJobStatuses);
 
@@ -122,8 +133,20 @@ export const DocumentChunkSchema = z.object({
   pageFrom: z.number().int().positive().nullable(),
   pageTo: z.number().int().positive().nullable(),
   strategyVersion: z.string().min(1),
+  contentHash: z.string().min(64).max(64),
   metadata: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.string().min(1),
+});
+
+export const DocumentChunkEmbeddingSchema = z.object({
+  documentId: z.string().uuid(),
+  chunkIndex: z.number().int().nonnegative(),
+  provider: EmbeddingProviderSchema,
+  model: z.string().min(1),
+  dimensions: z.number().int().positive(),
+  contentHash: z.string().min(64).max(64),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
 });
 
 export const TagSchema = z.object({
@@ -207,6 +230,14 @@ export const DocumentMetadataSchema = z
         usedProviderHints: z.boolean().optional(),
       })
       .optional(),
+    embedding: z
+      .object({
+        provider: EmbeddingProviderSchema.optional(),
+        model: z.string().optional(),
+        configured: z.boolean().optional(),
+        chunkCount: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
     reviewEvidence: ReviewEvidenceSchema.optional(),
   })
   .passthrough();
@@ -247,8 +278,13 @@ export const DocumentSchema = z.object({
   searchablePdfAvailable: z.boolean(),
   parseProvider: ParseProviderSchema.nullable().optional(),
   chunkCount: z.number().int().nonnegative().default(0),
+  embeddingStatus: EmbeddingStatusSchema.default("not_configured"),
+  embeddingProvider: EmbeddingProviderSchema.nullable().optional(),
+  embeddingModel: z.string().nullable().optional(),
+  embeddingsStale: z.boolean().default(false),
   lastProcessingError: z.string().nullable(),
   latestProcessingJob: ProcessingJobSummarySchema.nullable(),
+  latestEmbeddingJob: ProcessingJobSummarySchema.nullable().optional(),
   metadata: DocumentMetadataSchema,
   createdAt: z.string().min(1),
   processedAt: z.string().nullable(),
@@ -277,6 +313,40 @@ export const SearchDocumentsRequestSchema = z.object({
 
 export const SearchDocumentsResponseSchema = z.object({
   items: z.array(DocumentSchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().min(1),
+  pageSize: z.number().int().min(1),
+  appliedFilters: SearchDocumentsFiltersSchema.default({}),
+});
+
+export const SemanticMatchedChunkSchema = z.object({
+  chunkIndex: z.number().int().nonnegative(),
+  heading: z.string().nullable(),
+  text: z.string(),
+  pageFrom: z.number().int().positive().nullable(),
+  pageTo: z.number().int().positive().nullable(),
+  score: z.number().nonnegative(),
+  distance: z.number().nullable(),
+});
+
+export const SemanticSearchRequestSchema = z.object({
+  query: z.string().trim().min(1),
+  filters: SearchDocumentsFiltersSchema.optional(),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+  maxChunkMatches: z.number().int().min(1).max(10).default(3),
+});
+
+export const SemanticSearchResultSchema = z.object({
+  document: DocumentSchema,
+  score: z.number().nonnegative(),
+  semanticScore: z.number().nonnegative().nullable(),
+  keywordScore: z.number().nonnegative().nullable(),
+  matchedChunks: z.array(SemanticMatchedChunkSchema),
+});
+
+export const SemanticSearchResponseSchema = z.object({
+  items: z.array(SemanticSearchResultSchema),
   total: z.number().int().nonnegative(),
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1),
@@ -345,14 +415,21 @@ export const ProviderConfigSchema = z.object({
   mode: ProcessingModeSchema,
   activeParseProvider: ParseProviderSchema,
   fallbackParseProvider: ParseProviderSchema.nullable().optional(),
+  activeEmbeddingProvider: EmbeddingProviderSchema.nullable().optional(),
   openaiModel: z.string().optional(),
   geminiModel: z.string().optional(),
+  openaiEmbeddingModel: z.string().optional(),
+  geminiEmbeddingModel: z.string().optional(),
+  voyageEmbeddingModel: z.string().optional(),
+  mistralEmbeddingModel: z.string().optional(),
   hasOpenAiKey: z.boolean().default(false),
   hasGeminiKey: z.boolean().default(false),
+  hasVoyageKey: z.boolean().default(false),
   hasGoogleCloudConfig: z.boolean().default(false),
   hasAwsTextractConfig: z.boolean().default(false),
   hasAzureDocumentIntelligenceConfig: z.boolean().default(false),
   hasMistralOcrConfig: z.boolean().default(false),
+  hasMistralEmbeddingConfig: z.boolean().default(false),
 });
 
 export const QueueDocumentProcessingPayloadSchema = z.object({
@@ -362,6 +439,21 @@ export const QueueDocumentProcessingPayloadSchema = z.object({
   retryCount: z.number().int().nonnegative().default(0),
   parseProvider: ParseProviderSchema.optional(),
   fallbackParseProvider: ParseProviderSchema.nullable().optional(),
+});
+
+export const QueueDocumentEmbeddingPayloadSchema = z.object({
+  documentId: z.string().uuid(),
+  force: z.boolean().default(false),
+  embeddingJobId: z.string().uuid().optional(),
+  retryCount: z.number().int().nonnegative().default(0),
+  embeddingProvider: EmbeddingProviderSchema.optional(),
+  embeddingModel: z.string().optional(),
+});
+
+export const ReindexEmbeddingsRequestSchema = z.object({
+  documentIds: z.array(z.string().uuid()).optional(),
+  filters: SearchDocumentsFiltersSchema.optional(),
+  scope: z.enum(["stale", "all"]).default("stale"),
 });
 
 export const ReadinessResponseSchema = z.object({
@@ -375,6 +467,7 @@ export const ReadinessResponseSchema = z.object({
 
 export type BoundingBox = z.infer<typeof BoundingBoxSchema>;
 export type ParseProvider = z.infer<typeof ParseProviderSchema>;
+export type EmbeddingProvider = z.infer<typeof EmbeddingProviderSchema>;
 export type ParsedDocumentLine = z.infer<typeof ParsedDocumentLineSchema>;
 export type ParsedDocumentBlock = z.infer<typeof ParsedDocumentBlockSchema>;
 export type ParsedDocumentTableCell = z.infer<typeof ParsedDocumentTableCellSchema>;
@@ -384,6 +477,7 @@ export type ParsedDocumentChunkHint = z.infer<typeof ParsedDocumentChunkHintSche
 export type ParsedDocumentPage = z.infer<typeof ParsedDocumentPageSchema>;
 export type ParsedDocument = z.infer<typeof ParsedDocumentSchema>;
 export type DocumentChunk = z.infer<typeof DocumentChunkSchema>;
+export type DocumentChunkEmbedding = z.infer<typeof DocumentChunkEmbeddingSchema>;
 export type Tag = z.infer<typeof TagSchema>;
 export type Correspondent = z.infer<typeof CorrespondentSchema>;
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;
@@ -392,12 +486,17 @@ export type ReviewEvidenceField = z.infer<typeof ReviewEvidenceFieldSchema>;
 export type ReviewEvidence = z.infer<typeof ReviewEvidenceSchema>;
 export type DocumentMetadata = z.infer<typeof DocumentMetadataSchema>;
 export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
+export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>;
 export type ReviewReason = z.infer<typeof ReviewReasonSchema>;
 export type ProcessingJobStatus = z.infer<typeof ProcessingJobStatusSchema>;
 export type ProcessingJobSummary = z.infer<typeof ProcessingJobSummarySchema>;
 export type Document = z.infer<typeof DocumentSchema>;
 export type SearchDocumentsRequest = z.infer<typeof SearchDocumentsRequestSchema>;
 export type SearchDocumentsResponse = z.infer<typeof SearchDocumentsResponseSchema>;
+export type SemanticMatchedChunk = z.infer<typeof SemanticMatchedChunkSchema>;
+export type SemanticSearchRequest = z.infer<typeof SemanticSearchRequestSchema>;
+export type SemanticSearchResult = z.infer<typeof SemanticSearchResultSchema>;
+export type SemanticSearchResponse = z.infer<typeof SemanticSearchResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;
@@ -414,4 +513,8 @@ export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type QueueDocumentProcessingPayload = z.infer<
   typeof QueueDocumentProcessingPayloadSchema
 >;
+export type QueueDocumentEmbeddingPayload = z.infer<
+  typeof QueueDocumentEmbeddingPayloadSchema
+>;
+export type ReindexEmbeddingsRequest = z.infer<typeof ReindexEmbeddingsRequestSchema>;
 export type ReadinessResponse = z.infer<typeof ReadinessResponseSchema>;

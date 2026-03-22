@@ -1,9 +1,29 @@
 import { Injectable } from "@nestjs/common";
+import { createHash } from "crypto";
 
 import type { Chunker, ChunkingInput } from "./provider.types";
 
 const DEFAULT_STRATEGY = "normalized-parse-v1";
 const MAX_CHUNK_CHARS = 1200;
+
+const buildChunkContentHash = (input: {
+  heading: string | null;
+  text: string;
+  pageFrom: number | null;
+  pageTo: number | null;
+  strategyVersion: string;
+}) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify({
+        heading: input.heading,
+        text: input.text,
+        pageFrom: input.pageFrom,
+        pageTo: input.pageTo,
+        strategyVersion: input.strategyVersion,
+      }),
+    )
+    .digest("hex");
 
 @Injectable()
 export class DeterministicChunker implements Chunker {
@@ -20,6 +40,13 @@ export class DeterministicChunker implements Chunker {
           pageFrom: chunkHint.pageFrom ?? null,
           pageTo: chunkHint.pageTo ?? chunkHint.pageFrom ?? null,
           strategyVersion: DEFAULT_STRATEGY,
+          contentHash: buildChunkContentHash({
+            heading: chunkHint.heading ?? null,
+            text: chunkHint.text.trim(),
+            pageFrom: chunkHint.pageFrom ?? null,
+            pageTo: chunkHint.pageTo ?? chunkHint.pageFrom ?? null,
+            strategyVersion: DEFAULT_STRATEGY,
+          }),
           metadata: {
             source: "provider-hint",
             provider: parsed.provider,
@@ -37,6 +64,7 @@ export class DeterministicChunker implements Chunker {
       pageFrom: number | null;
       pageTo: number | null;
       strategyVersion: string;
+      contentHash: string;
       metadata: Record<string, unknown>;
     }> = [];
 
@@ -59,6 +87,13 @@ export class DeterministicChunker implements Chunker {
         pageFrom,
         pageTo,
         strategyVersion: DEFAULT_STRATEGY,
+        contentHash: buildChunkContentHash({
+          heading: currentHeading,
+          text,
+          pageFrom,
+          pageTo,
+          strategyVersion: DEFAULT_STRATEGY,
+        }),
         metadata: {
           source: "openkeep-lines",
           provider: parsed.provider,

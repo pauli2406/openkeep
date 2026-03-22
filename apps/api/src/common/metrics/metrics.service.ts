@@ -34,6 +34,18 @@ export class MetricsService {
     this.incrementCounter("openkeep_parse_fallback_usage_total");
   }
 
+  incrementEmbeddingJobsTotal(provider: string, outcome: string): void {
+    this.incrementCounter("openkeep_embedding_jobs_total", { provider, outcome });
+  }
+
+  incrementEmbeddedChunksTotal(provider: string, value = 1): void {
+    this.incrementCounter("openkeep_embedded_chunks_total", { provider }, value);
+  }
+
+  incrementSemanticQueriesTotal(): void {
+    this.incrementCounter("openkeep_semantic_queries_total");
+  }
+
   observeOcrDuration(seconds: number): void {
     this.observeDuration("openkeep_ocr_duration_seconds", seconds);
   }
@@ -50,14 +62,24 @@ export class MetricsService {
     this.observeDuration("openkeep_chunk_generation_duration_seconds", seconds);
   }
 
+  observeEmbeddingDuration(provider: string, seconds: number): void {
+    this.observeDuration("openkeep_embedding_duration_seconds", seconds, { provider });
+  }
+
+  observeSemanticQueryDuration(seconds: number): void {
+    this.observeDuration("openkeep_semantic_query_duration_seconds", seconds);
+  }
+
   renderPrometheus(dynamic: {
     documentsPendingReview: number;
     documentsPendingReviewByReason: Array<{ reason: ReviewReason; count: number }>;
-    queueDepth: number;
+    staleDocuments: number;
+    queueDepths: Array<{ queue: string; depth: number }>;
   }): string {
     const pendingByReason = new Map(
       dynamic.documentsPendingReviewByReason.map((item) => [item.reason, item.count]),
     );
+    const queueDepths = new Map(dynamic.queueDepths.map((item) => [item.queue, item.depth]));
     const lines: string[] = [
       "# HELP openkeep_uploads_total Total uploaded documents.",
       "# TYPE openkeep_uploads_total counter",
@@ -76,6 +98,15 @@ export class MetricsService {
       "# HELP openkeep_parse_fallback_usage_total Total parse fallback executions.",
       "# TYPE openkeep_parse_fallback_usage_total counter",
       `${this.metricLine("openkeep_parse_fallback_usage_total")}`,
+      "# HELP openkeep_embedding_jobs_total Total embedding jobs by provider and outcome.",
+      "# TYPE openkeep_embedding_jobs_total counter",
+      ...this.counterLines("openkeep_embedding_jobs_total"),
+      "# HELP openkeep_embedded_chunks_total Total embedded chunks by provider.",
+      "# TYPE openkeep_embedded_chunks_total counter",
+      ...this.counterLines("openkeep_embedded_chunks_total"),
+      "# HELP openkeep_semantic_queries_total Total semantic search requests.",
+      "# TYPE openkeep_semantic_queries_total counter",
+      `${this.metricLine("openkeep_semantic_queries_total")}`,
       "# HELP openkeep_ocr_duration_seconds OCR duration summary.",
       "# TYPE openkeep_ocr_duration_seconds summary",
       ...this.durationLines("openkeep_ocr_duration_seconds"),
@@ -88,6 +119,12 @@ export class MetricsService {
       "# HELP openkeep_chunk_generation_duration_seconds Chunk generation duration summary.",
       "# TYPE openkeep_chunk_generation_duration_seconds summary",
       ...this.durationLines("openkeep_chunk_generation_duration_seconds"),
+      "# HELP openkeep_embedding_duration_seconds Embedding job duration summary by provider.",
+      "# TYPE openkeep_embedding_duration_seconds summary",
+      ...this.durationLines("openkeep_embedding_duration_seconds"),
+      "# HELP openkeep_semantic_query_duration_seconds Semantic query duration summary.",
+      "# TYPE openkeep_semantic_query_duration_seconds summary",
+      ...this.durationLines("openkeep_semantic_query_duration_seconds"),
       "# HELP openkeep_documents_pending_review Documents waiting for review.",
       "# TYPE openkeep_documents_pending_review gauge",
       `openkeep_documents_pending_review ${dynamic.documentsPendingReview}`,
@@ -97,9 +134,13 @@ export class MetricsService {
         (reason) =>
           `openkeep_documents_pending_review_by_reason{reason="${reason}"} ${pendingByReason.get(reason) ?? 0}`,
       ),
-      "# HELP openkeep_document_processing_queue_depth Pending processing jobs in queue.",
+      "# HELP openkeep_embedding_documents_stale Documents with stale embeddings for the active provider/model.",
+      "# TYPE openkeep_embedding_documents_stale gauge",
+      `openkeep_embedding_documents_stale ${dynamic.staleDocuments}`,
+      "# HELP openkeep_document_processing_queue_depth Pending jobs in queues.",
       "# TYPE openkeep_document_processing_queue_depth gauge",
-      `openkeep_document_processing_queue_depth{queue="document.process"} ${dynamic.queueDepth}`,
+      `openkeep_document_processing_queue_depth{queue="document.process"} ${queueDepths.get("document.process") ?? 0}`,
+      `openkeep_document_processing_queue_depth{queue="document.embed"} ${queueDepths.get("document.embed") ?? 0}`,
     ];
 
     return `${lines.filter(Boolean).join("\n")}\n`;

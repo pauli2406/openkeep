@@ -41,6 +41,7 @@ describe("DeterministicChunker", () => {
       chunkIndex: 0,
       heading: "Intro",
       text: "First section",
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       metadata: {
         source: "fixture",
         provider: "google-document-ai-gemini-layout-parser",
@@ -107,6 +108,7 @@ describe("DeterministicChunker", () => {
       pageFrom: 1,
       pageTo: 1,
       strategyVersion: "normalized-parse-v1",
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(chunks[0]?.text).toContain("Line one");
   });

@@ -18,6 +18,7 @@ flowchart TD
     Worker --> ParseRegistry["DocumentParseProviderRegistry"]
     Worker --> Extractor["MetadataExtractor"]
     Worker --> Chunker["Chunker"]
+    Worker --> EmbedRegistry["EmbeddingProviderRegistry"]
     Worker --> DB
     Worker --> S3
 
@@ -35,18 +36,26 @@ flowchart TD
 
     Extractor --> Archive["OpenKeep archive extraction"]
     Chunker --> Chunks["Persisted document chunks"]
+    EmbedRegistry --> OpenAI["OpenAI embeddings"]
+    EmbedRegistry --> GeminiEmb["Gemini embeddings"]
+    EmbedRegistry --> Voyage["Voyage embeddings"]
+    EmbedRegistry --> MistralEmb["Mistral embeddings"]
+    EmbedRegistry --> Embeddings["Persisted chunk embeddings"]
+    Embeddings --> DB
     Worker --> Derived["Derived searchable PDF"]
     Derived --> S3
 
     API --> Download["Original / searchable download"]
     Download --> S3
+    Search --> Hybrid["Hybrid semantic ranking"]
+    Hybrid --> DB
 ```
 
 ## Runtime Components
 
 - API: receives uploads, exposes auth/search/archive endpoints, and enqueues processing jobs.
-- Worker: consumes `document.process` jobs from `pg-boss`, runs provider-selected parsing, shared archive extraction, chunk generation, and archive updates.
-- PostgreSQL: stores users, documents, OCR text blocks, persisted chunks, processing jobs, tags, correspondents, document types, and audit events.
+- Worker: consumes `document.process` and `document.embed` jobs from `pg-boss`, runs provider-selected parsing, shared archive extraction, chunk generation, embedding generation, and archive updates.
+- PostgreSQL: stores users, documents, OCR text blocks, persisted chunks, chunk embeddings, processing jobs, tags, correspondents, document types, and audit events.
 - MinIO: stores the original uploaded binary once per unique checksum plus derived searchable PDFs when parsing succeeds.
 
 ## Provider Wiring
@@ -65,9 +74,16 @@ flowchart TD
 - Metadata extractor interface: `MetadataExtractor`
 - Active metadata implementation: `HybridMetadataExtractor`
 - The hybrid extractor still wraps `DeterministicMetadataExtractor` and keeps OpenKeep as the source of truth for archive fields.
-- Embedding provider interface exists but is currently backed by a no-op implementation.
+- Embedding provider interface: `EmbeddingProvider`
+- Embedding provider registry: `EmbeddingProviderRegistry`
+- Active embedding providers supported now:
+  - `openai`
+  - `google-gemini`
+  - `voyage`
+  - `mistral`
 - Answer provider interface exists but is currently backed by a no-op implementation.
 - Config supports one globally active parse provider plus an optional fallback provider for hard failures.
+- Config supports one globally active embedding provider and explicit model selection for semantic indexing.
 
 ## Processing Flow
 
@@ -78,8 +94,9 @@ flowchart TD
 5. The active parse provider converts the source file into a normalized parsed-document model with text, pages, lines, blocks, optional tables, optional key-value pairs, optional chunk hints, and provider metadata.
 6. Metadata extraction applies shared normalization for dates, currencies, amounts, correspondents, document types, confidence scoring, and review evidence.
 7. Chunk generation derives deterministic stored chunks from normalized parse output and provider chunk hints when available.
-8. The worker replaces prior OCR/page/tag/chunk records for idempotent reprocessing, stores a derived searchable PDF when available, and records review state separately from processing state.
-9. The document becomes searchable through PostgreSQL full-text search and structured filters.
+8. If semantic indexing is configured, the worker enqueues a `document.embed` job after successful chunk persistence.
+9. The embedding worker upserts chunk-level vectors keyed by document id, chunk index, provider, and model.
+10. The document becomes searchable through PostgreSQL full-text search, structured filters, and the hybrid semantic endpoint.
 
 ## Parse Details
 
@@ -115,23 +132,43 @@ flowchart TD
 ## Chunking Details
 
 - Chunk persistence is part of successful document processing.
-- Each chunk stores document id, chunk index, text, page span, strategy version, and provider-related metadata.
+- Each chunk stores document id, chunk index, text, page span, strategy version, a deterministic content hash, and provider-related metadata.
 - The default chunker prefers provider chunk hints when available and falls back to deterministic grouping over normalized lines and pages.
 - Reprocessing deletes and rebuilds chunk rows so chunk persistence stays idempotent.
+
+## Embeddings and Semantic Search
+
+- Semantic indexing stores embeddings per chunk, not per document.
+- Embeddings are stored in `document_chunk_embeddings` with provider, model, dimensions, content hash, and vector payload.
+- The active embedding provider is global in v1 and selected through config.
+- `POST /api/search/semantic` applies structured filters first, then combines:
+  - PostgreSQL full-text ranking
+  - vector similarity over chunk embeddings
+  - weighted reciprocal rank fusion
+- Semantic responses stay document-centric and include matched chunks as explainability data.
+- Embedding summary fields on documents include:
+  - `embeddingStatus`
+  - `embeddingProvider`
+  - `embeddingModel`
+  - `embeddingsStale`
+  - `latestEmbeddingJob`
+- Reindexing is exposed through:
+  - `POST /api/embeddings/reindex`
+  - `POST /api/documents/:id/reembed`
 
 ## Review and Operations
 
 - Processing lifecycle status is limited to `pending`, `processing`, `ready`, and `failed`.
 - Review state is persisted separately with `reviewStatus`, `reviewReasons`, `reviewedAt`, and `reviewNote`.
 - Documents expose structured `metadata.reviewEvidence` so review callers can inspect missing invoice fields, OCR text length, thresholds, and active review reasons.
-- Documents also expose `parseProvider`, `chunkCount`, and provider-aware `metadata.parse` / `metadata.chunking` namespaces for future debugging and review UI.
+- Documents also expose `parseProvider`, `chunkCount`, embedding summaries, and provider-aware `metadata.parse` / `metadata.chunking` namespaces for future debugging and review UI.
 - `GET /api/documents/review` returns the review queue.
 - `POST /api/documents/:id/review/resolve` marks manual review complete.
 - `POST /api/documents/:id/review/requeue` clears review state and publishes a fresh processing job.
 - `GET /api/documents/:id/download/searchable` returns the derived searchable PDF when one exists.
-- `GET /api/health` exposes provider configuration metadata including the active parse provider and available credential-backed capabilities.
+- `GET /api/health` exposes provider configuration metadata including the active parse provider, active embedding provider, and available credential-backed capabilities.
 - `GET /api/health/live`, `GET /api/health/ready`, and `GET /api/metrics` expose process health and runtime metrics.
-- Metrics include processing outcomes, parse outcomes by provider, fallback usage, durations, queue depth, and pending-review gauges by reason.
+- Metrics include processing outcomes, parse outcomes by provider, embedding outcomes by provider, durations, queue depth for both queues, pending-review gauges by reason, and stale-embedding gauges.
 
 ## Current API Surface
 
@@ -156,8 +193,12 @@ flowchart TD
   - `POST /api/documents/:id/review/resolve`
   - `POST /api/documents/:id/review/requeue`
   - `POST /api/documents/:id/reprocess`
+  - `POST /api/documents/:id/reembed`
+- Embeddings:
+  - `POST /api/embeddings/reindex`
 - Search:
   - `GET /api/search/documents`
+  - `POST /api/search/semantic`
 - Ops:
   - `GET /api/health`
   - `GET /api/health/live`
@@ -169,15 +210,16 @@ flowchart TD
 - `pnpm --filter @openkeep/api test:unit` runs pure Node unit coverage.
 - `pnpm --filter @openkeep/api test:integration` runs the Testcontainers-backed API suite against PostgreSQL and MinIO.
 - `pnpm --filter @openkeep/api test:ocr` runs OCR acceptance coverage and should be executed in a worker-capable environment with the same OCR binaries and Tesseract language data as the production worker image.
-- `pnpm test:e2e:google`, `pnpm test:e2e:google:gemini`, `pnpm test:e2e:aws`, `pnpm test:e2e:azure`, and `pnpm test:e2e:mistral` run live provider acceptance tests against configured cloud adapters.
+- `pnpm test:e2e:google`, `pnpm test:e2e:google:gemini`, `pnpm test:e2e:aws`, `pnpm test:e2e:azure`, and `pnpm test:e2e:mistral` run live parse-provider acceptance tests against configured cloud adapters.
+- `pnpm test:e2e:openai-embeddings`, `pnpm test:e2e:gemini-embeddings`, `pnpm test:e2e:voyage`, and `pnpm test:e2e:mistral-embeddings` run live embedding-provider acceptance tests.
 - Expected operator bootstrap path:
   1. bring up infrastructure
   2. run migrations
   3. start API and worker
   4. wait for readiness to go green
 
-## Phase 2 Hooks Already Present
+## Remaining Backend Gaps
 
-- Embedding and answer provider interfaces already exist and are still wired to no-op implementations.
-- Queue payloads and processing metadata already carry provider-oriented fields for later semantic and answer-generation phases.
-- Persisted document chunks are now available as the stable handoff point for future embeddings and semantic retrieval.
+- Answer generation is still not implemented.
+- Retrieval evaluation is present in test coverage but not yet exposed as a dedicated operator-facing benchmark command.
+- Web, mobile, and desktop clients are still future phases on top of this backend.

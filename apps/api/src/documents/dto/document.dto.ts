@@ -1,9 +1,11 @@
 import {
   DocumentStatusSchema,
   ListReviewDocumentsRequestSchema,
+  ReindexEmbeddingsRequestSchema,
   RequeueDocumentProcessingRequestSchema,
   ResolveReviewRequestSchema,
   ReviewReasonSchema,
+  SemanticSearchRequestSchema,
   SearchDocumentsRequestSchema,
   UpdateDocumentSchema,
 } from "@openkeep/types";
@@ -54,3 +56,5 @@ export class ResolveReviewDto extends createZodDto(ResolveReviewRequestSchema) {
 export class RequeueDocumentProcessingDto extends createZodDto(
   RequeueDocumentProcessingRequestSchema,
 ) {}
+export class SemanticSearchDto extends createZodDto(SemanticSearchRequestSchema) {}
+export class ReindexEmbeddingsDto extends createZodDto(ReindexEmbeddingsRequestSchema) {}

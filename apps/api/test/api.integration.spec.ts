@@ -2,13 +2,15 @@ import { randomUUID } from "crypto";
 import { resolve } from "path";
 
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import request from "supertest";
 import { GenericContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  documentChunks,
+  documentChunkEmbeddings,
   documentFiles,
   documents,
   processingJobs,
@@ -16,6 +18,7 @@ import {
 import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
 import { ObjectStorageService } from "../src/common/storage/storage.service";
+import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
 
 const shouldRun = process.env.RUN_TESTCONTAINERS === "1";
 const migrationsFolder = resolve(__dirname, "../../../packages/db/migrations");
@@ -29,9 +32,32 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let accessToken = "";
   let apiToken = "";
   let ownerUserId = "";
+  const originalFetch = global.fetch;
 
   beforeAll(async () => {
-    postgresContainer = await new GenericContainer("postgres:16-alpine")
+    global.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url === "https://api.openai.com/v1/embeddings") {
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        const inputs = Array.isArray(body.input) ? body.input : [body.input];
+        return new Response(
+          JSON.stringify({
+            data: inputs.map((text: string, index: number) => ({
+              index,
+              embedding: text.toLowerCase().includes("invoice") ? [0.9, 0.1, 0.2] : [0.1, 0.9, 0.2],
+            })),
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return originalFetch(input as any, init);
+    }) as typeof fetch;
+
+    postgresContainer = await new GenericContainer("pgvector/pgvector:pg16")
       .withEnvironment({
         POSTGRES_DB: "openkeep",
         POSTGRES_USER: "openkeep",
@@ -69,6 +95,9 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     process.env.OWNER_EMAIL = "owner@test.local";
     process.env.OWNER_PASSWORD = "super-secure-owner-password";
     process.env.OWNER_NAME = "OpenKeep Test Owner";
+    process.env.ACTIVE_EMBEDDING_PROVIDER = "openai";
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
     process.env.SKIP_EXTERNAL_INIT = "false";
     process.env.OCR_LANGUAGES = "deu+eng";
     process.env.REVIEW_CONFIDENCE_THRESHOLD = "0.65";
@@ -113,6 +142,8 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     if (app) {
       await app.close();
     }
+
+    global.fetch = originalFetch;
 
     await postgresContainer?.stop();
     await minioContainer?.stop();
@@ -432,5 +463,199 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(missing.status).toBe(404);
+  });
+
+  it("supports semantic search, embedding summaries, and manual reindexing", async () => {
+    const [invoiceFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "e"),
+        storageKey: `fixtures/${randomUUID()}/invoice.pdf`,
+        originalFilename: "invoice-2025.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024,
+      })
+      .returning();
+
+    const [contractFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "f"),
+        storageKey: `fixtures/${randomUUID()}/contract.pdf`,
+        originalFilename: "contract.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024,
+      })
+      .returning();
+
+    const [invoiceDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: invoiceFile.id,
+        title: "Power invoice 2025",
+        mimeType: "application/pdf",
+        status: "ready",
+        parseProvider: "local-ocr",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        fullText: "Invoice 2025 electricity bill amount due",
+        issueDate: new Date(Date.UTC(2025, 1, 3)),
+        metadata: {
+          embedding: {
+            configured: true,
+            provider: "openai",
+            model: "text-embedding-3-small",
+            chunkCount: 1,
+          },
+        },
+        processedAt: new Date(),
+      })
+      .returning();
+
+    const [contractDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: contractFile.id,
+        title: "Insurance contract",
+        mimeType: "application/pdf",
+        status: "ready",
+        parseProvider: "local-ocr",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        fullText: "Insurance contract coverage and policy terms",
+        metadata: {
+          embedding: {
+            configured: true,
+            provider: "openai",
+            model: "text-embedding-3-small",
+            chunkCount: 1,
+          },
+        },
+        processedAt: new Date(),
+      })
+      .returning();
+
+    await databaseService.db.insert(documentChunks).values([
+      {
+        documentId: invoiceDocument.id,
+        chunkIndex: 0,
+        heading: "Invoice",
+        text: "Invoice 2025 electricity bill from municipal utility.",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "1".repeat(64),
+        metadata: {},
+      },
+      {
+        documentId: contractDocument.id,
+        chunkIndex: 0,
+        heading: "Contract",
+        text: "Insurance contract and policy terms for home coverage.",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "2".repeat(64),
+        metadata: {},
+      },
+    ]);
+
+    await databaseService.pool.query(
+      `INSERT INTO document_chunk_embeddings (
+        document_id,
+        chunk_index,
+        provider,
+        model,
+        dimensions,
+        embedding,
+        content_hash
+      )
+      VALUES
+        ($1::uuid, 0, 'openai', 'text-embedding-3-small', 3, $2::halfvec, $3),
+        ($4::uuid, 0, 'openai', 'text-embedding-3-small', 3, $5::halfvec, $6)`,
+      [
+        invoiceDocument.id,
+        serializeHalfVector(padEmbedding([0.9, 0.1, 0.2])),
+        "1".repeat(64),
+        contractDocument.id,
+        serializeHalfVector(padEmbedding([0.1, 0.9, 0.2])),
+        "2".repeat(64),
+      ],
+    );
+
+    const semanticResponse = await request(app.getHttpServer())
+      .post("/api/search/semantic")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        query: "all invoices from 2025",
+        filters: {
+          year: 2025,
+        },
+      });
+
+    expect(semanticResponse.status).toBe(201);
+    expect(semanticResponse.body.total).toBeGreaterThanOrEqual(1);
+    expect(semanticResponse.body.items[0]?.document.id).toBe(invoiceDocument.id);
+    expect(semanticResponse.body.items[0]?.matchedChunks[0]?.text).toContain("electricity bill");
+
+    const docResponse = await request(app.getHttpServer())
+      .get(`/api/documents/${invoiceDocument.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(docResponse.status).toBe(200);
+    expect(docResponse.body.embeddingStatus).toBe("ready");
+    expect(docResponse.body.embeddingProvider).toBe("openai");
+    expect(docResponse.body.embeddingModel).toBe("text-embedding-3-small");
+    expect(docResponse.body.latestProcessingJob).toBeNull();
+
+    await databaseService.db
+      .update(documentChunks)
+      .set({
+        contentHash: "3".repeat(64),
+      })
+      .where(eq(documentChunks.documentId, invoiceDocument.id));
+
+    const staleResponse = await request(app.getHttpServer())
+      .get(`/api/documents/${invoiceDocument.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(staleResponse.status).toBe(200);
+    expect(staleResponse.body.embeddingStatus).toBe("stale");
+    expect(staleResponse.body.embeddingsStale).toBe(true);
+
+    const reindexResponse = await request(app.getHttpServer())
+      .post("/api/embeddings/reindex")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [invoiceDocument.id, contractDocument.id],
+        scope: "stale",
+      });
+
+    expect(reindexResponse.status).toBe(201);
+    expect(reindexResponse.body.queued).toBe(1);
+    expect(reindexResponse.body.totalTargets).toBe(1);
+
+    const [embeddingJob] = await databaseService.db
+      .select({
+        queueName: processingJobs.queueName,
+        payload: processingJobs.payload,
+      })
+      .from(processingJobs)
+      .where(eq(processingJobs.documentId, invoiceDocument.id))
+      .orderBy(desc(processingJobs.createdAt))
+      .limit(1);
+
+    expect(embeddingJob?.queueName).toBe("document.embed");
+
+    const metricsResponse = await request(app.getHttpServer()).get("/api/metrics");
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.text).toContain("openkeep_embedding_documents_stale");
+    expect(metricsResponse.text).toContain('openkeep_document_processing_queue_depth{queue="document.embed"}');
   });
 });

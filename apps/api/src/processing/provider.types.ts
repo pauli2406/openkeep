@@ -1,6 +1,8 @@
 import type {
   DocumentChunk,
+  EmbeddingProvider as EmbeddingProviderId,
   ParsedDocument,
+  QueueDocumentEmbeddingPayload,
   QueueDocumentProcessingPayload,
   ReviewReason,
 } from "@openkeep/types";
@@ -15,6 +17,15 @@ export interface DocumentParseInput {
 export interface ChunkingInput {
   documentId: string;
   parsed: ParsedDocument;
+}
+
+export interface ChunkRecordInput {
+  heading: string | null;
+  text: string;
+  pageFrom: number | null;
+  pageTo: number | null;
+  strategyVersion: string;
+  metadata: Record<string, unknown>;
 }
 
 export interface MetadataExtractionInput {
@@ -52,10 +63,27 @@ export interface Chunker {
   chunk(input: ChunkingInput): Promise<Array<Omit<DocumentChunk, "id" | "createdAt">>>;
 }
 
+export interface EmbeddingRequest {
+  texts: string[];
+  inputType: "document" | "query";
+}
+
+export interface EmbeddingResponse {
+  provider: EmbeddingProviderId;
+  model: string;
+  dimensions: number;
+  embeddings: number[][];
+}
+
 export interface EmbeddingProvider {
-  embedChunks(chunks: string[]): Promise<Array<{ chunk: string; embedding: number[] }>>;
+  readonly provider: EmbeddingProviderId;
+  isConfigured(): boolean;
+  getModel(): string | null;
+  embed(input: EmbeddingRequest): Promise<EmbeddingResponse>;
 }
 
 export interface AnswerProvider {
   answer(question: string, payload: QueueDocumentProcessingPayload): Promise<string>;
 }
+
+export interface EmbeddingJobInput extends QueueDocumentEmbeddingPayload {}

@@ -8,7 +8,7 @@ import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
 import { DocumentsService } from "../documents/documents.service";
-import { DOCUMENT_PROCESSING_QUEUE } from "../processing/constants";
+import { DOCUMENT_EMBEDDING_QUEUE, DOCUMENT_PROCESSING_QUEUE } from "../processing/constants";
 import { BossService } from "../processing/boss.service";
 
 @ApiTags("health")
@@ -76,10 +76,12 @@ export class HealthController {
 
   @Get("metrics")
   async metrics(@Res() reply: FastifyReply) {
-    const [documentsPendingReview, documentsPendingReviewByReason, queueDepth] = await Promise.all([
+    const [documentsPendingReview, documentsPendingReviewByReason, staleDocuments, processingQueueDepth, embeddingQueueDepth] = await Promise.all([
       this.documentsService.countPendingReviewDocuments(),
       this.documentsService.countPendingReviewDocumentsByReason(),
+      this.documentsService.countStaleEmbeddingDocuments(),
       this.bossService.getQueueDepth(DOCUMENT_PROCESSING_QUEUE),
+      this.bossService.getQueueDepth(DOCUMENT_EMBEDDING_QUEUE),
     ]);
 
     reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
@@ -87,7 +89,11 @@ export class HealthController {
       this.metricsService.renderPrometheus({
         documentsPendingReview,
         documentsPendingReviewByReason,
-        queueDepth,
+        staleDocuments,
+        queueDepths: [
+          { queue: DOCUMENT_PROCESSING_QUEUE, depth: processingQueueDepth },
+          { queue: DOCUMENT_EMBEDDING_QUEUE, depth: embeddingQueueDepth },
+        ],
       }),
     );
   }

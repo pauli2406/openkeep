@@ -174,6 +174,11 @@ export class DocumentsController {
     return this.documentsService.reprocessDocument(id);
   }
 
+  @Post(":id/reembed")
+  async reembedDocument(@Param("id") id: string) {
+    return this.documentsService.reembedDocument(id);
+  }
+
   private readMultipartField(
     fields: Record<string, any> | undefined,
     name: string,

@@ -1,11 +1,14 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import {
   correspondents,
+  documentChunkEmbeddings,
+  documentChunks,
   documentFiles,
   documentTagLinks,
   documentTextBlocks,
@@ -16,13 +19,19 @@ import {
 } from "@openkeep/db";
 import type {
   Document,
+  EmbeddingProvider,
+  EmbeddingStatus,
   DocumentMetadata,
   DocumentTextBlock,
   ListReviewDocumentsRequest,
   ProcessingJobSummary,
+  ReindexEmbeddingsRequest,
   ResolveReviewRequest,
   RequeueDocumentProcessingRequest,
   ReviewReason,
+  SemanticMatchedChunk,
+  SemanticSearchRequest,
+  SemanticSearchResponse,
   SearchDocumentsRequest,
   SearchDocumentsResponse,
   UpdateDocumentInput,
@@ -37,8 +46,10 @@ import { type AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
+import { padEmbedding, serializeHalfVector } from "../processing/embedding.util";
 import { dateToIso, normalizeCurrencyCode, parseDateOnly } from "../processing/normalization.util";
 import { ProcessingService } from "../processing/processing.service";
+import { rankHybridResults } from "../search/semantic-ranking.util";
 
 interface UploadDocumentInput {
   principal: AuthenticatedPrincipal;
@@ -68,6 +79,9 @@ interface DocumentRow {
   searchablePdfStorageKey: string | null;
   parseProvider: Document["parseProvider"];
   chunkCount: number;
+  embeddingStatus: EmbeddingStatus;
+  embeddingProvider: EmbeddingProvider | null;
+  embeddingModel: string | null;
   lastProcessingError: string | null;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -582,6 +596,179 @@ export class DocumentsService {
     return this.processingService.enqueueDocumentProcessing(documentId, true);
   }
 
+  async reembedDocument(documentId: string) {
+    if (!this.processingService.isSemanticIndexingConfigured()) {
+      throw new ConflictException("Semantic indexing is not configured");
+    }
+
+    const document = await this.getDocument(documentId);
+    if (document.status !== "ready") {
+      throw new BadRequestException("Only ready documents can be embedded");
+    }
+
+    const queued = await this.processingService.enqueueDocumentEmbedding(documentId, true);
+    if (!queued) {
+      throw new BadRequestException("Document has no chunks to embed");
+    }
+
+    return queued;
+  }
+
+  async reindexEmbeddings(request: ReindexEmbeddingsRequest) {
+    if (!this.processingService.isSemanticIndexingConfigured()) {
+      throw new ConflictException("Semantic indexing is not configured");
+    }
+
+    const candidateIds = request.documentIds?.length
+      ? request.documentIds
+      : await this.listDocumentIdsByFilters(request.filters);
+    const targetIds =
+      request.scope === "all"
+        ? candidateIds
+        : await this.filterStaleDocumentIds(candidateIds);
+
+    let queued = 0;
+    let skipped = 0;
+    const embeddingJobIds: string[] = [];
+
+    for (const documentId of targetIds) {
+      const result = await this.processingService.enqueueDocumentEmbedding(documentId, true);
+      if (result) {
+        queued += 1;
+        embeddingJobIds.push(result.embeddingJobId);
+      } else {
+        skipped += 1;
+      }
+    }
+
+    return {
+      queued,
+      skipped,
+      totalCandidates: candidateIds.length,
+      totalTargets: targetIds.length,
+      scope: request.scope ?? "stale",
+      embeddingJobIds,
+    };
+  }
+
+  async semanticSearch(request: SemanticSearchRequest): Promise<SemanticSearchResponse> {
+    if (!this.processingService.isSemanticIndexingConfigured()) {
+      throw new ConflictException("Semantic indexing is not configured");
+    }
+
+    const { provider, model } = this.processingService.getActiveEmbeddingConfiguration();
+    if (!provider || !model) {
+      throw new ConflictException("Semantic indexing is not configured");
+    }
+
+    const queryText = request.query.trim();
+    const page = request.page ?? 1;
+    const pageSize = request.pageSize ?? 20;
+    const maxChunkMatches = request.maxChunkMatches ?? 3;
+    const filters = request.filters ?? {};
+    const startedAt = Date.now();
+    const semanticEmbedding = await this.processingService.embedQuery(queryText);
+    const embeddingLiteral = serializeHalfVector(padEmbedding(semanticEmbedding.embeddings[0]!));
+    const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+
+    const keywordRows = await this.databaseService.pool.query<{
+      id: string;
+      rank: string;
+    }>(
+      `SELECT d.id, ts_rank_cd(
+          to_tsvector('simple', coalesce(d.full_text, '')),
+          websearch_to_tsquery('simple', $${params.length + 1})
+       ) AS rank
+       FROM documents d
+       WHERE ${whereSql}
+         AND to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', $${params.length + 1})
+       ORDER BY rank DESC, d.id DESC`,
+      [...params, queryText],
+    );
+
+    const semanticRows = await this.databaseService.pool.query<{
+      id: string;
+      distance: string;
+    }>(
+      `SELECT d.id, MIN(e.embedding <=> $${params.length + 1}::halfvec)::text AS distance
+       FROM documents d
+       INNER JOIN document_chunk_embeddings e
+         ON e.document_id = d.id
+        AND e.provider = $${params.length + 2}::embedding_provider
+        AND e.model = $${params.length + 3}
+       WHERE ${whereSql}
+       GROUP BY d.id
+       ORDER BY MIN(e.embedding <=> $${params.length + 1}::halfvec) ASC, d.id DESC`,
+      [...params, embeddingLiteral, provider, model],
+    );
+
+    const keywordRankMap = new Map<string, number>();
+    const keywordScoreMap = new Map<string, number>();
+    keywordRows.rows.forEach((row, index) => {
+      keywordRankMap.set(row.id, index + 1);
+      keywordScoreMap.set(row.id, Number(row.rank));
+    });
+
+    const semanticRankMap = new Map<string, number>();
+    const semanticScoreMap = new Map<string, number>();
+    semanticRows.rows.forEach((row, index) => {
+      semanticRankMap.set(row.id, index + 1);
+      semanticScoreMap.set(row.id, 1 - Number(row.distance));
+    });
+
+    const candidateIds = [...new Set([...keywordRankMap.keys(), ...semanticRankMap.keys()])];
+    const combined = rankHybridResults(
+      candidateIds.map((id) => ({
+        id,
+        keywordRank: keywordRankMap.get(id),
+        semanticRank: semanticRankMap.get(id),
+        semanticScore: semanticScoreMap.get(id) ?? null,
+        keywordScore: keywordScoreMap.get(id) ?? null,
+      })),
+    );
+
+    const total = combined.length;
+    const paged = combined.slice((page - 1) * pageSize, page * pageSize);
+    const documentsById = await this.getDocumentsByIds(
+      paged.map((item) => item.id),
+      queryText,
+    );
+    const documentMap = new Map(documentsById.map((document) => [document.id, document]));
+    const matchedChunksByDocument = await this.loadSemanticMatchedChunks(
+      paged.map((item) => item.id),
+      provider,
+      model,
+      embeddingLiteral,
+      maxChunkMatches,
+    );
+
+    this.metricsService.incrementSemanticQueriesTotal();
+    this.metricsService.observeSemanticQueryDuration((Date.now() - startedAt) / 1000);
+
+    return {
+      items: paged
+        .map((item) => {
+          const document = documentMap.get(item.id);
+          if (!document) {
+            return null;
+          }
+
+          return {
+            document,
+            score: item.score,
+            semanticScore: item.semanticScore,
+            keywordScore: item.keywordScore,
+            matchedChunks: matchedChunksByDocument.get(item.id) ?? [],
+          };
+        })
+        .filter(Boolean) as SemanticSearchResponse["items"],
+      total,
+      page,
+      pageSize,
+      appliedFilters: filters,
+    };
+  }
+
   async countPendingReviewDocuments(): Promise<number> {
     const result = await this.databaseService.pool.query<{ count: string }>(
       `SELECT count(*)::int AS count
@@ -613,6 +800,96 @@ export class DocumentsService {
     }));
   }
 
+  async countStaleEmbeddingDocuments(): Promise<number> {
+    if (!this.processingService.isSemanticIndexingConfigured()) {
+      return 0;
+    }
+
+    const readyDocumentIds = await this.listDocumentIdsByFilters({ status: "ready" });
+    const staleIds = await this.filterStaleDocumentIds(readyDocumentIds);
+    return staleIds.length;
+  }
+
+  private buildDocumentFilterQuery(filters: SearchDocumentsRequest["filters"] = {}) {
+    const clauses: string[] = ["1=1"];
+    const params: unknown[] = [];
+
+    const push = (value: unknown) => {
+      params.push(value);
+      return `$${params.length}`;
+    };
+
+    if (filters?.year) {
+      const placeholder = push(filters.year);
+      clauses.push(
+        `extract(year from coalesce(d.issue_date, d.created_at::date)) = ${placeholder}`,
+      );
+    }
+
+    if (filters?.dateFrom) {
+      const placeholder = push(filters.dateFrom);
+      clauses.push(`coalesce(d.issue_date, d.created_at::date) >= ${placeholder}::date`);
+    }
+
+    if (filters?.dateTo) {
+      const placeholder = push(filters.dateTo);
+      clauses.push(`coalesce(d.issue_date, d.created_at::date) <= ${placeholder}::date`);
+    }
+
+    if (filters?.correspondentId) {
+      const placeholder = push(filters.correspondentId);
+      clauses.push(`d.correspondent_id = ${placeholder}::uuid`);
+    }
+
+    if (filters?.documentTypeId) {
+      const placeholder = push(filters.documentTypeId);
+      clauses.push(`d.document_type_id = ${placeholder}::uuid`);
+    }
+
+    if (filters?.status) {
+      const placeholder = push(filters.status);
+      clauses.push(`d.status = ${placeholder}`);
+    }
+
+    if (filters?.tags && filters.tags.length > 0) {
+      const placeholder = push(filters.tags);
+      clauses.push(
+        `exists (
+          select 1
+          from document_tag_links dtl
+          where dtl.document_id = d.id and dtl.tag_id = any(${placeholder}::uuid[])
+        )`,
+      );
+    }
+
+    return {
+      whereSql: clauses.join(" AND "),
+      params,
+    };
+  }
+
+  private async listDocumentIdsByFilters(filters: SearchDocumentsRequest["filters"] = {}) {
+    const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    const result = await this.databaseService.pool.query<{ id: string }>(
+      `SELECT d.id
+       FROM documents d
+       WHERE ${whereSql}
+       ORDER BY d.id ASC`,
+      params,
+    );
+
+    return result.rows.map((row) => row.id);
+  }
+
+  private async filterStaleDocumentIds(documentIds: string[]) {
+    if (documentIds.length === 0) {
+      return [];
+    }
+
+    const embeddingState = await this.loadEmbeddingStateByDocument(documentIds);
+    return documentIds.filter((documentId) => embeddingState.get(documentId)?.stale ?? false);
+  }
+
   async getDocumentsByIds(ids: string[], searchTerm?: string): Promise<Document[]> {
     if (ids.length === 0) {
       return [];
@@ -639,6 +916,9 @@ export class DocumentsService {
         searchablePdfStorageKey: documents.searchablePdfStorageKey,
         parseProvider: documents.parseProvider,
         chunkCount: documents.chunkCount,
+        embeddingStatus: documents.embeddingStatus,
+        embeddingProvider: documents.embeddingProvider,
+        embeddingModel: documents.embeddingModel,
         lastProcessingError: documents.lastProcessingError,
         metadata: documents.metadata,
         createdAt: documents.createdAt,
@@ -661,7 +941,15 @@ export class DocumentsService {
 
     const tagsByDocument = await this.loadTagsByDocument(ids);
     const linesByDocument = await this.loadMatchingLines(ids, searchTerm);
-    const latestJobsByDocument = await this.loadLatestJobsByDocument(ids);
+    const latestProcessingJobsByDocument = await this.loadLatestJobsByDocument(
+      ids,
+      "document.process",
+    );
+    const latestEmbeddingJobsByDocument = await this.loadLatestJobsByDocument(
+      ids,
+      "document.embed",
+    );
+    const embeddingStateByDocument = await this.loadEmbeddingStateByDocument(ids);
 
     const map = new Map(
       rows.map((row) => [
@@ -669,7 +957,13 @@ export class DocumentsService {
         this.toDocument(
           row as DocumentRow,
           tagsByDocument.get(row.id) ?? [],
-          latestJobsByDocument.get(row.id) ?? null,
+          latestProcessingJobsByDocument.get(row.id) ?? null,
+          latestEmbeddingJobsByDocument.get(row.id) ?? null,
+          embeddingStateByDocument.get(row.id) ?? {
+            stale: false,
+            indexedChunkCount: 0,
+            totalChunkCount: row.chunkCount ?? 0,
+          },
           linesByDocument.get(row.id),
         ),
       ]),
@@ -716,6 +1010,7 @@ export class DocumentsService {
 
   private async loadLatestJobsByDocument(
     ids: string[],
+    queueName: "document.process" | "document.embed",
   ): Promise<Map<string, ProcessingJobSummary>> {
     const rows = await this.databaseService.db
       .select({
@@ -730,7 +1025,7 @@ export class DocumentsService {
         updatedAt: processingJobs.updatedAt,
       })
       .from(processingJobs)
-      .where(inArray(processingJobs.documentId, ids))
+      .where(and(inArray(processingJobs.documentId, ids), eq(processingJobs.queueName, queueName)))
       .orderBy(desc(processingJobs.createdAt), desc(processingJobs.id));
 
     const map = new Map<string, ProcessingJobSummary>();
@@ -752,6 +1047,66 @@ export class DocumentsService {
     }
 
     return map;
+  }
+
+  private async loadEmbeddingStateByDocument(
+    ids: string[],
+  ): Promise<
+    Map<
+      string,
+      {
+        stale: boolean;
+        indexedChunkCount: number;
+        totalChunkCount: number;
+      }
+    >
+  > {
+    if (ids.length === 0 || !this.processingService.isSemanticIndexingConfigured()) {
+      return new Map();
+    }
+
+    const { provider, model } = this.processingService.getActiveEmbeddingConfiguration();
+    if (!provider || !model) {
+      return new Map();
+    }
+
+    const result = await this.databaseService.pool.query<{
+      document_id: string;
+      total_chunk_count: string;
+      indexed_chunk_count: string;
+      matching_hash_count: string;
+    }>(
+      `SELECT dc.document_id,
+              count(*)::int AS total_chunk_count,
+              count(e.chunk_index)::int AS indexed_chunk_count,
+              count(*) FILTER (WHERE e.content_hash = dc.content_hash)::int AS matching_hash_count
+       FROM document_chunks dc
+       LEFT JOIN document_chunk_embeddings e
+         ON e.document_id = dc.document_id
+        AND e.chunk_index = dc.chunk_index
+        AND e.provider = $2::embedding_provider
+        AND e.model = $3
+       WHERE dc.document_id = ANY($1::uuid[])
+       GROUP BY dc.document_id`,
+      [ids, provider, model],
+    );
+
+    return new Map(
+      result.rows.map((row) => {
+        const totalChunkCount = Number(row.total_chunk_count);
+        const indexedChunkCount = Number(row.indexed_chunk_count);
+        const matchingHashCount = Number(row.matching_hash_count);
+
+        return [
+          row.document_id,
+          {
+            stale: indexedChunkCount !== totalChunkCount || matchingHashCount !== totalChunkCount,
+            indexedChunkCount,
+            totalChunkCount,
+          },
+        ];
+      }),
+    );
   }
 
   private async loadMatchingLines(ids: string[], searchTerm?: string) {
@@ -797,12 +1152,105 @@ export class DocumentsService {
     return map;
   }
 
+  private async loadSemanticMatchedChunks(
+    ids: string[],
+    provider: EmbeddingProvider,
+    model: string,
+    embeddingLiteral: string,
+    maxChunkMatches: number,
+  ): Promise<Map<string, SemanticMatchedChunk[]>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const result = await this.databaseService.pool.query<{
+      document_id: string;
+      chunk_index: number;
+      heading: string | null;
+      text: string;
+      page_from: number | null;
+      page_to: number | null;
+      distance: string;
+      similarity: string;
+    }>(
+      `WITH ranked AS (
+         SELECT dc.document_id,
+                dc.chunk_index,
+                dc.heading,
+                dc.text,
+                dc.page_from,
+                dc.page_to,
+                (e.embedding <=> $4::halfvec)::float8 AS distance,
+                (1 - (e.embedding <=> $4::halfvec)::float8) AS similarity,
+                row_number() OVER (
+                  PARTITION BY dc.document_id
+                  ORDER BY e.embedding <=> $4::halfvec ASC, dc.chunk_index ASC
+                ) AS chunk_rank
+         FROM document_chunks dc
+         INNER JOIN document_chunk_embeddings e
+           ON e.document_id = dc.document_id
+          AND e.chunk_index = dc.chunk_index
+          AND e.provider = $2::embedding_provider
+          AND e.model = $3
+         WHERE dc.document_id = ANY($1::uuid[])
+       )
+       SELECT document_id,
+              chunk_index,
+              heading,
+              text,
+              page_from,
+              page_to,
+              distance::text,
+              similarity::text
+       FROM ranked
+       WHERE chunk_rank <= $5
+       ORDER BY document_id ASC, chunk_rank ASC`,
+      [ids, provider, model, embeddingLiteral, maxChunkMatches],
+    );
+
+    const map = new Map<string, SemanticMatchedChunk[]>();
+    for (const row of result.rows) {
+      const existing = map.get(row.document_id) ?? [];
+      existing.push({
+        chunkIndex: row.chunk_index,
+        heading: row.heading,
+        text: row.text,
+        pageFrom: row.page_from,
+        pageTo: row.page_to,
+        score: Number(row.similarity),
+        distance: Number(row.distance),
+      });
+      map.set(row.document_id, existing);
+    }
+
+    return map;
+  }
+
   private toDocument(
     row: DocumentRow,
     documentTags: Array<{ id: string; name: string; slug: string }>,
     latestProcessingJob: ProcessingJobSummary | null,
+    latestEmbeddingJob: ProcessingJobSummary | null,
+    embeddingState: {
+      stale: boolean;
+      indexedChunkCount: number;
+      totalChunkCount: number;
+    },
     matchingLines?: DocumentTextBlock[],
   ): Document {
+    const semanticConfigured = this.processingService.isSemanticIndexingConfigured();
+    const resolvedEmbeddingStatus: EmbeddingStatus = !semanticConfigured
+      ? "not_configured"
+      : row.embeddingStatus === "queued" ||
+          row.embeddingStatus === "indexing" ||
+          row.embeddingStatus === "failed"
+        ? row.embeddingStatus
+        : embeddingState.stale
+          ? "stale"
+          : row.chunkCount > 0
+            ? "ready"
+            : row.embeddingStatus;
+
     return {
       id: row.id,
       title: row.title,
@@ -843,8 +1291,13 @@ export class DocumentsService {
       searchablePdfAvailable: Boolean(row.searchablePdfStorageKey),
       parseProvider: row.parseProvider ?? null,
       chunkCount: row.chunkCount ?? 0,
+      embeddingStatus: resolvedEmbeddingStatus,
+      embeddingProvider: row.embeddingProvider,
+      embeddingModel: row.embeddingModel,
+      embeddingsStale: semanticConfigured && embeddingState.stale,
       lastProcessingError: row.lastProcessingError,
       latestProcessingJob,
+      latestEmbeddingJob,
       metadata: this.toDocumentMetadata(row.metadata),
       createdAt: row.createdAt.toISOString(),
       processedAt: row.processedAt?.toISOString() ?? null,
@@ -866,6 +1319,9 @@ export class DocumentsService {
       detectedKeywords: [],
       reviewReasons: [],
       chunkCount: 0,
+      embedding: {
+        configured: this.processingService.isSemanticIndexingConfigured(),
+      },
       ...(metadata ?? {}),
     };
   }

@@ -124,12 +124,13 @@ Status: complete
 
 ### Phase 2.5: AI Search and Retrieval
 
-Status: planned
+Status: implemented for semantic retrieval, answer generation still pending
 
-- Add embeddings storage and retrieval for semantic document search.
-- Add real embedding and answer-generation providers behind existing interfaces.
-- Support prompts such as “show all invoices from 2025” with retrieval-first behavior.
+- Add pgvector-backed embeddings storage for chunk-level semantic document search.
+- Add real embedding providers for OpenAI, Gemini, Voyage, and Mistral behind a registry.
+- Support retrieval-first prompts such as “show all invoices from 2025” through hybrid search.
 - Keep classic filters and exact search as a first-class path, not a fallback.
+- Add manual re-embedding flows and stale-embedding detection tied to active provider/model configuration.
 
 ### Phase 3: Web App
 
@@ -176,15 +177,19 @@ Status: planned
 - Explicit review state on documents plus resolve/requeue API endpoints.
 - Structured review evidence in document metadata for missing required invoice fields and threshold context.
 - Persisted document chunks and provider-aware parse metadata on processed documents.
+- pgvector-backed chunk embedding storage and embedding summary fields on documents.
+- Hybrid semantic search endpoint combining filters, keyword ranking, and vector similarity.
+- Manual reindex endpoints for all or stale document embeddings.
+- Live embedding E2E commands and templates for OpenAI, Gemini, Voyage, and Mistral.
 - Searchable-PDF download endpoint separate from original-binary download.
 - Readiness and metrics endpoints, including provider metadata, parse metrics, and pending-review gauges by reason.
+- Provider-aware embedding metrics, semantic query metrics, and embedding queue depth.
 - Migration-first Docker Compose startup path.
 - OpenAPI generation output in `openapi.json`.
 
 ### Not implemented yet
 
-- Real OpenAI or Gemini integration.
-- Embeddings and semantic retrieval.
+- Answer generation.
 - Web, mobile, or desktop client code beyond placeholders.
 - UI flows for review, corrections, and end-user archive management.
 
@@ -192,11 +197,11 @@ Status: planned
 
 ### Immediate next steps
 
-1. Start the Phase 3 web client on top of the hardened review, search, provider, and chunk-aware APIs.
+1. Start the Phase 3 web client on top of the hardened review, search, provider, chunk, and semantic APIs.
 2. Add richer review evidence and missing-field detection for more document classes beyond invoice-like mail.
-3. Add deeper operational metrics and queue dashboards once real deployment telemetry is available.
-4. Add embeddings on top of persisted chunks when semantic retrieval work begins.
-5. Keep the Docker/OCR test commands as part of the standard backend verification workflow.
+3. Add answer-generation and retrieval-augmented document Q&A on top of the current semantic retrieval layer.
+4. Add deeper operational metrics and queue dashboards once real deployment telemetry is available.
+5. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
 
 ### After backend hardening
 
@@ -214,7 +219,7 @@ Status: planned
 ### Recommended implementation order from here
 
 1. Web archive UI.
-2. Semantic retrieval on top of the existing provider platform and persisted chunks.
+2. Answer generation and retrieval UX on top of the existing semantic retrieval layer.
 3. Mobile capture app.
 4. Desktop utility app.
 
@@ -234,3 +239,4 @@ Status: planned
 - Virtual archive browsing instead of real nested folders.
 - Local OCR first, then a provider platform with optional cloud parsing.
 - Semantic search after archive stability, not part of the first archive milestone.
+- One active embedding provider globally in v1, with chunk-level embeddings as the semantic index.
