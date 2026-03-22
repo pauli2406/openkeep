@@ -1,4 +1,6 @@
 import { randomUUID } from "crypto";
+import { mkdtemp, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
 import { resolve } from "path";
 
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -14,11 +16,13 @@ import {
   documentFiles,
   documents,
   processingJobs,
+  tags,
 } from "@openkeep/db";
 import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
 import { ObjectStorageService } from "../src/common/storage/storage.service";
 import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
+import { ProcessingService } from "../src/processing/processing.service";
 
 const shouldRun = process.env.RUN_TESTCONTAINERS === "1";
 const migrationsFolder = resolve(__dirname, "../../../packages/db/migrations");
@@ -29,9 +33,11 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let postgresContainer: Awaited<ReturnType<GenericContainer["start"]>>;
   let minioContainer: Awaited<ReturnType<GenericContainer["start"]>>;
   let storageService: ObjectStorageService;
+  let processingService: ProcessingService;
   let accessToken = "";
   let apiToken = "";
   let ownerUserId = "";
+  let watchFolderPath = "";
   const originalFetch = global.fetch;
 
   beforeAll(async () => {
@@ -104,6 +110,8 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     process.env.OCR_EMPTY_TEXT_THRESHOLD = "20";
     process.env.PROCESSING_RETRY_LIMIT = "2";
     process.env.PROCESSING_RETRY_DELAY_SECONDS = "1";
+    watchFolderPath = await mkdtemp(`${tmpdir()}/openkeep-watch-`);
+    process.env.WATCH_FOLDER_PATH = watchFolderPath;
 
     const { pool, db } = await import("@openkeep/db").then((module) =>
       module.createDatabase(process.env.DATABASE_URL!),
@@ -117,6 +125,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     await app.getHttpAdapter().getInstance().ready();
     databaseService = app.get(DatabaseService);
     storageService = app.get(ObjectStorageService);
+    processingService = app.get(ProcessingService);
 
     const loginResponse = await request(app.getHttpServer()).post("/api/auth/login").send({
       email: process.env.OWNER_EMAIL,
@@ -144,6 +153,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     }
 
     global.fetch = originalFetch;
+    await rm(watchFolderPath, { recursive: true, force: true }).catch(() => undefined);
 
     await postgresContainer?.stop();
     await minioContainer?.stop();
@@ -657,5 +667,246 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(metricsResponse.status).toBe(200);
     expect(metricsResponse.text).toContain("openkeep_embedding_documents_stale");
     expect(metricsResponse.text).toContain('openkeep_document_processing_queue_depth{queue="document.embed"}');
+  });
+
+  it("preserves manual overrides across reprocessing and exposes document history", async () => {
+    const uploadResponse = await request(app.getHttpServer())
+      .post("/api/documents")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .field("title", "Override invoice")
+      .attach(
+        "file",
+        Buffer.from(
+          "Invoice Number: TXT-999\nInvoice Date: 2025-02-10\nAmount Due: EUR 42,50\n",
+          "utf8",
+        ),
+        {
+          filename: "override-invoice.txt",
+          contentType: "text/plain",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+    const documentId = uploadResponse.body.id as string;
+
+    await processingService.processDocument({
+      documentId,
+      force: true,
+      parseProvider: "local-ocr",
+    });
+
+    const patchResponse = await request(app.getHttpServer())
+      .patch(`/api/documents/${documentId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        amount: 99.99,
+        currency: "USD",
+      });
+
+    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.body.metadata.manual.lockedFields).toEqual(
+      expect.arrayContaining(["amount", "currency"]),
+    );
+
+    await processingService.processDocument({
+      documentId,
+      force: true,
+      parseProvider: "local-ocr",
+    });
+
+    const documentResponse = await request(app.getHttpServer())
+      .get(`/api/documents/${documentId}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(documentResponse.status).toBe(200);
+    expect(documentResponse.body.amount).toBe(99.99);
+    expect(documentResponse.body.currency).toBe("USD");
+
+    const historyResponse = await request(app.getHttpServer())
+      .get(`/api/documents/${documentId}/history`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(historyResponse.status).toBe(200);
+    expect(
+      historyResponse.body.items.some((item: { eventType: string }) => item.eventType === "document.uploaded"),
+    ).toBe(true);
+    expect(
+      historyResponse.body.items.some(
+        (item: { eventType: string }) => item.eventType === "document.metadata_updated",
+      ),
+    ).toBe(true);
+  });
+
+  it("answers grounded questions with citations", async () => {
+    const uploadResponse = await request(app.getHttpServer())
+      .post("/api/documents")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .field("title", "Answered invoice")
+      .attach(
+        "file",
+        Buffer.from(
+          "Invoice Number: TXT-321\nInvoice Date: 2025-03-01\nAmount Due: EUR 17,20\n",
+          "utf8",
+        ),
+        {
+          filename: "answer-invoice.txt",
+          contentType: "text/plain",
+        },
+      );
+
+    const documentId = uploadResponse.body.id as string;
+    await processingService.processDocument({
+      documentId,
+      force: true,
+      parseProvider: "local-ocr",
+    });
+    await processingService.processDocumentEmbedding({
+      documentId,
+      force: true,
+      retryCount: 0,
+      embeddingProvider: "openai",
+      embeddingModel: "text-embedding-3-small",
+    });
+
+    const answerResponse = await request(app.getHttpServer())
+      .post("/api/search/answer")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        query: "What is the invoice amount due?",
+      });
+
+    expect(answerResponse.status).toBe(201);
+    expect(answerResponse.body.status).toBe("answered");
+    expect(answerResponse.body.citations.length).toBeGreaterThan(0);
+    expect(answerResponse.body.results.length).toBeGreaterThan(0);
+    expect(
+      answerResponse.body.results.some(
+        (item: { document: { id: string } }) => item.document.id === documentId,
+      ),
+    ).toBe(true);
+  });
+
+  it("supports taxonomy CRUD and merge operations", async () => {
+    const targetName = `Finance ${randomUUID().slice(0, 8)}`;
+    const sourceName = `Bills ${randomUUID().slice(0, 8)}`;
+    const createTargetResponse = await request(app.getHttpServer())
+      .post("/api/taxonomies/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: targetName });
+    const createSourceResponse = await request(app.getHttpServer())
+      .post("/api/taxonomies/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: sourceName });
+
+    expect(createTargetResponse.status).toBe(201);
+    expect(createSourceResponse.status).toBe(201);
+
+    const [file] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "9"),
+        storageKey: `fixtures/${randomUUID()}/merge.pdf`,
+        originalFilename: "merge.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 128,
+      })
+      .returning();
+
+    const [document] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: file.id,
+        title: "Merge me",
+        mimeType: "application/pdf",
+        status: "ready",
+      })
+      .returning();
+
+    await databaseService.pool.query(
+      `INSERT INTO document_tag_links (document_id, tag_id) VALUES ($1::uuid, $2::uuid)`,
+      [document.id, createSourceResponse.body.id],
+    );
+
+    const mergeResponse = await request(app.getHttpServer())
+      .post(`/api/taxonomies/tags/${createSourceResponse.body.id}/merge`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        targetId: createTargetResponse.body.id,
+      });
+
+    expect(mergeResponse.status).toBe(201);
+    expect(mergeResponse.body.id).toBe(createTargetResponse.body.id);
+
+    const tagLinkCount = await databaseService.pool.query<{ count: string }>(
+      `SELECT count(*)::int AS count
+       FROM document_tag_links
+       WHERE document_id = $1::uuid AND tag_id = $2::uuid`,
+      [document.id, createTargetResponse.body.id],
+    );
+    const deletedSource = await databaseService.db
+      .select()
+      .from(tags)
+      .where(eq(tags.id, createSourceResponse.body.id));
+
+    expect(Number(tagLinkCount.rows[0]?.count ?? 0)).toBe(1);
+    expect(deletedSource).toHaveLength(0);
+  });
+
+  it("scans the watch folder and exports and imports archive snapshots", async () => {
+    const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
+    await writeFile(
+      watchedFile,
+      "Invoice Number: WATCH-1\nInvoice Date: 2025-04-02\nAmount Due: EUR 55,00\n",
+      "utf8",
+    );
+
+    const firstScan = await request(app.getHttpServer())
+      .post("/api/archive/watch-folder/scan")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({});
+
+    expect(firstScan.status).toBe(201);
+    expect(firstScan.body.importedDocumentIds.length).toBe(1);
+
+    const secondScan = await request(app.getHttpServer())
+      .post("/api/archive/watch-folder/scan")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({});
+
+    expect(secondScan.status).toBe(201);
+    expect(secondScan.body.importedDocumentIds).toHaveLength(0);
+    expect(secondScan.body.skippedFiles).toContain(watchedFile);
+
+    const exportResponse = await request(app.getHttpServer())
+      .get("/api/archive/export")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.body.version).toBe(1);
+    expect(exportResponse.body.documents.length).toBeGreaterThan(0);
+    expect(
+      exportResponse.body.files.some(
+        (file: { contentBase64: string | null }) => typeof file.contentBase64 === "string",
+      ),
+    ).toBe(true);
+
+    const importResponse = await request(app.getHttpServer())
+      .post("/api/archive/import")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        mode: "replace",
+        snapshot: exportResponse.body,
+      });
+
+    expect(importResponse.status).toBe(201);
+    expect(importResponse.body.imported).toBe(true);
+
+    const documentsResponse = await request(app.getHttpServer())
+      .get("/api/documents")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(documentsResponse.status).toBe(200);
+    expect(documentsResponse.body.total).toBe(exportResponse.body.documents.length);
   });
 });

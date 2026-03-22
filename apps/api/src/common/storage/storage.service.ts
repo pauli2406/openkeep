@@ -96,6 +96,20 @@ export class ObjectStorageService implements OnModuleInit, OnModuleDestroy {
     return target;
   }
 
+  async downloadToBuffer(key: string): Promise<Buffer | null> {
+    const stream = await this.getObjectStream(key);
+    if (!stream) {
+      return null;
+    }
+
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream as AsyncIterable<Buffer | string>) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+    }
+
+    return Buffer.concat(chunks);
+  }
+
   async ensureReady(): Promise<void> {
     await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
   }

@@ -14,12 +14,15 @@ import {
   tags,
 } from "@openkeep/db";
 import {
+  AnswerQueryResponse,
   DocumentMetadata,
   EmbeddingProvider as EmbeddingProviderId,
+  ManualOverrides,
   ParseProviderSchema,
   QueueDocumentEmbeddingPayload,
   ReviewEvidence,
   ReviewReason,
+  SemanticSearchResult,
 } from "@openkeep/types";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { readFile } from "fs/promises";
@@ -142,6 +145,7 @@ export class ProcessingService {
         documentId: documents.id,
         title: documents.title,
         mimeType: documents.mimeType,
+        metadata: documents.metadata,
         existingSearchablePdfStorageKey: documents.searchablePdfStorageKey,
         storageKey: documentFiles.storageKey,
         originalFilename: documentFiles.originalFilename,
@@ -230,8 +234,22 @@ export class ProcessingService {
         payload.processingJobId,
         parsed.searchablePdfPath,
       );
+      const mergedArchiveFields = this.applyManualOverrides(
+        record.metadata,
+        {
+          issueDate: metadata.issueDate,
+          dueDate: metadata.dueDate,
+          amount: metadata.amount,
+          currency: metadata.currency,
+          referenceNumber: metadata.referenceNumber,
+          correspondentId,
+          documentTypeId,
+          tagIds,
+        },
+      );
       const documentMetadata = this.buildDocumentMetadata({
         metadata,
+        existingMetadata: record.metadata,
         parsed,
         chunks,
         reviewReasons,
@@ -271,9 +289,9 @@ export class ProcessingService {
           await tx.insert(documentChunks).values(chunks);
         }
 
-        if (tagIds.length > 0) {
+        if (mergedArchiveFields.tagIds.length > 0) {
           await tx.insert(documentTagLinks).values(
-            tagIds.map((tagId) => ({
+            mergedArchiveFields.tagIds.map((tagId) => ({
               documentId: payload.documentId,
               tagId,
             })),
@@ -287,11 +305,12 @@ export class ProcessingService {
             language: metadata.language,
             fullText: parsed.text,
             pageCount: parsed.pages.length,
-            issueDate: metadata.issueDate,
-            dueDate: metadata.dueDate,
-            amount: metadata.amount === null ? null : metadata.amount.toFixed(2),
-            currency: metadata.currency,
-            referenceNumber: metadata.referenceNumber,
+            issueDate: mergedArchiveFields.issueDate,
+            dueDate: mergedArchiveFields.dueDate,
+            amount:
+              mergedArchiveFields.amount === null ? null : mergedArchiveFields.amount.toFixed(2),
+            currency: mergedArchiveFields.currency,
+            referenceNumber: mergedArchiveFields.referenceNumber,
             confidence: metadata.confidence.toFixed(2),
             parseProvider: parsed.provider,
             chunkCount: chunks.length,
@@ -308,8 +327,8 @@ export class ProcessingService {
             reviewNote: null,
             searchablePdfStorageKey,
             lastProcessingError: null,
-            correspondentId,
-            documentTypeId,
+            correspondentId: mergedArchiveFields.correspondentId,
+            documentTypeId: mergedArchiveFields.documentTypeId,
             metadata: documentMetadata,
             processedAt: new Date(),
             updatedAt: new Date(),
@@ -455,6 +474,14 @@ export class ProcessingService {
       texts: [text],
       inputType: "query",
     });
+  }
+
+  async answerQuestion(input: {
+    question: string;
+    results: SemanticSearchResult[];
+    maxCitations: number;
+  }): Promise<Pick<AnswerQueryResponse, "status" | "answer" | "reasoning" | "citations">> {
+    return this.answerProvider.answer(input);
   }
 
   async enqueueDocumentEmbedding(
@@ -1169,6 +1196,113 @@ export class ProcessingService {
     return ids;
   }
 
+  private applyManualOverrides(
+    existingMetadata: Record<string, unknown>,
+    extracted: {
+      issueDate: Date | null;
+      dueDate: Date | null;
+      amount: number | null;
+      currency: string | null;
+      referenceNumber: string | null;
+      correspondentId: string | null;
+      documentTypeId: string | null;
+      tagIds: string[];
+    },
+  ) {
+    const manualOverrides = this.readManualOverrides(existingMetadata);
+
+    return {
+      issueDate: this.isFieldLocked(manualOverrides, "issueDate")
+        ? this.toDateOrNull(manualOverrides.values.issueDate)
+        : extracted.issueDate,
+      dueDate: this.isFieldLocked(manualOverrides, "dueDate")
+        ? this.toDateOrNull(manualOverrides.values.dueDate)
+        : extracted.dueDate,
+      amount: this.isFieldLocked(manualOverrides, "amount")
+        ? manualOverrides.values.amount ?? null
+        : extracted.amount,
+      currency: this.isFieldLocked(manualOverrides, "currency")
+        ? manualOverrides.values.currency ?? null
+        : extracted.currency,
+      referenceNumber: this.isFieldLocked(manualOverrides, "referenceNumber")
+        ? manualOverrides.values.referenceNumber ?? null
+        : extracted.referenceNumber,
+      correspondentId: this.isFieldLocked(manualOverrides, "correspondentId")
+        ? manualOverrides.values.correspondentId ?? null
+        : extracted.correspondentId,
+      documentTypeId: this.isFieldLocked(manualOverrides, "documentTypeId")
+        ? manualOverrides.values.documentTypeId ?? null
+        : extracted.documentTypeId,
+      tagIds: this.isFieldLocked(manualOverrides, "tagIds")
+        ? manualOverrides.values.tagIds ?? []
+        : extracted.tagIds,
+    };
+  }
+
+  private readManualOverrides(metadata: Record<string, unknown>): ManualOverrides {
+    const manual =
+      metadata.manual && typeof metadata.manual === "object" ? metadata.manual : undefined;
+    const record = manual as Record<string, unknown> | undefined;
+    const values =
+      record?.values && typeof record.values === "object"
+        ? (record.values as Record<string, unknown>)
+        : {};
+
+    return {
+      lockedFields: Array.isArray(record?.lockedFields)
+        ? record!.lockedFields.filter((value): value is ManualOverrides["lockedFields"][number] =>
+            typeof value === "string",
+          )
+        : [],
+      values: {
+        issueDate: typeof values.issueDate === "string" || values.issueDate === null
+          ? (values.issueDate as string | null)
+          : undefined,
+        dueDate: typeof values.dueDate === "string" || values.dueDate === null
+          ? (values.dueDate as string | null)
+          : undefined,
+        amount: typeof values.amount === "number" || values.amount === null
+          ? (values.amount as number | null)
+          : undefined,
+        currency: typeof values.currency === "string" || values.currency === null
+          ? (values.currency as string | null)
+          : undefined,
+        referenceNumber:
+          typeof values.referenceNumber === "string" || values.referenceNumber === null
+            ? (values.referenceNumber as string | null)
+            : undefined,
+        correspondentId:
+          typeof values.correspondentId === "string" || values.correspondentId === null
+            ? (values.correspondentId as string | null)
+            : undefined,
+        documentTypeId:
+          typeof values.documentTypeId === "string" || values.documentTypeId === null
+            ? (values.documentTypeId as string | null)
+            : undefined,
+        tagIds: Array.isArray(values.tagIds)
+          ? values.tagIds.filter((value): value is string => typeof value === "string")
+          : undefined,
+      },
+      updatedAt: typeof record?.updatedAt === "string" ? record.updatedAt : null,
+      updatedByUserId: typeof record?.updatedByUserId === "string" ? record.updatedByUserId : null,
+    };
+  }
+
+  private isFieldLocked(
+    manualOverrides: ManualOverrides,
+    field: keyof ManualOverrides["values"],
+  ): boolean {
+    return manualOverrides.lockedFields.includes(field as ManualOverrides["lockedFields"][number]);
+  }
+
+  private toDateOrNull(value: string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    return new Date(`${value}T00:00:00.000Z`);
+  }
+
   private createSlug(input: string): string {
     return slugify(input, {
       lower: true,
@@ -1191,6 +1325,7 @@ export class ProcessingService {
 
   private buildDocumentMetadata(input: {
     metadata: { confidence: number; metadata: Record<string, unknown> };
+    existingMetadata: Record<string, unknown>;
     parsed: {
       provider: DocumentMetadata["parseProvider"];
       parseStrategy: string;
@@ -1259,6 +1394,9 @@ export class ProcessingService {
 
     return {
       ...input.metadata.metadata,
+      ...(this.readManualOverrides(input.existingMetadata).lockedFields.length > 0
+        ? { manual: this.readManualOverrides(input.existingMetadata) }
+        : {}),
       parseProvider: input.parsed.provider ?? undefined,
       parseStrategy: input.parsed.parseStrategy,
       pageCount: input.parsed.pages.length,

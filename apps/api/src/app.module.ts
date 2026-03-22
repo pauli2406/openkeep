@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { ArchiveModule } from "./archive/archive.module";
 import { AuthModule } from "./auth/auth.module";
 import { AppConfigModule } from "./common/config/app-config.module";
 import { DatabaseModule } from "./common/db/database.module";
@@ -9,6 +10,7 @@ import { DocumentsModule } from "./documents/documents.module";
 import { HealthController } from "./health/health.controller";
 import { ProcessingModule } from "./processing/processing.module";
 import { SearchModule } from "./search/search.module";
+import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
 
 @Module({
   imports: [
@@ -16,10 +18,12 @@ import { SearchModule } from "./search/search.module";
     DatabaseModule,
     MetricsModule,
     StorageModule,
+    ArchiveModule,
     AuthModule,
     ProcessingModule,
     DocumentsModule,
     SearchModule,
+    TaxonomiesModule,
   ],
   controllers: [HealthController],
 })

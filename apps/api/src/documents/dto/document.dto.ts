@@ -1,4 +1,5 @@
 import {
+  AnswerQueryRequestSchema,
   DocumentSchema,
   DocumentStatusSchema,
   ListReviewDocumentsRequestSchema,
@@ -66,5 +67,6 @@ export class RequeueDocumentProcessingResponseDto extends createZodDto(
   RequeueDocumentProcessingResponseSchema,
 ) {}
 export class ReprocessDocumentDto extends createZodDto(ReprocessDocumentRequestSchema) {}
+export class AnswerQueryDto extends createZodDto(AnswerQueryRequestSchema) {}
 export class SemanticSearchDto extends createZodDto(SemanticSearchRequestSchema) {}
 export class ReindexEmbeddingsDto extends createZodDto(ReindexEmbeddingsRequestSchema) {}

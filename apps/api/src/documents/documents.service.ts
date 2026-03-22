@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  auditEvents,
   correspondents,
   documentChunkEmbeddings,
   documentChunks,
@@ -16,14 +17,21 @@ import {
   documents,
   processingJobs,
   tags,
+  users,
 } from "@openkeep/db";
 import type {
+  AnswerQueryRequest,
+  AnswerQueryResponse,
+  AuditEvent,
   Document,
-  EmbeddingProvider,
-  EmbeddingStatus,
   DocumentMetadata,
   DocumentTextBlock,
+  DocumentHistoryResponse,
+  EmbeddingProvider,
+  EmbeddingStatus,
   ListReviewDocumentsRequest,
+  ManualOverrideField,
+  ManualOverrides,
   ProcessingJobSummary,
   ReindexEmbeddingsRequest,
   ResolveReviewRequest,
@@ -97,6 +105,17 @@ interface DocumentRow {
   documentTypeDescription: string | null;
 }
 
+const MANUAL_OVERRIDE_FIELDS: ManualOverrideField[] = [
+  "issueDate",
+  "dueDate",
+  "amount",
+  "currency",
+  "referenceNumber",
+  "correspondentId",
+  "documentTypeId",
+  "tagIds",
+];
+
 @Injectable()
 export class DocumentsService {
   constructor(
@@ -151,6 +170,17 @@ export class DocumentsService {
       .returning();
 
     this.metricsService.incrementUploadsTotal();
+    await this.recordAuditEvent({
+      actorUserId: input.principal.userId,
+      documentId: document.id,
+      eventType: "document.uploaded",
+      payload: {
+        source,
+        filename: input.filename,
+        mimeType,
+        checksum,
+      },
+    });
     await this.processingService.enqueueDocumentProcessing(document.id, false);
     return this.getDocument(document.id);
   }
@@ -490,8 +520,13 @@ export class DocumentsService {
     };
   }
 
-  async updateDocument(documentId: string, input: UpdateDocumentInput): Promise<Document> {
-    await this.getDocument(documentId);
+  async updateDocument(
+    documentId: string,
+    input: UpdateDocumentInput,
+    principal: AuthenticatedPrincipal,
+  ): Promise<Document> {
+    const existing = await this.getDocument(documentId);
+    const manualOverrides = this.buildManualOverrides(existing, input, principal.userId);
 
     await this.databaseService.db.transaction(async (tx) => {
       await tx
@@ -528,6 +563,7 @@ export class DocumentsService {
           documentTypeId:
             input.documentTypeId === null ? null : input.documentTypeId ?? undefined,
           status: input.status,
+          metadata: this.withManualMetadata(existing.metadata, manualOverrides),
           updatedAt: new Date(),
         })
         .where(eq(documents.id, documentId));
@@ -545,10 +581,24 @@ export class DocumentsService {
       }
     });
 
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      documentId,
+      eventType: "document.metadata_updated",
+      payload: {
+        changedFields: Object.keys(input).filter((key) => key !== "clearLockedFields"),
+        clearLockedFields: input.clearLockedFields ?? [],
+      },
+    });
+
     return this.getDocument(documentId);
   }
 
-  async resolveReview(documentId: string, input: ResolveReviewRequest): Promise<Document> {
+  async resolveReview(
+    documentId: string,
+    input: ResolveReviewRequest,
+    principal: AuthenticatedPrincipal,
+  ): Promise<Document> {
     await this.getDocument(documentId);
     await this.databaseService.db
       .update(documents)
@@ -560,12 +610,22 @@ export class DocumentsService {
       })
       .where(eq(documents.id, documentId));
 
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      documentId,
+      eventType: "document.review_resolved",
+      payload: {
+        reviewNote: input.reviewNote ?? null,
+      },
+    });
+
     return this.getDocument(documentId);
   }
 
   async requeueReview(
     documentId: string,
     input: RequeueDocumentProcessingRequest,
+    principal: AuthenticatedPrincipal,
   ): Promise<{ queued: true; documentId: string; processingJobId: string }> {
     const document = await this.getDocument(documentId);
     if (document.status === "processing") {
@@ -584,19 +644,49 @@ export class DocumentsService {
       })
       .where(eq(documents.id, documentId));
 
-    return this.processingService.enqueueDocumentProcessing(documentId, input.force);
+    const queued = await this.processingService.enqueueDocumentProcessing(documentId, input.force);
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      documentId,
+      eventType: "document.review_requeued",
+      payload: {
+        force: input.force,
+        processingJobId: queued.processingJobId,
+      },
+    });
+
+    return queued;
   }
 
-  async reprocessDocument(documentId: string, parseProvider?: string) {
+  async reprocessDocument(
+    documentId: string,
+    principal: AuthenticatedPrincipal,
+    parseProvider?: string,
+  ) {
     const document = await this.getDocument(documentId);
     if (document.status === "processing") {
       throw new BadRequestException("Document is already processing");
     }
 
-    return this.processingService.enqueueDocumentProcessing(documentId, true, parseProvider);
+    const queued = await this.processingService.enqueueDocumentProcessing(
+      documentId,
+      true,
+      parseProvider,
+    );
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      documentId,
+      eventType: "document.reprocess_requested",
+      payload: {
+        parseProvider: parseProvider ?? null,
+        processingJobId: queued.processingJobId,
+      },
+    });
+
+    return queued;
   }
 
-  async reembedDocument(documentId: string) {
+  async reembedDocument(documentId: string, principal: AuthenticatedPrincipal) {
     if (!this.processingService.isSemanticIndexingConfigured()) {
       throw new ConflictException("Semantic indexing is not configured");
     }
@@ -610,6 +700,15 @@ export class DocumentsService {
     if (!queued) {
       throw new BadRequestException("Document has no chunks to embed");
     }
+
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      documentId,
+      eventType: "document.reembed_requested",
+      payload: {
+        embeddingJobId: queued.embeddingJobId,
+      },
+    });
 
     return queued;
   }
@@ -766,6 +865,60 @@ export class DocumentsService {
       page,
       pageSize,
       appliedFilters: filters,
+    };
+  }
+
+  async answerQuery(request: AnswerQueryRequest): Promise<AnswerQueryResponse> {
+    const results = await this.semanticSearch({
+      query: request.query,
+      filters: request.filters,
+      page: 1,
+      pageSize: request.maxDocuments,
+      maxChunkMatches: request.maxChunkMatches,
+    });
+
+    const answered = await this.processingService.answerQuestion({
+      question: request.query,
+      results: results.items,
+      maxCitations: request.maxCitations,
+    });
+
+    return {
+      ...answered,
+      results: results.items,
+    };
+  }
+
+  async getDocumentHistory(documentId: string): Promise<DocumentHistoryResponse> {
+    await this.getDocument(documentId);
+    const rows = await this.databaseService.db
+      .select({
+        id: auditEvents.id,
+        actorUserId: auditEvents.actorUserId,
+        actorDisplayName: users.displayName,
+        actorEmail: users.email,
+        documentId: auditEvents.documentId,
+        eventType: auditEvents.eventType,
+        payload: auditEvents.payload,
+        createdAt: auditEvents.createdAt,
+      })
+      .from(auditEvents)
+      .leftJoin(users, eq(auditEvents.actorUserId, users.id))
+      .where(eq(auditEvents.documentId, documentId))
+      .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id));
+
+    return {
+      documentId,
+      items: rows.map((row) => ({
+        id: row.id,
+        actorUserId: row.actorUserId,
+        actorDisplayName: row.actorDisplayName,
+        actorEmail: row.actorEmail,
+        documentId: row.documentId,
+        eventType: row.eventType,
+        payload: row.payload,
+        createdAt: row.createdAt.toISOString(),
+      }) satisfies AuditEvent),
     };
   }
 
@@ -1303,6 +1456,101 @@ export class DocumentsService {
       processedAt: row.processedAt?.toISOString() ?? null,
       matchingLines,
     };
+  }
+
+  private buildManualOverrides(
+    existing: Document,
+    input: UpdateDocumentInput,
+    userId: string,
+  ): ManualOverrides | undefined {
+    const hadManualChanges =
+      (input.clearLockedFields?.length ?? 0) > 0 ||
+      MANUAL_OVERRIDE_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(input, field));
+
+    if (!hadManualChanges) {
+      return existing.metadata.manual;
+    }
+
+    const nextLockedFields = new Set(existing.metadata.manual?.lockedFields ?? []);
+    const nextValues: ManualOverrides["values"] = {
+      ...(existing.metadata.manual?.values ?? {}),
+    };
+
+    for (const field of input.clearLockedFields ?? []) {
+      nextLockedFields.delete(field);
+      delete nextValues[field];
+    }
+
+    const assignIfPresent = <K extends ManualOverrideField>(
+      field: K,
+      value: ManualOverrides["values"][K],
+    ) => {
+      if (!Object.prototype.hasOwnProperty.call(input, field)) {
+        return;
+      }
+
+      nextLockedFields.add(field);
+      if (value === undefined) {
+        delete nextValues[field];
+        return;
+      }
+
+      nextValues[field] = value;
+    };
+
+    assignIfPresent("issueDate", input.issueDate ?? null);
+    assignIfPresent("dueDate", input.dueDate ?? null);
+    assignIfPresent("amount", input.amount ?? null);
+    assignIfPresent(
+      "currency",
+      input.currency === undefined ? undefined : normalizeCurrencyCode(input.currency),
+    );
+    assignIfPresent("referenceNumber", input.referenceNumber ?? null);
+    assignIfPresent("correspondentId", input.correspondentId ?? null);
+    assignIfPresent("documentTypeId", input.documentTypeId ?? null);
+    assignIfPresent("tagIds", input.tagIds);
+
+    if (nextLockedFields.size === 0) {
+      return undefined;
+    }
+
+    return {
+      lockedFields: [...nextLockedFields],
+      values: nextValues,
+      updatedAt: new Date().toISOString(),
+      updatedByUserId: userId,
+    };
+  }
+
+  private withManualMetadata(
+    metadata: DocumentMetadata,
+    manualOverrides: ManualOverrides | undefined,
+  ): DocumentMetadata {
+    const nextMetadata: DocumentMetadata = {
+      ...metadata,
+    };
+
+    if (manualOverrides) {
+      nextMetadata.manual = manualOverrides;
+    } else {
+      delete nextMetadata.manual;
+    }
+
+    return nextMetadata;
+  }
+
+  private async recordAuditEvent(input: {
+    actorUserId?: string | null;
+    documentId?: string | null;
+    eventType: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    await this.databaseService.db.insert(auditEvents).values({
+      actorUserId: input.actorUserId ?? null,
+      documentId: input.documentId ?? null,
+      eventType: input.eventType,
+      payload: input.payload,
+    });
   }
 
   private computeChecksum(buffer: Buffer): string {

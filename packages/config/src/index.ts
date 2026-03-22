@@ -124,6 +124,7 @@ export const AppEnvSchema = z.object({
   OCR_EMPTY_TEXT_THRESHOLD: NumberFromEnv.default(20),
   PROCESSING_RETRY_LIMIT: NumberFromEnv.default(2),
   PROCESSING_RETRY_DELAY_SECONDS: NumberFromEnv.default(30),
+  WATCH_FOLDER_PATH: EmptyStringToUndefined(z.string().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(26_214_400),
   SEARCH_DEFAULT_PAGE_SIZE: NumberFromEnv.default(20),
   SEARCH_MAX_PAGE_SIZE: NumberFromEnv.default(100),

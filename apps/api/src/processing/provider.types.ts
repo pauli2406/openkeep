@@ -1,10 +1,12 @@
 import type {
+  AnswerCitation,
+  AnswerQueryResponse,
   DocumentChunk,
   EmbeddingProvider as EmbeddingProviderId,
   ParsedDocument,
   QueueDocumentEmbeddingPayload,
-  QueueDocumentProcessingPayload,
   ReviewReason,
+  SemanticSearchResult,
 } from "@openkeep/types";
 
 export interface DocumentParseInput {
@@ -83,7 +85,16 @@ export interface EmbeddingProvider {
 }
 
 export interface AnswerProvider {
-  answer(question: string, payload: QueueDocumentProcessingPayload): Promise<string>;
+  answer(input: {
+    question: string;
+    results: SemanticSearchResult[];
+    maxCitations: number;
+  }): Promise<{
+    status: AnswerQueryResponse["status"];
+    answer: string | null;
+    reasoning: string | null;
+    citations: AnswerCitation[];
+  }>;
 }
 
 export interface EmbeddingJobInput extends QueueDocumentEmbeddingPayload {}

@@ -25,13 +25,8 @@ import { AzureDocumentIntelligenceParseProvider } from "./azure-document-intelli
 import { MistralOcrParseProvider } from "./mistral-ocr.provider";
 import { OpenAiEmbeddingProvider } from "./openai-embedding.provider";
 import { ProcessingService } from "./processing.service";
+import { ExtractiveAnswerProvider } from "./extractive-answer.provider";
 import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
-
-class NoopAnswerProvider {
-  async answer() {
-    return "";
-  }
-}
 
 @Module({
   providers: [
@@ -52,7 +47,7 @@ class NoopAnswerProvider {
     DeterministicMetadataExtractor,
     HybridMetadataExtractor,
     DeterministicChunker,
-    NoopAnswerProvider,
+    ExtractiveAnswerProvider,
     {
       provide: "LOCAL_PARSE_PROVIDER",
       useExisting: LocalDocumentParseProvider,
@@ -111,7 +106,7 @@ class NoopAnswerProvider {
     },
     {
       provide: ANSWER_PROVIDER,
-      useExisting: NoopAnswerProvider,
+      useExisting: ExtractiveAnswerProvider,
     },
   ],
   exports: [

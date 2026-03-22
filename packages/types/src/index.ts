@@ -200,6 +200,35 @@ export const ReviewEvidenceSchema = z.object({
   ocrEmptyThreshold: z.number().int().nonnegative().optional(),
 });
 
+export const ManualOverrideFieldSchema = z.enum([
+  "issueDate",
+  "dueDate",
+  "amount",
+  "currency",
+  "referenceNumber",
+  "correspondentId",
+  "documentTypeId",
+  "tagIds",
+]);
+
+export const ManualOverridesSchema = z.object({
+  lockedFields: z.array(ManualOverrideFieldSchema).default([]),
+  values: z
+    .object({
+      issueDate: z.string().nullable().optional(),
+      dueDate: z.string().nullable().optional(),
+      amount: z.number().nullable().optional(),
+      currency: z.string().length(3).nullable().optional(),
+      referenceNumber: z.string().nullable().optional(),
+      correspondentId: z.string().uuid().nullable().optional(),
+      documentTypeId: z.string().uuid().nullable().optional(),
+      tagIds: z.array(z.string().uuid()).optional(),
+    })
+    .default({}),
+  updatedAt: z.string().nullable().optional(),
+  updatedByUserId: z.string().uuid().nullable().optional(),
+});
+
 export const DocumentMetadataSchema = z
   .object({
     extractionStrategy: z.string().optional(),
@@ -239,6 +268,7 @@ export const DocumentMetadataSchema = z
       })
       .optional(),
     reviewEvidence: ReviewEvidenceSchema.optional(),
+    manual: ManualOverridesSchema.optional(),
   })
   .passthrough();
 
@@ -368,6 +398,7 @@ export const UpdateDocumentSchema = z.object({
   correspondentId: z.string().uuid().nullable().optional(),
   documentTypeId: z.string().uuid().nullable().optional(),
   tagIds: z.array(z.string().uuid()).optional(),
+  clearLockedFields: z.array(ManualOverrideFieldSchema).optional(),
   status: DocumentStatusSchema.optional(),
 });
 
@@ -527,6 +558,89 @@ export const ReadinessResponseSchema = z.object({
   }),
 });
 
+export const AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actorUserId: z.string().uuid().nullable(),
+  actorDisplayName: z.string().nullable().optional(),
+  actorEmail: z.string().nullable().optional(),
+  documentId: z.string().uuid().nullable(),
+  eventType: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.string().min(1),
+});
+
+export const DocumentHistoryResponseSchema = z.object({
+  documentId: z.string().uuid(),
+  items: z.array(AuditEventSchema),
+});
+
+export const CreateTagSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const UpdateTagSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const CreateCorrespondentSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const UpdateCorrespondentSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const CreateDocumentTypeSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  description: z.string().trim().max(2_000).nullable().optional(),
+});
+
+export const UpdateDocumentTypeSchema = z.object({
+  name: z.string().trim().min(1).max(255).optional(),
+  description: z.string().trim().max(2_000).nullable().optional(),
+});
+
+export const MergeTaxonomySchema = z.object({
+  targetId: z.string().uuid(),
+});
+
+export const AnswerCitationSchema = z.object({
+  documentId: z.string().uuid(),
+  documentTitle: z.string().min(1),
+  chunkIndex: z.number().int().nonnegative(),
+  pageFrom: z.number().int().positive().nullable(),
+  pageTo: z.number().int().positive().nullable(),
+  quote: z.string().min(1),
+  score: z.number().nonnegative(),
+});
+
+export const AnswerQueryRequestSchema = z.object({
+  query: z.string().trim().min(1),
+  filters: SearchDocumentsFiltersSchema.optional(),
+  maxDocuments: z.number().int().min(1).max(5).default(3),
+  maxCitations: z.number().int().min(1).max(8).default(4),
+  maxChunkMatches: z.number().int().min(1).max(6).default(4),
+});
+
+export const AnswerQueryResponseSchema = z.object({
+  status: z.enum(["answered", "insufficient_evidence"]),
+  answer: z.string().nullable(),
+  reasoning: z.string().nullable().optional(),
+  citations: z.array(AnswerCitationSchema),
+  results: z.array(SemanticSearchResultSchema),
+});
+
+export const WatchFolderScanRequestSchema = z.object({
+  dryRun: z.boolean().default(false),
+});
+
+export const WatchFolderScanResponseSchema = z.object({
+  configuredPath: z.string().min(1),
+  importedDocumentIds: z.array(z.string().uuid()),
+  skippedFiles: z.array(z.string()),
+  errors: z.array(z.string()),
+});
+
 export type BoundingBox = z.infer<typeof BoundingBoxSchema>;
 export type ParseProvider = z.infer<typeof ParseProviderSchema>;
 export type EmbeddingProvider = z.infer<typeof EmbeddingProviderSchema>;
@@ -546,6 +660,8 @@ export type DocumentType = z.infer<typeof DocumentTypeSchema>;
 export type DocumentTextBlock = z.infer<typeof DocumentTextBlockSchema>;
 export type ReviewEvidenceField = z.infer<typeof ReviewEvidenceFieldSchema>;
 export type ReviewEvidence = z.infer<typeof ReviewEvidenceSchema>;
+export type ManualOverrideField = z.infer<typeof ManualOverrideFieldSchema>;
+export type ManualOverrides = z.infer<typeof ManualOverridesSchema>;
 export type DocumentMetadata = z.infer<typeof DocumentMetadataSchema>;
 export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
 export type EmbeddingStatus = z.infer<typeof EmbeddingStatusSchema>;
@@ -592,3 +708,17 @@ export type QueueDocumentEmbeddingPayload = z.infer<
 >;
 export type ReindexEmbeddingsRequest = z.infer<typeof ReindexEmbeddingsRequestSchema>;
 export type ReadinessResponse = z.infer<typeof ReadinessResponseSchema>;
+export type AuditEvent = z.infer<typeof AuditEventSchema>;
+export type DocumentHistoryResponse = z.infer<typeof DocumentHistoryResponseSchema>;
+export type CreateTagInput = z.infer<typeof CreateTagSchema>;
+export type UpdateTagInput = z.infer<typeof UpdateTagSchema>;
+export type CreateCorrespondentInput = z.infer<typeof CreateCorrespondentSchema>;
+export type UpdateCorrespondentInput = z.infer<typeof UpdateCorrespondentSchema>;
+export type CreateDocumentTypeInput = z.infer<typeof CreateDocumentTypeSchema>;
+export type UpdateDocumentTypeInput = z.infer<typeof UpdateDocumentTypeSchema>;
+export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;
+export type AnswerCitation = z.infer<typeof AnswerCitationSchema>;
+export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
+export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
+export type WatchFolderScanRequest = z.infer<typeof WatchFolderScanRequestSchema>;
+export type WatchFolderScanResponse = z.infer<typeof WatchFolderScanResponseSchema>;

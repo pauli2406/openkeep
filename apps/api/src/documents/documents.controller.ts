@@ -27,6 +27,7 @@ import { AccessAuthGuard } from "../auth/access-auth.guard";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
   RequeueDocumentProcessingDto,
+  ReprocessDocumentDto,
   ResolveReviewDto,
   ReviewDocumentsQueryDto,
   SearchDocumentsQueryDto,
@@ -126,6 +127,11 @@ export class DocumentsController {
     });
   }
 
+  @Get(":id/history")
+  async getDocumentHistory(@Param("id") id: string) {
+    return this.documentsService.getDocumentHistory(id);
+  }
+
   @Get(":id")
   async getDocument(@Param("id") id: string) {
     return this.documentsService.getDocument(id);
@@ -154,15 +160,23 @@ export class DocumentsController {
   }
 
   @Patch(":id")
-  async updateDocument(@Param("id") id: string, @Body() body: UpdateDocumentDto) {
-    return this.documentsService.updateDocument(id, body);
+  async updateDocument(
+    @Param("id") id: string,
+    @Body() body: UpdateDocumentDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.updateDocument(id, body, principal);
   }
 
   @Post(":id/review/resolve")
   @ApiOperation({ summary: "Resolve review state for a document" })
   @ApiOkResponse({ description: "Updated document after review resolution" })
-  async resolveReview(@Param("id") id: string, @Body() body: ResolveReviewDto) {
-    return this.documentsService.resolveReview(id, body);
+  async resolveReview(
+    @Param("id") id: string,
+    @Body() body: ResolveReviewDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.resolveReview(id, body, principal);
   }
 
   @Post(":id/review/requeue")
@@ -171,8 +185,9 @@ export class DocumentsController {
   async requeueReview(
     @Param("id") id: string,
     @Body() body: RequeueDocumentProcessingDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
-    return this.documentsService.requeueReview(id, body);
+    return this.documentsService.requeueReview(id, body, principal);
   }
 
   @Post(":id/reprocess")
@@ -180,14 +195,18 @@ export class DocumentsController {
   @ApiOkResponse({ description: "Queued processing job metadata" })
   async reprocessDocument(
     @Param("id") id: string,
-    @Body() body?: { parseProvider?: string },
+    @Body() body: ReprocessDocumentDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
-    return this.documentsService.reprocessDocument(id, body?.parseProvider);
+    return this.documentsService.reprocessDocument(id, principal, body?.parseProvider);
   }
 
   @Post(":id/reembed")
-  async reembedDocument(@Param("id") id: string) {
-    return this.documentsService.reembedDocument(id);
+  async reembedDocument(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.reembedDocument(id, principal);
   }
 
   private readMultipartField(

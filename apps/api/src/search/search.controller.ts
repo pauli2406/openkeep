@@ -2,7 +2,11 @@ import { Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/c
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 
 import { AccessAuthGuard } from "../auth/access-auth.guard";
-import { SearchDocumentsQueryDto, SemanticSearchDto } from "../documents/dto/document.dto";
+import {
+  AnswerQueryDto,
+  SearchDocumentsQueryDto,
+  SemanticSearchDto,
+} from "../documents/dto/document.dto";
 import { DocumentsService } from "../documents/documents.service";
 
 @ApiTags("search")
@@ -35,5 +39,10 @@ export class SearchController {
   @Post("semantic")
   async semanticSearch(@Body() body: SemanticSearchDto) {
     return this.documentsService.semanticSearch(body);
+  }
+
+  @Post("answer")
+  async answerQuery(@Body() body: AnswerQueryDto) {
+    return this.documentsService.answerQuery(body);
   }
 }
