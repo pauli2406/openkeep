@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { mkdtemp, readFile, readdir } from "fs/promises";
 import { extname, join } from "path";
 import { tmpdir } from "os";
-import { execa } from "execa";
+import { exec } from "./exec.util";
 import type { ParsedDocument } from "@openkeep/types";
 
 import { AppConfigService } from "../common/config/app-config.service";
@@ -87,7 +87,7 @@ export class LocalDocumentParseProvider implements DocumentParseProvider {
     const sidecarPath = join(workingDir, "sidecar.txt");
 
     try {
-      await execa("ocrmypdf", [
+      await exec("ocrmypdf", [
         "--skip-text",
         "--sidecar",
         sidecarPath,
@@ -184,7 +184,7 @@ export class LocalDocumentParseProvider implements DocumentParseProvider {
     const prefix = join(workingDir, "page");
 
     try {
-      await execa("pdftoppm", ["-png", filePath, prefix]);
+      await exec("pdftoppm", ["-png", filePath, prefix]);
       const pageImagePaths = await this.listGeneratedPngs(workingDir);
       if (pageImagePaths.length > 0) {
         return {
@@ -204,7 +204,7 @@ export class LocalDocumentParseProvider implements DocumentParseProvider {
 
     for (const [index, pageImagePath] of pageImagePaths.entries()) {
       try {
-        const { stdout } = await execa("tesseract", [
+        const { stdout } = await exec("tesseract", [
           pageImagePath,
           "stdout",
           "-l",
@@ -242,7 +242,7 @@ export class LocalDocumentParseProvider implements DocumentParseProvider {
 
     try {
       await this.runImagemagick([...pageImagePaths, combinedPdfPath]);
-      await execa("ocrmypdf", [
+      await exec("ocrmypdf", [
         "--skip-text",
         "-l",
         this.configService.get("OCR_LANGUAGES"),
@@ -474,9 +474,9 @@ export class LocalDocumentParseProvider implements DocumentParseProvider {
 
   private async runImagemagick(args: string[]): Promise<void> {
     try {
-      await execa("magick", args);
+      await exec("magick", args);
     } catch {
-      await execa("convert", args);
+      await exec("convert", args);
     }
   }
 }

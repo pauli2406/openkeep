@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 
-import { execa } from "execa";
+import { exec } from "../src/processing/exec.util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { LocalOcrProvider } from "../src/processing/local-ocr.provider";
@@ -110,8 +110,8 @@ const createAnnotatedImage = async (outputPath: string, text: string) => {
 
 const runImagemagick = async (args: string[]) => {
   try {
-    await execa("magick", args);
+    await exec("magick", args);
   } catch {
-    await execa("convert", args);
+    await exec("convert", args);
   }
 };

@@ -587,13 +587,13 @@ export class DocumentsService {
     return this.processingService.enqueueDocumentProcessing(documentId, input.force);
   }
 
-  async reprocessDocument(documentId: string) {
+  async reprocessDocument(documentId: string, parseProvider?: string) {
     const document = await this.getDocument(documentId);
     if (document.status === "processing") {
       throw new BadRequestException("Document is already processing");
     }
 
-    return this.processingService.enqueueDocumentProcessing(documentId, true);
+    return this.processingService.enqueueDocumentProcessing(documentId, true, parseProvider);
   }
 
   async reembedDocument(documentId: string) {

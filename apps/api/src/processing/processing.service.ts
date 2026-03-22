@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   auditEvents,
   documentChunkEmbeddings,
@@ -13,9 +13,10 @@ import {
   processingJobs,
   tags,
 } from "@openkeep/db";
-import type {
+import {
   DocumentMetadata,
   EmbeddingProvider as EmbeddingProviderId,
+  ParseProviderSchema,
   QueueDocumentEmbeddingPayload,
   ReviewEvidence,
   ReviewReason,
@@ -84,8 +85,15 @@ export class ProcessingService {
     @Inject(ANSWER_PROVIDER) private readonly answerProvider: AnswerProvider,
   ) {}
 
-  async enqueueDocumentProcessing(documentId: string, force: boolean) {
-    const parseProvider = this.parseProviderRegistry.getActiveProviderId();
+  async enqueueDocumentProcessing(documentId: string, force: boolean, overrideParseProvider?: string) {
+    let parseProvider = this.parseProviderRegistry.getActiveProviderId();
+    if (overrideParseProvider) {
+      const parsed = ParseProviderSchema.safeParse(overrideParseProvider);
+      if (!parsed.success) {
+        throw new BadRequestException(`Invalid parse provider: ${overrideParseProvider}`);
+      }
+      parseProvider = parsed.data;
+    }
     const fallbackParseProvider = this.parseProviderRegistry.getFallbackProviderId();
     const [job] = await this.databaseService.db
       .insert(processingJobs)
@@ -165,10 +173,14 @@ export class ProcessingService {
       const parseStartedAt = Date.now();
       const { parsed, fallbackUsed, fallbackProvider } =
         await this.parseProviderRegistry.parseWithConfiguredProvider({
-        filePath: tempFile,
-        mimeType: record.mimeType,
-        filename: record.originalFilename,
-      });
+          filePath: tempFile,
+          mimeType: record.mimeType,
+          filename: record.originalFilename,
+        },
+        {
+          activeProviderId: payload.parseProvider,
+          fallbackProviderId: payload.fallbackParseProvider,
+        });
       this.metricsService.observeOcrDuration((Date.now() - parseStartedAt) / 1000);
       this.metricsService.observeParseDuration(
         parsed.provider,

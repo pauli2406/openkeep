@@ -4,7 +4,7 @@ import { join } from "path";
 
 import { loadConfig, type AppConfig } from "@openkeep/config";
 import type { ParseProvider } from "@openkeep/types";
-import { execa } from "execa";
+import { exec } from "../src/processing/exec.util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AmazonTextractParseProvider } from "../src/processing/amazon-textract.provider";
@@ -173,8 +173,8 @@ const createAnnotatedImage = async (outputPath: string, text: string) => {
 
 const runImagemagick = async (args: string[]) => {
   try {
-    await execa("magick", args);
+    await exec("magick", args);
   } catch {
-    await execa("convert", args);
+    await exec("convert", args);
   }
 };

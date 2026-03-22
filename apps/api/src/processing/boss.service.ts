@@ -3,6 +3,7 @@ import PgBoss from "pg-boss";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
+import { DOCUMENT_EMBEDDING_QUEUE, DOCUMENT_PROCESSING_QUEUE } from "./constants";
 
 @Injectable()
 export class BossService implements OnModuleInit, OnModuleDestroy {
@@ -33,6 +34,8 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.boss.start();
+    await this.boss.createQueue(DOCUMENT_PROCESSING_QUEUE);
+    await this.boss.createQueue(DOCUMENT_EMBEDDING_QUEUE);
     this.started = true;
   }
 
@@ -45,11 +48,17 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publish<T extends object>(queueName: string, payload: T): Promise<string | null> {
-    return this.boss.send(queueName, payload, {
+    const jobId = await this.boss.send(queueName, payload, {
       retryLimit: this.retryLimit,
       retryDelay: this.retryDelaySeconds,
       retryBackoff: true,
     });
+
+    if (!jobId) {
+      throw new Error(`Failed to publish job to queue: ${queueName}`);
+    }
+
+    return jobId;
   }
 
   async work<T extends object>(

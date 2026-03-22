@@ -115,6 +115,8 @@ export class DocumentsController {
   }
 
   @Get("review")
+  @ApiOperation({ summary: "List documents currently waiting for review" })
+  @ApiOkResponse({ description: "Review queue response" })
   async listReviewDocuments(@Query() query: ReviewDocumentsQueryDto) {
     return this.documentsService.listReviewDocuments({
       processingStatus: query.processingStatus,
@@ -157,11 +159,15 @@ export class DocumentsController {
   }
 
   @Post(":id/review/resolve")
+  @ApiOperation({ summary: "Resolve review state for a document" })
+  @ApiOkResponse({ description: "Updated document after review resolution" })
   async resolveReview(@Param("id") id: string, @Body() body: ResolveReviewDto) {
     return this.documentsService.resolveReview(id, body);
   }
 
   @Post(":id/review/requeue")
+  @ApiOperation({ summary: "Requeue a document from the review queue for processing" })
+  @ApiOkResponse({ description: "Queued processing job metadata" })
   async requeueReview(
     @Param("id") id: string,
     @Body() body: RequeueDocumentProcessingDto,
@@ -170,8 +176,13 @@ export class DocumentsController {
   }
 
   @Post(":id/reprocess")
-  async reprocessDocument(@Param("id") id: string) {
-    return this.documentsService.reprocessDocument(id);
+  @ApiOperation({ summary: "Reprocess a document with an optional OCR provider override" })
+  @ApiOkResponse({ description: "Queued processing job metadata" })
+  async reprocessDocument(
+    @Param("id") id: string,
+    @Body() body?: { parseProvider?: string },
+  ) {
+    return this.documentsService.reprocessDocument(id, body?.parseProvider);
   }
 
   @Post(":id/reembed")

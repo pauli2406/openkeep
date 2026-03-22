@@ -4,7 +4,9 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs --dts",
     "lint": "tsc --noEmit -p tsconfig.json",
@@ -13,10 +15,10 @@
     "generate": "openapi-typescript ../../openapi.json --output src/generated.ts"
   },
   "dependencies": {
-    "@openkeep/types": "workspace:*"
+    "@openkeep/types": "workspace:*",
+    "openapi-fetch": "^0.17.0"
   },
   "devDependencies": {
     "openapi-typescript": "^7.6.1"
   }
 }
-

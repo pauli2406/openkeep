@@ -36,7 +36,7 @@ The long-term product should feel like a modern, privacy-aware, API-first versio
 
 - `apps/api`: REST API, auth, document endpoints, search, archive facets.
 - `apps/worker`: OCR and extraction worker consuming async jobs.
-- `apps/web`: future browser UI for archive management and search.
+- `apps/web`: browser UI for archive management, review, search, upload, and settings.
 - `apps/mobile`: future React Native app for scan/upload and archive access.
 - `apps/desktop`: future Electron app for power-user workflows and local batch import.
 
@@ -134,12 +134,26 @@ Status: implemented for semantic retrieval, answer generation still pending
 
 ### Phase 3: Web App
 
-Status: next
+Status: complete
 
-- Build a browser UI on top of the API.
-- Include login, document list, detail view, OCR text view, search, filters, facets, and manual metadata correction.
-- Add “needs review” screens for extraction failures or low-confidence results.
-- Add document preview and download flows.
+- React 19 + Vite SPA with Tailwind CSS v4 and shadcn/ui components.
+- TanStack Router for file-based routing with type-safe search params.
+- TanStack Query for server state with automatic caching and refetching.
+- openapi-fetch typed API client generated from the OpenAPI spec via @openkeep/sdk, including review, reprocess, and health/provider JSON endpoints.
+- Login and initial owner setup flows with JWT access/refresh token management and auto-refresh middleware.
+- Responsive app shell with collapsible sidebar navigation.
+- Dashboard with stat cards, recent documents, and quick actions.
+- Document list with facet-driven filters (year, correspondent, type, status, tags), keyword search, sort controls, and pagination.
+- Document detail view with MIME-aware preview flows, OCR text viewer, metadata display, inline metadata editing, review actions, and raw details tab.
+- Review queue with review reason badges, confidence scores, review evidence display, and resolve/requeue actions.
+- Search page with keyword and semantic search modes, matched chunk previews, and relevance score breakdown.
+- Upload page with drag-and-drop zone, multi-file queuing, per-file title override, and upload progress tracking.
+- Settings page with user profile, API token management (create/revoke/copy), and richer system health/admin visibility.
+- Provider-aware reprocessing with per-job OCR provider selection.
+- Bundle splitting in the Vite build to reduce the initial payload.
+- Vitest + Testing Library + MSW smoke coverage for auth recovery, dashboard, upload, document detail, review queue, and settings.
+- Static file serving via @fastify/static from the API server in production (single container deployment).
+- Dockerfile updated to build both web and API in a single image.
 
 ### Phase 4: Mobile App
 
@@ -186,33 +200,42 @@ Status: planned
 - Provider-aware embedding metrics, semantic query metrics, and embedding queue depth.
 - Migration-first Docker Compose startup path.
 - OpenAPI generation output in `openapi.json`.
+- SDK package with openapi-typescript generated types and openapi-fetch client factory.
+- Web app: React 19 + Vite SPA with Tailwind CSS v4, shadcn/ui, TanStack Router, TanStack Query.
+- Web app pages: login, setup, dashboard, document list with filters/facets, document detail with MIME-aware preview/OCR/editing, review queue, keyword and semantic search, drag-and-drop upload, settings with API tokens plus health/admin visibility.
+- Provider-aware reprocessing UI in the web app.
+- Web app smoke tests covering auth, dashboard, upload, document detail, review, and settings flows.
+- Bundle-split web build.
+- Static file serving from the API server via @fastify/static for single-container deployment.
+- Dockerfile builds both web and API into a single image.
+- Recent live-app stabilization fixes for settings readiness rendering, raw object rendering on dashboard/review screens, OCR provider override handling, review query parsing, and clearer upload/requeue/reprocess errors.
+- OpenAPI parity for the remaining Phase 3 web-used JSON endpoints, with generated SDK output committed.
+- Manual smoke checklist in `docs/phase-3-smoke.md`.
+- Completed live Docker-stack smoke pass on 2026-03-22 covering login, health/admin endpoints, review data, upload, and provider-selected reprocess.
 
 ### Not implemented yet
 
 - Answer generation.
 - Azure live-provider validation is still pending because the root `.env` does not yet include Azure credentials.
-- Web, mobile, or desktop client code beyond placeholders.
-- UI flows for review, corrections, and end-user archive management.
+- Mobile or desktop client code beyond placeholders.
 
 ## Next Steps
 
 ### Immediate next steps
 
-1. Start the Phase 3 web client on top of the hardened review, search, provider, chunk, and semantic APIs.
-2. Build the first complete browser workflow: login, upload, inbox/review queue, search, document detail, preview, download, and metadata editing.
-3. Use the web app to expose any remaining backend UX gaps before adding more backend surface area.
-4. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
-5. Return to backend-only work after the web baseline is in place for:
+1. Keep `apps/web` smoke tests and `docs/phase-3-smoke.md` as the required regression gate for Phase 3 surfaces.
+2. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
+3. Return to backend and retrieval work for:
    answer generation,
    richer non-invoice extraction,
    deeper operational dashboards,
    Azure provider validation.
 
-### After backend hardening
+### After web app stabilization
 
-1. Build the web app first.
-2. Use the API and shared types to implement login, document list, detail pages, search, semantic search, and review flows.
-3. Only then add answer-generation and chat-style retrieval UX so the UI has a strong archive baseline.
+1. Add answer generation and retrieval UX on top of the existing semantic retrieval layer.
+2. Build chat-style document Q&A in the web app.
+3. Add operator dashboards with richer processing metrics.
 
 ### Mobile and desktop sequencing
 
@@ -223,23 +246,20 @@ Status: planned
 
 ### Recommended implementation order from here
 
-1. Web archive UI.
-2. Backend polish discovered by the web app rollout.
-3. Answer generation and retrieval UX on top of the existing semantic retrieval layer.
-4. Mobile capture app.
-5. Desktop utility app.
+1. Answer generation and retrieval UX on top of the existing semantic retrieval layer.
+2. Backend polish discovered by real web app usage and smoke runs.
+3. Mobile capture app.
+4. Desktop utility app.
 
 ### Why this order
 
-- The backend is already the critical path and shared dependency for every client.
-- The backend is now complete enough for the first real client and already covers archive, review, provider, and semantic-search needs.
-- The web app will expose missing backend UX needs faster than another backend-only phase.
-- Answer generation should land on a reliable archive and usable client, not replace missing archive fundamentals.
-- Mobile and desktop become easier once auth, uploads, and metadata correction are stable.
+- The web app now has automated smoke coverage, typed-client parity for the Phase 3 JSON flows, and a repeatable live smoke checklist, so the archive fundamentals are in place.
+- Answer generation should build on that stable archive and usable client rather than compete with unfinished platform work.
+- Mobile and desktop become easier once auth, uploads, and metadata correction are stable and validated through real web app use.
 
 ## Current Recommendation
 
-The backend is complete enough to start the web app now.
+Phase 3 is feature-complete, but it should not be considered done until web tests, OpenAPI parity, and repeatable smoke verification are in place. The next priority is finishing that stabilization work, then moving to answer generation.
 
 What is already strong enough:
 
@@ -249,15 +269,21 @@ What is already strong enough:
 - keyword and semantic search
 - chunk persistence and embeddings
 - operational health/metrics and reproducible backend verification
+- complete browser UI covering login, archive browsing, review, search, upload, and settings
+- provider-aware reprocessing and richer system health/admin visibility
+- single-container production serving and bundle-split web delivery
 
-What remains on the backend is real, but not blocking for the first client:
+What remains is real, but not blocking for day-to-day archive use:
 
+- web app tests
+- OpenAPI parity for the remaining review and health endpoints used by the web app
+- repeatable Phase 3 smoke verification after frontend/backend changes
 - answer generation
 - broader extraction heuristics beyond invoice-heavy logic
 - deeper operator dashboards
 - Azure live-provider validation once credentials are added
 
-So the next important step is Phase 3, not another backend-first expansion.
+So the next important step is closing the remaining Phase 3 stabilization gaps, then moving to answer generation and retrieval UX.
 
 ## Decisions Already Locked In
 

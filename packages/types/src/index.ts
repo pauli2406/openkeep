@@ -386,6 +386,16 @@ export const RequeueDocumentProcessingRequestSchema = z.object({
   force: z.boolean().default(true),
 });
 
+export const RequeueDocumentProcessingResponseSchema = z.object({
+  queued: z.literal(true),
+  documentId: z.string().uuid(),
+  processingJobId: z.string().uuid(),
+});
+
+export const ReprocessDocumentRequestSchema = z.object({
+  parseProvider: ParseProviderSchema.optional(),
+});
+
 export const LoginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -430,6 +440,58 @@ export const ProviderConfigSchema = z.object({
   hasAzureDocumentIntelligenceConfig: z.boolean().default(false),
   hasMistralOcrConfig: z.boolean().default(false),
   hasMistralEmbeddingConfig: z.boolean().default(false),
+});
+
+export const HealthResponseSchema = z.object({
+  status: z.string(),
+  provider: ProviderConfigSchema,
+});
+
+export const ParseProviderAvailabilitySchema = z.object({
+  id: ParseProviderSchema,
+  available: z.boolean(),
+});
+
+export const EmbeddingProviderAvailabilitySchema = z.object({
+  id: EmbeddingProviderSchema,
+  available: z.boolean(),
+  model: z.string().nullable(),
+});
+
+export const HealthProvidersResponseSchema = z.object({
+  activeParseProvider: ParseProviderSchema,
+  fallbackParseProvider: ParseProviderSchema.nullable(),
+  activeEmbeddingProvider: EmbeddingProviderSchema.nullable(),
+  parseProviders: z.array(ParseProviderAvailabilitySchema),
+  embeddingProviders: z.array(EmbeddingProviderAvailabilitySchema),
+});
+
+export const ProcessingStatusJobSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  queueName: z.string(),
+  status: ProcessingJobStatusSchema,
+  attempts: z.number().int().nonnegative(),
+  lastError: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const ProcessingStatusResponseSchema = z.object({
+  queues: z.object({
+    processing: z.object({
+      depth: z.number().int().nonnegative(),
+    }),
+    embedding: z.object({
+      depth: z.number().int().nonnegative(),
+    }),
+  }),
+  documents: z.object({
+    byStatus: z.record(z.string(), z.number().int().nonnegative()),
+    pendingReview: z.number().int().nonnegative(),
+  }),
+  recentJobs: z.array(ProcessingStatusJobSchema),
 });
 
 export const QueueDocumentProcessingPayloadSchema = z.object({
@@ -504,12 +566,24 @@ export type ResolveReviewRequest = z.infer<typeof ResolveReviewRequestSchema>;
 export type RequeueDocumentProcessingRequest = z.infer<
   typeof RequeueDocumentProcessingRequestSchema
 >;
+export type RequeueDocumentProcessingResponse = z.infer<
+  typeof RequeueDocumentProcessingResponseSchema
+>;
+export type ReprocessDocumentRequest = z.infer<typeof ReprocessDocumentRequestSchema>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type SetupOwnerInput = z.infer<typeof SetupOwnerSchema>;
 export type RefreshInput = z.infer<typeof RefreshSchema>;
 export type CreateApiTokenInput = z.infer<typeof CreateApiTokenSchema>;
 export type AuthTokens = z.infer<typeof AuthTokensSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+export type ParseProviderAvailability = z.infer<typeof ParseProviderAvailabilitySchema>;
+export type EmbeddingProviderAvailability = z.infer<
+  typeof EmbeddingProviderAvailabilitySchema
+>;
+export type HealthProvidersResponse = z.infer<typeof HealthProvidersResponseSchema>;
+export type ProcessingStatusJob = z.infer<typeof ProcessingStatusJobSchema>;
+export type ProcessingStatusResponse = z.infer<typeof ProcessingStatusResponseSchema>;
 export type QueueDocumentProcessingPayload = z.infer<
   typeof QueueDocumentProcessingPayloadSchema
 >;

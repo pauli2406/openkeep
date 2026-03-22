@@ -44,9 +44,16 @@ export class DocumentParseProviderRegistry {
     return this.configService.get("FALLBACK_PARSE_PROVIDER") ?? null;
   }
 
-  async parseWithConfiguredProvider(input: DocumentParseInput): Promise<ParseRegistryResult> {
-    const activeProvider = this.requireProvider(this.getActiveProviderId());
-    const fallbackProviderId = this.getFallbackProviderId();
+  async parseWithConfiguredProvider(
+    input: DocumentParseInput,
+    options?: {
+      activeProviderId?: ParseProvider;
+      fallbackProviderId?: ParseProvider | null;
+    },
+  ): Promise<ParseRegistryResult> {
+    const activeProviderId = options?.activeProviderId ?? this.getActiveProviderId();
+    const activeProvider = this.requireProvider(activeProviderId);
+    const fallbackProviderId = options?.fallbackProviderId ?? this.getFallbackProviderId();
 
     try {
       return {
