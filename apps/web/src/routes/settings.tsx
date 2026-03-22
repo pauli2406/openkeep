@@ -1000,13 +1000,19 @@ function ArchiveOperationsSection() {
   });
 
   const watchImportedCount =
-    watchResult?.items.filter((item) => item.action === "imported").length ?? 0;
+    watchResult?.summary.imported ?? 0;
   const watchDuplicateCount =
-    watchResult?.items.filter((item) => item.action === "duplicate").length ?? 0;
+    watchResult?.summary.duplicate ?? 0;
+  const watchUnsupportedCount =
+    watchResult?.summary.unsupported ?? 0;
   const watchFailedCount =
-    watchResult?.items.filter((item) => item.action === "failed").length ?? 0;
+    watchResult?.summary.failed ?? 0;
+  const watchPlannedCount =
+    watchResult?.summary.planned ?? 0;
   const watchProblemItems =
-    watchResult?.items.filter((item) => item.action !== "imported") ?? [];
+    watchResult?.items.filter(
+      (item) => item.action !== "imported" && item.action !== "duplicate",
+    ) ?? [];
 
   return (
     <Card>
@@ -1117,7 +1123,7 @@ function ArchiveOperationsSection() {
                 Path: {watchResult.configuredPath}
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <QueueCard
                 label="Imported"
                 value={watchImportedCount}
@@ -1129,16 +1135,96 @@ function ArchiveOperationsSection() {
                 active={watchDuplicateCount > 0}
               />
               <QueueCard
+                label="Unsupported"
+                value={watchUnsupportedCount}
+                active={watchUnsupportedCount > 0}
+                variant="warning"
+              />
+              <QueueCard
                 label="Failures"
                 value={watchFailedCount}
                 active={watchFailedCount > 0}
                 variant="warning"
               />
+              <QueueCard
+                label={watchResult.dryRun ? "Planned" : "Total"}
+                value={watchResult.dryRun ? watchPlannedCount : watchResult.summary.total}
+                active={(watchResult.dryRun ? watchPlannedCount : watchResult.summary.total) > 0}
+              />
             </div>
             {watchProblemItems.length > 0 && (
-              <pre className="overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono">
-                {JSON.stringify(watchProblemItems, null, 2)}
-              </pre>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Current scan issues
+                </p>
+                <div className="space-y-2">
+                  {watchProblemItems.map((item) => (
+                    <div
+                      key={`${item.path}:${item.reason}`}
+                      className="rounded-md border bg-muted/30 p-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant={
+                            item.action === "failed" || item.action === "unsupported"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
+                          {item.action}
+                        </Badge>
+                        <span className="text-sm font-medium">{item.path}</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span>Reason: {formatWatchFolderReason(item.reason)}</span>
+                        {item.failureCode && (
+                          <span>Code: {item.failureCode}</span>
+                        )}
+                        {item.mimeType && <span>MIME: {item.mimeType}</span>}
+                        {item.destinationPath && (
+                          <span>Destination: {item.destinationPath}</span>
+                        )}
+                      </div>
+                      {item.detail && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {item.detail}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {watchResult.history.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Recent scans
+                </p>
+                <div className="space-y-2">
+                  {watchResult.history.map((entry) => (
+                    <div
+                      key={entry.scannedAt}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">
+                          {format(new Date(entry.scannedAt), "MMM d, yyyy HH:mm")}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {entry.dryRun ? "Dry run" : "Live scan"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span>I: {entry.imported}</span>
+                        <span>D: {entry.duplicate}</span>
+                        <span>U: {entry.unsupported}</span>
+                        <span>F: {entry.failed}</span>
+                        <span>P: {entry.planned}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1388,6 +1474,13 @@ function QueueCard({
       <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
+}
+
+function formatWatchFolderReason(reason: string): string {
+  return reason
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
 }
 
 function formatJobTime(dateStr: string): string {

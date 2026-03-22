@@ -14,6 +14,8 @@ import {
   documentChunks,
   documentChunkEmbeddings,
   documentFiles,
+  documentPages,
+  documentTextBlocks,
   documents,
   processingJobs,
   tags,
@@ -867,10 +869,13 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .send({});
 
     expect(firstScan.status).toBe(201);
+    expect(firstScan.body.summary.imported).toBe(1);
     expect(firstScan.body.items).toHaveLength(1);
     expect(firstScan.body.items[0]?.action).toBe("imported");
     expect(firstScan.body.items[0]?.documentId).toBeDefined();
     expect(firstScan.body.items[0]?.destinationPath).toContain("processed");
+    expect(firstScan.body.items[0]?.mimeType).toBe("text/plain");
+    expect(firstScan.body.items[0]?.failureCode).toBeNull();
 
     await writeFile(
       watchedFile,
@@ -884,10 +889,14 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .send({});
 
     expect(secondScan.status).toBe(201);
+    expect(secondScan.body.summary.duplicate).toBe(1);
     expect(secondScan.body.items).toHaveLength(1);
     expect(secondScan.body.items[0]?.action).toBe("duplicate");
     expect(secondScan.body.items[0]?.path).toContain("watch-invoice.txt");
     expect(secondScan.body.items[0]?.reason).toBe("duplicate_checksum");
+    expect(secondScan.body.items[0]?.mimeType).toBe("text/plain");
+    expect(secondScan.body.items[0]?.failureCode).toBeNull();
+    expect(secondScan.body.history.length).toBeGreaterThan(0);
 
     const exportResponse = await request(app.getHttpServer())
       .get("/api/archive/export")
@@ -936,6 +945,428 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(documentsResponse.status).toBe(200);
     expect(documentsResponse.body.total).toBe(exportResponse.body.documents.length);
+  });
+
+  it("merges partial archive snapshots by replacing scoped rows and preserving untouched documents", async () => {
+    const timestamp = new Date().toISOString();
+    const oldTagId = randomUUID();
+    const replacementTagId = randomUUID();
+    const targetFileKey = `fixtures/${randomUUID()}/merge-target.pdf`;
+    const untouchedFileKey = `fixtures/${randomUUID()}/merge-untouched.pdf`;
+    const targetDerivedKey = `fixtures/${randomUUID()}/merge-target.searchable.pdf`;
+    const replacementDerivedKey = `fixtures/${randomUUID()}/merge-target.replaced.searchable.pdf`;
+
+    await storageService.uploadBuffer(
+      targetFileKey,
+      Buffer.from("target-file-original", "utf8"),
+      "application/pdf",
+    );
+    await storageService.uploadBuffer(
+      untouchedFileKey,
+      Buffer.from("untouched-file-original", "utf8"),
+      "application/pdf",
+    );
+    await storageService.uploadBuffer(
+      targetDerivedKey,
+      Buffer.from("%PDF-target-original", "utf8"),
+      "application/pdf",
+    );
+    await storageService.uploadBuffer(
+      replacementDerivedKey,
+      Buffer.from("%PDF-target-replaced", "utf8"),
+      "application/pdf",
+    );
+
+    await databaseService.db.insert(tags).values({
+      id: oldTagId,
+      name: `Legacy ${randomUUID().slice(0, 8)}`,
+      slug: `legacy-${randomUUID().slice(0, 8)}`,
+    });
+
+    const [targetFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: "a".repeat(64),
+        storageKey: targetFileKey,
+        originalFilename: "merge-target.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 256,
+      })
+      .returning();
+
+    const [untouchedFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: "b".repeat(64),
+        storageKey: untouchedFileKey,
+        originalFilename: "merge-untouched.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 256,
+      })
+      .returning();
+
+    const [targetDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: targetFile.id,
+        title: "Merge target before",
+        source: "upload",
+        mimeType: "application/pdf",
+        status: "ready",
+        fullText: "old target text",
+        pageCount: 1,
+        reviewStatus: "not_required",
+        searchablePdfStorageKey: targetDerivedKey,
+        parseProvider: "local-ocr",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        metadata: {
+          parse: {
+            provider: "local-ocr",
+            strategy: "fixture-old",
+          },
+          chunking: {
+            strategy: "normalized-parse-v1",
+            chunkCount: 1,
+          },
+        },
+        processedAt: new Date(),
+      })
+      .returning();
+
+    const [untouchedDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: untouchedFile.id,
+        title: "Merge untouched",
+        source: "upload",
+        mimeType: "application/pdf",
+        status: "ready",
+        fullText: "untouched text",
+        pageCount: 1,
+        reviewStatus: "not_required",
+        parseProvider: "local-ocr",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        metadata: {
+          parse: {
+            provider: "local-ocr",
+            strategy: "fixture-untouched",
+          },
+          chunking: {
+            strategy: "normalized-parse-v1",
+            chunkCount: 1,
+          },
+        },
+        processedAt: new Date(),
+      })
+      .returning();
+
+    await databaseService.pool.query(
+      `INSERT INTO document_tag_links (document_id, tag_id) VALUES
+        ($1::uuid, $2::uuid),
+        ($3::uuid, $2::uuid)`,
+      [targetDocument.id, oldTagId, untouchedDocument.id],
+    );
+
+    await databaseService.db.insert(documentPages).values([
+      {
+        id: randomUUID(),
+        documentId: targetDocument.id,
+        pageNumber: 1,
+        width: 1200,
+        height: 1600,
+      },
+      {
+        id: randomUUID(),
+        documentId: untouchedDocument.id,
+        pageNumber: 1,
+        width: 1200,
+        height: 1600,
+      },
+    ]);
+
+    await databaseService.db.insert(documentTextBlocks).values([
+      {
+        id: randomUUID(),
+        documentId: targetDocument.id,
+        pageNumber: 1,
+        lineIndex: 0,
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+        text: "old target block",
+      },
+      {
+        id: randomUUID(),
+        documentId: untouchedDocument.id,
+        pageNumber: 1,
+        lineIndex: 0,
+        boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+        text: "untouched block",
+      },
+    ]);
+
+    await databaseService.db.insert(documentChunks).values([
+      {
+        id: randomUUID(),
+        documentId: targetDocument.id,
+        chunkIndex: 0,
+        heading: "Before",
+        text: "old target chunk",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "1".repeat(64),
+        metadata: {},
+      },
+      {
+        id: randomUUID(),
+        documentId: untouchedDocument.id,
+        chunkIndex: 0,
+        heading: "Untouched",
+        text: "untouched chunk",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "2".repeat(64),
+        metadata: {},
+      },
+    ]);
+
+    await databaseService.pool.query(
+      `INSERT INTO document_chunk_embeddings (
+        document_id,
+        chunk_index,
+        provider,
+        model,
+        dimensions,
+        embedding,
+        content_hash
+      )
+      VALUES
+        ($1::uuid, 0, 'openai', 'text-embedding-3-small', 3, $2::halfvec, $3),
+        ($4::uuid, 0, 'openai', 'text-embedding-3-small', 3, $5::halfvec, $6)`,
+      [
+        targetDocument.id,
+        serializeHalfVector(padEmbedding([0.9, 0.1, 0.2])),
+        "1".repeat(64),
+        untouchedDocument.id,
+        serializeHalfVector(padEmbedding([0.1, 0.9, 0.2])),
+        "2".repeat(64),
+      ],
+    );
+
+    const mergeResponse = await request(app.getHttpServer())
+      .post("/api/archive/import")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        mode: "merge",
+        snapshot: {
+          version: 1,
+          exportedAt: timestamp,
+          tags: [
+            {
+              id: replacementTagId,
+              name: "Merged replacement",
+              slug: `merged-replacement-${randomUUID().slice(0, 8)}`,
+              createdAt: timestamp,
+            },
+          ],
+          correspondents: [],
+          documentTypes: [],
+          files: [
+            {
+              id: targetFile.id,
+              checksum: "c".repeat(64),
+              storageKey: targetFileKey,
+              originalFilename: "merge-target-updated.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 512,
+              createdAt: timestamp,
+              contentBase64: Buffer.from("target-file-replaced", "utf8").toString("base64"),
+            },
+          ],
+          documents: [
+            {
+              id: targetDocument.id,
+              ownerUserId,
+              fileId: targetFile.id,
+              title: "Merge target after",
+              source: "upload",
+              status: "ready",
+              mimeType: "application/pdf",
+              language: "en",
+              fullText: "new target text",
+              pageCount: 1,
+              issueDate: "2025-06-01",
+              dueDate: null,
+              amount: 19.99,
+              currency: "EUR",
+              referenceNumber: "MERGED-42",
+              confidence: 0.91,
+              reviewStatus: "not_required",
+              reviewReasons: [],
+              reviewedAt: null,
+              reviewNote: null,
+              searchablePdfStorageKey: replacementDerivedKey,
+              parseProvider: "local-ocr",
+              chunkCount: 1,
+              embeddingStatus: "ready",
+              embeddingProvider: "openai",
+              embeddingModel: "text-embedding-3-small",
+              lastProcessingError: null,
+              correspondentId: null,
+              documentTypeId: null,
+              metadata: {
+                parse: {
+                  provider: "local-ocr",
+                  strategy: "fixture-new",
+                },
+                chunking: {
+                  strategy: "normalized-parse-v1",
+                  chunkCount: 1,
+                },
+              },
+              createdAt: timestamp,
+              processedAt: timestamp,
+              updatedAt: timestamp,
+            },
+          ],
+          documentTagLinks: [
+            {
+              documentId: targetDocument.id,
+              tagId: replacementTagId,
+              createdAt: timestamp,
+            },
+          ],
+          documentPages: [
+            {
+              id: randomUUID(),
+              documentId: targetDocument.id,
+              pageNumber: 1,
+              width: 1400,
+              height: 1800,
+            },
+          ],
+          documentTextBlocks: [
+            {
+              id: randomUUID(),
+              documentId: targetDocument.id,
+              pageNumber: 1,
+              lineIndex: 0,
+              boundingBox: { x: 0, y: 0, width: 120, height: 20 },
+              text: "new target block",
+            },
+          ],
+          documentChunks: [
+            {
+              id: randomUUID(),
+              documentId: targetDocument.id,
+              chunkIndex: 0,
+              heading: "After",
+              text: "new target chunk",
+              pageFrom: 1,
+              pageTo: 1,
+              strategyVersion: "normalized-parse-v1",
+              contentHash: "3".repeat(64),
+              metadata: {},
+              createdAt: timestamp,
+            },
+          ],
+          documentChunkEmbeddings: [
+            {
+              documentId: targetDocument.id,
+              chunkIndex: 0,
+              provider: "openai",
+              model: "text-embedding-3-small",
+              dimensions: 3,
+              embeddingLiteral: serializeHalfVector(padEmbedding([0.2, 0.3, 0.4])),
+              contentHash: "3".repeat(64),
+              createdAt: timestamp,
+              updatedAt: timestamp,
+            },
+          ],
+          processingJobs: [],
+          auditEvents: [],
+          derivedObjects: [
+            {
+              storageKey: replacementDerivedKey,
+              contentBase64: Buffer.from("%PDF-merged", "utf8").toString("base64"),
+            },
+          ],
+        },
+      });
+
+    expect(mergeResponse.status).toBe(201);
+    expect(mergeResponse.body.mode).toBe("merge");
+    expect(mergeResponse.body.documentCount).toBe(1);
+
+    const [mergedTarget] = await databaseService.db
+      .select({
+        title: documents.title,
+        fullText: documents.fullText,
+        referenceNumber: documents.referenceNumber,
+        searchablePdfStorageKey: documents.searchablePdfStorageKey,
+      })
+      .from(documents)
+      .where(eq(documents.id, targetDocument.id))
+      .limit(1);
+
+    expect(mergedTarget?.title).toBe("Merge target after");
+    expect(mergedTarget?.fullText).toBe("new target text");
+    expect(mergedTarget?.referenceNumber).toBe("MERGED-42");
+    expect(mergedTarget?.searchablePdfStorageKey).toBe(replacementDerivedKey);
+
+    const targetTagLinks = await databaseService.pool.query<{ tag_id: string }>(
+      `SELECT tag_id::text FROM document_tag_links WHERE document_id = $1::uuid ORDER BY tag_id`,
+      [targetDocument.id],
+    );
+    const untouchedTagLinks = await databaseService.pool.query<{ tag_id: string }>(
+      `SELECT tag_id::text FROM document_tag_links WHERE document_id = $1::uuid ORDER BY tag_id`,
+      [untouchedDocument.id],
+    );
+    const targetTextBlocks = await databaseService.pool.query<{ text: string }>(
+      `SELECT text FROM document_text_blocks WHERE document_id = $1::uuid`,
+      [targetDocument.id],
+    );
+    const untouchedTextBlocks = await databaseService.pool.query<{ text: string }>(
+      `SELECT text FROM document_text_blocks WHERE document_id = $1::uuid`,
+      [untouchedDocument.id],
+    );
+    const targetChunks = await databaseService.pool.query<{ text: string; content_hash: string }>(
+      `SELECT text, content_hash FROM document_chunks WHERE document_id = $1::uuid`,
+      [targetDocument.id],
+    );
+    const untouchedChunks = await databaseService.pool.query<{ text: string; content_hash: string }>(
+      `SELECT text, content_hash FROM document_chunks WHERE document_id = $1::uuid`,
+      [untouchedDocument.id],
+    );
+    const targetEmbeddings = await databaseService.pool.query<{ content_hash: string }>(
+      `SELECT content_hash FROM document_chunk_embeddings WHERE document_id = $1::uuid`,
+      [targetDocument.id],
+    );
+    const untouchedEmbeddings = await databaseService.pool.query<{ content_hash: string }>(
+      `SELECT content_hash FROM document_chunk_embeddings WHERE document_id = $1::uuid`,
+      [untouchedDocument.id],
+    );
+
+    expect(targetTagLinks.rows.map((row) => row.tag_id)).toEqual([replacementTagId]);
+    expect(untouchedTagLinks.rows.map((row) => row.tag_id)).toEqual([oldTagId]);
+    expect(targetTextBlocks.rows.map((row) => row.text)).toEqual(["new target block"]);
+    expect(untouchedTextBlocks.rows.map((row) => row.text)).toEqual(["untouched block"]);
+    expect(targetChunks.rows).toEqual([
+      { text: "new target chunk", content_hash: "3".repeat(64) },
+    ]);
+    expect(untouchedChunks.rows).toEqual([
+      { text: "untouched chunk", content_hash: "2".repeat(64) },
+    ]);
+    expect(targetEmbeddings.rows.map((row) => row.content_hash)).toEqual(["3".repeat(64)]);
+    expect(untouchedEmbeddings.rows.map((row) => row.content_hash)).toEqual(["2".repeat(64)]);
   });
 
   it("rejects malformed archive snapshots before replacing stored data", async () => {

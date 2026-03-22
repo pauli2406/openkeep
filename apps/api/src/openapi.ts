@@ -12,6 +12,7 @@ import {
   CorrespondentSchema,
   CreateApiTokenResponseSchema,
   CurrentUserSchema,
+  DocumentStatusSchema,
   DeleteTaxonomyResponseSchema,
   DocumentHistoryResponseSchema,
   DocumentSchema,
@@ -22,7 +23,9 @@ import {
   ProcessingStatusResponseSchema,
   ReadinessResponseSchema,
   RequeueDocumentProcessingResponseSchema,
+  ReviewReasonSchema,
   SearchDocumentsResponseSchema,
+  SearchDocumentsRequestSchema,
   SemanticSearchResponseSchema,
   SuccessResponseSchema,
   TagSchema,
@@ -140,25 +143,34 @@ function patchJsonResponse(
   };
 }
 
-function patchCsvTagsQuery(document: Record<string, any>, path: string) {
-  const operation = ensureOperation(document, path, "get");
-  if (!operation?.parameters) {
+function patchQueryParameters(
+  document: Record<string, any>,
+  path: string,
+  method: string,
+  parameters: Array<{
+    name: string;
+    schema: Record<string, any>;
+    description?: string;
+    style?: string;
+    explode?: boolean;
+  }>,
+) {
+  const operation = ensureOperation(document, path, method);
+  if (!operation) {
     return;
   }
 
-  operation.parameters = operation.parameters.map((parameter: Record<string, any>) => {
-    if (parameter.in === "query" && parameter.name === "tags") {
-      return {
-        ...parameter,
-        schema: {
-          type: "string",
-          description: "Comma-separated UUIDs",
-        },
-      };
-    }
-
-    return parameter;
-  });
+  operation.parameters = parameters.map((parameter) => ({
+    in: "query",
+    name: parameter.name,
+    required: false,
+    description: parameter.description,
+    schema: parameter.schema,
+    ...(parameter.style ? { style: parameter.style } : {}),
+    ...(typeof parameter.explode === "boolean"
+      ? { explode: parameter.explode }
+      : {}),
+  }));
 }
 
 function patchBinaryDownload(document: Record<string, any>, path: string, description: string) {
@@ -201,6 +213,102 @@ function patchMetrics(document: Record<string, any>) {
 }
 
 function patchGeneratedDocument(document: Record<string, any>) {
+  const searchDocumentQueryParameters = [
+    {
+      name: "query",
+      schema: { type: "string" },
+      description: "Full-text search query",
+    },
+    {
+      name: "year",
+      schema: {
+        type: "integer",
+        minimum: 1970,
+        maximum: 2100,
+      },
+      description: "Filter by issue year",
+    },
+    {
+      name: "dateFrom",
+      schema: {
+        type: "string",
+        format: "date",
+      },
+      description: "Lower issue date bound",
+    },
+    {
+      name: "dateTo",
+      schema: {
+        type: "string",
+        format: "date",
+      },
+      description: "Upper issue date bound",
+    },
+    {
+      name: "correspondentId",
+      schema: {
+        type: "string",
+        format: "uuid",
+      },
+      description: "Filter by correspondent",
+    },
+    {
+      name: "documentTypeId",
+      schema: {
+        type: "string",
+        format: "uuid",
+      },
+      description: "Filter by document type",
+    },
+    {
+      name: "status",
+      schema: zodToOpenAPI(DocumentStatusSchema),
+      description: "Filter by processing status",
+    },
+    {
+      name: "tags",
+      schema: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+      },
+      description: "Filter by tag IDs",
+      style: "form",
+      explode: true,
+    },
+    {
+      name: "sort",
+      schema: zodToOpenAPI(SearchDocumentsRequestSchema.shape.sort),
+      description: "Sort field",
+    },
+    {
+      name: "direction",
+      schema: zodToOpenAPI(SearchDocumentsRequestSchema.shape.direction),
+      description: "Sort direction",
+    },
+    {
+      name: "page",
+      schema: {
+        type: "integer",
+        minimum: 1,
+        default: 1,
+      },
+      description: "Page number",
+    },
+    {
+      name: "pageSize",
+      schema: {
+        type: "integer",
+        minimum: 1,
+        maximum: 100,
+        default: 20,
+      },
+      description: "Page size",
+    },
+  ] as const;
+
   patchJsonResponse(
     document,
     "/api/health",
@@ -324,7 +432,47 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "SearchDocumentsResponse",
     SearchDocumentsResponseSchema,
   );
-  patchCsvTagsQuery(document, "/api/documents");
+  patchQueryParameters(document, "/api/documents", "get", [...searchDocumentQueryParameters]);
+  patchJsonResponse(
+    document,
+    "/api/documents/review",
+    "get",
+    200,
+    "Review queue response",
+    "SearchDocumentsResponse",
+    SearchDocumentsResponseSchema,
+  );
+  patchQueryParameters(document, "/api/documents/review", "get", [
+    {
+      name: "processingStatus",
+      schema: zodToOpenAPI(DocumentStatusSchema),
+      description: "Filter review queue by processing status",
+    },
+    {
+      name: "reason",
+      schema: zodToOpenAPI(ReviewReasonSchema),
+      description: "Filter review queue by review reason",
+    },
+    {
+      name: "page",
+      schema: {
+        type: "integer",
+        minimum: 1,
+        default: 1,
+      },
+      description: "Page number",
+    },
+    {
+      name: "pageSize",
+      schema: {
+        type: "integer",
+        minimum: 1,
+        maximum: 100,
+        default: 20,
+      },
+      description: "Page size",
+    },
+  ]);
   patchJsonResponse(
     document,
     "/api/documents/{id}",
@@ -388,7 +536,6 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "RequeueDocumentProcessingResponse",
     RequeueDocumentProcessingResponseSchema,
   );
-  patchCsvTagsQuery(document, "/api/search/documents");
   patchJsonResponse(
     document,
     "/api/search/documents",
@@ -398,6 +545,9 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "SearchDocumentsResponse",
     SearchDocumentsResponseSchema,
   );
+  patchQueryParameters(document, "/api/search/documents", "get", [
+    ...searchDocumentQueryParameters,
+  ]);
   patchJsonResponse(
     document,
     "/api/search/semantic",

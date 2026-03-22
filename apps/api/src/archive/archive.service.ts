@@ -27,15 +27,17 @@ import {
   ArchiveImportResult,
   ArchiveSnapshot,
   ArchiveSnapshotSchema,
+  type WatchFolderScanHistoryItem,
   WatchFolderScanItem,
   WatchFolderScanRequest,
   WatchFolderScanResponse,
+  type WatchFolderScanSummary,
 } from "@openkeep/types";
 import { createHash } from "crypto";
 import { lookup as lookupMimeType } from "mime-types";
 import { mkdir, readFile, readdir, rename } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 interface SnapshotUploadPlan {
@@ -49,6 +51,20 @@ interface UploadedObjectBackup {
   contentType: string;
   previousBuffer: Buffer | null;
 }
+
+const SUPPORTED_WATCH_FOLDER_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/heic",
+  "image/heif",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/tif",
+  "image/tiff",
+  "image/webp",
+]);
+
+const WATCH_FOLDER_SCAN_HISTORY_LIMIT = 5;
 
 @Injectable()
 export class ArchiveService {
@@ -257,10 +273,9 @@ export class ArchiveService {
             await tx
               .delete(documentChunks)
               .where(inArray(documentChunks.documentId, snapshotDocumentIds));
-            await tx.execute(sql`
-              DELETE FROM document_chunk_embeddings
-              WHERE document_id = ANY(${snapshotDocumentIds}::uuid[])
-            `);
+            await tx
+              .delete(documentChunkEmbeddings)
+              .where(inArray(documentChunkEmbeddings.documentId, snapshotDocumentIds));
           }
         }
 
@@ -372,8 +387,12 @@ export class ArchiveService {
 
     for (const filePath of filePaths) {
       const relativePath = relative(configuredPath, filePath);
+      let mimeType: string | null = null;
+
       try {
-        const mimeType = lookupMimeType(filePath);
+        const detectedMimeType = lookupMimeType(filePath);
+        mimeType = typeof detectedMimeType === "string" ? detectedMimeType : null;
+
         if (!mimeType) {
           items.push(
             await this.finalizeWatchFolderItem({
@@ -384,6 +403,27 @@ export class ArchiveService {
               action: request.dryRun ? "planned" : "unsupported",
               reason: request.dryRun ? "would_fail_unsupported" : "unsupported_file_type",
               destinationDirectory: "failed",
+              mimeType: null,
+              failureCode: "mime_type_missing",
+              detail: "Could not determine a MIME type from the file extension.",
+            }),
+          );
+          continue;
+        }
+
+        if (!this.isSupportedWatchFolderMimeType(mimeType)) {
+          items.push(
+            await this.finalizeWatchFolderItem({
+              configuredPath,
+              sourcePath: filePath,
+              relativePath,
+              dryRun: request.dryRun,
+              action: request.dryRun ? "planned" : "unsupported",
+              reason: request.dryRun ? "would_fail_unsupported" : "unsupported_file_type",
+              destinationDirectory: "failed",
+              mimeType,
+              failureCode: "mime_type_not_allowed",
+              detail: `Unsupported watch-folder MIME type: ${mimeType}`,
             }),
           );
           continue;
@@ -407,6 +447,9 @@ export class ArchiveService {
               action: request.dryRun ? "planned" : "duplicate",
               reason: request.dryRun ? "would_skip_duplicate" : "duplicate_checksum",
               destinationDirectory: "processed",
+              mimeType,
+              failureCode: null,
+              detail: null,
             }),
           );
           continue;
@@ -419,6 +462,9 @@ export class ArchiveService {
             destinationPath: null,
             documentId: null,
             reason: "would_import",
+            mimeType,
+            failureCode: null,
+            detail: null,
           });
           continue;
         }
@@ -444,6 +490,9 @@ export class ArchiveService {
           destinationDirectory: "processed",
           checksum,
           documentId: imported.id,
+          mimeType,
+          failureCode: null,
+          detail: null,
         });
         items.push(finalized);
       } catch (error) {
@@ -456,17 +505,24 @@ export class ArchiveService {
             action: request.dryRun ? "planned" : "failed",
             reason: request.dryRun ? "would_fail_upload" : "upload_failed",
             destinationDirectory: "failed",
+            mimeType,
+            failureCode: "upload_failed",
+            detail: error instanceof Error ? error.message : "Unknown upload failure",
           }).catch(() => ({
             path: filePath,
             action: request.dryRun ? "planned" : "failed",
             destinationPath: null,
             documentId: null,
-            reason:
-              error instanceof Error ? `upload_failed:${error.message}` : "upload_failed:unknown",
+            reason: request.dryRun ? "would_fail_upload" : "upload_failed",
+            mimeType,
+            failureCode: "upload_failed",
+            detail: error instanceof Error ? error.message : "Unknown upload failure",
           })),
         );
       }
     }
+
+    const summary = this.buildWatchFolderSummary(items);
 
     await this.databaseService.db.insert(auditEvents).values({
       actorUserId: principal.userId,
@@ -474,18 +530,23 @@ export class ArchiveService {
       payload: {
         configuredPath,
         dryRun: request.dryRun,
-        importedCount: items.filter((item) => item.action === "imported").length,
-        duplicateCount: items.filter((item) => item.action === "duplicate").length,
-        unsupportedCount: items.filter((item) => item.action === "unsupported").length,
-        failedCount: items.filter((item) => item.action === "failed").length,
-        plannedCount: items.filter((item) => item.action === "planned").length,
+        totalCount: summary.total,
+        importedCount: summary.imported,
+        duplicateCount: summary.duplicate,
+        unsupportedCount: summary.unsupported,
+        failedCount: summary.failed,
+        plannedCount: summary.planned,
       },
     });
+
+    const history = await this.listWatchFolderScanHistory();
 
     return {
       configuredPath,
       dryRun: request.dryRun,
+      summary,
       items,
+      history,
     };
   }
 
@@ -999,6 +1060,9 @@ export class ArchiveService {
     action: WatchFolderScanItem["action"];
     reason: string;
     destinationDirectory: "processed" | "failed";
+    mimeType: string | null;
+    failureCode: WatchFolderScanItem["failureCode"];
+    detail: string | null;
     checksum?: string;
     documentId?: string;
   }): Promise<WatchFolderScanItem> {
@@ -1009,6 +1073,9 @@ export class ArchiveService {
         destinationPath: null,
         documentId: input.documentId ?? null,
         reason: input.reason,
+        mimeType: input.mimeType,
+        failureCode: input.failureCode,
+        detail: input.detail,
       };
     }
 
@@ -1026,7 +1093,60 @@ export class ArchiveService {
       destinationPath,
       documentId: input.documentId ?? null,
       reason: input.reason,
+      mimeType: input.mimeType,
+      failureCode: input.failureCode,
+      detail: input.detail,
     };
+  }
+
+  private isSupportedWatchFolderMimeType(mimeType: string): boolean {
+    return mimeType.startsWith("text/") || SUPPORTED_WATCH_FOLDER_MIME_TYPES.has(mimeType);
+  }
+
+  private buildWatchFolderSummary(items: WatchFolderScanItem[]): WatchFolderScanSummary {
+    return {
+      total: items.length,
+      imported: items.filter((item) => item.action === "imported").length,
+      duplicate: items.filter((item) => item.action === "duplicate").length,
+      unsupported: items.filter((item) => item.action === "unsupported").length,
+      failed: items.filter((item) => item.action === "failed").length,
+      planned: items.filter((item) => item.action === "planned").length,
+    };
+  }
+
+  private async listWatchFolderScanHistory(): Promise<WatchFolderScanHistoryItem[]> {
+    const rows = await this.databaseService.db
+      .select({
+        id: auditEvents.id,
+        createdAt: auditEvents.createdAt,
+        payload: auditEvents.payload,
+      })
+      .from(auditEvents)
+      .where(eq(auditEvents.eventType, "archive.watch_folder_scanned"))
+      .orderBy(desc(auditEvents.createdAt), desc(auditEvents.id))
+      .limit(WATCH_FOLDER_SCAN_HISTORY_LIMIT);
+
+    return rows.map((row) => {
+      const payload =
+        row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+          ? (row.payload as Record<string, unknown>)
+          : {};
+
+      return {
+        scannedAt: row.createdAt.toISOString(),
+        dryRun: payload.dryRun === true,
+        imported: this.readWatchFolderHistoryCount(payload, "importedCount"),
+        duplicate: this.readWatchFolderHistoryCount(payload, "duplicateCount"),
+        unsupported: this.readWatchFolderHistoryCount(payload, "unsupportedCount"),
+        failed: this.readWatchFolderHistoryCount(payload, "failedCount"),
+        planned: this.readWatchFolderHistoryCount(payload, "plannedCount"),
+      };
+    });
+  }
+
+  private readWatchFolderHistoryCount(payload: Record<string, unknown>, key: string): number {
+    const value = payload[key];
+    return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
   }
 
   private async moveWatchFolderFile(input: {

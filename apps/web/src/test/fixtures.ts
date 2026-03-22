@@ -316,6 +316,14 @@ export function makeWatchFolderScanResponse(
   return {
     configuredPath: "/watch-folder",
     dryRun: false,
+    summary: {
+      total: 2,
+      imported: 1,
+      duplicate: 1,
+      unsupported: 0,
+      failed: 0,
+      planned: 0,
+    },
     items: [
       {
         path: "/watch-folder/invoice.pdf",
@@ -323,6 +331,9 @@ export function makeWatchFolderScanResponse(
         destinationPath: "/watch-folder/processed/invoice.pdf",
         documentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
         reason: "imported",
+        mimeType: "application/pdf",
+        failureCode: null,
+        detail: null,
       },
       {
         path: "/watch-folder/duplicate.pdf",
@@ -330,6 +341,20 @@ export function makeWatchFolderScanResponse(
         destinationPath: "/watch-folder/processed/duplicate.pdf",
         documentId: null,
         reason: "duplicate_checksum",
+        mimeType: "application/pdf",
+        failureCode: null,
+        detail: null,
+      },
+    ],
+    history: [
+      {
+        scannedAt: "2026-03-22T10:00:00.000Z",
+        dryRun: false,
+        imported: 1,
+        duplicate: 1,
+        unsupported: 0,
+        failed: 0,
+        planned: 0,
       },
     ],
     ...overrides,

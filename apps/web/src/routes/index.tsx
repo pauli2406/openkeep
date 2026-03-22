@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import type { SearchDocumentsResponse } from "@openkeep/types";
-import { api, authFetch } from "@/lib/api";
+import { api } from "@/lib/api";
 import {
   Card,
   CardHeader,
@@ -63,27 +62,36 @@ function DashboardPage() {
   const documentsQuery = useQuery({
     queryKey: ["documents", "recent"],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        sort: "createdAt",
-        direction: "desc",
-        pageSize: "5",
+      const { data, error, response } = await api.GET("/api/documents", {
+        params: {
+          query: {
+            sort: "createdAt",
+            direction: "desc",
+            pageSize: 5,
+          },
+        },
       });
-      const response = await authFetch(`/api/documents?${params.toString()}`);
-      if (!response.ok) {
+      if (!response.ok || error || !data) {
         throw new Error("Failed to load recent documents");
       }
-      return (await response.json()) as SearchDocumentsResponse;
+      return data;
     },
   });
 
   const reviewQuery = useQuery({
     queryKey: ["documents", "review", "count"],
     queryFn: async () => {
-      const response = await authFetch("/api/documents/review?pageSize=1");
-      if (!response.ok) {
+      const { data, error, response } = await api.GET("/api/documents/review", {
+        params: {
+          query: {
+            pageSize: 1,
+          },
+        },
+      });
+      if (!response.ok || error || !data) {
         throw new Error("Failed to load review queue");
       }
-      return (await response.json()) as SearchDocumentsResponse;
+      return data;
     },
   });
 

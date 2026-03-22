@@ -791,6 +791,1572 @@ export interface components {
             name?: string;
             description?: string | null;
         };
+        HealthResponse: {
+            status: string;
+            provider: {
+                /** @enum {string} */
+                mode: "local-only" | "hybrid" | "cloud-assisted";
+                /** @enum {string} */
+                activeParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                /** @enum {string|null} */
+                fallbackParseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                /** @enum {string|null} */
+                activeEmbeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                openaiModel?: string;
+                geminiModel?: string;
+                openaiEmbeddingModel?: string;
+                geminiEmbeddingModel?: string;
+                voyageEmbeddingModel?: string;
+                mistralEmbeddingModel?: string;
+                /** @default false */
+                hasOpenAiKey: boolean;
+                /** @default false */
+                hasGeminiKey: boolean;
+                /** @default false */
+                hasVoyageKey: boolean;
+                /** @default false */
+                hasGoogleCloudConfig: boolean;
+                /** @default false */
+                hasAwsTextractConfig: boolean;
+                /** @default false */
+                hasAzureDocumentIntelligenceConfig: boolean;
+                /** @default false */
+                hasMistralOcrConfig: boolean;
+                /** @default false */
+                hasMistralEmbeddingConfig: boolean;
+            };
+        };
+        HealthProvidersResponse: {
+            /** @enum {string} */
+            activeParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+            /** @enum {string|null} */
+            fallbackParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+            /** @enum {string|null} */
+            activeEmbeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+            parseProviders: {
+                /** @enum {string} */
+                id: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                available: boolean;
+            }[];
+            embeddingProviders: {
+                /** @enum {string} */
+                id: "openai" | "google-gemini" | "voyage" | "mistral";
+                available: boolean;
+                model: string | null;
+            }[];
+        };
+        HealthLiveResponse: {
+            /** @enum {string} */
+            status: "ok";
+            timestamp: string;
+        };
+        ReadinessResponse: {
+            /** @enum {string} */
+            status: "ok" | "degraded";
+            checks: {
+                database: boolean;
+                objectStorage: boolean;
+                queue: boolean;
+            };
+        };
+        ProcessingStatusResponse: {
+            queues: {
+                processing: {
+                    depth: number;
+                };
+                embedding: {
+                    depth: number;
+                };
+            };
+            documents: {
+                byStatus: {
+                    [key: string]: number;
+                };
+                pendingReview: number;
+            };
+            recentJobs: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                queueName: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "failed";
+                attempts: number;
+                lastError: string | null;
+                startedAt: string | null;
+                finishedAt: string | null;
+                createdAt: string;
+            }[];
+        };
+        AuthTokens: {
+            accessToken: string;
+            refreshToken: string;
+        };
+        CurrentUser: {
+            /** Format: uuid */
+            id: string;
+            /** Format: email */
+            email: string;
+            displayName: string;
+            isOwner: boolean;
+            createdAt: string;
+        };
+        ApiTokenList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            tokenPrefix: string;
+            lastUsedAt: string | null;
+            expiresAt: string | null;
+            createdAt: string;
+        }[];
+        CreateApiTokenResponse: {
+            /** Format: uuid */
+            id: string;
+            token: string;
+            name: string;
+            expiresAt: string | null;
+        };
+        SuccessResponse: {
+            success: boolean;
+        };
+        SearchDocumentsResponse: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                /** @enum {string} */
+                source: "upload" | "watch-folder" | "email" | "api";
+                mimeType: string;
+                checksum: string;
+                storageKey: string;
+                /** @enum {string} */
+                status: "pending" | "processing" | "ready" | "failed";
+                language: string | null;
+                issueDate: string | null;
+                dueDate: string | null;
+                amount: number | null;
+                currency: string | null;
+                referenceNumber: string | null;
+                correspondent: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                } | null;
+                documentType: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description?: string | null;
+                } | null;
+                tags: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                }[];
+                confidence: number | null;
+                /** @enum {string} */
+                reviewStatus: "not_required" | "pending" | "resolved";
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewedAt: string | null;
+                reviewNote: string | null;
+                searchablePdfAvailable: boolean;
+                /** @enum {string|null} */
+                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                /** @default 0 */
+                chunkCount: number;
+                /**
+                 * @default not_configured
+                 * @enum {string}
+                 */
+                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                /** @enum {string|null} */
+                embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                embeddingModel?: string | null;
+                /** @default false */
+                embeddingsStale: boolean;
+                lastProcessingError: string | null;
+                latestProcessingJob: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                latestEmbeddingJob?: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                metadata: {
+                    extractionStrategy?: string;
+                    normalizationStrategy?: string;
+                    /** @enum {string} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                    parseStrategy?: string;
+                    documentTypeName?: string | null;
+                    detectedKeywords?: string[];
+                    pageCount?: number;
+                    chunkCount?: number;
+                    searchablePdfGenerated?: boolean;
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    parse?: {
+                        /** @enum {string} */
+                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        strategy: string;
+                        fallbackUsed?: boolean;
+                        warnings?: string[];
+                        keyValueCount?: number;
+                        tableCount?: number;
+                        providerMetadata?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    chunking?: {
+                        strategy: string;
+                        chunkCount: number;
+                        usedProviderHints?: boolean;
+                    };
+                    embedding?: {
+                        /** @enum {string} */
+                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                        model?: string;
+                        configured?: boolean;
+                        chunkCount?: number;
+                    };
+                    reviewEvidence?: {
+                        /** @enum {string} */
+                        documentClass: "invoice" | "generic";
+                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        extracted: {
+                            correspondent: boolean;
+                            issueDate: boolean;
+                            amount: boolean;
+                            currency: boolean;
+                        };
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        confidence?: number | null;
+                        confidenceThreshold?: number;
+                        ocrTextLength?: number;
+                        ocrEmptyThreshold?: number;
+                    };
+                    manual?: {
+                        /** @default [] */
+                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        /** @default {} */
+                        values: {
+                            issueDate?: string | null;
+                            dueDate?: string | null;
+                            amount?: number | null;
+                            currency?: string | null;
+                            referenceNumber?: string | null;
+                            /** Format: uuid */
+                            correspondentId?: string | null;
+                            /** Format: uuid */
+                            documentTypeId?: string | null;
+                            tagIds?: string[];
+                        };
+                        updatedAt?: string | null;
+                        /** Format: uuid */
+                        updatedByUserId?: string | null;
+                    };
+                };
+                createdAt: string;
+                processedAt: string | null;
+                snippets?: string[];
+                matchingLines?: {
+                    /** Format: uuid */
+                    documentId: string;
+                    page: number;
+                    lineIndex: number;
+                    boundingBox: {
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                    };
+                    text: string;
+                }[];
+            }[];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @default {} */
+            appliedFilters: {
+                year?: number;
+                dateFrom?: string;
+                dateTo?: string;
+                /** Format: uuid */
+                correspondentId?: string;
+                /** Format: uuid */
+                documentTypeId?: string;
+                /** @enum {string} */
+                status?: "pending" | "processing" | "ready" | "failed";
+                tags?: string[];
+            };
+        };
+        Document: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            source: "upload" | "watch-folder" | "email" | "api";
+            mimeType: string;
+            checksum: string;
+            storageKey: string;
+            /** @enum {string} */
+            status: "pending" | "processing" | "ready" | "failed";
+            language: string | null;
+            issueDate: string | null;
+            dueDate: string | null;
+            amount: number | null;
+            currency: string | null;
+            referenceNumber: string | null;
+            correspondent: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+            } | null;
+            documentType: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                description?: string | null;
+            } | null;
+            tags: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+            }[];
+            confidence: number | null;
+            /** @enum {string} */
+            reviewStatus: "not_required" | "pending" | "resolved";
+            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+            reviewedAt: string | null;
+            reviewNote: string | null;
+            searchablePdfAvailable: boolean;
+            /** @enum {string|null} */
+            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+            /** @default 0 */
+            chunkCount: number;
+            /**
+             * @default not_configured
+             * @enum {string}
+             */
+            embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+            /** @enum {string|null} */
+            embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+            embeddingModel?: string | null;
+            /** @default false */
+            embeddingsStale: boolean;
+            lastProcessingError: string | null;
+            latestProcessingJob: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "failed";
+                attempts: number;
+                lastError: string | null;
+                startedAt: string | null;
+                finishedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+            } | null;
+            latestEmbeddingJob?: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "failed";
+                attempts: number;
+                lastError: string | null;
+                startedAt: string | null;
+                finishedAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+            } | null;
+            metadata: {
+                extractionStrategy?: string;
+                normalizationStrategy?: string;
+                /** @enum {string} */
+                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                parseStrategy?: string;
+                documentTypeName?: string | null;
+                detectedKeywords?: string[];
+                pageCount?: number;
+                chunkCount?: number;
+                searchablePdfGenerated?: boolean;
+                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                parse?: {
+                    /** @enum {string} */
+                    provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                    strategy: string;
+                    fallbackUsed?: boolean;
+                    warnings?: string[];
+                    keyValueCount?: number;
+                    tableCount?: number;
+                    providerMetadata?: {
+                        [key: string]: unknown;
+                    };
+                };
+                chunking?: {
+                    strategy: string;
+                    chunkCount: number;
+                    usedProviderHints?: boolean;
+                };
+                embedding?: {
+                    /** @enum {string} */
+                    provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                    model?: string;
+                    configured?: boolean;
+                    chunkCount?: number;
+                };
+                reviewEvidence?: {
+                    /** @enum {string} */
+                    documentClass: "invoice" | "generic";
+                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                    extracted: {
+                        correspondent: boolean;
+                        issueDate: boolean;
+                        amount: boolean;
+                        currency: boolean;
+                    };
+                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    confidence?: number | null;
+                    confidenceThreshold?: number;
+                    ocrTextLength?: number;
+                    ocrEmptyThreshold?: number;
+                };
+                manual?: {
+                    /** @default [] */
+                    lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                    /** @default {} */
+                    values: {
+                        issueDate?: string | null;
+                        dueDate?: string | null;
+                        amount?: number | null;
+                        currency?: string | null;
+                        referenceNumber?: string | null;
+                        /** Format: uuid */
+                        correspondentId?: string | null;
+                        /** Format: uuid */
+                        documentTypeId?: string | null;
+                        tagIds?: string[];
+                    };
+                    updatedAt?: string | null;
+                    /** Format: uuid */
+                    updatedByUserId?: string | null;
+                };
+            };
+            createdAt: string;
+            processedAt: string | null;
+            snippets?: string[];
+            matchingLines?: {
+                /** Format: uuid */
+                documentId: string;
+                page: number;
+                lineIndex: number;
+                boundingBox: {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                };
+                text: string;
+            }[];
+        };
+        DocumentHistoryResponse: {
+            /** Format: uuid */
+            documentId: string;
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                actorUserId: string | null;
+                actorDisplayName?: string | null;
+                actorEmail?: string | null;
+                /** Format: uuid */
+                documentId: string | null;
+                eventType: string;
+                /** @default {} */
+                payload: {
+                    [key: string]: unknown;
+                };
+                createdAt: string;
+            }[];
+        };
+        DocumentTextResponse: {
+            /** Format: uuid */
+            documentId: string;
+            blocks: {
+                /** Format: uuid */
+                documentId: string;
+                page: number;
+                lineIndex: number;
+                boundingBox: {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                };
+                text: string;
+            }[];
+        };
+        RequeueDocumentProcessingResponse: {
+            queued: boolean;
+            /** Format: uuid */
+            documentId: string;
+            /** Format: uuid */
+            processingJobId: string;
+        };
+        SemanticSearchResponse: {
+            items: {
+                document: {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    /** @enum {string} */
+                    source: "upload" | "watch-folder" | "email" | "api";
+                    mimeType: string;
+                    checksum: string;
+                    storageKey: string;
+                    /** @enum {string} */
+                    status: "pending" | "processing" | "ready" | "failed";
+                    language: string | null;
+                    issueDate: string | null;
+                    dueDate: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    referenceNumber: string | null;
+                    correspondent: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                    } | null;
+                    documentType: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                        description?: string | null;
+                    } | null;
+                    tags: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                    }[];
+                    confidence: number | null;
+                    /** @enum {string} */
+                    reviewStatus: "not_required" | "pending" | "resolved";
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewedAt: string | null;
+                    reviewNote: string | null;
+                    searchablePdfAvailable: boolean;
+                    /** @enum {string|null} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                    /** @default 0 */
+                    chunkCount: number;
+                    /**
+                     * @default not_configured
+                     * @enum {string}
+                     */
+                    embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                    /** @enum {string|null} */
+                    embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                    embeddingModel?: string | null;
+                    /** @default false */
+                    embeddingsStale: boolean;
+                    lastProcessingError: string | null;
+                    latestProcessingJob: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    latestEmbeddingJob?: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    metadata: {
+                        extractionStrategy?: string;
+                        normalizationStrategy?: string;
+                        /** @enum {string} */
+                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        parseStrategy?: string;
+                        documentTypeName?: string | null;
+                        detectedKeywords?: string[];
+                        pageCount?: number;
+                        chunkCount?: number;
+                        searchablePdfGenerated?: boolean;
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        parse?: {
+                            /** @enum {string} */
+                            provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                            strategy: string;
+                            fallbackUsed?: boolean;
+                            warnings?: string[];
+                            keyValueCount?: number;
+                            tableCount?: number;
+                            providerMetadata?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        chunking?: {
+                            strategy: string;
+                            chunkCount: number;
+                            usedProviderHints?: boolean;
+                        };
+                        embedding?: {
+                            /** @enum {string} */
+                            provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                            model?: string;
+                            configured?: boolean;
+                            chunkCount?: number;
+                        };
+                        reviewEvidence?: {
+                            /** @enum {string} */
+                            documentClass: "invoice" | "generic";
+                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            extracted: {
+                                correspondent: boolean;
+                                issueDate: boolean;
+                                amount: boolean;
+                                currency: boolean;
+                            };
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            confidence?: number | null;
+                            confidenceThreshold?: number;
+                            ocrTextLength?: number;
+                            ocrEmptyThreshold?: number;
+                        };
+                        manual?: {
+                            /** @default [] */
+                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            /** @default {} */
+                            values: {
+                                issueDate?: string | null;
+                                dueDate?: string | null;
+                                amount?: number | null;
+                                currency?: string | null;
+                                referenceNumber?: string | null;
+                                /** Format: uuid */
+                                correspondentId?: string | null;
+                                /** Format: uuid */
+                                documentTypeId?: string | null;
+                                tagIds?: string[];
+                            };
+                            updatedAt?: string | null;
+                            /** Format: uuid */
+                            updatedByUserId?: string | null;
+                        };
+                    };
+                    createdAt: string;
+                    processedAt: string | null;
+                    snippets?: string[];
+                    matchingLines?: {
+                        /** Format: uuid */
+                        documentId: string;
+                        page: number;
+                        lineIndex: number;
+                        boundingBox: {
+                            x: number;
+                            y: number;
+                            width: number;
+                            height: number;
+                        };
+                        text: string;
+                    }[];
+                };
+                score: number;
+                semanticScore: number | null;
+                keywordScore: number | null;
+                matchedChunks: {
+                    chunkIndex: number;
+                    heading: string | null;
+                    text: string;
+                    pageFrom: number | null;
+                    pageTo: number | null;
+                    score: number;
+                    distance: number | null;
+                }[];
+            }[];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @default {} */
+            appliedFilters: {
+                year?: number;
+                dateFrom?: string;
+                dateTo?: string;
+                /** Format: uuid */
+                correspondentId?: string;
+                /** Format: uuid */
+                documentTypeId?: string;
+                /** @enum {string} */
+                status?: "pending" | "processing" | "ready" | "failed";
+                tags?: string[];
+            };
+        };
+        AnswerQueryResponse: {
+            /** @enum {string} */
+            status: "answered" | "insufficient_evidence";
+            answer: string | null;
+            reasoning?: string | null;
+            citations: {
+                /** Format: uuid */
+                documentId: string;
+                documentTitle: string;
+                chunkIndex: number;
+                pageFrom: number | null;
+                pageTo: number | null;
+                quote: string;
+                score: number;
+            }[];
+            results: {
+                document: {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    /** @enum {string} */
+                    source: "upload" | "watch-folder" | "email" | "api";
+                    mimeType: string;
+                    checksum: string;
+                    storageKey: string;
+                    /** @enum {string} */
+                    status: "pending" | "processing" | "ready" | "failed";
+                    language: string | null;
+                    issueDate: string | null;
+                    dueDate: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    referenceNumber: string | null;
+                    correspondent: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                    } | null;
+                    documentType: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                        description?: string | null;
+                    } | null;
+                    tags: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                    }[];
+                    confidence: number | null;
+                    /** @enum {string} */
+                    reviewStatus: "not_required" | "pending" | "resolved";
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewedAt: string | null;
+                    reviewNote: string | null;
+                    searchablePdfAvailable: boolean;
+                    /** @enum {string|null} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                    /** @default 0 */
+                    chunkCount: number;
+                    /**
+                     * @default not_configured
+                     * @enum {string}
+                     */
+                    embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                    /** @enum {string|null} */
+                    embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                    embeddingModel?: string | null;
+                    /** @default false */
+                    embeddingsStale: boolean;
+                    lastProcessingError: string | null;
+                    latestProcessingJob: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    latestEmbeddingJob?: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    metadata: {
+                        extractionStrategy?: string;
+                        normalizationStrategy?: string;
+                        /** @enum {string} */
+                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        parseStrategy?: string;
+                        documentTypeName?: string | null;
+                        detectedKeywords?: string[];
+                        pageCount?: number;
+                        chunkCount?: number;
+                        searchablePdfGenerated?: boolean;
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        parse?: {
+                            /** @enum {string} */
+                            provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                            strategy: string;
+                            fallbackUsed?: boolean;
+                            warnings?: string[];
+                            keyValueCount?: number;
+                            tableCount?: number;
+                            providerMetadata?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        chunking?: {
+                            strategy: string;
+                            chunkCount: number;
+                            usedProviderHints?: boolean;
+                        };
+                        embedding?: {
+                            /** @enum {string} */
+                            provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                            model?: string;
+                            configured?: boolean;
+                            chunkCount?: number;
+                        };
+                        reviewEvidence?: {
+                            /** @enum {string} */
+                            documentClass: "invoice" | "generic";
+                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            extracted: {
+                                correspondent: boolean;
+                                issueDate: boolean;
+                                amount: boolean;
+                                currency: boolean;
+                            };
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            confidence?: number | null;
+                            confidenceThreshold?: number;
+                            ocrTextLength?: number;
+                            ocrEmptyThreshold?: number;
+                        };
+                        manual?: {
+                            /** @default [] */
+                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            /** @default {} */
+                            values: {
+                                issueDate?: string | null;
+                                dueDate?: string | null;
+                                amount?: number | null;
+                                currency?: string | null;
+                                referenceNumber?: string | null;
+                                /** Format: uuid */
+                                correspondentId?: string | null;
+                                /** Format: uuid */
+                                documentTypeId?: string | null;
+                                tagIds?: string[];
+                            };
+                            updatedAt?: string | null;
+                            /** Format: uuid */
+                            updatedByUserId?: string | null;
+                        };
+                    };
+                    createdAt: string;
+                    processedAt: string | null;
+                    snippets?: string[];
+                    matchingLines?: {
+                        /** Format: uuid */
+                        documentId: string;
+                        page: number;
+                        lineIndex: number;
+                        boundingBox: {
+                            x: number;
+                            y: number;
+                            width: number;
+                            height: number;
+                        };
+                        text: string;
+                    }[];
+                };
+                score: number;
+                semanticScore: number | null;
+                keywordScore: number | null;
+                matchedChunks: {
+                    chunkIndex: number;
+                    heading: string | null;
+                    text: string;
+                    pageFrom: number | null;
+                    pageTo: number | null;
+                    score: number;
+                    distance: number | null;
+                }[];
+            }[];
+        };
+        TagList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+        }[];
+        Tag: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+        };
+        DeleteTaxonomyResponse: {
+            deleted: boolean;
+        };
+        CorrespondentList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+        }[];
+        Correspondent: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+        };
+        DocumentTypeList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            description?: string | null;
+        }[];
+        DocumentType: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            description?: string | null;
+        };
+        ArchiveSnapshot: {
+            version: number;
+            /** Format: date-time */
+            exportedAt: string;
+            tags: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            correspondents: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                normalizedName: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            documentTypes: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                description?: string | null;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            files: {
+                /** Format: uuid */
+                id: string;
+                checksum: string;
+                storageKey: string;
+                originalFilename: string;
+                mimeType: string;
+                sizeBytes: number;
+                /** Format: date-time */
+                createdAt: string;
+                contentBase64: string | null;
+            }[];
+            documents: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                ownerUserId: string;
+                /** Format: uuid */
+                fileId: string;
+                title: string;
+                /** @enum {string} */
+                source: "upload" | "watch-folder" | "email" | "api";
+                /** @enum {string} */
+                status: "pending" | "processing" | "ready" | "failed";
+                mimeType: string;
+                language: string | null;
+                fullText: string;
+                pageCount: number;
+                issueDate: string | null;
+                dueDate: string | null;
+                amount: number | null;
+                currency: string | null;
+                referenceNumber: string | null;
+                confidence: number | null;
+                /** @enum {string} */
+                reviewStatus: "not_required" | "pending" | "resolved";
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                /** Format: date-time */
+                reviewedAt: string | null;
+                reviewNote: string | null;
+                searchablePdfStorageKey: string | null;
+                /** @enum {string|null} */
+                parseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                chunkCount: number;
+                /** @enum {string} */
+                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                /** @enum {string|null} */
+                embeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                embeddingModel: string | null;
+                lastProcessingError: string | null;
+                /** Format: uuid */
+                correspondentId: string | null;
+                /** Format: uuid */
+                documentTypeId: string | null;
+                metadata: {
+                    extractionStrategy?: string;
+                    normalizationStrategy?: string;
+                    /** @enum {string} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                    parseStrategy?: string;
+                    documentTypeName?: string | null;
+                    detectedKeywords?: string[];
+                    pageCount?: number;
+                    chunkCount?: number;
+                    searchablePdfGenerated?: boolean;
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    parse?: {
+                        /** @enum {string} */
+                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        strategy: string;
+                        fallbackUsed?: boolean;
+                        warnings?: string[];
+                        keyValueCount?: number;
+                        tableCount?: number;
+                        providerMetadata?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    chunking?: {
+                        strategy: string;
+                        chunkCount: number;
+                        usedProviderHints?: boolean;
+                    };
+                    embedding?: {
+                        /** @enum {string} */
+                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                        model?: string;
+                        configured?: boolean;
+                        chunkCount?: number;
+                    };
+                    reviewEvidence?: {
+                        /** @enum {string} */
+                        documentClass: "invoice" | "generic";
+                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        extracted: {
+                            correspondent: boolean;
+                            issueDate: boolean;
+                            amount: boolean;
+                            currency: boolean;
+                        };
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        confidence?: number | null;
+                        confidenceThreshold?: number;
+                        ocrTextLength?: number;
+                        ocrEmptyThreshold?: number;
+                    };
+                    manual?: {
+                        /** @default [] */
+                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        /** @default {} */
+                        values: {
+                            issueDate?: string | null;
+                            dueDate?: string | null;
+                            amount?: number | null;
+                            currency?: string | null;
+                            referenceNumber?: string | null;
+                            /** Format: uuid */
+                            correspondentId?: string | null;
+                            /** Format: uuid */
+                            documentTypeId?: string | null;
+                            tagIds?: string[];
+                        };
+                        updatedAt?: string | null;
+                        /** Format: uuid */
+                        updatedByUserId?: string | null;
+                    };
+                };
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                processedAt: string | null;
+                /** Format: date-time */
+                updatedAt: string;
+            }[];
+            documentTagLinks: {
+                /** Format: uuid */
+                documentId: string;
+                /** Format: uuid */
+                tagId: string;
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            documentPages: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                pageNumber: number;
+                width: number | null;
+                height: number | null;
+            }[];
+            documentTextBlocks: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                pageNumber: number;
+                lineIndex: number;
+                boundingBox: {
+                    x: number;
+                    y: number;
+                    width: number;
+                    height: number;
+                };
+                text: string;
+            }[];
+            documentChunks: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                chunkIndex: number;
+                heading: string | null;
+                text: string;
+                pageFrom: number | null;
+                pageTo: number | null;
+                strategyVersion: string;
+                contentHash: string;
+                /** @default {} */
+                metadata: {
+                    [key: string]: unknown;
+                };
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            documentChunkEmbeddings: {
+                /** Format: uuid */
+                documentId: string;
+                chunkIndex: number;
+                /** @enum {string} */
+                provider: "openai" | "google-gemini" | "voyage" | "mistral";
+                model: string;
+                dimensions: number;
+                embeddingLiteral: string;
+                contentHash: string;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+            }[];
+            processingJobs: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                queueName: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "completed" | "failed";
+                attempts: number;
+                /** @default {} */
+                payload: {
+                    [key: string]: unknown;
+                };
+                lastError: string | null;
+                /** Format: date-time */
+                startedAt: string | null;
+                /** Format: date-time */
+                finishedAt: string | null;
+                /** Format: date-time */
+                createdAt: string;
+                /** Format: date-time */
+                updatedAt: string;
+            }[];
+            auditEvents: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                actorUserId: string | null;
+                /** Format: uuid */
+                documentId: string | null;
+                eventType: string;
+                /** @default {} */
+                payload: {
+                    [key: string]: unknown;
+                };
+                /** Format: date-time */
+                createdAt: string;
+            }[];
+            derivedObjects: {
+                storageKey: string;
+                contentBase64: string | null;
+            }[];
+        };
+        ArchiveImportRequest: {
+            /**
+             * @default replace
+             * @enum {string}
+             */
+            mode: "replace" | "merge";
+            snapshot: {
+                version: number;
+                /** Format: date-time */
+                exportedAt: string;
+                tags: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                correspondents: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    normalizedName: string;
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                documentTypes: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description?: string | null;
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                files: {
+                    /** Format: uuid */
+                    id: string;
+                    checksum: string;
+                    storageKey: string;
+                    originalFilename: string;
+                    mimeType: string;
+                    sizeBytes: number;
+                    /** Format: date-time */
+                    createdAt: string;
+                    contentBase64: string | null;
+                }[];
+                documents: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    ownerUserId: string;
+                    /** Format: uuid */
+                    fileId: string;
+                    title: string;
+                    /** @enum {string} */
+                    source: "upload" | "watch-folder" | "email" | "api";
+                    /** @enum {string} */
+                    status: "pending" | "processing" | "ready" | "failed";
+                    mimeType: string;
+                    language: string | null;
+                    fullText: string;
+                    pageCount: number;
+                    issueDate: string | null;
+                    dueDate: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    referenceNumber: string | null;
+                    confidence: number | null;
+                    /** @enum {string} */
+                    reviewStatus: "not_required" | "pending" | "resolved";
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    /** Format: date-time */
+                    reviewedAt: string | null;
+                    reviewNote: string | null;
+                    searchablePdfStorageKey: string | null;
+                    /** @enum {string|null} */
+                    parseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                    chunkCount: number;
+                    /** @enum {string} */
+                    embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                    /** @enum {string|null} */
+                    embeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                    embeddingModel: string | null;
+                    lastProcessingError: string | null;
+                    /** Format: uuid */
+                    correspondentId: string | null;
+                    /** Format: uuid */
+                    documentTypeId: string | null;
+                    metadata: {
+                        extractionStrategy?: string;
+                        normalizationStrategy?: string;
+                        /** @enum {string} */
+                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        parseStrategy?: string;
+                        documentTypeName?: string | null;
+                        detectedKeywords?: string[];
+                        pageCount?: number;
+                        chunkCount?: number;
+                        searchablePdfGenerated?: boolean;
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        parse?: {
+                            /** @enum {string} */
+                            provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                            strategy: string;
+                            fallbackUsed?: boolean;
+                            warnings?: string[];
+                            keyValueCount?: number;
+                            tableCount?: number;
+                            providerMetadata?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        chunking?: {
+                            strategy: string;
+                            chunkCount: number;
+                            usedProviderHints?: boolean;
+                        };
+                        embedding?: {
+                            /** @enum {string} */
+                            provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                            model?: string;
+                            configured?: boolean;
+                            chunkCount?: number;
+                        };
+                        reviewEvidence?: {
+                            /** @enum {string} */
+                            documentClass: "invoice" | "generic";
+                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            extracted: {
+                                correspondent: boolean;
+                                issueDate: boolean;
+                                amount: boolean;
+                                currency: boolean;
+                            };
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            confidence?: number | null;
+                            confidenceThreshold?: number;
+                            ocrTextLength?: number;
+                            ocrEmptyThreshold?: number;
+                        };
+                        manual?: {
+                            /** @default [] */
+                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            /** @default {} */
+                            values: {
+                                issueDate?: string | null;
+                                dueDate?: string | null;
+                                amount?: number | null;
+                                currency?: string | null;
+                                referenceNumber?: string | null;
+                                /** Format: uuid */
+                                correspondentId?: string | null;
+                                /** Format: uuid */
+                                documentTypeId?: string | null;
+                                tagIds?: string[];
+                            };
+                            updatedAt?: string | null;
+                            /** Format: uuid */
+                            updatedByUserId?: string | null;
+                        };
+                    };
+                    /** Format: date-time */
+                    createdAt: string;
+                    /** Format: date-time */
+                    processedAt: string | null;
+                    /** Format: date-time */
+                    updatedAt: string;
+                }[];
+                documentTagLinks: {
+                    /** Format: uuid */
+                    documentId: string;
+                    /** Format: uuid */
+                    tagId: string;
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                documentPages: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    documentId: string;
+                    pageNumber: number;
+                    width: number | null;
+                    height: number | null;
+                }[];
+                documentTextBlocks: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    documentId: string;
+                    pageNumber: number;
+                    lineIndex: number;
+                    boundingBox: {
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                    };
+                    text: string;
+                }[];
+                documentChunks: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    documentId: string;
+                    chunkIndex: number;
+                    heading: string | null;
+                    text: string;
+                    pageFrom: number | null;
+                    pageTo: number | null;
+                    strategyVersion: string;
+                    contentHash: string;
+                    /** @default {} */
+                    metadata: {
+                        [key: string]: unknown;
+                    };
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                documentChunkEmbeddings: {
+                    /** Format: uuid */
+                    documentId: string;
+                    chunkIndex: number;
+                    /** @enum {string} */
+                    provider: "openai" | "google-gemini" | "voyage" | "mistral";
+                    model: string;
+                    dimensions: number;
+                    embeddingLiteral: string;
+                    contentHash: string;
+                    /** Format: date-time */
+                    createdAt: string;
+                    /** Format: date-time */
+                    updatedAt: string;
+                }[];
+                processingJobs: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    documentId: string;
+                    queueName: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    /** @default {} */
+                    payload: {
+                        [key: string]: unknown;
+                    };
+                    lastError: string | null;
+                    /** Format: date-time */
+                    startedAt: string | null;
+                    /** Format: date-time */
+                    finishedAt: string | null;
+                    /** Format: date-time */
+                    createdAt: string;
+                    /** Format: date-time */
+                    updatedAt: string;
+                }[];
+                auditEvents: {
+                    /** Format: uuid */
+                    id: string;
+                    /** Format: uuid */
+                    actorUserId: string | null;
+                    /** Format: uuid */
+                    documentId: string | null;
+                    eventType: string;
+                    /** @default {} */
+                    payload: {
+                        [key: string]: unknown;
+                    };
+                    /** Format: date-time */
+                    createdAt: string;
+                }[];
+                derivedObjects: {
+                    storageKey: string;
+                    contentBase64: string | null;
+                }[];
+            };
+        };
+        ArchiveImportResult: {
+            imported: boolean;
+            /** @enum {string} */
+            mode: "replace" | "merge";
+            documentCount: number;
+            fileCount: number;
+        };
+        WatchFolderScanRequest: {
+            /** @default false */
+            dryRun: boolean;
+        };
+        WatchFolderScanResponse: {
+            configuredPath: string;
+            dryRun: boolean;
+            items: {
+                path: string;
+                /** @enum {string} */
+                action: "imported" | "duplicate" | "unsupported" | "failed" | "planned";
+                destinationPath: string | null;
+                /** Format: uuid */
+                documentId: string | null;
+                reason: string;
+            }[];
+        };
     };
     responses: never;
     parameters: never;
@@ -815,41 +2381,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        status: string;
-                        provider: {
-                            /** @enum {string} */
-                            mode: "local-only" | "hybrid" | "cloud-assisted";
-                            /** @enum {string} */
-                            activeParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                            /** @enum {string|null} */
-                            fallbackParseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                            /** @enum {string|null} */
-                            activeEmbeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                            openaiModel?: string;
-                            geminiModel?: string;
-                            openaiEmbeddingModel?: string;
-                            geminiEmbeddingModel?: string;
-                            voyageEmbeddingModel?: string;
-                            mistralEmbeddingModel?: string;
-                            /** @default false */
-                            hasOpenAiKey: boolean;
-                            /** @default false */
-                            hasGeminiKey: boolean;
-                            /** @default false */
-                            hasVoyageKey: boolean;
-                            /** @default false */
-                            hasGoogleCloudConfig: boolean;
-                            /** @default false */
-                            hasAwsTextractConfig: boolean;
-                            /** @default false */
-                            hasAzureDocumentIntelligenceConfig: boolean;
-                            /** @default false */
-                            hasMistralOcrConfig: boolean;
-                            /** @default false */
-                            hasMistralEmbeddingConfig: boolean;
-                        };
-                    };
+                    "application/json": components["schemas"]["HealthResponse"];
                 };
             };
         };
@@ -869,25 +2401,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        activeParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                        /** @enum {string|null} */
-                        fallbackParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                        /** @enum {string|null} */
-                        activeEmbeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                        parseProviders: {
-                            /** @enum {string} */
-                            id: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                            available: boolean;
-                        }[];
-                        embeddingProviders: {
-                            /** @enum {string} */
-                            id: "openai" | "google-gemini" | "voyage" | "mistral";
-                            available: boolean;
-                            model: string | null;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["HealthProvidersResponse"];
                 };
             };
         };
@@ -907,11 +2421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        status: "ok";
-                        timestamp: string;
-                    };
+                    "application/json": components["schemas"]["HealthLiveResponse"];
                 };
             };
         };
@@ -931,15 +2441,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        status: "ok" | "degraded";
-                        checks: {
-                            database: boolean;
-                            objectStorage: boolean;
-                            queue: boolean;
-                        };
-                    };
+                    "application/json": components["schemas"]["ReadinessResponse"];
                 };
             };
         };
@@ -959,36 +2461,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        queues: {
-                            processing: {
-                                depth: number;
-                            };
-                            embedding: {
-                                depth: number;
-                            };
-                        };
-                        documents: {
-                            byStatus: {
-                                [key: string]: number;
-                            };
-                            pendingReview: number;
-                        };
-                        recentJobs: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            queueName: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["ProcessingStatusResponse"];
                 };
             };
         };
@@ -1028,280 +2501,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        version: number;
-                        /** Format: date-time */
-                        exportedAt: string;
-                        tags: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        correspondents: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            normalizedName: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentTypes: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            description?: string | null;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        files: {
-                            /** Format: uuid */
-                            id: string;
-                            checksum: string;
-                            storageKey: string;
-                            originalFilename: string;
-                            mimeType: string;
-                            sizeBytes: number;
-                            /** Format: date-time */
-                            createdAt: string;
-                            contentBase64: string | null;
-                        }[];
-                        documents: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            ownerUserId: string;
-                            /** Format: uuid */
-                            fileId: string;
-                            title: string;
-                            /** @enum {string} */
-                            source: "upload" | "watch-folder" | "email" | "api";
-                            /** @enum {string} */
-                            status: "pending" | "processing" | "ready" | "failed";
-                            mimeType: string;
-                            language: string | null;
-                            fullText: string;
-                            pageCount: number;
-                            issueDate: string | null;
-                            dueDate: string | null;
-                            amount: number | null;
-                            currency: string | null;
-                            referenceNumber: string | null;
-                            confidence: number | null;
-                            /** @enum {string} */
-                            reviewStatus: "not_required" | "pending" | "resolved";
-                            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            /** Format: date-time */
-                            reviewedAt: string | null;
-                            reviewNote: string | null;
-                            searchablePdfStorageKey: string | null;
-                            /** @enum {string|null} */
-                            parseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                            chunkCount: number;
-                            /** @enum {string} */
-                            embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                            /** @enum {string|null} */
-                            embeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                            embeddingModel: string | null;
-                            lastProcessingError: string | null;
-                            /** Format: uuid */
-                            correspondentId: string | null;
-                            /** Format: uuid */
-                            documentTypeId: string | null;
-                            metadata: {
-                                extractionStrategy?: string;
-                                normalizationStrategy?: string;
-                                /** @enum {string} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                parseStrategy?: string;
-                                documentTypeName?: string | null;
-                                detectedKeywords?: string[];
-                                pageCount?: number;
-                                chunkCount?: number;
-                                searchablePdfGenerated?: boolean;
-                                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                parse?: {
-                                    /** @enum {string} */
-                                    provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    strategy: string;
-                                    fallbackUsed?: boolean;
-                                    warnings?: string[];
-                                    keyValueCount?: number;
-                                    tableCount?: number;
-                                    providerMetadata?: {
-                                        [key: string]: unknown;
-                                    };
-                                };
-                                chunking?: {
-                                    strategy: string;
-                                    chunkCount: number;
-                                    usedProviderHints?: boolean;
-                                };
-                                embedding?: {
-                                    /** @enum {string} */
-                                    provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                    model?: string;
-                                    configured?: boolean;
-                                    chunkCount?: number;
-                                };
-                                reviewEvidence?: {
-                                    /** @enum {string} */
-                                    documentClass: "invoice" | "generic";
-                                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    extracted: {
-                                        correspondent: boolean;
-                                        issueDate: boolean;
-                                        amount: boolean;
-                                        currency: boolean;
-                                    };
-                                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    confidence?: number | null;
-                                    confidenceThreshold?: number;
-                                    ocrTextLength?: number;
-                                    ocrEmptyThreshold?: number;
-                                };
-                                manual?: {
-                                    /** @default [] */
-                                    lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                    /** @default {} */
-                                    values: {
-                                        issueDate?: string | null;
-                                        dueDate?: string | null;
-                                        amount?: number | null;
-                                        currency?: string | null;
-                                        referenceNumber?: string | null;
-                                        /** Format: uuid */
-                                        correspondentId?: string | null;
-                                        /** Format: uuid */
-                                        documentTypeId?: string | null;
-                                        tagIds?: string[];
-                                    };
-                                    updatedAt?: string | null;
-                                    /** Format: uuid */
-                                    updatedByUserId?: string | null;
-                                };
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            processedAt: string | null;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        documentTagLinks: {
-                            /** Format: uuid */
-                            documentId: string;
-                            /** Format: uuid */
-                            tagId: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentPages: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            pageNumber: number;
-                            width: number | null;
-                            height: number | null;
-                        }[];
-                        documentTextBlocks: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            pageNumber: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                        documentChunks: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            chunkIndex: number;
-                            heading: string | null;
-                            text: string;
-                            pageFrom: number | null;
-                            pageTo: number | null;
-                            strategyVersion: string;
-                            contentHash: string;
-                            /** @default {} */
-                            metadata: {
-                                [key: string]: unknown;
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentChunkEmbeddings: {
-                            /** Format: uuid */
-                            documentId: string;
-                            chunkIndex: number;
-                            /** @enum {string} */
-                            provider: "openai" | "google-gemini" | "voyage" | "mistral";
-                            model: string;
-                            dimensions: number;
-                            embeddingLiteral: string;
-                            contentHash: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        processingJobs: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            queueName: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            /** @default {} */
-                            payload: {
-                                [key: string]: unknown;
-                            };
-                            lastError: string | null;
-                            /** Format: date-time */
-                            startedAt: string | null;
-                            /** Format: date-time */
-                            finishedAt: string | null;
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        auditEvents: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            actorUserId: string | null;
-                            /** Format: uuid */
-                            documentId: string | null;
-                            eventType: string;
-                            /** @default {} */
-                            payload: {
-                                [key: string]: unknown;
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        derivedObjects: {
-                            storageKey: string;
-                            contentBase64: string | null;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["ArchiveSnapshot"];
                 };
             };
         };
@@ -1315,287 +2515,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /**
-                     * @default replace
-                     * @enum {string}
-                     */
-                    mode?: "replace" | "merge";
-                    snapshot: {
-                        version: number;
-                        /** Format: date-time */
-                        exportedAt: string;
-                        tags: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        correspondents: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            normalizedName: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentTypes: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            description?: string | null;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        files: {
-                            /** Format: uuid */
-                            id: string;
-                            checksum: string;
-                            storageKey: string;
-                            originalFilename: string;
-                            mimeType: string;
-                            sizeBytes: number;
-                            /** Format: date-time */
-                            createdAt: string;
-                            contentBase64: string | null;
-                        }[];
-                        documents: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            ownerUserId: string;
-                            /** Format: uuid */
-                            fileId: string;
-                            title: string;
-                            /** @enum {string} */
-                            source: "upload" | "watch-folder" | "email" | "api";
-                            /** @enum {string} */
-                            status: "pending" | "processing" | "ready" | "failed";
-                            mimeType: string;
-                            language: string | null;
-                            fullText: string;
-                            pageCount: number;
-                            issueDate: string | null;
-                            dueDate: string | null;
-                            amount: number | null;
-                            currency: string | null;
-                            referenceNumber: string | null;
-                            confidence: number | null;
-                            /** @enum {string} */
-                            reviewStatus: "not_required" | "pending" | "resolved";
-                            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            /** Format: date-time */
-                            reviewedAt: string | null;
-                            reviewNote: string | null;
-                            searchablePdfStorageKey: string | null;
-                            /** @enum {string|null} */
-                            parseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                            chunkCount: number;
-                            /** @enum {string} */
-                            embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                            /** @enum {string|null} */
-                            embeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                            embeddingModel: string | null;
-                            lastProcessingError: string | null;
-                            /** Format: uuid */
-                            correspondentId: string | null;
-                            /** Format: uuid */
-                            documentTypeId: string | null;
-                            metadata: {
-                                extractionStrategy?: string;
-                                normalizationStrategy?: string;
-                                /** @enum {string} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                parseStrategy?: string;
-                                documentTypeName?: string | null;
-                                detectedKeywords?: string[];
-                                pageCount?: number;
-                                chunkCount?: number;
-                                searchablePdfGenerated?: boolean;
-                                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                parse?: {
-                                    /** @enum {string} */
-                                    provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    strategy: string;
-                                    fallbackUsed?: boolean;
-                                    warnings?: string[];
-                                    keyValueCount?: number;
-                                    tableCount?: number;
-                                    providerMetadata?: {
-                                        [key: string]: unknown;
-                                    };
-                                };
-                                chunking?: {
-                                    strategy: string;
-                                    chunkCount: number;
-                                    usedProviderHints?: boolean;
-                                };
-                                embedding?: {
-                                    /** @enum {string} */
-                                    provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                    model?: string;
-                                    configured?: boolean;
-                                    chunkCount?: number;
-                                };
-                                reviewEvidence?: {
-                                    /** @enum {string} */
-                                    documentClass: "invoice" | "generic";
-                                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    extracted: {
-                                        correspondent: boolean;
-                                        issueDate: boolean;
-                                        amount: boolean;
-                                        currency: boolean;
-                                    };
-                                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    confidence?: number | null;
-                                    confidenceThreshold?: number;
-                                    ocrTextLength?: number;
-                                    ocrEmptyThreshold?: number;
-                                };
-                                manual?: {
-                                    /** @default [] */
-                                    lockedFields?: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                    /** @default {} */
-                                    values?: {
-                                        issueDate?: string | null;
-                                        dueDate?: string | null;
-                                        amount?: number | null;
-                                        currency?: string | null;
-                                        referenceNumber?: string | null;
-                                        /** Format: uuid */
-                                        correspondentId?: string | null;
-                                        /** Format: uuid */
-                                        documentTypeId?: string | null;
-                                        tagIds?: string[];
-                                    };
-                                    updatedAt?: string | null;
-                                    /** Format: uuid */
-                                    updatedByUserId?: string | null;
-                                };
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            processedAt: string | null;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        documentTagLinks: {
-                            /** Format: uuid */
-                            documentId: string;
-                            /** Format: uuid */
-                            tagId: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentPages: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            pageNumber: number;
-                            width: number | null;
-                            height: number | null;
-                        }[];
-                        documentTextBlocks: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            pageNumber: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                        documentChunks: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            chunkIndex: number;
-                            heading: string | null;
-                            text: string;
-                            pageFrom: number | null;
-                            pageTo: number | null;
-                            strategyVersion: string;
-                            contentHash: string;
-                            /** @default {} */
-                            metadata?: {
-                                [key: string]: unknown;
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        documentChunkEmbeddings: {
-                            /** Format: uuid */
-                            documentId: string;
-                            chunkIndex: number;
-                            /** @enum {string} */
-                            provider: "openai" | "google-gemini" | "voyage" | "mistral";
-                            model: string;
-                            dimensions: number;
-                            embeddingLiteral: string;
-                            contentHash: string;
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        processingJobs: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            documentId: string;
-                            queueName: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            /** @default {} */
-                            payload?: {
-                                [key: string]: unknown;
-                            };
-                            lastError: string | null;
-                            /** Format: date-time */
-                            startedAt: string | null;
-                            /** Format: date-time */
-                            finishedAt: string | null;
-                            /** Format: date-time */
-                            createdAt: string;
-                            /** Format: date-time */
-                            updatedAt: string;
-                        }[];
-                        auditEvents: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            actorUserId: string | null;
-                            /** Format: uuid */
-                            documentId: string | null;
-                            eventType: string;
-                            /** @default {} */
-                            payload?: {
-                                [key: string]: unknown;
-                            };
-                            /** Format: date-time */
-                            createdAt: string;
-                        }[];
-                        derivedObjects: {
-                            storageKey: string;
-                            contentBase64: string | null;
-                        }[];
-                    };
-                };
+                "application/json": components["schemas"]["ArchiveImportRequest"];
             };
         };
         responses: {
@@ -1605,13 +2525,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        imported: boolean;
-                        /** @enum {string} */
-                        mode: "replace" | "merge";
-                        documentCount: number;
-                        fileCount: number;
-                    };
+                    "application/json": components["schemas"]["ArchiveImportResult"];
                 };
             };
         };
@@ -1625,10 +2539,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** @default false */
-                    dryRun?: boolean;
-                };
+                "application/json": components["schemas"]["WatchFolderScanRequest"];
             };
         };
         responses: {
@@ -1638,19 +2549,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        configuredPath: string;
-                        dryRun: boolean;
-                        items: {
-                            path: string;
-                            /** @enum {string} */
-                            action: "imported" | "duplicate" | "unsupported" | "failed" | "planned";
-                            destinationPath: string | null;
-                            /** Format: uuid */
-                            documentId: string | null;
-                            reason: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["WatchFolderScanResponse"];
                 };
             };
         };
@@ -1674,10 +2573,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        accessToken: string;
-                        refreshToken: string;
-                    };
+                    "application/json": components["schemas"]["AuthTokens"];
                 };
             };
         };
@@ -1701,10 +2597,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        accessToken: string;
-                        refreshToken: string;
-                    };
+                    "application/json": components["schemas"]["AuthTokens"];
                 };
             };
         };
@@ -1728,10 +2621,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        accessToken: string;
-                        refreshToken: string;
-                    };
+                    "application/json": components["schemas"]["AuthTokens"];
                 };
             };
         };
@@ -1751,15 +2641,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        /** Format: email */
-                        email: string;
-                        displayName: string;
-                        isOwner: boolean;
-                        createdAt: string;
-                    };
+                    "application/json": components["schemas"]["CurrentUser"];
                 };
             };
         };
@@ -1779,15 +2661,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        tokenPrefix: string;
-                        lastUsedAt: string | null;
-                        expiresAt: string | null;
-                        createdAt: string;
-                    }[];
+                    "application/json": components["schemas"]["ApiTokenList"];
                 };
             };
         };
@@ -1811,13 +2685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        token: string;
-                        name: string;
-                        expiresAt: string | null;
-                    };
+                    "application/json": components["schemas"]["CreateApiTokenResponse"];
                 };
             };
         };
@@ -1839,16 +2707,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        success: boolean;
-                    };
+                    "application/json": components["schemas"]["SuccessResponse"];
                 };
             };
         };
     };
     DocumentsController_listDocuments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Full-text search query */
+                query?: string;
+                /** @description Filter by issue year */
+                year?: number;
+                /** @description Lower issue date bound */
+                dateFrom?: string;
+                /** @description Upper issue date bound */
+                dateTo?: string;
+                /** @description Filter by correspondent */
+                correspondentId?: string;
+                /** @description Filter by document type */
+                documentTypeId?: string;
+                /** @description Filter by processing status */
+                status?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter by tag IDs */
+                tags?: string[];
+                /** @description Sort field */
+                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+                /** @description Sort direction */
+                direction?: "asc" | "desc";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1861,197 +2752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: {
-                            /** Format: uuid */
-                            id: string;
-                            title: string;
-                            /** @enum {string} */
-                            source: "upload" | "watch-folder" | "email" | "api";
-                            mimeType: string;
-                            checksum: string;
-                            storageKey: string;
-                            /** @enum {string} */
-                            status: "pending" | "processing" | "ready" | "failed";
-                            language: string | null;
-                            issueDate: string | null;
-                            dueDate: string | null;
-                            amount: number | null;
-                            currency: string | null;
-                            referenceNumber: string | null;
-                            correspondent: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                            } | null;
-                            documentType: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                                description?: string | null;
-                            } | null;
-                            tags: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                            }[];
-                            confidence: number | null;
-                            /** @enum {string} */
-                            reviewStatus: "not_required" | "pending" | "resolved";
-                            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            reviewedAt: string | null;
-                            reviewNote: string | null;
-                            searchablePdfAvailable: boolean;
-                            /** @enum {string|null} */
-                            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                            /** @default 0 */
-                            chunkCount: number;
-                            /**
-                             * @default not_configured
-                             * @enum {string}
-                             */
-                            embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                            /** @enum {string|null} */
-                            embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                            embeddingModel?: string | null;
-                            /** @default false */
-                            embeddingsStale: boolean;
-                            lastProcessingError: string | null;
-                            latestProcessingJob: {
-                                /** Format: uuid */
-                                id: string;
-                                /** @enum {string} */
-                                status: "queued" | "running" | "completed" | "failed";
-                                attempts: number;
-                                lastError: string | null;
-                                startedAt: string | null;
-                                finishedAt: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                            } | null;
-                            latestEmbeddingJob?: {
-                                /** Format: uuid */
-                                id: string;
-                                /** @enum {string} */
-                                status: "queued" | "running" | "completed" | "failed";
-                                attempts: number;
-                                lastError: string | null;
-                                startedAt: string | null;
-                                finishedAt: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                            } | null;
-                            metadata: {
-                                extractionStrategy?: string;
-                                normalizationStrategy?: string;
-                                /** @enum {string} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                parseStrategy?: string;
-                                documentTypeName?: string | null;
-                                detectedKeywords?: string[];
-                                pageCount?: number;
-                                chunkCount?: number;
-                                searchablePdfGenerated?: boolean;
-                                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                parse?: {
-                                    /** @enum {string} */
-                                    provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    strategy: string;
-                                    fallbackUsed?: boolean;
-                                    warnings?: string[];
-                                    keyValueCount?: number;
-                                    tableCount?: number;
-                                    providerMetadata?: {
-                                        [key: string]: unknown;
-                                    };
-                                };
-                                chunking?: {
-                                    strategy: string;
-                                    chunkCount: number;
-                                    usedProviderHints?: boolean;
-                                };
-                                embedding?: {
-                                    /** @enum {string} */
-                                    provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                    model?: string;
-                                    configured?: boolean;
-                                    chunkCount?: number;
-                                };
-                                reviewEvidence?: {
-                                    /** @enum {string} */
-                                    documentClass: "invoice" | "generic";
-                                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    extracted: {
-                                        correspondent: boolean;
-                                        issueDate: boolean;
-                                        amount: boolean;
-                                        currency: boolean;
-                                    };
-                                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    confidence?: number | null;
-                                    confidenceThreshold?: number;
-                                    ocrTextLength?: number;
-                                    ocrEmptyThreshold?: number;
-                                };
-                                manual?: {
-                                    /** @default [] */
-                                    lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                    /** @default {} */
-                                    values: {
-                                        issueDate?: string | null;
-                                        dueDate?: string | null;
-                                        amount?: number | null;
-                                        currency?: string | null;
-                                        referenceNumber?: string | null;
-                                        /** Format: uuid */
-                                        correspondentId?: string | null;
-                                        /** Format: uuid */
-                                        documentTypeId?: string | null;
-                                        tagIds?: string[];
-                                    };
-                                    updatedAt?: string | null;
-                                    /** Format: uuid */
-                                    updatedByUserId?: string | null;
-                                };
-                            };
-                            createdAt: string;
-                            processedAt: string | null;
-                            snippets?: string[];
-                            matchingLines?: {
-                                /** Format: uuid */
-                                documentId: string;
-                                page: number;
-                                lineIndex: number;
-                                boundingBox: {
-                                    x: number;
-                                    y: number;
-                                    width: number;
-                                    height: number;
-                                };
-                                text: string;
-                            }[];
-                        }[];
-                        total: number;
-                        page: number;
-                        pageSize: number;
-                        /** @default {} */
-                        appliedFilters: {
-                            year?: number;
-                            dateFrom?: string;
-                            dateTo?: string;
-                            /** Format: uuid */
-                            correspondentId?: string;
-                            /** Format: uuid */
-                            documentTypeId?: string;
-                            /** @enum {string} */
-                            status?: "pending" | "processing" | "ready" | "failed";
-                            tags?: string[];
-                        };
-                    };
+                    "application/json": components["schemas"]["SearchDocumentsResponse"];
                 };
             };
         };
@@ -2102,7 +2803,16 @@ export interface operations {
     };
     DocumentsController_listReviewDocuments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter review queue by processing status */
+                processingStatus?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter review queue by review reason */
+                reason?: "low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2114,7 +2824,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["SearchDocumentsResponse"];
+                };
             };
         };
     };
@@ -2135,26 +2847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        documentId: string;
-                        items: {
-                            /** Format: uuid */
-                            id: string;
-                            /** Format: uuid */
-                            actorUserId: string | null;
-                            actorDisplayName?: string | null;
-                            actorEmail?: string | null;
-                            /** Format: uuid */
-                            documentId: string | null;
-                            eventType: string;
-                            /** @default {} */
-                            payload: {
-                                [key: string]: unknown;
-                            };
-                            createdAt: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["DocumentHistoryResponse"];
                 };
             };
         };
@@ -2176,179 +2869,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        title: string;
-                        /** @enum {string} */
-                        source: "upload" | "watch-folder" | "email" | "api";
-                        mimeType: string;
-                        checksum: string;
-                        storageKey: string;
-                        /** @enum {string} */
-                        status: "pending" | "processing" | "ready" | "failed";
-                        language: string | null;
-                        issueDate: string | null;
-                        dueDate: string | null;
-                        amount: number | null;
-                        currency: string | null;
-                        referenceNumber: string | null;
-                        correspondent: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        } | null;
-                        documentType: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            description?: string | null;
-                        } | null;
-                        tags: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        }[];
-                        confidence: number | null;
-                        /** @enum {string} */
-                        reviewStatus: "not_required" | "pending" | "resolved";
-                        reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                        reviewedAt: string | null;
-                        reviewNote: string | null;
-                        searchablePdfAvailable: boolean;
-                        /** @enum {string|null} */
-                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                        /** @default 0 */
-                        chunkCount: number;
-                        /**
-                         * @default not_configured
-                         * @enum {string}
-                         */
-                        embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                        /** @enum {string|null} */
-                        embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                        embeddingModel?: string | null;
-                        /** @default false */
-                        embeddingsStale: boolean;
-                        lastProcessingError: string | null;
-                        latestProcessingJob: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        latestEmbeddingJob?: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        metadata: {
-                            extractionStrategy?: string;
-                            normalizationStrategy?: string;
-                            /** @enum {string} */
-                            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                            parseStrategy?: string;
-                            documentTypeName?: string | null;
-                            detectedKeywords?: string[];
-                            pageCount?: number;
-                            chunkCount?: number;
-                            searchablePdfGenerated?: boolean;
-                            reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            parse?: {
-                                /** @enum {string} */
-                                provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                strategy: string;
-                                fallbackUsed?: boolean;
-                                warnings?: string[];
-                                keyValueCount?: number;
-                                tableCount?: number;
-                                providerMetadata?: {
-                                    [key: string]: unknown;
-                                };
-                            };
-                            chunking?: {
-                                strategy: string;
-                                chunkCount: number;
-                                usedProviderHints?: boolean;
-                            };
-                            embedding?: {
-                                /** @enum {string} */
-                                provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                model?: string;
-                                configured?: boolean;
-                                chunkCount?: number;
-                            };
-                            reviewEvidence?: {
-                                /** @enum {string} */
-                                documentClass: "invoice" | "generic";
-                                requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                extracted: {
-                                    correspondent: boolean;
-                                    issueDate: boolean;
-                                    amount: boolean;
-                                    currency: boolean;
-                                };
-                                activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                confidence?: number | null;
-                                confidenceThreshold?: number;
-                                ocrTextLength?: number;
-                                ocrEmptyThreshold?: number;
-                            };
-                            manual?: {
-                                /** @default [] */
-                                lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                /** @default {} */
-                                values: {
-                                    issueDate?: string | null;
-                                    dueDate?: string | null;
-                                    amount?: number | null;
-                                    currency?: string | null;
-                                    referenceNumber?: string | null;
-                                    /** Format: uuid */
-                                    correspondentId?: string | null;
-                                    /** Format: uuid */
-                                    documentTypeId?: string | null;
-                                    tagIds?: string[];
-                                };
-                                updatedAt?: string | null;
-                                /** Format: uuid */
-                                updatedByUserId?: string | null;
-                            };
-                        };
-                        createdAt: string;
-                        processedAt: string | null;
-                        snippets?: string[];
-                        matchingLines?: {
-                            /** Format: uuid */
-                            documentId: string;
-                            page: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["Document"];
                 };
             };
         };
@@ -2374,179 +2895,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        title: string;
-                        /** @enum {string} */
-                        source: "upload" | "watch-folder" | "email" | "api";
-                        mimeType: string;
-                        checksum: string;
-                        storageKey: string;
-                        /** @enum {string} */
-                        status: "pending" | "processing" | "ready" | "failed";
-                        language: string | null;
-                        issueDate: string | null;
-                        dueDate: string | null;
-                        amount: number | null;
-                        currency: string | null;
-                        referenceNumber: string | null;
-                        correspondent: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        } | null;
-                        documentType: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            description?: string | null;
-                        } | null;
-                        tags: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        }[];
-                        confidence: number | null;
-                        /** @enum {string} */
-                        reviewStatus: "not_required" | "pending" | "resolved";
-                        reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                        reviewedAt: string | null;
-                        reviewNote: string | null;
-                        searchablePdfAvailable: boolean;
-                        /** @enum {string|null} */
-                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                        /** @default 0 */
-                        chunkCount: number;
-                        /**
-                         * @default not_configured
-                         * @enum {string}
-                         */
-                        embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                        /** @enum {string|null} */
-                        embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                        embeddingModel?: string | null;
-                        /** @default false */
-                        embeddingsStale: boolean;
-                        lastProcessingError: string | null;
-                        latestProcessingJob: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        latestEmbeddingJob?: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        metadata: {
-                            extractionStrategy?: string;
-                            normalizationStrategy?: string;
-                            /** @enum {string} */
-                            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                            parseStrategy?: string;
-                            documentTypeName?: string | null;
-                            detectedKeywords?: string[];
-                            pageCount?: number;
-                            chunkCount?: number;
-                            searchablePdfGenerated?: boolean;
-                            reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            parse?: {
-                                /** @enum {string} */
-                                provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                strategy: string;
-                                fallbackUsed?: boolean;
-                                warnings?: string[];
-                                keyValueCount?: number;
-                                tableCount?: number;
-                                providerMetadata?: {
-                                    [key: string]: unknown;
-                                };
-                            };
-                            chunking?: {
-                                strategy: string;
-                                chunkCount: number;
-                                usedProviderHints?: boolean;
-                            };
-                            embedding?: {
-                                /** @enum {string} */
-                                provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                model?: string;
-                                configured?: boolean;
-                                chunkCount?: number;
-                            };
-                            reviewEvidence?: {
-                                /** @enum {string} */
-                                documentClass: "invoice" | "generic";
-                                requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                extracted: {
-                                    correspondent: boolean;
-                                    issueDate: boolean;
-                                    amount: boolean;
-                                    currency: boolean;
-                                };
-                                activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                confidence?: number | null;
-                                confidenceThreshold?: number;
-                                ocrTextLength?: number;
-                                ocrEmptyThreshold?: number;
-                            };
-                            manual?: {
-                                /** @default [] */
-                                lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                /** @default {} */
-                                values: {
-                                    issueDate?: string | null;
-                                    dueDate?: string | null;
-                                    amount?: number | null;
-                                    currency?: string | null;
-                                    referenceNumber?: string | null;
-                                    /** Format: uuid */
-                                    correspondentId?: string | null;
-                                    /** Format: uuid */
-                                    documentTypeId?: string | null;
-                                    tagIds?: string[];
-                                };
-                                updatedAt?: string | null;
-                                /** Format: uuid */
-                                updatedByUserId?: string | null;
-                            };
-                        };
-                        createdAt: string;
-                        processedAt: string | null;
-                        snippets?: string[];
-                        matchingLines?: {
-                            /** Format: uuid */
-                            documentId: string;
-                            page: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["Document"];
                 };
             };
         };
@@ -2568,23 +2917,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        documentId: string;
-                        blocks: {
-                            /** Format: uuid */
-                            documentId: string;
-                            page: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["DocumentTextResponse"];
                 };
             };
         };
@@ -2654,179 +2987,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        title: string;
-                        /** @enum {string} */
-                        source: "upload" | "watch-folder" | "email" | "api";
-                        mimeType: string;
-                        checksum: string;
-                        storageKey: string;
-                        /** @enum {string} */
-                        status: "pending" | "processing" | "ready" | "failed";
-                        language: string | null;
-                        issueDate: string | null;
-                        dueDate: string | null;
-                        amount: number | null;
-                        currency: string | null;
-                        referenceNumber: string | null;
-                        correspondent: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        } | null;
-                        documentType: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                            description?: string | null;
-                        } | null;
-                        tags: {
-                            /** Format: uuid */
-                            id: string;
-                            name: string;
-                            slug: string;
-                        }[];
-                        confidence: number | null;
-                        /** @enum {string} */
-                        reviewStatus: "not_required" | "pending" | "resolved";
-                        reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                        reviewedAt: string | null;
-                        reviewNote: string | null;
-                        searchablePdfAvailable: boolean;
-                        /** @enum {string|null} */
-                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                        /** @default 0 */
-                        chunkCount: number;
-                        /**
-                         * @default not_configured
-                         * @enum {string}
-                         */
-                        embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                        /** @enum {string|null} */
-                        embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                        embeddingModel?: string | null;
-                        /** @default false */
-                        embeddingsStale: boolean;
-                        lastProcessingError: string | null;
-                        latestProcessingJob: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        latestEmbeddingJob?: {
-                            /** Format: uuid */
-                            id: string;
-                            /** @enum {string} */
-                            status: "queued" | "running" | "completed" | "failed";
-                            attempts: number;
-                            lastError: string | null;
-                            startedAt: string | null;
-                            finishedAt: string | null;
-                            createdAt: string;
-                            updatedAt: string;
-                        } | null;
-                        metadata: {
-                            extractionStrategy?: string;
-                            normalizationStrategy?: string;
-                            /** @enum {string} */
-                            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                            parseStrategy?: string;
-                            documentTypeName?: string | null;
-                            detectedKeywords?: string[];
-                            pageCount?: number;
-                            chunkCount?: number;
-                            searchablePdfGenerated?: boolean;
-                            reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            parse?: {
-                                /** @enum {string} */
-                                provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                strategy: string;
-                                fallbackUsed?: boolean;
-                                warnings?: string[];
-                                keyValueCount?: number;
-                                tableCount?: number;
-                                providerMetadata?: {
-                                    [key: string]: unknown;
-                                };
-                            };
-                            chunking?: {
-                                strategy: string;
-                                chunkCount: number;
-                                usedProviderHints?: boolean;
-                            };
-                            embedding?: {
-                                /** @enum {string} */
-                                provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                model?: string;
-                                configured?: boolean;
-                                chunkCount?: number;
-                            };
-                            reviewEvidence?: {
-                                /** @enum {string} */
-                                documentClass: "invoice" | "generic";
-                                requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                extracted: {
-                                    correspondent: boolean;
-                                    issueDate: boolean;
-                                    amount: boolean;
-                                    currency: boolean;
-                                };
-                                activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                confidence?: number | null;
-                                confidenceThreshold?: number;
-                                ocrTextLength?: number;
-                                ocrEmptyThreshold?: number;
-                            };
-                            manual?: {
-                                /** @default [] */
-                                lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                /** @default {} */
-                                values: {
-                                    issueDate?: string | null;
-                                    dueDate?: string | null;
-                                    amount?: number | null;
-                                    currency?: string | null;
-                                    referenceNumber?: string | null;
-                                    /** Format: uuid */
-                                    correspondentId?: string | null;
-                                    /** Format: uuid */
-                                    documentTypeId?: string | null;
-                                    tagIds?: string[];
-                                };
-                                updatedAt?: string | null;
-                                /** Format: uuid */
-                                updatedByUserId?: string | null;
-                            };
-                        };
-                        createdAt: string;
-                        processedAt: string | null;
-                        snippets?: string[];
-                        matchingLines?: {
-                            /** Format: uuid */
-                            documentId: string;
-                            page: number;
-                            lineIndex: number;
-                            boundingBox: {
-                                x: number;
-                                y: number;
-                                width: number;
-                                height: number;
-                            };
-                            text: string;
-                        }[];
-                    };
+                    "application/json": components["schemas"]["Document"];
                 };
             };
         };
@@ -2852,13 +3013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        queued: boolean;
-                        /** Format: uuid */
-                        documentId: string;
-                        /** Format: uuid */
-                        processingJobId: string;
-                    };
+                    "application/json": components["schemas"]["RequeueDocumentProcessingResponse"];
                 };
             };
         };
@@ -2884,13 +3039,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        queued: boolean;
-                        /** Format: uuid */
-                        documentId: string;
-                        /** Format: uuid */
-                        processingJobId: string;
-                    };
+                    "application/json": components["schemas"]["RequeueDocumentProcessingResponse"];
                 };
             };
         };
@@ -2937,7 +3086,32 @@ export interface operations {
     };
     SearchController_searchDocuments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Full-text search query */
+                query?: string;
+                /** @description Filter by issue year */
+                year?: number;
+                /** @description Lower issue date bound */
+                dateFrom?: string;
+                /** @description Upper issue date bound */
+                dateTo?: string;
+                /** @description Filter by correspondent */
+                correspondentId?: string;
+                /** @description Filter by document type */
+                documentTypeId?: string;
+                /** @description Filter by processing status */
+                status?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter by tag IDs */
+                tags?: string[];
+                /** @description Sort field */
+                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+                /** @description Sort direction */
+                direction?: "asc" | "desc";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2950,197 +3124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: {
-                            /** Format: uuid */
-                            id: string;
-                            title: string;
-                            /** @enum {string} */
-                            source: "upload" | "watch-folder" | "email" | "api";
-                            mimeType: string;
-                            checksum: string;
-                            storageKey: string;
-                            /** @enum {string} */
-                            status: "pending" | "processing" | "ready" | "failed";
-                            language: string | null;
-                            issueDate: string | null;
-                            dueDate: string | null;
-                            amount: number | null;
-                            currency: string | null;
-                            referenceNumber: string | null;
-                            correspondent: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                            } | null;
-                            documentType: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                                description?: string | null;
-                            } | null;
-                            tags: {
-                                /** Format: uuid */
-                                id: string;
-                                name: string;
-                                slug: string;
-                            }[];
-                            confidence: number | null;
-                            /** @enum {string} */
-                            reviewStatus: "not_required" | "pending" | "resolved";
-                            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                            reviewedAt: string | null;
-                            reviewNote: string | null;
-                            searchablePdfAvailable: boolean;
-                            /** @enum {string|null} */
-                            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                            /** @default 0 */
-                            chunkCount: number;
-                            /**
-                             * @default not_configured
-                             * @enum {string}
-                             */
-                            embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                            /** @enum {string|null} */
-                            embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                            embeddingModel?: string | null;
-                            /** @default false */
-                            embeddingsStale: boolean;
-                            lastProcessingError: string | null;
-                            latestProcessingJob: {
-                                /** Format: uuid */
-                                id: string;
-                                /** @enum {string} */
-                                status: "queued" | "running" | "completed" | "failed";
-                                attempts: number;
-                                lastError: string | null;
-                                startedAt: string | null;
-                                finishedAt: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                            } | null;
-                            latestEmbeddingJob?: {
-                                /** Format: uuid */
-                                id: string;
-                                /** @enum {string} */
-                                status: "queued" | "running" | "completed" | "failed";
-                                attempts: number;
-                                lastError: string | null;
-                                startedAt: string | null;
-                                finishedAt: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                            } | null;
-                            metadata: {
-                                extractionStrategy?: string;
-                                normalizationStrategy?: string;
-                                /** @enum {string} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                parseStrategy?: string;
-                                documentTypeName?: string | null;
-                                detectedKeywords?: string[];
-                                pageCount?: number;
-                                chunkCount?: number;
-                                searchablePdfGenerated?: boolean;
-                                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                parse?: {
-                                    /** @enum {string} */
-                                    provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    strategy: string;
-                                    fallbackUsed?: boolean;
-                                    warnings?: string[];
-                                    keyValueCount?: number;
-                                    tableCount?: number;
-                                    providerMetadata?: {
-                                        [key: string]: unknown;
-                                    };
-                                };
-                                chunking?: {
-                                    strategy: string;
-                                    chunkCount: number;
-                                    usedProviderHints?: boolean;
-                                };
-                                embedding?: {
-                                    /** @enum {string} */
-                                    provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                    model?: string;
-                                    configured?: boolean;
-                                    chunkCount?: number;
-                                };
-                                reviewEvidence?: {
-                                    /** @enum {string} */
-                                    documentClass: "invoice" | "generic";
-                                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                    extracted: {
-                                        correspondent: boolean;
-                                        issueDate: boolean;
-                                        amount: boolean;
-                                        currency: boolean;
-                                    };
-                                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    confidence?: number | null;
-                                    confidenceThreshold?: number;
-                                    ocrTextLength?: number;
-                                    ocrEmptyThreshold?: number;
-                                };
-                                manual?: {
-                                    /** @default [] */
-                                    lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                    /** @default {} */
-                                    values: {
-                                        issueDate?: string | null;
-                                        dueDate?: string | null;
-                                        amount?: number | null;
-                                        currency?: string | null;
-                                        referenceNumber?: string | null;
-                                        /** Format: uuid */
-                                        correspondentId?: string | null;
-                                        /** Format: uuid */
-                                        documentTypeId?: string | null;
-                                        tagIds?: string[];
-                                    };
-                                    updatedAt?: string | null;
-                                    /** Format: uuid */
-                                    updatedByUserId?: string | null;
-                                };
-                            };
-                            createdAt: string;
-                            processedAt: string | null;
-                            snippets?: string[];
-                            matchingLines?: {
-                                /** Format: uuid */
-                                documentId: string;
-                                page: number;
-                                lineIndex: number;
-                                boundingBox: {
-                                    x: number;
-                                    y: number;
-                                    width: number;
-                                    height: number;
-                                };
-                                text: string;
-                            }[];
-                        }[];
-                        total: number;
-                        page: number;
-                        pageSize: number;
-                        /** @default {} */
-                        appliedFilters: {
-                            year?: number;
-                            dateFrom?: string;
-                            dateTo?: string;
-                            /** Format: uuid */
-                            correspondentId?: string;
-                            /** Format: uuid */
-                            documentTypeId?: string;
-                            /** @enum {string} */
-                            status?: "pending" | "processing" | "ready" | "failed";
-                            tags?: string[];
-                        };
-                    };
+                    "application/json": components["schemas"]["SearchDocumentsResponse"];
                 };
             };
         };
@@ -3164,211 +3148,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: {
-                            document: {
-                                /** Format: uuid */
-                                id: string;
-                                title: string;
-                                /** @enum {string} */
-                                source: "upload" | "watch-folder" | "email" | "api";
-                                mimeType: string;
-                                checksum: string;
-                                storageKey: string;
-                                /** @enum {string} */
-                                status: "pending" | "processing" | "ready" | "failed";
-                                language: string | null;
-                                issueDate: string | null;
-                                dueDate: string | null;
-                                amount: number | null;
-                                currency: string | null;
-                                referenceNumber: string | null;
-                                correspondent: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                } | null;
-                                documentType: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                    description?: string | null;
-                                } | null;
-                                tags: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                }[];
-                                confidence: number | null;
-                                /** @enum {string} */
-                                reviewStatus: "not_required" | "pending" | "resolved";
-                                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                reviewedAt: string | null;
-                                reviewNote: string | null;
-                                searchablePdfAvailable: boolean;
-                                /** @enum {string|null} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                                /** @default 0 */
-                                chunkCount: number;
-                                /**
-                                 * @default not_configured
-                                 * @enum {string}
-                                 */
-                                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                                /** @enum {string|null} */
-                                embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                                embeddingModel?: string | null;
-                                /** @default false */
-                                embeddingsStale: boolean;
-                                lastProcessingError: string | null;
-                                latestProcessingJob: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    /** @enum {string} */
-                                    status: "queued" | "running" | "completed" | "failed";
-                                    attempts: number;
-                                    lastError: string | null;
-                                    startedAt: string | null;
-                                    finishedAt: string | null;
-                                    createdAt: string;
-                                    updatedAt: string;
-                                } | null;
-                                latestEmbeddingJob?: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    /** @enum {string} */
-                                    status: "queued" | "running" | "completed" | "failed";
-                                    attempts: number;
-                                    lastError: string | null;
-                                    startedAt: string | null;
-                                    finishedAt: string | null;
-                                    createdAt: string;
-                                    updatedAt: string;
-                                } | null;
-                                metadata: {
-                                    extractionStrategy?: string;
-                                    normalizationStrategy?: string;
-                                    /** @enum {string} */
-                                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    parseStrategy?: string;
-                                    documentTypeName?: string | null;
-                                    detectedKeywords?: string[];
-                                    pageCount?: number;
-                                    chunkCount?: number;
-                                    searchablePdfGenerated?: boolean;
-                                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    parse?: {
-                                        /** @enum {string} */
-                                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                        strategy: string;
-                                        fallbackUsed?: boolean;
-                                        warnings?: string[];
-                                        keyValueCount?: number;
-                                        tableCount?: number;
-                                        providerMetadata?: {
-                                            [key: string]: unknown;
-                                        };
-                                    };
-                                    chunking?: {
-                                        strategy: string;
-                                        chunkCount: number;
-                                        usedProviderHints?: boolean;
-                                    };
-                                    embedding?: {
-                                        /** @enum {string} */
-                                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                        model?: string;
-                                        configured?: boolean;
-                                        chunkCount?: number;
-                                    };
-                                    reviewEvidence?: {
-                                        /** @enum {string} */
-                                        documentClass: "invoice" | "generic";
-                                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                        extracted: {
-                                            correspondent: boolean;
-                                            issueDate: boolean;
-                                            amount: boolean;
-                                            currency: boolean;
-                                        };
-                                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                        confidence?: number | null;
-                                        confidenceThreshold?: number;
-                                        ocrTextLength?: number;
-                                        ocrEmptyThreshold?: number;
-                                    };
-                                    manual?: {
-                                        /** @default [] */
-                                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                        /** @default {} */
-                                        values: {
-                                            issueDate?: string | null;
-                                            dueDate?: string | null;
-                                            amount?: number | null;
-                                            currency?: string | null;
-                                            referenceNumber?: string | null;
-                                            /** Format: uuid */
-                                            correspondentId?: string | null;
-                                            /** Format: uuid */
-                                            documentTypeId?: string | null;
-                                            tagIds?: string[];
-                                        };
-                                        updatedAt?: string | null;
-                                        /** Format: uuid */
-                                        updatedByUserId?: string | null;
-                                    };
-                                };
-                                createdAt: string;
-                                processedAt: string | null;
-                                snippets?: string[];
-                                matchingLines?: {
-                                    /** Format: uuid */
-                                    documentId: string;
-                                    page: number;
-                                    lineIndex: number;
-                                    boundingBox: {
-                                        x: number;
-                                        y: number;
-                                        width: number;
-                                        height: number;
-                                    };
-                                    text: string;
-                                }[];
-                            };
-                            score: number;
-                            semanticScore: number | null;
-                            keywordScore: number | null;
-                            matchedChunks: {
-                                chunkIndex: number;
-                                heading: string | null;
-                                text: string;
-                                pageFrom: number | null;
-                                pageTo: number | null;
-                                score: number;
-                                distance: number | null;
-                            }[];
-                        }[];
-                        total: number;
-                        page: number;
-                        pageSize: number;
-                        /** @default {} */
-                        appliedFilters: {
-                            year?: number;
-                            dateFrom?: string;
-                            dateTo?: string;
-                            /** Format: uuid */
-                            correspondentId?: string;
-                            /** Format: uuid */
-                            documentTypeId?: string;
-                            /** @enum {string} */
-                            status?: "pending" | "processing" | "ready" | "failed";
-                            tags?: string[];
-                        };
-                    };
+                    "application/json": components["schemas"]["SemanticSearchResponse"];
                 };
             };
         };
@@ -3392,209 +3172,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        status: "answered" | "insufficient_evidence";
-                        answer: string | null;
-                        reasoning?: string | null;
-                        citations: {
-                            /** Format: uuid */
-                            documentId: string;
-                            documentTitle: string;
-                            chunkIndex: number;
-                            pageFrom: number | null;
-                            pageTo: number | null;
-                            quote: string;
-                            score: number;
-                        }[];
-                        results: {
-                            document: {
-                                /** Format: uuid */
-                                id: string;
-                                title: string;
-                                /** @enum {string} */
-                                source: "upload" | "watch-folder" | "email" | "api";
-                                mimeType: string;
-                                checksum: string;
-                                storageKey: string;
-                                /** @enum {string} */
-                                status: "pending" | "processing" | "ready" | "failed";
-                                language: string | null;
-                                issueDate: string | null;
-                                dueDate: string | null;
-                                amount: number | null;
-                                currency: string | null;
-                                referenceNumber: string | null;
-                                correspondent: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                } | null;
-                                documentType: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                    description?: string | null;
-                                } | null;
-                                tags: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    name: string;
-                                    slug: string;
-                                }[];
-                                confidence: number | null;
-                                /** @enum {string} */
-                                reviewStatus: "not_required" | "pending" | "resolved";
-                                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                reviewedAt: string | null;
-                                reviewNote: string | null;
-                                searchablePdfAvailable: boolean;
-                                /** @enum {string|null} */
-                                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
-                                /** @default 0 */
-                                chunkCount: number;
-                                /**
-                                 * @default not_configured
-                                 * @enum {string}
-                                 */
-                                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
-                                /** @enum {string|null} */
-                                embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
-                                embeddingModel?: string | null;
-                                /** @default false */
-                                embeddingsStale: boolean;
-                                lastProcessingError: string | null;
-                                latestProcessingJob: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    /** @enum {string} */
-                                    status: "queued" | "running" | "completed" | "failed";
-                                    attempts: number;
-                                    lastError: string | null;
-                                    startedAt: string | null;
-                                    finishedAt: string | null;
-                                    createdAt: string;
-                                    updatedAt: string;
-                                } | null;
-                                latestEmbeddingJob?: {
-                                    /** Format: uuid */
-                                    id: string;
-                                    /** @enum {string} */
-                                    status: "queued" | "running" | "completed" | "failed";
-                                    attempts: number;
-                                    lastError: string | null;
-                                    startedAt: string | null;
-                                    finishedAt: string | null;
-                                    createdAt: string;
-                                    updatedAt: string;
-                                } | null;
-                                metadata: {
-                                    extractionStrategy?: string;
-                                    normalizationStrategy?: string;
-                                    /** @enum {string} */
-                                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                    parseStrategy?: string;
-                                    documentTypeName?: string | null;
-                                    detectedKeywords?: string[];
-                                    pageCount?: number;
-                                    chunkCount?: number;
-                                    searchablePdfGenerated?: boolean;
-                                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                    parse?: {
-                                        /** @enum {string} */
-                                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
-                                        strategy: string;
-                                        fallbackUsed?: boolean;
-                                        warnings?: string[];
-                                        keyValueCount?: number;
-                                        tableCount?: number;
-                                        providerMetadata?: {
-                                            [key: string]: unknown;
-                                        };
-                                    };
-                                    chunking?: {
-                                        strategy: string;
-                                        chunkCount: number;
-                                        usedProviderHints?: boolean;
-                                    };
-                                    embedding?: {
-                                        /** @enum {string} */
-                                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
-                                        model?: string;
-                                        configured?: boolean;
-                                        chunkCount?: number;
-                                    };
-                                    reviewEvidence?: {
-                                        /** @enum {string} */
-                                        documentClass: "invoice" | "generic";
-                                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                                        extracted: {
-                                            correspondent: boolean;
-                                            issueDate: boolean;
-                                            amount: boolean;
-                                            currency: boolean;
-                                        };
-                                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
-                                        confidence?: number | null;
-                                        confidenceThreshold?: number;
-                                        ocrTextLength?: number;
-                                        ocrEmptyThreshold?: number;
-                                    };
-                                    manual?: {
-                                        /** @default [] */
-                                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
-                                        /** @default {} */
-                                        values: {
-                                            issueDate?: string | null;
-                                            dueDate?: string | null;
-                                            amount?: number | null;
-                                            currency?: string | null;
-                                            referenceNumber?: string | null;
-                                            /** Format: uuid */
-                                            correspondentId?: string | null;
-                                            /** Format: uuid */
-                                            documentTypeId?: string | null;
-                                            tagIds?: string[];
-                                        };
-                                        updatedAt?: string | null;
-                                        /** Format: uuid */
-                                        updatedByUserId?: string | null;
-                                    };
-                                };
-                                createdAt: string;
-                                processedAt: string | null;
-                                snippets?: string[];
-                                matchingLines?: {
-                                    /** Format: uuid */
-                                    documentId: string;
-                                    page: number;
-                                    lineIndex: number;
-                                    boundingBox: {
-                                        x: number;
-                                        y: number;
-                                        width: number;
-                                        height: number;
-                                    };
-                                    text: string;
-                                }[];
-                            };
-                            score: number;
-                            semanticScore: number | null;
-                            keywordScore: number | null;
-                            matchedChunks: {
-                                chunkIndex: number;
-                                heading: string | null;
-                                text: string;
-                                pageFrom: number | null;
-                                pageTo: number | null;
-                                score: number;
-                                distance: number | null;
-                            }[];
-                        }[];
-                    };
+                    "application/json": components["schemas"]["AnswerQueryResponse"];
                 };
             };
         };
@@ -3614,12 +3192,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    }[];
+                    "application/json": components["schemas"]["TagList"];
                 };
             };
         };
@@ -3643,12 +3216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Tag"];
                 };
             };
         };
@@ -3670,9 +3238,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        deleted: boolean;
-                    };
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
                 };
             };
         };
@@ -3698,12 +3264,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Tag"];
                 };
             };
         };
@@ -3729,12 +3290,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Tag"];
                 };
             };
         };
@@ -3754,12 +3310,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    }[];
+                    "application/json": components["schemas"]["CorrespondentList"];
                 };
             };
         };
@@ -3783,12 +3334,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Correspondent"];
                 };
             };
         };
@@ -3810,9 +3356,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        deleted: boolean;
-                    };
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
                 };
             };
         };
@@ -3838,12 +3382,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Correspondent"];
                 };
             };
         };
@@ -3869,12 +3408,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                    };
+                    "application/json": components["schemas"]["Correspondent"];
                 };
             };
         };
@@ -3894,13 +3428,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                        description?: string | null;
-                    }[];
+                    "application/json": components["schemas"]["DocumentTypeList"];
                 };
             };
         };
@@ -3924,13 +3452,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                        description?: string | null;
-                    };
+                    "application/json": components["schemas"]["DocumentType"];
                 };
             };
         };
@@ -3952,9 +3474,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        deleted: boolean;
-                    };
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
                 };
             };
         };
@@ -3980,13 +3500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                        description?: string | null;
-                    };
+                    "application/json": components["schemas"]["DocumentType"];
                 };
             };
         };
@@ -4012,13 +3526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        id: string;
-                        name: string;
-                        slug: string;
-                        description?: string | null;
-                    };
+                    "application/json": components["schemas"]["DocumentType"];
                 };
             };
         };

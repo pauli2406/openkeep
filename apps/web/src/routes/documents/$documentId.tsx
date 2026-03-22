@@ -387,6 +387,10 @@ function renderManualOverrideValue(
   }
 }
 
+function sameTagIds(left: string[], right: string[]): boolean {
+  return [...left].sort().join(",") === [...right].sort().join(",");
+}
+
 const EMPTY_SELECT_VALUE = "__none__";
 
 // --- Component ---
@@ -401,6 +405,7 @@ function DocumentDetailPage() {
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
+  const [tagQuery, setTagQuery] = useState("");
   const [editForm, setEditForm] = useState({
     title: "",
     issueDate: "",
@@ -630,6 +635,7 @@ function DocumentDetailPage() {
   function startEditing() {
     const doc = documentQuery.data;
     if (!doc) return;
+    setTagQuery("");
     setEditForm({
       title: doc.title,
       issueDate: doc.issueDate ?? "",
@@ -645,6 +651,7 @@ function DocumentDetailPage() {
   }
 
   function cancelEditing() {
+    setTagQuery("");
     setIsEditing(false);
   }
 
@@ -691,9 +698,7 @@ function DocumentDetailPage() {
       body.documentTypeId = nextDocumentTypeId;
     }
 
-    const currentTagIds = [...doc.tags.map((tag) => tag.id)].sort();
-    const nextTagIds = [...editForm.tagIds].sort();
-    if (currentTagIds.join(",") !== nextTagIds.join(",")) {
+    if (!sameTagIds(doc.tags.map((tag) => tag.id), editForm.tagIds)) {
       body.tagIds = editForm.tagIds;
     }
 
@@ -771,6 +776,55 @@ function DocumentDetailPage() {
   const doc = documentQuery.data;
   const manualOverrides = doc.metadata.manual;
   const lockedFields = manualOverrides?.lockedFields ?? [];
+  const pendingLockedFields: ManualOverrideField[] = [];
+  if (isEditing) {
+    if ((doc.issueDate ?? "") !== editForm.issueDate) {
+      pendingLockedFields.push("issueDate");
+    }
+    if ((doc.dueDate ?? "") !== editForm.dueDate) {
+      pendingLockedFields.push("dueDate");
+    }
+
+    const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
+    if (doc.amount !== nextAmount) {
+      pendingLockedFields.push("amount");
+    }
+
+    const nextCurrency = editForm.currency.trim() || null;
+    if ((doc.currency ?? null) !== nextCurrency) {
+      pendingLockedFields.push("currency");
+    }
+
+    const nextReferenceNumber = editForm.referenceNumber.trim() || null;
+    if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
+      pendingLockedFields.push("referenceNumber");
+    }
+
+    const nextCorrespondentId =
+      editForm.correspondentId === EMPTY_SELECT_VALUE ? null : editForm.correspondentId;
+    if ((doc.correspondent?.id ?? null) !== nextCorrespondentId) {
+      pendingLockedFields.push("correspondentId");
+    }
+
+    const nextDocumentTypeId =
+      editForm.documentTypeId === EMPTY_SELECT_VALUE ? null : editForm.documentTypeId;
+    if ((doc.documentType?.id ?? null) !== nextDocumentTypeId) {
+      pendingLockedFields.push("documentTypeId");
+    }
+
+    if (!sameTagIds(doc.tags.map((tag) => tag.id), editForm.tagIds)) {
+      pendingLockedFields.push("tagIds");
+    }
+  }
+  const pendingNewLocks = pendingLockedFields.filter((field) => !lockedFields.includes(field));
+  const tagFilter = tagQuery.trim().toLowerCase();
+  const filteredTags = (tagsQuery.data ?? []).filter((tag) =>
+    tagFilter.length === 0
+      ? true
+      : `${tag.name} ${tag.slug}`.toLowerCase().includes(tagFilter),
+  );
+  const selectedTags = (tagsQuery.data ?? []).filter((tag) => editForm.tagIds.includes(tag.id));
+  const availableTags = filteredTags.filter((tag) => !editForm.tagIds.includes(tag.id));
 
   // Group text blocks by page
   const textBlocksByPage: Record<number, TextBlock[]> = {};
@@ -1120,6 +1174,16 @@ function DocumentDetailPage() {
               )}
             </CardHeader>
             <CardContent className="space-y-4">
+              {isEditing && (
+                <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+                  {pendingNewLocks.length > 0
+                    ? `Saving will lock ${pendingNewLocks.map((field) => formatManualOverrideField(field)).join(", ")}.`
+                    : lockedFields.length > 0
+                      ? "Already locked fields stay overridden until you clear them."
+                      : "Only the fields you change will become sticky manual overrides."}
+                </div>
+              )}
+
               {/* Title */}
               {isEditing && (
                 <div className="space-y-1.5">
@@ -1154,27 +1218,34 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <Select
-                      value={editForm.correspondentId}
-                      onValueChange={(value) =>
-                        setEditForm((current) => ({
-                          ...current,
-                          correspondentId: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select correspondent" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>No correspondent</SelectItem>
-                        {(correspondentsQuery.data ?? []).map((correspondent) => (
-                          <SelectItem key={correspondent.id} value={correspondent.id}>
-                            {correspondent.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select
+                        value={editForm.correspondentId}
+                        onValueChange={(value) =>
+                          setEditForm((current) => ({
+                            ...current,
+                            correspondentId: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select correspondent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={EMPTY_SELECT_VALUE}>No correspondent</SelectItem>
+                          {(correspondentsQuery.data ?? []).map((correspondent) => (
+                            <SelectItem key={correspondent.id} value={correspondent.id}>
+                              {correspondent.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {pendingNewLocks.includes("correspondentId") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">
                       {doc.correspondent?.name ?? "Unknown"}
@@ -1206,27 +1277,34 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <Select
-                      value={editForm.documentTypeId}
-                      onValueChange={(value) =>
-                        setEditForm((current) => ({
-                          ...current,
-                          documentTypeId: value,
-                        }))
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select document type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={EMPTY_SELECT_VALUE}>No document type</SelectItem>
-                        {(documentTypesQuery.data ?? []).map((documentType) => (
-                          <SelectItem key={documentType.id} value={documentType.id}>
-                            {documentType.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Select
+                        value={editForm.documentTypeId}
+                        onValueChange={(value) =>
+                          setEditForm((current) => ({
+                            ...current,
+                            documentTypeId: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select document type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={EMPTY_SELECT_VALUE}>No document type</SelectItem>
+                          {(documentTypesQuery.data ?? []).map((documentType) => (
+                            <SelectItem key={documentType.id} value={documentType.id}>
+                              {documentType.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {pendingNewLocks.includes("documentTypeId") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">
                       {doc.documentType?.name ?? "Unclassified"}
@@ -1258,12 +1336,19 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <Input
-                      type="date"
-                      value={editForm.issueDate}
-                      onChange={(e) => setEditForm((f) => ({ ...f, issueDate: e.target.value }))}
-                      className="mt-1"
-                    />
+                    <>
+                      <Input
+                        type="date"
+                        value={editForm.issueDate}
+                        onChange={(e) => setEditForm((f) => ({ ...f, issueDate: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("issueDate") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">{formatDate(doc.issueDate)}</p>
                   )}
@@ -1293,12 +1378,19 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <Input
-                      type="date"
-                      value={editForm.dueDate}
-                      onChange={(e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))}
-                      className="mt-1"
-                    />
+                    <>
+                      <Input
+                        type="date"
+                        value={editForm.dueDate}
+                        onChange={(e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("dueDate") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">{formatDate(doc.dueDate)}</p>
                   )}
@@ -1331,25 +1423,33 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={editForm.amount}
-                        onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="EUR"
-                        maxLength={3}
-                        value={editForm.currency}
-                        onChange={(e) =>
-                          setEditForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))
-                        }
-                        className="w-20"
-                      />
-                    </div>
+                    <>
+                      <div className="flex gap-2 mt-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={editForm.amount}
+                          onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                          className="flex-1"
+                        />
+                        <Input
+                          placeholder="EUR"
+                          maxLength={3}
+                          value={editForm.currency}
+                          onChange={(e) =>
+                            setEditForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))
+                          }
+                          className="w-20"
+                        />
+                      </div>
+                      {(pendingNewLocks.includes("amount") ||
+                        pendingNewLocks.includes("currency")) && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock the amount fields you changed.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">
                       {doc.amount !== null
@@ -1383,11 +1483,18 @@ function DocumentDetailPage() {
                     )}
                   </div>
                   {isEditing ? (
-                    <Input
-                      value={editForm.referenceNumber}
-                      onChange={(e) => setEditForm((f) => ({ ...f, referenceNumber: e.target.value }))}
-                      className="mt-1"
-                    />
+                    <>
+                      <Input
+                        value={editForm.referenceNumber}
+                        onChange={(e) => setEditForm((f) => ({ ...f, referenceNumber: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("referenceNumber") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-sm font-medium">{doc.referenceNumber ?? "-"}</p>
                   )}
@@ -1418,23 +1525,63 @@ function DocumentDetailPage() {
                   </div>
                   {isEditing ? (
                     <div className="mt-2 space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        {(tagsQuery.data ?? []).map((tag) => {
-                          const selected = editForm.tagIds.includes(tag.id);
-                          return (
+                      <Input
+                        value={tagQuery}
+                        onChange={(e) => setTagQuery(e.target.value)}
+                        placeholder="Filter tags..."
+                      />
+                      {selectedTags.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">Selected tags</p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTags.map((tag) => (
+                              <Button
+                                key={tag.id}
+                                type="button"
+                                variant="default"
+                                size="sm"
+                                className="h-auto rounded-full px-3 py-1 text-xs"
+                                onClick={() => toggleEditTag(tag.id)}
+                              >
+                                {tag.name}
+                                <X className="h-3 w-3" />
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Available tags</p>
+                        <div className="flex flex-wrap gap-2">
+                          {availableTags.map((tag) => (
                             <Button
                               key={tag.id}
                               type="button"
-                              variant={selected ? "default" : "outline"}
+                              variant="outline"
                               size="sm"
                               className="h-auto rounded-full px-3 py-1 text-xs"
                               onClick={() => toggleEditTag(tag.id)}
                             >
                               {tag.name}
                             </Button>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
+                      {pendingNewLocks.includes("tagIds") && (
+                        <p className="text-xs text-amber-700">
+                          Saving will lock the tag selection.
+                        </p>
+                      )}
+                      {tagsQuery.isSuccess && availableTags.length === 0 && selectedTags.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          All matching tags are already selected.
+                        </p>
+                      )}
+                      {tagsQuery.isSuccess && availableTags.length === 0 && selectedTags.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No tags match the current filter.
+                        </p>
+                      )}
                       {tagsQuery.isSuccess && (tagsQuery.data ?? []).length === 0 && (
                         <p className="text-sm text-muted-foreground">No tags available.</p>
                       )}

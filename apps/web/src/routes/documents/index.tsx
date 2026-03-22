@@ -32,11 +32,11 @@ type DocumentsSearch = {
   year?: number;
   correspondentId?: string;
   documentTypeId?: string;
-  status?: string;
+  status?: "pending" | "processing" | "ready" | "failed";
   page?: number;
   pageSize?: number;
-  sort?: string;
-  direction?: string;
+  sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+  direction?: "asc" | "desc";
 };
 
 export const Route = createFileRoute("/documents/")({
@@ -45,11 +45,11 @@ export const Route = createFileRoute("/documents/")({
     year: search.year ? Number(search.year) : undefined,
     correspondentId: (search.correspondentId as string) || undefined,
     documentTypeId: (search.documentTypeId as string) || undefined,
-    status: (search.status as string) || undefined,
+    status: search.status as DocumentsSearch["status"],
     page: search.page ? Number(search.page) : undefined,
     pageSize: search.pageSize ? Number(search.pageSize) : undefined,
-    sort: (search.sort as string) || undefined,
-    direction: (search.direction as string) || undefined,
+    sort: search.sort as DocumentsSearch["sort"],
+    direction: search.direction as DocumentsSearch["direction"],
   }),
   component: DocumentsPage,
 });
@@ -102,24 +102,9 @@ function DocumentsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/documents", {
         params: { query: params },
-      } as never);
+      });
       if (error) throw error;
-      return data as unknown as {
-        items: Array<{
-          id: string;
-          title: string;
-          status: string;
-          issueDate: string | null;
-          correspondent: { id: string; name: string } | null;
-          documentType: { id: string; name: string } | null;
-          tags: Array<{ id: string; name: string }>;
-          createdAt: string;
-          snippets?: string[];
-        }>;
-        total: number;
-        page: number;
-        pageSize: number;
-      };
+      return data;
     },
   });
 
@@ -297,7 +282,11 @@ function DocumentsPage() {
         {/* Status */}
         <Select
           value={search.status ?? ""}
-          onValueChange={(v) => updateSearch({ status: v || undefined })}
+          onValueChange={(value) =>
+            updateSearch({
+              status: (value || undefined) as DocumentsSearch["status"],
+            })
+          }
         >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Status" />
@@ -316,7 +305,9 @@ function DocumentsPage() {
           <ArrowUpDown className="h-4 w-4 text-muted-foreground" />
           <Select
             value={search.sort ?? "createdAt"}
-            onValueChange={(v) => updateSearch({ sort: v })}
+            onValueChange={(value) =>
+              updateSearch({ sort: value as DocumentsSearch["sort"] })
+            }
           >
             <SelectTrigger className="w-[130px]">
               <SelectValue />
@@ -332,7 +323,9 @@ function DocumentsPage() {
 
           <Select
             value={search.direction ?? "desc"}
-            onValueChange={(v) => updateSearch({ direction: v })}
+            onValueChange={(value) =>
+              updateSearch({ direction: value as DocumentsSearch["direction"] })
+            }
           >
             <SelectTrigger className="w-[100px]">
               <SelectValue />

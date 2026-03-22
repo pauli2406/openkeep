@@ -841,18 +841,44 @@ export const WatchFolderScanRequestSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
+export const WatchFolderScanSummarySchema = z.object({
+  total: z.number().int().nonnegative(),
+  imported: z.number().int().nonnegative(),
+  duplicate: z.number().int().nonnegative(),
+  unsupported: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  planned: z.number().int().nonnegative(),
+});
+
+export const WatchFolderScanHistoryItemSchema = z.object({
+  scannedAt: ArchiveTimestampSchema,
+  dryRun: z.boolean(),
+  imported: z.number().int().nonnegative(),
+  duplicate: z.number().int().nonnegative(),
+  unsupported: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  planned: z.number().int().nonnegative(),
+});
+
 export const WatchFolderScanItemSchema = z.object({
   path: z.string().min(1),
   action: z.enum(["imported", "duplicate", "unsupported", "failed", "planned"]),
   destinationPath: z.string().nullable(),
   documentId: z.string().uuid().nullable(),
   reason: z.string().min(1),
+  mimeType: z.string().min(1).nullable(),
+  failureCode: z
+    .enum(["mime_type_missing", "mime_type_not_allowed", "upload_failed"])
+    .nullable(),
+  detail: z.string().nullable(),
 });
 
 export const WatchFolderScanResponseSchema = z.object({
   configuredPath: z.string().min(1),
   dryRun: z.boolean(),
+  summary: WatchFolderScanSummarySchema,
   items: z.array(WatchFolderScanItemSchema),
+  history: z.array(WatchFolderScanHistoryItemSchema),
 });
 
 export type BoundingBox = z.infer<typeof BoundingBoxSchema>;
@@ -957,5 +983,7 @@ export type ArchiveSnapshot = z.infer<typeof ArchiveSnapshotSchema>;
 export type ArchiveImportRequest = z.infer<typeof ArchiveImportRequestSchema>;
 export type ArchiveImportResult = z.infer<typeof ArchiveImportResultSchema>;
 export type WatchFolderScanRequest = z.infer<typeof WatchFolderScanRequestSchema>;
+export type WatchFolderScanSummary = z.infer<typeof WatchFolderScanSummarySchema>;
+export type WatchFolderScanHistoryItem = z.infer<typeof WatchFolderScanHistoryItemSchema>;
 export type WatchFolderScanItem = z.infer<typeof WatchFolderScanItemSchema>;
 export type WatchFolderScanResponse = z.infer<typeof WatchFolderScanResponseSchema>;
