@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReviewReason, SearchDocumentsResponse } from "@openkeep/types";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,11 +42,13 @@ function ReviewPage() {
   const reviewQuery = useQuery({
     queryKey: ["documents", "review", page],
     queryFn: async () => {
-      const { data, error } = await api.GET("/api/documents/review", {
-        params: { query: { page, pageSize: 20 } },
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: "20",
       });
-      if (error) throw new Error("Failed to fetch review queue");
-      return data as SearchDocumentsResponse;
+      const response = await authFetch(`/api/documents/review?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch review queue");
+      return (await response.json()) as SearchDocumentsResponse;
     },
   });
 

@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  Correspondent as TaxonomyCorrespondent,
   DocumentHistoryResponse,
+  DocumentType as TaxonomyDocumentType,
   HealthProvidersResponse,
   ManualOverrideField,
   ManualOverrides,
   ParseProvider,
+  Tag as TaxonomyTag,
 } from "@openkeep/types";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -384,6 +387,8 @@ function renderManualOverrideValue(
   }
 }
 
+const EMPTY_SELECT_VALUE = "__none__";
+
 // --- Component ---
 
 function DocumentDetailPage() {
@@ -403,6 +408,9 @@ function DocumentDetailPage() {
     amount: "",
     currency: "",
     referenceNumber: "",
+    correspondentId: EMPTY_SELECT_VALUE,
+    documentTypeId: EMPTY_SELECT_VALUE,
+    tagIds: [] as string[],
   });
 
   // --- Queries ---
@@ -433,13 +441,46 @@ function DocumentDetailPage() {
   const historyQuery = useQuery({
     queryKey: ["document-history", documentId],
     queryFn: async () => {
-      const { data, error } = await api.GET("/api/documents/{id}/history" as never, {
+      const { data, error } = await api.GET("/api/documents/{id}/history", {
         params: { path: { id: documentId } },
-      } as never);
+      });
       if (error) throw new Error("Failed to load document history");
       return data as unknown as DocumentHistoryResponse;
     },
     enabled: documentQuery.isSuccess,
+  });
+
+  const tagsQuery = useQuery({
+    queryKey: ["taxonomies", "tags"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/taxonomies/tags", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load tags"));
+      }
+      return (data ?? []) as TaxonomyTag[];
+    },
+  });
+
+  const correspondentsQuery = useQuery({
+    queryKey: ["taxonomies", "correspondents"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load correspondents"));
+      }
+      return (data ?? []) as TaxonomyCorrespondent[];
+    },
+  });
+
+  const documentTypesQuery = useQuery({
+    queryKey: ["taxonomies", "document-types"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/taxonomies/document-types", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load document types"));
+      }
+      return (data ?? []) as TaxonomyDocumentType[];
+    },
   });
 
   const previewQuery = useQuery({
@@ -513,6 +554,7 @@ function DocumentDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
       setIsEditing(false);
     },
   });
@@ -553,7 +595,7 @@ function DocumentDetailPage() {
     mutationFn: async (parseProvider?: ParseProvider) => {
       const { data, error } = await api.POST("/api/documents/{id}/reprocess", {
         params: { path: { id: documentId } },
-        body: parseProvider ? { parseProvider } : undefined,
+        body: parseProvider ? { parseProvider } : {},
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, "Failed to reprocess document"));
@@ -568,10 +610,10 @@ function DocumentDetailPage() {
 
   const clearOverrideMutation = useMutation({
     mutationFn: async (field: ManualOverrideField) => {
-      const { data, error } = await api.PATCH("/api/documents/{id}" as never, {
+      const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: { clearLockedFields: [field] },
-      } as never);
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, "Failed to clear manual override"));
       }
@@ -595,6 +637,9 @@ function DocumentDetailPage() {
       amount: doc.amount !== null ? String(doc.amount) : "",
       currency: doc.currency ?? "",
       referenceNumber: doc.referenceNumber ?? "",
+      correspondentId: doc.correspondent?.id ?? EMPTY_SELECT_VALUE,
+      documentTypeId: doc.documentType?.id ?? EMPTY_SELECT_VALUE,
+      tagIds: doc.tags.map((tag) => tag.id),
     });
     setIsEditing(true);
   }
@@ -608,16 +653,65 @@ function DocumentDetailPage() {
     const doc = documentQuery.data;
     if (!doc) return;
 
-    if (editForm.title && editForm.title !== doc.title) {
+    if (editForm.title.trim() && editForm.title !== doc.title) {
       body.title = editForm.title;
     }
-    body.issueDate = editForm.issueDate || null;
-    body.dueDate = editForm.dueDate || null;
-    body.amount = editForm.amount ? Number(editForm.amount) : null;
-    body.currency = editForm.currency || null;
-    body.referenceNumber = editForm.referenceNumber || null;
+
+    if ((doc.issueDate ?? "") !== editForm.issueDate) {
+      body.issueDate = editForm.issueDate || null;
+    }
+    if ((doc.dueDate ?? "") !== editForm.dueDate) {
+      body.dueDate = editForm.dueDate || null;
+    }
+
+    const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
+    if (doc.amount !== nextAmount) {
+      body.amount = nextAmount;
+    }
+
+    const nextCurrency = editForm.currency.trim() || null;
+    if ((doc.currency ?? null) !== nextCurrency) {
+      body.currency = nextCurrency;
+    }
+
+    const nextReferenceNumber = editForm.referenceNumber.trim() || null;
+    if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
+      body.referenceNumber = nextReferenceNumber;
+    }
+
+    const nextCorrespondentId =
+      editForm.correspondentId === EMPTY_SELECT_VALUE ? null : editForm.correspondentId;
+    if ((doc.correspondent?.id ?? null) !== nextCorrespondentId) {
+      body.correspondentId = nextCorrespondentId;
+    }
+
+    const nextDocumentTypeId =
+      editForm.documentTypeId === EMPTY_SELECT_VALUE ? null : editForm.documentTypeId;
+    if ((doc.documentType?.id ?? null) !== nextDocumentTypeId) {
+      body.documentTypeId = nextDocumentTypeId;
+    }
+
+    const currentTagIds = [...doc.tags.map((tag) => tag.id)].sort();
+    const nextTagIds = [...editForm.tagIds].sort();
+    if (currentTagIds.join(",") !== nextTagIds.join(",")) {
+      body.tagIds = editForm.tagIds;
+    }
+
+    if (Object.keys(body).length === 0) {
+      setIsEditing(false);
+      return;
+    }
 
     updateMutation.mutate(body);
+  }
+
+  function toggleEditTag(tagId: string) {
+    setEditForm((current) => ({
+      ...current,
+      tagIds: current.tagIds.includes(tagId)
+        ? current.tagIds.filter((id) => id !== tagId)
+        : [...current.tagIds, tagId],
+    }));
   }
 
   async function handleDownload(variant: "original" | "searchable") {
@@ -1040,22 +1134,104 @@ function DocumentDetailPage() {
               {/* Correspondent */}
               <div className="flex items-start gap-2">
                 <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Correspondent</p>
-                  <p className="text-sm font-medium">
-                    {doc.correspondent?.name ?? "Unknown"}
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Correspondent</p>
+                    {lockedFields.includes("correspondentId") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("correspondentId")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <Select
+                      value={editForm.correspondentId}
+                      onValueChange={(value) =>
+                        setEditForm((current) => ({
+                          ...current,
+                          correspondentId: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select correspondent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>No correspondent</SelectItem>
+                        {(correspondentsQuery.data ?? []).map((correspondent) => (
+                          <SelectItem key={correspondent.id} value={correspondent.id}>
+                            {correspondent.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium">
+                      {doc.correspondent?.name ?? "Unknown"}
+                    </p>
+                  )}
                 </div>
               </div>
 
               {/* Document Type */}
               <div className="flex items-start gap-2">
                 <FileText className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Document Type</p>
-                  <p className="text-sm font-medium">
-                    {doc.documentType?.name ?? "Unclassified"}
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Document Type</p>
+                    {lockedFields.includes("documentTypeId") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("documentTypeId")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <Select
+                      value={editForm.documentTypeId}
+                      onValueChange={(value) =>
+                        setEditForm((current) => ({
+                          ...current,
+                          documentTypeId: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select document type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={EMPTY_SELECT_VALUE}>No document type</SelectItem>
+                        {(documentTypesQuery.data ?? []).map((documentType) => (
+                          <SelectItem key={documentType.id} value={documentType.id}>
+                            {documentType.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm font-medium">
+                      {doc.documentType?.name ?? "Unclassified"}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1221,21 +1397,72 @@ function DocumentDetailPage() {
               {/* Tags */}
               <div className="flex items-start gap-2">
                 <Tag className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Tags</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {doc.tags.length > 0 ? (
-                      doc.tags.map((tag) => (
-                        <Badge key={tag.id} variant="secondary">
-                          {tag.name}
-                        </Badge>
-                      ))
-                    ) : (
-                      <span className="text-sm text-muted-foreground">No tags</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Tags</p>
+                    {lockedFields.includes("tagIds") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("tagIds")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
                     )}
                   </div>
+                  {isEditing ? (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {(tagsQuery.data ?? []).map((tag) => {
+                          const selected = editForm.tagIds.includes(tag.id);
+                          return (
+                            <Button
+                              key={tag.id}
+                              type="button"
+                              variant={selected ? "default" : "outline"}
+                              size="sm"
+                              className="h-auto rounded-full px-3 py-1 text-xs"
+                              onClick={() => toggleEditTag(tag.id)}
+                            >
+                              {tag.name}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      {tagsQuery.isSuccess && (tagsQuery.data ?? []).length === 0 && (
+                        <p className="text-sm text-muted-foreground">No tags available.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {doc.tags.length > 0 ? (
+                        doc.tags.map((tag) => (
+                          <Badge key={tag.id} variant="secondary">
+                            {tag.name}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No tags</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {isEditing &&
+                (tagsQuery.isError ||
+                  correspondentsQuery.isError ||
+                  documentTypesQuery.isError) && (
+                  <p className="text-xs text-destructive">
+                    Failed to load taxonomy options for manual overrides.
+                  </p>
+                )}
 
               <Separator />
 

@@ -1,8 +1,52 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
-import { syncTokensFromStorage } from "@/lib/api";
 import { server } from "./msw-server";
+
+// Node v25 ships a built-in `localStorage` global that is an empty stub (methods
+// are undefined). When vitest runs with jsdom, jsdom provides its own Storage
+// implementation on `window` — but the Node global shadows it. We fix this by
+// replacing the global `localStorage` with a simple in-memory Map-backed
+// implementation before any application code (like api.ts) is imported.
+const localStorageMap = new Map<string, string>();
+const localStorageShim: Storage = {
+  getItem(key: string) {
+    return localStorageMap.get(key) ?? null;
+  },
+  setItem(key: string, value: string) {
+    localStorageMap.set(key, String(value));
+  },
+  removeItem(key: string) {
+    localStorageMap.delete(key);
+  },
+  clear() {
+    localStorageMap.clear();
+  },
+  key(index: number) {
+    return [...localStorageMap.keys()][index] ?? null;
+  },
+  get length() {
+    return localStorageMap.size;
+  },
+};
+
+// Apply the shim to both `globalThis` and `window` so that any code path
+// referencing either sees a functional localStorage.
+Object.defineProperty(globalThis, "localStorage", {
+  value: localStorageShim,
+  writable: true,
+  configurable: true,
+});
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "localStorage", {
+    value: localStorageShim,
+    writable: true,
+    configurable: true,
+  });
+}
+
+// Now that localStorage is functional we can safely import api helpers.
+const { syncTokensFromStorage } = await import("@/lib/api");
 
 class ResizeObserverMock {
   observe() {}

@@ -14,7 +14,12 @@ describe("search smoke", () => {
     server.use(
       http.post(apiUrl("/api/search/answer"), async ({ request }) => {
         const body = (await request.json()) as { query: string };
-        expect(body).toEqual({ query: "When is the invoice due?" });
+        expect(body).toEqual({
+          query: "When is the invoice due?",
+          maxDocuments: 3,
+          maxCitations: 4,
+          maxChunkMatches: 4,
+        });
 
         return HttpResponse.json({
           status: "answered",
@@ -74,7 +79,12 @@ describe("search smoke", () => {
     server.use(
       http.post(apiUrl("/api/search/semantic"), async ({ request }) => {
         const body = (await request.json()) as { query: string };
-        expect(body).toEqual({ query: "professional services" });
+        expect(body).toEqual({
+          query: "professional services",
+          page: 1,
+          pageSize: 20,
+          maxChunkMatches: 3,
+        });
 
         return HttpResponse.json(
           makeSemanticSearchResponse({

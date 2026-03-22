@@ -1,7 +1,10 @@
 import {
   AnswerQueryRequestSchema,
+  AnswerQueryResponseSchema,
   DocumentSchema,
   DocumentStatusSchema,
+  DocumentHistoryResponseSchema,
+  DocumentTextResponseSchema,
   ListReviewDocumentsRequestSchema,
   ReindexEmbeddingsRequestSchema,
   ReprocessDocumentRequestSchema,
@@ -10,6 +13,7 @@ import {
   ResolveReviewRequestSchema,
   ReviewReasonSchema,
   SearchDocumentsResponseSchema,
+  SemanticSearchResponseSchema,
   SemanticSearchRequestSchema,
   SearchDocumentsRequestSchema,
   UpdateDocumentSchema,
@@ -59,6 +63,8 @@ export class SearchDocumentsQueryDto extends createZodDto(SearchDocumentsQuerySc
 export class ReviewDocumentsQueryDto extends createZodDto(ReviewDocumentsQuerySchema) {}
 export class SearchDocumentsResponseDto extends createZodDto(SearchDocumentsResponseSchema) {}
 export class DocumentResponseDto extends createZodDto(DocumentSchema) {}
+export class DocumentTextResponseDto extends createZodDto(DocumentTextResponseSchema) {}
+export class DocumentHistoryResponseDto extends createZodDto(DocumentHistoryResponseSchema) {}
 export class ResolveReviewDto extends createZodDto(ResolveReviewRequestSchema) {}
 export class RequeueDocumentProcessingDto extends createZodDto(
   RequeueDocumentProcessingRequestSchema,
@@ -68,5 +74,7 @@ export class RequeueDocumentProcessingResponseDto extends createZodDto(
 ) {}
 export class ReprocessDocumentDto extends createZodDto(ReprocessDocumentRequestSchema) {}
 export class AnswerQueryDto extends createZodDto(AnswerQueryRequestSchema) {}
+export class AnswerQueryResponseDto extends createZodDto(AnswerQueryResponseSchema) {}
 export class SemanticSearchDto extends createZodDto(SemanticSearchRequestSchema) {}
+export class SemanticSearchResponseDto extends createZodDto(SemanticSearchResponseSchema) {}
 export class ReindexEmbeddingsDto extends createZodDto(ReindexEmbeddingsRequestSchema) {}

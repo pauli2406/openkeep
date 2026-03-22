@@ -4,18 +4,36 @@ import { describe, expect, it } from "vitest";
 import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
 import {
+  makeCorrespondent,
   makeDocument,
+  makeDocumentType,
   makeHealthProvidersResponse,
+  makeTag,
 } from "./fixtures";
 import { server } from "./msw-server";
 
 const documentId = "11111111-1111-1111-1111-111111111111";
+
+function taxonomyHandlers() {
+  return [
+    http.get(apiUrl("/api/taxonomies/tags"), () =>
+      HttpResponse.json([makeTag()]),
+    ),
+    http.get(apiUrl("/api/taxonomies/correspondents"), () =>
+      HttpResponse.json([makeCorrespondent()]),
+    ),
+    http.get(apiUrl("/api/taxonomies/document-types"), () =>
+      HttpResponse.json([makeDocumentType()]),
+    ),
+  ];
+}
 
 describe("document detail smoke", () => {
   it("loads the detail page and reprocesses with the selected OCR provider", async () => {
     let reprocessBody: unknown = null;
 
     server.use(
+      ...taxonomyHandlers(),
       http.get(apiUrl(`/api/documents/${documentId}`), () =>
         HttpResponse.json(
           makeDocument({
@@ -129,6 +147,7 @@ describe("document detail smoke", () => {
 
   it("shows the unsupported preview fallback for non-previewable documents", async () => {
     server.use(
+      ...taxonomyHandlers(),
       http.get(apiUrl(`/api/documents/${documentId}`), () =>
         HttpResponse.json(
           makeDocument({
@@ -173,6 +192,7 @@ describe("document detail smoke", () => {
     const patchCalls: unknown[] = [];
 
     server.use(
+      ...taxonomyHandlers(),
       http.get(apiUrl(`/api/documents/${documentId}`), () =>
         HttpResponse.json(
           makeDocument({

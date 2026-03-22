@@ -867,7 +867,16 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .send({});
 
     expect(firstScan.status).toBe(201);
-    expect(firstScan.body.importedDocumentIds.length).toBe(1);
+    expect(firstScan.body.items).toHaveLength(1);
+    expect(firstScan.body.items[0]?.action).toBe("imported");
+    expect(firstScan.body.items[0]?.documentId).toBeDefined();
+    expect(firstScan.body.items[0]?.destinationPath).toContain("processed");
+
+    await writeFile(
+      watchedFile,
+      "Invoice Number: WATCH-1\nInvoice Date: 2025-04-02\nAmount Due: EUR 55,00\n",
+      "utf8",
+    );
 
     const secondScan = await request(app.getHttpServer())
       .post("/api/archive/watch-folder/scan")
@@ -875,8 +884,10 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .send({});
 
     expect(secondScan.status).toBe(201);
-    expect(secondScan.body.importedDocumentIds).toHaveLength(0);
-    expect(secondScan.body.skippedFiles).toContain(watchedFile);
+    expect(secondScan.body.items).toHaveLength(1);
+    expect(secondScan.body.items[0]?.action).toBe("duplicate");
+    expect(secondScan.body.items[0]?.path).toContain("watch-invoice.txt");
+    expect(secondScan.body.items[0]?.reason).toBe("duplicate_checksum");
 
     const exportResponse = await request(app.getHttpServer())
       .get("/api/archive/export")
@@ -891,12 +902,29 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       ),
     ).toBe(true);
 
+    const importableSnapshot = {
+      ...exportResponse.body,
+      files: exportResponse.body.files.map((file: { contentBase64: string | null }) => ({
+        ...file,
+        contentBase64:
+          file.contentBase64 ?? Buffer.from("placeholder-binary", "utf8").toString("base64"),
+      })),
+      derivedObjects: exportResponse.body.derivedObjects.map(
+        (object: { contentBase64: string | null }) => ({
+          ...object,
+          contentBase64:
+            object.contentBase64 ??
+            Buffer.from("placeholder-derived", "utf8").toString("base64"),
+        }),
+      ),
+    };
+
     const importResponse = await request(app.getHttpServer())
       .post("/api/archive/import")
       .set("Authorization", `Bearer ${accessToken}`)
       .send({
         mode: "replace",
-        snapshot: exportResponse.body,
+        snapshot: importableSnapshot,
       });
 
     expect(importResponse.status).toBe(201);
@@ -908,5 +936,35 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(documentsResponse.status).toBe(200);
     expect(documentsResponse.body.total).toBe(exportResponse.body.documents.length);
+  });
+
+  it("rejects malformed archive snapshots before replacing stored data", async () => {
+    const exportResponse = await request(app.getHttpServer())
+      .get("/api/archive/export")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.body.files.length).toBeGreaterThan(0);
+
+    const malformedSnapshot = structuredClone(exportResponse.body);
+    malformedSnapshot.files[0].contentBase64 = null;
+
+    const failedImportResponse = await request(app.getHttpServer())
+      .post("/api/archive/import")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        mode: "replace",
+        snapshot: malformedSnapshot,
+      });
+
+    expect(failedImportResponse.status).toBe(400);
+    expect(String(failedImportResponse.body.message)).toContain("payload missing");
+
+    const documentsResponse = await request(app.getHttpServer())
+      .get("/api/documents")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(documentsResponse.status).toBe(200);
+    expect(documentsResponse.body.total).toBeGreaterThan(0);
   });
 });

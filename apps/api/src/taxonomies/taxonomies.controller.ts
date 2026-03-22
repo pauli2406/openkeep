@@ -1,5 +1,10 @@
 import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import {
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiTags,
+} from "@nestjs/swagger";
 
 import { AccessAuthGuard } from "../auth/access-auth.guard";
 import { CurrentPrincipal } from "../auth/current-principal.decorator";
@@ -23,11 +28,13 @@ export class TaxonomiesController {
   constructor(@Inject(TaxonomiesService) private readonly taxonomiesService: TaxonomiesService) {}
 
   @Get("tags")
+  @ApiOkResponse({ description: "List of tags" })
   async listTags() {
     return this.taxonomiesService.listTags();
   }
 
   @Post("tags")
+  @ApiCreatedResponse({ description: "Created tag" })
   async createTag(
     @Body() body: CreateTagDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -36,6 +43,7 @@ export class TaxonomiesController {
   }
 
   @Patch("tags/:id")
+  @ApiOkResponse({ description: "Updated tag" })
   async updateTag(
     @Param("id") id: string,
     @Body() body: UpdateTagDto,
@@ -45,6 +53,7 @@ export class TaxonomiesController {
   }
 
   @Delete("tags/:id")
+  @ApiOkResponse({ description: "Deleted tag" })
   async deleteTag(
     @Param("id") id: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -53,6 +62,7 @@ export class TaxonomiesController {
   }
 
   @Post("tags/:id/merge")
+  @ApiCreatedResponse({ description: "Merged tag" })
   async mergeTag(
     @Param("id") id: string,
     @Body() body: MergeTaxonomyDto,
@@ -62,11 +72,13 @@ export class TaxonomiesController {
   }
 
   @Get("correspondents")
+  @ApiOkResponse({ description: "List of correspondents" })
   async listCorrespondents() {
     return this.taxonomiesService.listCorrespondents();
   }
 
   @Post("correspondents")
+  @ApiCreatedResponse({ description: "Created correspondent" })
   async createCorrespondent(
     @Body() body: CreateCorrespondentDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -75,6 +87,7 @@ export class TaxonomiesController {
   }
 
   @Patch("correspondents/:id")
+  @ApiOkResponse({ description: "Updated correspondent" })
   async updateCorrespondent(
     @Param("id") id: string,
     @Body() body: UpdateCorrespondentDto,
@@ -84,6 +97,7 @@ export class TaxonomiesController {
   }
 
   @Delete("correspondents/:id")
+  @ApiOkResponse({ description: "Deleted correspondent" })
   async deleteCorrespondent(
     @Param("id") id: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -92,6 +106,7 @@ export class TaxonomiesController {
   }
 
   @Post("correspondents/:id/merge")
+  @ApiCreatedResponse({ description: "Merged correspondent" })
   async mergeCorrespondent(
     @Param("id") id: string,
     @Body() body: MergeTaxonomyDto,
@@ -101,11 +116,13 @@ export class TaxonomiesController {
   }
 
   @Get("document-types")
+  @ApiOkResponse({ description: "List of document types" })
   async listDocumentTypes() {
     return this.taxonomiesService.listDocumentTypes();
   }
 
   @Post("document-types")
+  @ApiCreatedResponse({ description: "Created document type" })
   async createDocumentType(
     @Body() body: CreateDocumentTypeDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -114,6 +131,7 @@ export class TaxonomiesController {
   }
 
   @Patch("document-types/:id")
+  @ApiOkResponse({ description: "Updated document type" })
   async updateDocumentType(
     @Param("id") id: string,
     @Body() body: UpdateDocumentTypeDto,
@@ -123,6 +141,7 @@ export class TaxonomiesController {
   }
 
   @Delete("document-types/:id")
+  @ApiOkResponse({ description: "Deleted document type" })
   async deleteDocumentType(
     @Param("id") id: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
@@ -131,6 +150,7 @@ export class TaxonomiesController {
   }
 
   @Post("document-types/:id/merge")
+  @ApiCreatedResponse({ description: "Merged document type" })
   async mergeDocumentType(
     @Param("id") id: string,
     @Body() body: MergeTaxonomyDto,

@@ -15,6 +15,7 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiConsumes,
   ApiOkResponse,
   ApiOperation,
@@ -27,6 +28,7 @@ import { AccessAuthGuard } from "../auth/access-auth.guard";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
   RequeueDocumentProcessingDto,
+  RequeueDocumentProcessingResponseDto,
   ReprocessDocumentDto,
   ResolveReviewDto,
   ReviewDocumentsQueryDto,
@@ -128,16 +130,19 @@ export class DocumentsController {
   }
 
   @Get(":id/history")
+  @ApiOkResponse({ description: "Document audit history" })
   async getDocumentHistory(@Param("id") id: string) {
     return this.documentsService.getDocumentHistory(id);
   }
 
   @Get(":id")
+  @ApiOkResponse({ description: "Single document" })
   async getDocument(@Param("id") id: string) {
     return this.documentsService.getDocument(id);
   }
 
   @Get(":id/text")
+  @ApiOkResponse({ description: "Extracted text blocks" })
   async getDocumentText(@Param("id") id: string) {
     return this.documentsService.getDocumentText(id);
   }
@@ -160,6 +165,7 @@ export class DocumentsController {
   }
 
   @Patch(":id")
+  @ApiOkResponse({ description: "Updated document" })
   async updateDocument(
     @Param("id") id: string,
     @Body() body: UpdateDocumentDto,
@@ -170,7 +176,7 @@ export class DocumentsController {
 
   @Post(":id/review/resolve")
   @ApiOperation({ summary: "Resolve review state for a document" })
-  @ApiOkResponse({ description: "Updated document after review resolution" })
+  @ApiCreatedResponse({ description: "Updated document after review resolution" })
   async resolveReview(
     @Param("id") id: string,
     @Body() body: ResolveReviewDto,
@@ -181,7 +187,7 @@ export class DocumentsController {
 
   @Post(":id/review/requeue")
   @ApiOperation({ summary: "Requeue a document from the review queue for processing" })
-  @ApiOkResponse({ description: "Queued processing job metadata" })
+  @ApiCreatedResponse({ description: "Queued processing job metadata" })
   async requeueReview(
     @Param("id") id: string,
     @Body() body: RequeueDocumentProcessingDto,
@@ -192,7 +198,7 @@ export class DocumentsController {
 
   @Post(":id/reprocess")
   @ApiOperation({ summary: "Reprocess a document with an optional OCR provider override" })
-  @ApiOkResponse({ description: "Queued processing job metadata" })
+  @ApiCreatedResponse({ description: "Queued processing job metadata" })
   async reprocessDocument(
     @Param("id") id: string,
     @Body() body: ReprocessDocumentDto,

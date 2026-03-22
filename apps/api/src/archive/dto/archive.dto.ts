@@ -1,11 +1,14 @@
-import { WatchFolderScanRequestSchema } from "@openkeep/types";
+import {
+  ArchiveImportRequestSchema,
+  ArchiveImportResultSchema,
+  ArchiveSnapshotSchema,
+  WatchFolderScanRequestSchema,
+  WatchFolderScanResponseSchema,
+} from "@openkeep/types";
 import { createZodDto } from "nestjs-zod";
-import { z } from "zod";
-
-export const ArchiveImportRequestSchema = z.object({
-  mode: z.enum(["replace", "merge"]).default("replace"),
-  snapshot: z.record(z.string(), z.unknown()),
-});
 
 export class ArchiveImportDto extends createZodDto(ArchiveImportRequestSchema) {}
 export class WatchFolderScanDto extends createZodDto(WatchFolderScanRequestSchema) {}
+export class ArchiveSnapshotDto extends createZodDto(ArchiveSnapshotSchema) {}
+export class ArchiveImportResultDto extends createZodDto(ArchiveImportResultSchema) {}
+export class WatchFolderScanResponseDto extends createZodDto(WatchFolderScanResponseSchema) {}

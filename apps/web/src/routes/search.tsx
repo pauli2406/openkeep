@@ -2,9 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type {
   AnswerQueryResponse,
+  SearchDocumentsResponse,
   SemanticSearchResponse,
 } from "@openkeep/types";
-import { api } from "@/lib/api";
+import { api, authFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,21 +38,6 @@ export const Route = createFileRoute("/search")({
   component: SearchPage,
 });
 
-interface KeywordResult {
-  id: string;
-  title: string;
-  correspondent: { id: string; name: string } | null;
-  issueDate: string | null;
-  createdAt: string;
-  snippets?: string[];
-  status: string;
-}
-
-interface KeywordResponse {
-  items: KeywordResult[];
-  total: number;
-}
-
 function SearchPage() {
   const { q, mode } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -81,11 +67,10 @@ function SearchPage() {
   const keywordQuery = useQuery({
     queryKey: ["search", "keyword", searchTerm],
     queryFn: async () => {
-      const { data, error } = await api.GET("/api/search/documents", {
-        params: { query: { query: searchTerm } },
-      } as never);
-      if (error) throw new Error("Search failed");
-      return data as unknown as KeywordResponse;
+      const params = new URLSearchParams({ query: searchTerm });
+      const response = await authFetch(`/api/search/documents?${params.toString()}`);
+      if (!response.ok) throw new Error("Search failed");
+      return (await response.json()) as SearchDocumentsResponse;
     },
     enabled: searchMode === "keyword" && searchTerm.length > 0,
   });
@@ -93,10 +78,9 @@ function SearchPage() {
   const semanticQuery = useQuery({
     queryKey: ["search", "semantic", searchTerm],
     queryFn: async () => {
-      const { data, error } = await api.POST(
-        "/api/search/semantic",
-        { body: { query: searchTerm } } as never,
-      );
+      const { data, error } = await api.POST("/api/search/semantic", {
+        body: { query: searchTerm, page: 1, pageSize: 20, maxChunkMatches: 3 },
+      });
       if (error) throw new Error("Semantic search failed");
       return data as unknown as SemanticSearchResponse;
     },
@@ -106,11 +90,14 @@ function SearchPage() {
   const answerQuery = useQuery({
     queryKey: ["search", "answer", searchTerm],
     queryFn: async () => {
-      const { data, error } = await api.POST(
-        // TODO: Path exists in SDK but TS can't resolve the large PathsWithMethod union
-        "/api/search/answer" as never,
-        { body: { query: searchTerm } } as never,
-      );
+      const { data, error } = await api.POST("/api/search/answer", {
+        body: {
+          query: searchTerm,
+          maxDocuments: 3,
+          maxCitations: 4,
+          maxChunkMatches: 4,
+        },
+      });
       if (error) throw new Error("Answer query failed");
       return data as unknown as AnswerQueryResponse;
     },

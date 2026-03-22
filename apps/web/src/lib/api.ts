@@ -49,11 +49,21 @@ function writeStoredToken(key: string, value: string | null) {
   }
 }
 
-let accessToken: string | null = readStoredToken(ACCESS_TOKEN_STORAGE_KEY);
-let refreshToken: string | null = readStoredToken(REFRESH_TOKEN_STORAGE_KEY);
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+let tokensInitialized = false;
 let onAuthFailure: (() => void) | null = null;
 
+function ensureTokensInitialized() {
+  if (!tokensInitialized) {
+    tokensInitialized = true;
+    accessToken = readStoredToken(ACCESS_TOKEN_STORAGE_KEY);
+    refreshToken = readStoredToken(REFRESH_TOKEN_STORAGE_KEY);
+  }
+}
+
 export function syncTokensFromStorage() {
+  tokensInitialized = true;
   accessToken = readStoredToken(ACCESS_TOKEN_STORAGE_KEY);
   refreshToken = readStoredToken(REFRESH_TOKEN_STORAGE_KEY);
 }
@@ -73,10 +83,12 @@ export function clearTokens() {
 }
 
 export function getAccessToken() {
+  ensureTokensInitialized();
   return accessToken;
 }
 
 export function getRefreshToken() {
+  ensureTokensInitialized();
   return refreshToken;
 }
 
@@ -85,6 +97,7 @@ export function setOnAuthFailure(handler: () => void) {
 }
 
 export function hasTokens() {
+  ensureTokensInitialized();
   return accessToken !== null && refreshToken !== null;
 }
 
@@ -109,6 +122,7 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
 }
 
 async function refreshAccessToken(): Promise<boolean> {
+  ensureTokensInitialized();
   if (!refreshToken) {
     return false;
   }
@@ -134,6 +148,7 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 export async function authFetch(input: string, init?: RequestInit): Promise<Response> {
+  ensureTokensInitialized();
   const headers = new Headers(init?.headers);
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
@@ -169,6 +184,7 @@ const client = createApiClient<paths>({
 // Add auth middleware
 client.use({
   async onRequest({ request }) {
+    ensureTokensInitialized();
     if (accessToken) {
       request.headers.set("Authorization", `Bearer ${accessToken}`);
     }

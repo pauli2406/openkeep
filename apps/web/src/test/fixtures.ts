@@ -1,11 +1,17 @@
 import type {
+  AnswerQueryResponse,
+  Correspondent,
   Document,
+  DocumentType,
   HealthProvidersResponse,
   HealthResponse,
   ProcessingStatusResponse,
   ProviderConfig,
   ReadinessResponse,
   SearchDocumentsResponse,
+  SemanticSearchResponse,
+  Tag,
+  WatchFolderScanResponse,
 } from "@openkeep/types";
 
 export function makeUser(overrides: Partial<{
@@ -200,6 +206,132 @@ export function makeSearchDocumentsResponse(
     page: 1,
     pageSize: 20,
     appliedFilters: {},
+    ...overrides,
+  };
+}
+
+export function makeTag(overrides: Partial<Tag> = {}): Tag {
+  return {
+    id: "aaa11111-1111-1111-1111-111111111111",
+    name: "Important",
+    slug: "important",
+    ...overrides,
+  };
+}
+
+export function makeCorrespondent(overrides: Partial<Correspondent> = {}): Correspondent {
+  return {
+    id: "bbb22222-2222-2222-2222-222222222222",
+    name: "Acme Corp",
+    slug: "acme-corp",
+    ...overrides,
+  };
+}
+
+export function makeDocumentType(overrides: Partial<DocumentType> = {}): DocumentType {
+  return {
+    id: "ccc33333-3333-3333-3333-333333333333",
+    name: "Invoice",
+    slug: "invoice",
+    description: "Billing documents",
+    ...overrides,
+  };
+}
+
+export function makeSemanticSearchResponse(
+  overrides: Partial<SemanticSearchResponse> = {},
+): SemanticSearchResponse {
+  return {
+    items: [
+      {
+        document: makeDocument(),
+        score: 0.88,
+        semanticScore: 0.92,
+        keywordScore: 0.75,
+        matchedChunks: [
+          {
+            chunkIndex: 0,
+            heading: "Summary",
+            text: "March invoice for professional services rendered.",
+            pageFrom: 1,
+            pageTo: 1,
+            score: 0.92,
+            distance: 0.08,
+          },
+        ],
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+    appliedFilters: {},
+    ...overrides,
+  };
+}
+
+export function makeAnswerQueryResponse(
+  overrides: Partial<AnswerQueryResponse> = {},
+): AnswerQueryResponse {
+  return {
+    status: "answered",
+    answer: "The invoice is due on March 31, 2026.",
+    reasoning: "Matched invoice due date fields in the top ranked document.",
+    citations: [
+      {
+        documentId: "11111111-1111-1111-1111-111111111111",
+        documentTitle: "March Invoice",
+        chunkIndex: 0,
+        pageFrom: 1,
+        pageTo: 1,
+        quote: "Due date: 2026-03-31",
+        score: 0.96,
+      },
+    ],
+    results: [
+      {
+        document: makeDocument(),
+        score: 0.96,
+        semanticScore: 0.91,
+        keywordScore: 0.88,
+        matchedChunks: [
+          {
+            chunkIndex: 0,
+            heading: "Payment details",
+            text: "Due date: 2026-03-31",
+            pageFrom: 1,
+            pageTo: 1,
+            score: 0.96,
+            distance: 0.04,
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function makeWatchFolderScanResponse(
+  overrides: Partial<WatchFolderScanResponse> = {},
+): WatchFolderScanResponse {
+  return {
+    configuredPath: "/watch-folder",
+    dryRun: false,
+    items: [
+      {
+        path: "/watch-folder/invoice.pdf",
+        action: "imported",
+        destinationPath: "/watch-folder/processed/invoice.pdf",
+        documentId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        reason: "imported",
+      },
+      {
+        path: "/watch-folder/duplicate.pdf",
+        action: "duplicate",
+        destinationPath: "/watch-folder/processed/duplicate.pdf",
+        documentId: null,
+        reason: "duplicate_checksum",
+      },
+    ],
     ...overrides,
   };
 }

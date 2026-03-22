@@ -5,10 +5,11 @@ import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
 import {
   makeDocument,
-  makeHealthResponse,
-  makeProcessingStatusResponse,
-  makeReadinessResponse,
-  makeSearchDocumentsResponse,
+    makeHealthResponse,
+    makeProcessingStatusResponse,
+    makeReadinessResponse,
+    makeSearchDocumentsResponse,
+    makeWatchFolderScanResponse,
 } from "./fixtures";
 import { server } from "./msw-server";
 
@@ -101,7 +102,7 @@ function settingsHandlers(overrides?: {
 }) {
   return [
     http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
-    http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json({ tokens: [] })),
+    http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json([])),
     http.get(apiUrl("/api/taxonomies/tags"), () =>
       HttpResponse.json(
         overrides?.tags ?? [{ id: "1", name: "Important", slug: "important" }],
@@ -156,7 +157,7 @@ describe("settings smoke", () => {
   it("shows a stable error state when processing status fails to load", async () => {
     server.use(
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
-      http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json({ tokens: [] })),
+      http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json([])),
       http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([])),
       http.get(apiUrl("/api/taxonomies/correspondents"), () => HttpResponse.json([])),
       http.get(apiUrl("/api/taxonomies/document-types"), () => HttpResponse.json([])),
@@ -186,12 +187,7 @@ describe("settings smoke", () => {
       http.post(apiUrl("/api/archive/watch-folder/scan"), async ({ request }) => {
         const body = (await request.json()) as { dryRun: boolean };
         expect(body).toEqual({ dryRun: true });
-        return HttpResponse.json({
-          configuredPath: "/watch-folder",
-          importedDocumentIds: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
-          skippedFiles: ["duplicate.pdf"],
-          errors: [],
-        });
+        return HttpResponse.json(makeWatchFolderScanResponse({ dryRun: true }));
       }),
     );
 
@@ -308,9 +304,10 @@ describe("settings smoke", () => {
         const body = await request.json();
         importCalls.push(body);
         return HttpResponse.json({
-          imported: 1,
-          skipped: 0,
-          errors: [],
+          imported: true,
+          mode: "replace",
+          documentCount: 0,
+          fileCount: 0,
         });
       }),
     );

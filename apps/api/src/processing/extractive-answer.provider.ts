@@ -5,6 +5,8 @@ import type { AnswerProvider } from "./provider.types";
 
 @Injectable()
 export class ExtractiveAnswerProvider implements AnswerProvider {
+  private static readonly MIN_EVIDENCE_SCORE = 0.55;
+
   async answer(input: {
     question: string;
     results: SemanticSearchResult[];
@@ -17,7 +19,10 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
   }> {
     const citations = this.collectCitations(input.results, input.maxCitations);
 
-    if (citations.length === 0) {
+    if (
+      citations.length === 0 ||
+      (citations[0]?.score ?? 0) < ExtractiveAnswerProvider.MIN_EVIDENCE_SCORE
+    ) {
       return {
         status: "insufficient_evidence",
         answer: null,
@@ -28,21 +33,15 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
     }
 
     const best = citations[0]!;
-    const supporting = citations.slice(1, 3);
-    const supportSummary =
-      supporting.length > 0
-        ? ` Supporting evidence also appears in ${supporting
-            .map((citation) => this.describeCitation(citation))
-            .join(", ")}.`
-        : "";
+    const supporting = citations.slice(1, 3).map((citation) => this.describeCitation(citation));
 
     return {
       status: "answered",
-      answer:
-        `Based on the indexed archive, the strongest answer to "${input.question}" is: ` +
-        `${best.quote}${supportSummary}`,
+      answer: best.quote,
       reasoning:
-        "The answer is grounded in the highest-ranked semantic matches and returned only when at least one chunk cleared the evidence threshold.",
+        supporting.length > 0
+          ? `Answer selected from the highest-scoring grounded chunk, with corroborating evidence in ${supporting.join(", ")}.`
+          : "Answer selected from the highest-scoring grounded chunk after filtering weak and duplicate evidence.",
       citations,
     };
   }
@@ -51,17 +50,9 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
     results: SemanticSearchResult[],
     maxCitations: number,
   ): AnswerCitation[] {
-    const citations: AnswerCitation[] = [];
-    const seen = new Set<string>();
-
-    for (const result of results) {
-      for (const chunk of result.matchedChunks) {
-        const key = `${result.document.id}:${chunk.chunkIndex}`;
-        if (seen.has(key)) {
-          continue;
-        }
-
-        citations.push({
+    const ranked = results
+      .flatMap((result) =>
+        result.matchedChunks.map((chunk) => ({
           documentId: result.document.id,
           documentTitle: result.document.title,
           chunkIndex: chunk.chunkIndex,
@@ -69,12 +60,34 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
           pageTo: chunk.pageTo,
           quote: this.normalizeQuote(chunk.text),
           score: chunk.score,
-        });
-        seen.add(key);
-
-        if (citations.length >= maxCitations) {
-          return citations;
+        })),
+      )
+      .filter((citation) => citation.score >= ExtractiveAnswerProvider.MIN_EVIDENCE_SCORE)
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
         }
+
+        const leftSpan = this.pageSpan(left);
+        const rightSpan = this.pageSpan(right);
+        if (leftSpan !== rightSpan) {
+          return leftSpan - rightSpan;
+        }
+
+        return (left.pageFrom ?? Number.MAX_SAFE_INTEGER) - (right.pageFrom ?? Number.MAX_SAFE_INTEGER);
+      });
+
+    const citations: AnswerCitation[] = [];
+    for (const citation of ranked) {
+      if (
+        citations.some((existing) => this.isDuplicateCitation(existing, citation))
+      ) {
+        continue;
+      }
+
+      citations.push(citation);
+      if (citations.length >= maxCitations) {
+        return citations;
       }
     }
 
@@ -83,6 +96,60 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
 
   private normalizeQuote(text: string): string {
     return text.replace(/\s+/g, " ").trim().slice(0, 280);
+  }
+
+  private normalizedFingerprint(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  private isDuplicateCitation(left: AnswerCitation, right: AnswerCitation): boolean {
+    if (
+      left.documentId === right.documentId &&
+      left.chunkIndex === right.chunkIndex
+    ) {
+      return true;
+    }
+
+    const leftFingerprint = this.normalizedFingerprint(left.quote);
+    const rightFingerprint = this.normalizedFingerprint(right.quote);
+    if (leftFingerprint === rightFingerprint) {
+      return true;
+    }
+
+    if (
+      leftFingerprint.length > 0 &&
+      rightFingerprint.length > 0 &&
+      (leftFingerprint.includes(rightFingerprint) || rightFingerprint.includes(leftFingerprint))
+    ) {
+      return true;
+    }
+
+    return this.tokenOverlap(leftFingerprint, rightFingerprint) >= 0.9;
+  }
+
+  private tokenOverlap(left: string, right: string): number {
+    const leftTokens = new Set(left.split(" ").filter(Boolean));
+    const rightTokens = new Set(right.split(" ").filter(Boolean));
+    if (leftTokens.size === 0 || rightTokens.size === 0) {
+      return 0;
+    }
+
+    let overlap = 0;
+    for (const token of leftTokens) {
+      if (rightTokens.has(token)) {
+        overlap += 1;
+      }
+    }
+
+    return overlap / Math.max(leftTokens.size, rightTokens.size);
+  }
+
+  private pageSpan(citation: Pick<AnswerCitation, "pageFrom" | "pageTo">): number {
+    if (!citation.pageFrom || !citation.pageTo) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    return citation.pageTo - citation.pageFrom;
   }
 
   private describeCitation(citation: AnswerCitation): string {

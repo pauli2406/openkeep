@@ -2,6 +2,8 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  ArchiveImportResult,
+  ArchiveSnapshot,
   Correspondent,
   DocumentType,
   HealthResponse,
@@ -78,14 +80,167 @@ interface ApiToken {
   createdAt: string;
 }
 
-interface TokensResponse {
-  tokens: ApiToken[];
-}
-
 interface CreateTokenResponse {
   token: string;
   id: string;
   name: string;
+}
+
+type TaxonomyEntity = Tag | Correspondent | DocumentType;
+type TaxonomyKind = "tags" | "correspondents" | "document-types";
+
+async function listTaxonomy(kind: TaxonomyKind): Promise<TaxonomyEntity[]> {
+  switch (kind) {
+    case "tags": {
+      const { data, error } = await api.GET("/api/taxonomies/tags", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load tags"));
+      }
+      return (data ?? []) as Tag[];
+    }
+    case "correspondents": {
+      const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load correspondents"));
+      }
+      return (data ?? []) as Correspondent[];
+    }
+    case "document-types": {
+      const { data, error } = await api.GET("/api/taxonomies/document-types", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to load document types"));
+      }
+      return (data ?? []) as DocumentType[];
+    }
+  }
+}
+
+async function createTaxonomy(kind: TaxonomyKind, name: string): Promise<void> {
+  switch (kind) {
+    case "tags": {
+      const { error } = await api.POST("/api/taxonomies/tags", { body: { name } });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to create tag"));
+      }
+      return;
+    }
+    case "correspondents": {
+      const { error } = await api.POST("/api/taxonomies/correspondents", { body: { name } });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to create correspondent"));
+      }
+      return;
+    }
+    case "document-types": {
+      const { error } = await api.POST("/api/taxonomies/document-types", { body: { name } });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to create document type"));
+      }
+      return;
+    }
+  }
+}
+
+async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string): Promise<void> {
+  switch (kind) {
+    case "tags": {
+      const { error } = await api.PATCH("/api/taxonomies/tags/{id}", {
+        params: { path: { id } },
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to update tag"));
+      }
+      return;
+    }
+    case "correspondents": {
+      const { error } = await api.PATCH("/api/taxonomies/correspondents/{id}", {
+        params: { path: { id } },
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to update correspondent"));
+      }
+      return;
+    }
+    case "document-types": {
+      const { error } = await api.PATCH("/api/taxonomies/document-types/{id}", {
+        params: { path: { id } },
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to update document type"));
+      }
+      return;
+    }
+  }
+}
+
+async function deleteTaxonomy(kind: TaxonomyKind, id: string): Promise<void> {
+  switch (kind) {
+    case "tags": {
+      const { error } = await api.DELETE("/api/taxonomies/tags/{id}", {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to delete tag"));
+      }
+      return;
+    }
+    case "correspondents": {
+      const { error } = await api.DELETE("/api/taxonomies/correspondents/{id}", {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to delete correspondent"));
+      }
+      return;
+    }
+    case "document-types": {
+      const { error } = await api.DELETE("/api/taxonomies/document-types/{id}", {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to delete document type"));
+      }
+      return;
+    }
+  }
+}
+
+async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): Promise<void> {
+  switch (kind) {
+    case "tags": {
+      const { error } = await api.POST("/api/taxonomies/tags/{id}/merge", {
+        params: { path: { id } },
+        body: { targetId },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to merge tag"));
+      }
+      return;
+    }
+    case "correspondents": {
+      const { error } = await api.POST("/api/taxonomies/correspondents/{id}/merge", {
+        params: { path: { id } },
+        body: { targetId },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to merge correspondent"));
+      }
+      return;
+    }
+    case "document-types": {
+      const { error } = await api.POST("/api/taxonomies/document-types/{id}/merge", {
+        params: { path: { id } },
+        body: { targetId },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to merge document type"));
+      }
+      return;
+    }
+  }
 }
 
 function SettingsPage() {
@@ -184,21 +339,21 @@ function ApiTokensSection() {
   const tokensQuery = useQuery({
     queryKey: ["auth", "tokens"],
     queryFn: async () => {
-      const { data, error } = await api.GET("/api/auth/tokens" as never);
+      const { data, error } = await api.GET("/api/auth/tokens", {});
       if (error) throw new Error("Failed to fetch tokens");
-      return data as unknown as TokensResponse;
+      return (data ?? []) as ApiToken[];
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (params: { name: string; expiresAt?: string }) => {
-      const body: Record<string, unknown> = { name: params.name };
+      const body: { name: string; expiresAt?: string } = { name: params.name };
       if (params.expiresAt) {
         body.expiresAt = params.expiresAt;
       }
-      const { data, error } = await api.POST("/api/auth/tokens" as never, {
+      const { data, error } = await api.POST("/api/auth/tokens", {
         body,
-      } as never);
+      });
       if (error) throw new Error("Failed to create token");
       return data as unknown as CreateTokenResponse;
     },
@@ -212,10 +367,9 @@ function ApiTokensSection() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await api.DELETE(
-        "/api/auth/tokens/{id}" as never,
-        { params: { path: { id } } } as never,
-      );
+      const { error } = await api.DELETE("/api/auth/tokens/{id}", {
+        params: { path: { id } },
+      });
       if (error) throw new Error("Failed to delete token");
     },
     onSuccess: () => {
@@ -252,7 +406,7 @@ function ApiTokensSection() {
     setCreateDialogOpen(open);
   }
 
-  const tokens = tokensQuery.data?.tokens ?? [];
+  const tokens = tokensQuery.data ?? [];
 
   return (
     <Card>
@@ -476,9 +630,6 @@ function ApiTokensSection() {
   );
 }
 
-type TaxonomyEntity = Tag | Correspondent | DocumentType;
-type TaxonomyKind = "tags" | "correspondents" | "document-types";
-
 function TaxonomyManagementSection() {
   return (
     <div className="space-y-4">
@@ -529,28 +680,13 @@ function TaxonomySection({
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
 
-  const basePath = `/api/taxonomies/${kind}`;
-
   const listQuery = useQuery({
     queryKey: ["taxonomies", kind],
-    queryFn: async () => {
-      const { data, error } = await api.GET(basePath as never);
-      if (error) {
-        throw new Error(getApiErrorMessage(error, `Failed to load ${title.toLowerCase()}`));
-      }
-      return (data ?? []) as TaxonomyEntity[];
-    },
+    queryFn: () => listTaxonomy(kind),
   });
 
   const createMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const { error } = await api.POST(basePath as never, {
-        body: { name },
-      } as never);
-      if (error) {
-        throw new Error(getApiErrorMessage(error, `Failed to create ${title.toLowerCase()}`));
-      }
-    },
+    mutationFn: (name: string) => createTaxonomy(kind, name),
     onSuccess: () => {
       setNewName("");
       queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
@@ -558,15 +694,8 @@ function TaxonomySection({
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (params: { id: string; name: string }) => {
-      const { error } = await api.PATCH(`${basePath}/{id}` as never, {
-        params: { path: { id: params.id } },
-        body: { name: params.name },
-      } as never);
-      if (error) {
-        throw new Error(getApiErrorMessage(error, `Failed to update ${title.toLowerCase()}`));
-      }
-    },
+    mutationFn: (params: { id: string; name: string }) =>
+      updateTaxonomy(kind, params.id, params.name),
     onSuccess: () => {
       setEditingId(null);
       setEditingName("");
@@ -575,29 +704,15 @@ function TaxonomySection({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await api.DELETE(`${basePath}/{id}` as never, {
-        params: { path: { id } },
-      } as never);
-      if (error) {
-        throw new Error(getApiErrorMessage(error, `Failed to delete ${title.toLowerCase()}`));
-      }
-    },
+    mutationFn: (id: string) => deleteTaxonomy(kind, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
     },
   });
 
   const mergeMutation = useMutation({
-    mutationFn: async (params: { id: string; targetId: string }) => {
-      const { error } = await api.POST(`${basePath}/{id}/merge` as never, {
-        params: { path: { id: params.id } },
-        body: { targetId: params.targetId },
-      } as never);
-      if (error) {
-        throw new Error(getApiErrorMessage(error, `Failed to merge ${title.toLowerCase()}`));
-      }
-    },
+    mutationFn: (params: { id: string; targetId: string }) =>
+      mergeTaxonomy(kind, params.id, params.targetId),
     onSuccess: () => {
       setMergeSourceId(null);
       setMergeTargetId("");
@@ -839,11 +954,11 @@ function ArchiveOperationsSection() {
 
   const exportMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.GET("/api/archive/export" as never);
+      const { data, error } = await api.GET("/api/archive/export", {});
       if (error) {
         throw new Error(getApiErrorMessage(error, "Failed to export archive"));
       }
-      return data as Record<string, unknown>;
+      return data as ArchiveSnapshot;
     },
     onSuccess: (data) => {
       setSnapshotText(JSON.stringify(data, null, 2));
@@ -852,17 +967,17 @@ function ArchiveOperationsSection() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
-      const snapshot = JSON.parse(snapshotText) as Record<string, unknown>;
-      const { data, error } = await api.POST("/api/archive/import" as never, {
+      const snapshot = JSON.parse(snapshotText) as ArchiveSnapshot;
+      const { data, error } = await api.POST("/api/archive/import", {
         body: {
           mode: importMode,
           snapshot,
         },
-      } as never);
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, "Failed to import archive"));
       }
-      return data;
+      return data as ArchiveImportResult;
     },
     onSuccess: (data) => {
       setLastImportResult(JSON.stringify(data, null, 2));
@@ -871,19 +986,27 @@ function ArchiveOperationsSection() {
 
   const watchMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await api.POST(
-        "/api/archive/watch-folder/scan" as never,
-        { body: { dryRun: watchDryRun } } as never,
-      );
+      const { data, error } = await api.POST("/api/archive/watch-folder/scan", {
+        body: { dryRun: watchDryRun },
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, "Failed to scan watch folder"));
       }
-      return data as unknown as WatchFolderScanResponse;
+      return data as WatchFolderScanResponse;
     },
     onSuccess: (data) => {
       setWatchResult(data);
     },
   });
+
+  const watchImportedCount =
+    watchResult?.items.filter((item) => item.action === "imported").length ?? 0;
+  const watchDuplicateCount =
+    watchResult?.items.filter((item) => item.action === "duplicate").length ?? 0;
+  const watchFailedCount =
+    watchResult?.items.filter((item) => item.action === "failed").length ?? 0;
+  const watchProblemItems =
+    watchResult?.items.filter((item) => item.action !== "imported") ?? [];
 
   return (
     <Card>
@@ -997,31 +1120,24 @@ function ArchiveOperationsSection() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <QueueCard
                 label="Imported"
-                value={watchResult.importedDocumentIds.length}
-                active={watchResult.importedDocumentIds.length > 0}
+                value={watchImportedCount}
+                active={watchImportedCount > 0}
               />
               <QueueCard
-                label="Skipped"
-                value={watchResult.skippedFiles.length}
-                active={watchResult.skippedFiles.length > 0}
+                label="Duplicates"
+                value={watchDuplicateCount}
+                active={watchDuplicateCount > 0}
               />
               <QueueCard
-                label="Errors"
-                value={watchResult.errors.length}
-                active={watchResult.errors.length > 0}
+                label="Failures"
+                value={watchFailedCount}
+                active={watchFailedCount > 0}
                 variant="warning"
               />
             </div>
-            {(watchResult.skippedFiles.length > 0 || watchResult.errors.length > 0) && (
+            {watchProblemItems.length > 0 && (
               <pre className="overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono">
-                {JSON.stringify(
-                  {
-                    skippedFiles: watchResult.skippedFiles,
-                    errors: watchResult.errors,
-                  },
-                  null,
-                  2,
-                )}
+                {JSON.stringify(watchProblemItems, null, 2)}
               </pre>
             )}
           </div>

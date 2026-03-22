@@ -447,6 +447,34 @@ export const CreateApiTokenSchema = z.object({
   expiresAt: z.string().nullable().optional(),
 });
 
+export const CurrentUserSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  displayName: z.string().min(1),
+  isOwner: z.boolean(),
+  createdAt: z.string().min(1),
+});
+
+export const ApiTokenSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  tokenPrefix: z.string().min(1),
+  lastUsedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  createdAt: z.string().min(1),
+});
+
+export const CreateApiTokenResponseSchema = z.object({
+  id: z.string().uuid(),
+  token: z.string().min(1),
+  name: z.string().min(1),
+  expiresAt: z.string().nullable(),
+});
+
+export const SuccessResponseSchema = z.object({
+  success: z.literal(true),
+});
+
 export const AuthTokensSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1),
@@ -574,6 +602,11 @@ export const DocumentHistoryResponseSchema = z.object({
   items: z.array(AuditEventSchema),
 });
 
+export const DocumentTextResponseSchema = z.object({
+  documentId: z.string().uuid(),
+  blocks: z.array(DocumentTextBlockSchema),
+});
+
 export const CreateTagSchema = z.object({
   name: z.string().trim().min(1).max(255),
 });
@@ -604,6 +637,10 @@ export const MergeTaxonomySchema = z.object({
   targetId: z.string().uuid(),
 });
 
+export const DeleteTaxonomyResponseSchema = z.object({
+  deleted: z.literal(true),
+});
+
 export const AnswerCitationSchema = z.object({
   documentId: z.string().uuid(),
   documentTitle: z.string().min(1),
@@ -630,15 +667,192 @@ export const AnswerQueryResponseSchema = z.object({
   results: z.array(SemanticSearchResultSchema),
 });
 
+const ArchiveTimestampSchema = z.string().datetime({ offset: true });
+const ArchiveDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const ArchiveTagSchema = TagSchema.extend({
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveCorrespondentSchema = CorrespondentSchema.extend({
+  normalizedName: z.string().min(1),
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveDocumentTypeSchema = DocumentTypeSchema.extend({
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveFileSchema = z.object({
+  id: z.string().uuid(),
+  checksum: z.string().min(64).max(64),
+  storageKey: z.string().min(1),
+  originalFilename: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  createdAt: ArchiveTimestampSchema,
+  contentBase64: z.string().nullable(),
+});
+
+export const ArchiveDocumentSchema = z.object({
+  id: z.string().uuid(),
+  ownerUserId: z.string().uuid(),
+  fileId: z.string().uuid(),
+  title: z.string().min(1),
+  source: DocumentSourceSchema,
+  status: DocumentStatusSchema,
+  mimeType: z.string().min(1),
+  language: z.string().nullable(),
+  fullText: z.string(),
+  pageCount: z.number().int().nonnegative(),
+  issueDate: ArchiveDateSchema.nullable(),
+  dueDate: ArchiveDateSchema.nullable(),
+  amount: z.number().nullable(),
+  currency: z.string().length(3).nullable(),
+  referenceNumber: z.string().nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+  reviewStatus: ReviewStatusSchema,
+  reviewReasons: z.array(ReviewReasonSchema),
+  reviewedAt: ArchiveTimestampSchema.nullable(),
+  reviewNote: z.string().nullable(),
+  searchablePdfStorageKey: z.string().nullable(),
+  parseProvider: ParseProviderSchema.nullable(),
+  chunkCount: z.number().int().nonnegative(),
+  embeddingStatus: EmbeddingStatusSchema,
+  embeddingProvider: EmbeddingProviderSchema.nullable(),
+  embeddingModel: z.string().nullable(),
+  lastProcessingError: z.string().nullable(),
+  correspondentId: z.string().uuid().nullable(),
+  documentTypeId: z.string().uuid().nullable(),
+  metadata: DocumentMetadataSchema,
+  createdAt: ArchiveTimestampSchema,
+  processedAt: ArchiveTimestampSchema.nullable(),
+  updatedAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveDocumentTagLinkSchema = z.object({
+  documentId: z.string().uuid(),
+  tagId: z.string().uuid(),
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveDocumentPageSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  pageNumber: z.number().int().positive(),
+  width: z.number().int().positive().nullable(),
+  height: z.number().int().positive().nullable(),
+});
+
+export const ArchiveDocumentTextBlockSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  pageNumber: z.number().int().positive(),
+  lineIndex: z.number().int().nonnegative(),
+  boundingBox: BoundingBoxSchema,
+  text: z.string().min(1),
+});
+
+export const ArchiveDocumentChunkSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  chunkIndex: z.number().int().nonnegative(),
+  heading: z.string().nullable(),
+  text: z.string(),
+  pageFrom: z.number().int().positive().nullable(),
+  pageTo: z.number().int().positive().nullable(),
+  strategyVersion: z.string().min(1),
+  contentHash: z.string().min(64).max(64),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveDocumentChunkEmbeddingSchema = z.object({
+  documentId: z.string().uuid(),
+  chunkIndex: z.number().int().nonnegative(),
+  provider: EmbeddingProviderSchema,
+  model: z.string().min(1),
+  dimensions: z.number().int().positive(),
+  embeddingLiteral: z.string().min(1),
+  contentHash: z.string().min(64).max(64),
+  createdAt: ArchiveTimestampSchema,
+  updatedAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveProcessingJobSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  queueName: z.string().min(1),
+  status: ProcessingJobStatusSchema,
+  attempts: z.number().int().nonnegative(),
+  payload: z.record(z.string(), z.unknown()).default({}),
+  lastError: z.string().nullable(),
+  startedAt: ArchiveTimestampSchema.nullable(),
+  finishedAt: ArchiveTimestampSchema.nullable(),
+  createdAt: ArchiveTimestampSchema,
+  updatedAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveAuditEventSchema = z.object({
+  id: z.string().uuid(),
+  actorUserId: z.string().uuid().nullable(),
+  documentId: z.string().uuid().nullable(),
+  eventType: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()).default({}),
+  createdAt: ArchiveTimestampSchema,
+});
+
+export const ArchiveDerivedObjectSchema = z.object({
+  storageKey: z.string().min(1),
+  contentBase64: z.string().nullable(),
+});
+
+export const ArchiveSnapshotSchema = z.object({
+  version: z.literal(1),
+  exportedAt: ArchiveTimestampSchema,
+  tags: z.array(ArchiveTagSchema),
+  correspondents: z.array(ArchiveCorrespondentSchema),
+  documentTypes: z.array(ArchiveDocumentTypeSchema),
+  files: z.array(ArchiveFileSchema),
+  documents: z.array(ArchiveDocumentSchema),
+  documentTagLinks: z.array(ArchiveDocumentTagLinkSchema),
+  documentPages: z.array(ArchiveDocumentPageSchema),
+  documentTextBlocks: z.array(ArchiveDocumentTextBlockSchema),
+  documentChunks: z.array(ArchiveDocumentChunkSchema),
+  documentChunkEmbeddings: z.array(ArchiveDocumentChunkEmbeddingSchema),
+  processingJobs: z.array(ArchiveProcessingJobSchema),
+  auditEvents: z.array(ArchiveAuditEventSchema),
+  derivedObjects: z.array(ArchiveDerivedObjectSchema),
+});
+
+export const ArchiveImportRequestSchema = z.object({
+  mode: z.enum(["replace", "merge"]).default("replace"),
+  snapshot: ArchiveSnapshotSchema,
+});
+
+export const ArchiveImportResultSchema = z.object({
+  imported: z.literal(true),
+  mode: z.enum(["replace", "merge"]),
+  documentCount: z.number().int().nonnegative(),
+  fileCount: z.number().int().nonnegative(),
+});
+
 export const WatchFolderScanRequestSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
+export const WatchFolderScanItemSchema = z.object({
+  path: z.string().min(1),
+  action: z.enum(["imported", "duplicate", "unsupported", "failed", "planned"]),
+  destinationPath: z.string().nullable(),
+  documentId: z.string().uuid().nullable(),
+  reason: z.string().min(1),
+});
+
 export const WatchFolderScanResponseSchema = z.object({
   configuredPath: z.string().min(1),
-  importedDocumentIds: z.array(z.string().uuid()),
-  skippedFiles: z.array(z.string()),
-  errors: z.array(z.string()),
+  dryRun: z.boolean(),
+  items: z.array(WatchFolderScanItemSchema),
 });
 
 export type BoundingBox = z.infer<typeof BoundingBoxSchema>;
@@ -690,6 +904,10 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export type SetupOwnerInput = z.infer<typeof SetupOwnerSchema>;
 export type RefreshInput = z.infer<typeof RefreshSchema>;
 export type CreateApiTokenInput = z.infer<typeof CreateApiTokenSchema>;
+export type CurrentUser = z.infer<typeof CurrentUserSchema>;
+export type ApiToken = z.infer<typeof ApiTokenSchema>;
+export type CreateApiTokenResponse = z.infer<typeof CreateApiTokenResponseSchema>;
+export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;
 export type AuthTokens = z.infer<typeof AuthTokensSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
@@ -710,6 +928,7 @@ export type ReindexEmbeddingsRequest = z.infer<typeof ReindexEmbeddingsRequestSc
 export type ReadinessResponse = z.infer<typeof ReadinessResponseSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export type DocumentHistoryResponse = z.infer<typeof DocumentHistoryResponseSchema>;
+export type DocumentTextResponse = z.infer<typeof DocumentTextResponseSchema>;
 export type CreateTagInput = z.infer<typeof CreateTagSchema>;
 export type UpdateTagInput = z.infer<typeof UpdateTagSchema>;
 export type CreateCorrespondentInput = z.infer<typeof CreateCorrespondentSchema>;
@@ -717,8 +936,26 @@ export type UpdateCorrespondentInput = z.infer<typeof UpdateCorrespondentSchema>
 export type CreateDocumentTypeInput = z.infer<typeof CreateDocumentTypeSchema>;
 export type UpdateDocumentTypeInput = z.infer<typeof UpdateDocumentTypeSchema>;
 export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;
+export type DeleteTaxonomyResponse = z.infer<typeof DeleteTaxonomyResponseSchema>;
 export type AnswerCitation = z.infer<typeof AnswerCitationSchema>;
 export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
+export type ArchiveTag = z.infer<typeof ArchiveTagSchema>;
+export type ArchiveCorrespondent = z.infer<typeof ArchiveCorrespondentSchema>;
+export type ArchiveDocumentType = z.infer<typeof ArchiveDocumentTypeSchema>;
+export type ArchiveFile = z.infer<typeof ArchiveFileSchema>;
+export type ArchiveDocument = z.infer<typeof ArchiveDocumentSchema>;
+export type ArchiveDocumentTagLink = z.infer<typeof ArchiveDocumentTagLinkSchema>;
+export type ArchiveDocumentPage = z.infer<typeof ArchiveDocumentPageSchema>;
+export type ArchiveDocumentTextBlock = z.infer<typeof ArchiveDocumentTextBlockSchema>;
+export type ArchiveDocumentChunk = z.infer<typeof ArchiveDocumentChunkSchema>;
+export type ArchiveDocumentChunkEmbedding = z.infer<typeof ArchiveDocumentChunkEmbeddingSchema>;
+export type ArchiveProcessingJob = z.infer<typeof ArchiveProcessingJobSchema>;
+export type ArchiveAuditEvent = z.infer<typeof ArchiveAuditEventSchema>;
+export type ArchiveDerivedObject = z.infer<typeof ArchiveDerivedObjectSchema>;
+export type ArchiveSnapshot = z.infer<typeof ArchiveSnapshotSchema>;
+export type ArchiveImportRequest = z.infer<typeof ArchiveImportRequestSchema>;
+export type ArchiveImportResult = z.infer<typeof ArchiveImportResultSchema>;
 export type WatchFolderScanRequest = z.infer<typeof WatchFolderScanRequestSchema>;
+export type WatchFolderScanItem = z.infer<typeof WatchFolderScanItemSchema>;
 export type WatchFolderScanResponse = z.infer<typeof WatchFolderScanResponseSchema>;
