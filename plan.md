@@ -134,7 +134,7 @@ Status: implemented for semantic retrieval, answer generation still pending
 
 ### Phase 3: Web App
 
-Status: planned
+Status: next
 
 - Build a browser UI on top of the API.
 - Include login, document list, detail view, OCR text view, search, filters, facets, and manual metadata correction.
@@ -190,6 +190,7 @@ Status: planned
 ### Not implemented yet
 
 - Answer generation.
+- Azure live-provider validation is still pending because the root `.env` does not yet include Azure credentials.
 - Web, mobile, or desktop client code beyond placeholders.
 - UI flows for review, corrections, and end-user archive management.
 
@@ -198,16 +199,20 @@ Status: planned
 ### Immediate next steps
 
 1. Start the Phase 3 web client on top of the hardened review, search, provider, chunk, and semantic APIs.
-2. Add richer review evidence and missing-field detection for more document classes beyond invoice-like mail.
-3. Add answer-generation and retrieval-augmented document Q&A on top of the current semantic retrieval layer.
-4. Add deeper operational metrics and queue dashboards once real deployment telemetry is available.
-5. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
+2. Build the first complete browser workflow: login, upload, inbox/review queue, search, document detail, preview, download, and metadata editing.
+3. Use the web app to expose any remaining backend UX gaps before adding more backend surface area.
+4. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
+5. Return to backend-only work after the web baseline is in place for:
+   answer generation,
+   richer non-invoice extraction,
+   deeper operational dashboards,
+   Azure provider validation.
 
 ### After backend hardening
 
 1. Build the web app first.
-2. Use the API and shared types to implement login, document list, detail pages, search, and review flows.
-3. Only then add semantic retrieval and LLM query UX so the UI has a strong non-AI baseline.
+2. Use the API and shared types to implement login, document list, detail pages, search, semantic search, and review flows.
+3. Only then add answer-generation and chat-style retrieval UX so the UI has a strong archive baseline.
 
 ### Mobile and desktop sequencing
 
@@ -219,16 +224,40 @@ Status: planned
 ### Recommended implementation order from here
 
 1. Web archive UI.
-2. Answer generation and retrieval UX on top of the existing semantic retrieval layer.
-3. Mobile capture app.
-4. Desktop utility app.
+2. Backend polish discovered by the web app rollout.
+3. Answer generation and retrieval UX on top of the existing semantic retrieval layer.
+4. Mobile capture app.
+5. Desktop utility app.
 
 ### Why this order
 
 - The backend is already the critical path and shared dependency for every client.
-- The web app will expose missing backend needs faster than a mobile-first build.
-- Semantic search should land on a reliable archive, not replace missing archive fundamentals.
+- The backend is now complete enough for the first real client and already covers archive, review, provider, and semantic-search needs.
+- The web app will expose missing backend UX needs faster than another backend-only phase.
+- Answer generation should land on a reliable archive and usable client, not replace missing archive fundamentals.
 - Mobile and desktop become easier once auth, uploads, and metadata correction are stable.
+
+## Current Recommendation
+
+The backend is complete enough to start the web app now.
+
+What is already strong enough:
+
+- document ingestion and asynchronous processing
+- parse-provider platform with local and cloud adapters
+- archive metadata and review workflow
+- keyword and semantic search
+- chunk persistence and embeddings
+- operational health/metrics and reproducible backend verification
+
+What remains on the backend is real, but not blocking for the first client:
+
+- answer generation
+- broader extraction heuristics beyond invoice-heavy logic
+- deeper operator dashboards
+- Azure live-provider validation once credentials are added
+
+So the next important step is Phase 3, not another backend-first expansion.
 
 ## Decisions Already Locked In
 
