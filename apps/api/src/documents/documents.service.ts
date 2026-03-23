@@ -191,64 +191,71 @@ export class DocumentsService {
     const direction = request.direction === "asc" ? "asc" : "desc";
     const page = request.page ?? 1;
     const pageSize = request.pageSize ?? 20;
-    const clauses: string[] = ["1=1"];
-    const params: unknown[] = [];
-
-    const push = (value: unknown) => {
-      params.push(value);
-      return `$${params.length}`;
-    };
+    const { whereSql, params } = this.buildDocumentFilterQuery(filters);
 
     let snippetSql = "NULL::text AS snippet";
     if (request.query?.trim()) {
-      const placeholder = push(request.query.trim());
-      clauses.push(
-        `to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', ${placeholder})`,
-      );
+      params.push(request.query.trim());
+      const placeholder = `$${params.length}`;
       snippetSql = `ts_headline('simple', coalesce(d.full_text, ''), websearch_to_tsquery('simple', ${placeholder}), 'MaxFragments=2, MaxWords=18, MinWords=5') AS snippet`;
     }
 
-    if (filters.year) {
-      const placeholder = push(filters.year);
-      clauses.push(
-        `extract(year from coalesce(d.issue_date, d.created_at::date)) = ${placeholder}`,
-      );
+    const baseWhere = request.query?.trim()
+      ? `${whereSql} AND to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', $${params.length})`
+      : whereSql;
+
+    const normalizedFilters = {
+      ...filters,
+      correspondentIds:
+        filters.correspondentIds && filters.correspondentIds.length > 0
+          ? filters.correspondentIds
+          : filters.correspondentId
+            ? [filters.correspondentId]
+            : undefined,
+      documentTypeIds:
+        filters.documentTypeIds && filters.documentTypeIds.length > 0
+          ? filters.documentTypeIds
+          : filters.documentTypeId
+            ? [filters.documentTypeId]
+            : undefined,
+      statuses:
+        filters.statuses && filters.statuses.length > 0
+          ? filters.statuses
+          : filters.status
+            ? [filters.status]
+            : undefined,
+    };
+
+    if (normalizedFilters.correspondentIds?.length === 0) {
+      delete normalizedFilters.correspondentIds;
+    }
+    if (normalizedFilters.documentTypeIds?.length === 0) {
+      delete normalizedFilters.documentTypeIds;
+    }
+    if (normalizedFilters.statuses?.length === 0) {
+      delete normalizedFilters.statuses;
     }
 
-    if (filters.dateFrom) {
-      const placeholder = push(filters.dateFrom);
-      clauses.push(`coalesce(d.issue_date, d.created_at::date) >= ${placeholder}::date`);
+    if (
+      normalizedFilters.correspondentIds &&
+      normalizedFilters.correspondentIds.length === 1 &&
+      !filters.correspondentId
+    ) {
+      normalizedFilters.correspondentId = normalizedFilters.correspondentIds[0];
     }
-
-    if (filters.dateTo) {
-      const placeholder = push(filters.dateTo);
-      clauses.push(`coalesce(d.issue_date, d.created_at::date) <= ${placeholder}::date`);
+    if (
+      normalizedFilters.documentTypeIds &&
+      normalizedFilters.documentTypeIds.length === 1 &&
+      !filters.documentTypeId
+    ) {
+      normalizedFilters.documentTypeId = normalizedFilters.documentTypeIds[0];
     }
-
-    if (filters.correspondentId) {
-      const placeholder = push(filters.correspondentId);
-      clauses.push(`d.correspondent_id = ${placeholder}::uuid`);
-    }
-
-    if (filters.documentTypeId) {
-      const placeholder = push(filters.documentTypeId);
-      clauses.push(`d.document_type_id = ${placeholder}::uuid`);
-    }
-
-    if (filters.status) {
-      const placeholder = push(filters.status);
-      clauses.push(`d.status = ${placeholder}`);
-    }
-
-    if (filters.tags && filters.tags.length > 0) {
-      const placeholder = push(filters.tags);
-      clauses.push(
-        `exists (
-          select 1
-          from document_tag_links dtl
-          where dtl.document_id = d.id and dtl.tag_id = any(${placeholder}::uuid[])
-        )`,
-      );
+    if (
+      normalizedFilters.statuses &&
+      normalizedFilters.statuses.length === 1 &&
+      !filters.status
+    ) {
+      normalizedFilters.status = normalizedFilters.statuses[0];
     }
 
     const orderColumns = {
@@ -258,7 +265,6 @@ export class DocumentsService {
       title: "d.title",
     } as const;
     const orderColumn = orderColumns[sort];
-    const baseWhere = clauses.join(" AND ");
 
     const totalResult = await this.databaseService.pool.query<{ total: string }>(
       `SELECT count(*)::int AS total FROM documents d WHERE ${baseWhere}`,
@@ -296,7 +302,7 @@ export class DocumentsService {
       total: Number(totalResult.rows[0]?.total ?? 0),
       page,
       pageSize,
-      appliedFilters: filters,
+      appliedFilters: normalizedFilters,
     };
   }
 
@@ -347,7 +353,8 @@ export class DocumentsService {
   }
 
   async getBrowseFacets() {
-    const [years, correspondentFacets, typeFacets, tagFacets] = await Promise.all([
+    const [years, correspondentFacets, typeFacets, tagFacets, amountRange, statusFacets] =
+      await Promise.all([
       this.databaseService.pool.query<{
         year: string;
         count: string;
@@ -394,6 +401,24 @@ export class DocumentsService {
          GROUP BY t.id
          ORDER BY count DESC, t.name ASC`,
       ),
+      this.databaseService.pool.query<{
+        min_amount: string | null;
+        max_amount: string | null;
+      }>(
+        `SELECT min(amount)::text AS min_amount,
+                max(amount)::text AS max_amount
+         FROM documents
+         WHERE amount IS NOT NULL`,
+      ),
+      this.databaseService.pool.query<{
+        status: string;
+        count: string;
+      }>(
+        `SELECT status::text AS status, count(*)::int AS count
+         FROM documents
+         GROUP BY status
+         ORDER BY status ASC`,
+      ),
     ]);
 
     return {
@@ -417,6 +442,20 @@ export class DocumentsService {
         id: row.id,
         name: row.name,
         slug: row.slug,
+        count: Number(row.count),
+      })),
+      amountRange: {
+        min:
+          amountRange.rows[0]?.min_amount === null
+            ? null
+            : Number(amountRange.rows[0]?.min_amount ?? 0),
+        max:
+          amountRange.rows[0]?.max_amount === null
+            ? null
+            : Number(amountRange.rows[0]?.max_amount ?? 0),
+      },
+      statuses: statusFacets.rows.map((row) => ({
+        status: row.status,
         count: Number(row.count),
       })),
     };
@@ -963,7 +1002,7 @@ export class DocumentsService {
     return staleIds.length;
   }
 
-  private buildDocumentFilterQuery(filters: SearchDocumentsRequest["filters"] = {}) {
+  buildDocumentFilterQuery(filters: SearchDocumentsRequest["filters"] = {}) {
     const clauses: string[] = ["1=1"];
     const params: unknown[] = [];
 
@@ -989,19 +1028,34 @@ export class DocumentsService {
       clauses.push(`coalesce(d.issue_date, d.created_at::date) <= ${placeholder}::date`);
     }
 
-    if (filters?.correspondentId) {
-      const placeholder = push(filters.correspondentId);
-      clauses.push(`d.correspondent_id = ${placeholder}::uuid`);
+    const correspondentIds = filters?.correspondentIds?.length
+      ? filters.correspondentIds
+      : filters?.correspondentId
+        ? [filters.correspondentId]
+        : undefined;
+    if (correspondentIds?.length) {
+      const placeholder = push(correspondentIds);
+      clauses.push(`d.correspondent_id = ANY(${placeholder}::uuid[])`);
     }
 
-    if (filters?.documentTypeId) {
-      const placeholder = push(filters.documentTypeId);
-      clauses.push(`d.document_type_id = ${placeholder}::uuid`);
+    const documentTypeIds = filters?.documentTypeIds?.length
+      ? filters.documentTypeIds
+      : filters?.documentTypeId
+        ? [filters.documentTypeId]
+        : undefined;
+    if (documentTypeIds?.length) {
+      const placeholder = push(documentTypeIds);
+      clauses.push(`d.document_type_id = ANY(${placeholder}::uuid[])`);
     }
 
-    if (filters?.status) {
-      const placeholder = push(filters.status);
-      clauses.push(`d.status = ${placeholder}`);
+    const statuses = filters?.statuses?.length
+      ? filters.statuses
+      : filters?.status
+        ? [filters.status]
+        : undefined;
+    if (statuses?.length) {
+      const placeholder = push(statuses);
+      clauses.push(`d.status = ANY(${placeholder}::document_status[])`);
     }
 
     if (filters?.tags && filters.tags.length > 0) {
@@ -1013,6 +1067,16 @@ export class DocumentsService {
           where dtl.document_id = d.id and dtl.tag_id = any(${placeholder}::uuid[])
         )`,
       );
+    }
+
+    if (filters?.amountMin !== undefined) {
+      const placeholder = push(filters.amountMin);
+      clauses.push(`d.amount IS NOT NULL AND d.amount >= ${placeholder}::numeric`);
+    }
+
+    if (filters?.amountMax !== undefined) {
+      const placeholder = push(filters.amountMax);
+      clauses.push(`d.amount IS NOT NULL AND d.amount <= ${placeholder}::numeric`);
     }
 
     return {

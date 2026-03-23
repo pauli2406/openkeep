@@ -159,6 +159,7 @@ export const CorrespondentSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   slug: z.string().min(1),
+  summary: z.string().nullable().optional(),
 });
 
 export const DocumentTypeSchema = z.object({
@@ -327,9 +328,14 @@ export const SearchDocumentsFiltersSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   correspondentId: z.string().uuid().optional(),
+  correspondentIds: z.array(z.string().uuid()).optional(),
   documentTypeId: z.string().uuid().optional(),
+  documentTypeIds: z.array(z.string().uuid()).optional(),
   status: DocumentStatusSchema.optional(),
+  statuses: z.array(DocumentStatusSchema).optional(),
   tags: z.array(z.string().uuid()).optional(),
+  amountMin: z.number().optional(),
+  amountMax: z.number().optional(),
 });
 
 export const SearchDocumentsRequestSchema = z.object({
@@ -381,6 +387,130 @@ export const SemanticSearchResponseSchema = z.object({
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1),
   appliedFilters: SearchDocumentsFiltersSchema.default({}),
+});
+
+export const DashboardInsightStatsSchema = z.object({
+  totalDocuments: z.number().int().nonnegative(),
+  pendingReview: z.number().int().nonnegative(),
+  documentTypesCount: z.number().int().nonnegative(),
+  correspondentsCount: z.number().int().nonnegative(),
+});
+
+export const CorrespondentTypeCountSchema = z.object({
+  name: z.string().min(1),
+  count: z.number().int().nonnegative(),
+});
+
+export const DashboardTopCorrespondentSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  documentCount: z.number().int().nonnegative(),
+  totalAmount: z.number().nullable(),
+  currency: z.string().length(3).nullable(),
+  latestDocDate: z.string().nullable(),
+  documentTypes: z.array(CorrespondentTypeCountSchema),
+});
+
+export const DashboardDeadlineItemSchema = z.object({
+  documentId: z.string().uuid(),
+  title: z.string().min(1),
+  dueDate: z.string(),
+  amount: z.number().nullable(),
+  currency: z.string().length(3).nullable(),
+  correspondentName: z.string().nullable(),
+  daysUntilDue: z.number().int(),
+  isOverdue: z.boolean(),
+});
+
+export const MonthlyActivityPointSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  count: z.number().int().nonnegative(),
+});
+
+export const DashboardInsightsResponseSchema = z.object({
+  stats: DashboardInsightStatsSchema,
+  topCorrespondents: z.array(DashboardTopCorrespondentSchema),
+  upcomingDeadlines: z.array(DashboardDeadlineItemSchema),
+  overdueItems: z.array(DashboardDeadlineItemSchema),
+  recentDocuments: z.array(DocumentSchema),
+  monthlyActivity: z.array(MonthlyActivityPointSchema),
+});
+
+export const CorrespondentSummaryStatusSchema = z.enum([
+  "ready",
+  "pending",
+  "unavailable",
+]);
+
+export const CorrespondentTimelinePointSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  count: z.number().int().nonnegative(),
+});
+
+export const CorrespondentInsightsResponseSchema = z.object({
+  correspondent: CorrespondentSchema.extend({
+    summaryGeneratedAt: z.string().nullable().optional(),
+  }),
+  summaryStatus: CorrespondentSummaryStatusSchema,
+  summary: z.string().nullable(),
+  stats: z.object({
+    documentCount: z.number().int().nonnegative(),
+    totalAmount: z.number().nullable(),
+    currency: z.string().length(3).nullable(),
+    dateRange: z.object({
+      from: z.string().nullable(),
+      to: z.string().nullable(),
+    }),
+    avgConfidence: z.number().min(0).max(1).nullable(),
+  }),
+  documentTypeBreakdown: z.array(CorrespondentTypeCountSchema),
+  timeline: z.array(CorrespondentTimelinePointSchema),
+  recentDocuments: z.array(DocumentSchema),
+  upcomingDeadlines: z.array(DashboardDeadlineItemSchema),
+});
+
+export const DocumentProjectionPointSchema = z.object({
+  documentId: z.string().uuid(),
+  x: z.number(),
+  y: z.number(),
+  title: z.string().min(1),
+  correspondentName: z.string().nullable(),
+  correspondentSlug: z.string().nullable().optional(),
+  typeName: z.string().nullable(),
+  tags: z.array(z.string()),
+  issueDate: z.string().nullable(),
+  year: z.number().int().nullable(),
+  status: DocumentStatusSchema,
+});
+
+export const DocumentProjectionClusterSchema = z.object({
+  centroidX: z.number(),
+  centroidY: z.number(),
+  label: z.string().min(1),
+  documentIds: z.array(z.string().uuid()),
+});
+
+export const DocumentsProjectionResponseSchema = z.object({
+  points: z.array(DocumentProjectionPointSchema),
+  clusters: z.array(DocumentProjectionClusterSchema),
+});
+
+export const DocumentsTimelineMonthSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  count: z.number().int().nonnegative(),
+  topCorrespondents: z.array(z.string()),
+  topTypes: z.array(z.string()),
+});
+
+export const DocumentsTimelineYearSchema = z.object({
+  year: z.number().int().min(1970).max(2100),
+  count: z.number().int().nonnegative(),
+  months: z.array(DocumentsTimelineMonthSchema),
+});
+
+export const DocumentsTimelineResponseSchema = z.object({
+  years: z.array(DocumentsTimelineYearSchema),
 });
 
 export const UploadDocumentMetadataSchema = z.object({
@@ -677,6 +807,8 @@ export const ArchiveTagSchema = TagSchema.extend({
 export const ArchiveCorrespondentSchema = CorrespondentSchema.extend({
   normalizedName: z.string().min(1),
   createdAt: ArchiveTimestampSchema,
+  summary: z.string().nullable().optional(),
+  summaryGeneratedAt: ArchiveTimestampSchema.nullable().optional(),
 });
 
 export const ArchiveDocumentTypeSchema = DocumentTypeSchema.extend({
@@ -915,6 +1047,23 @@ export type SemanticMatchedChunk = z.infer<typeof SemanticMatchedChunkSchema>;
 export type SemanticSearchRequest = z.infer<typeof SemanticSearchRequestSchema>;
 export type SemanticSearchResult = z.infer<typeof SemanticSearchResultSchema>;
 export type SemanticSearchResponse = z.infer<typeof SemanticSearchResponseSchema>;
+export type DashboardInsightStats = z.infer<typeof DashboardInsightStatsSchema>;
+export type CorrespondentTypeCount = z.infer<typeof CorrespondentTypeCountSchema>;
+export type DashboardTopCorrespondent = z.infer<typeof DashboardTopCorrespondentSchema>;
+export type DashboardDeadlineItem = z.infer<typeof DashboardDeadlineItemSchema>;
+export type MonthlyActivityPoint = z.infer<typeof MonthlyActivityPointSchema>;
+export type DashboardInsightsResponse = z.infer<typeof DashboardInsightsResponseSchema>;
+export type CorrespondentSummaryStatus = z.infer<typeof CorrespondentSummaryStatusSchema>;
+export type CorrespondentTimelinePoint = z.infer<typeof CorrespondentTimelinePointSchema>;
+export type CorrespondentInsightsResponse = z.infer<
+  typeof CorrespondentInsightsResponseSchema
+>;
+export type DocumentProjectionPoint = z.infer<typeof DocumentProjectionPointSchema>;
+export type DocumentProjectionCluster = z.infer<typeof DocumentProjectionClusterSchema>;
+export type DocumentsProjectionResponse = z.infer<typeof DocumentsProjectionResponseSchema>;
+export type DocumentsTimelineMonth = z.infer<typeof DocumentsTimelineMonthSchema>;
+export type DocumentsTimelineYear = z.infer<typeof DocumentsTimelineYearSchema>;
+export type DocumentsTimelineResponse = z.infer<typeof DocumentsTimelineResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;

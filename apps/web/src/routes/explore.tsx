@@ -2,24 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ExplorerSurface } from "@/components/explorer/explorer-surface";
 import { parseExplorerSearch } from "@/lib/explorer";
 
-export const Route = createFileRoute("/documents/")({
+export const Route = createFileRoute("/explore")({
   validateSearch: (search: Record<string, unknown>) => parseExplorerSearch(search),
-  component: DocumentsExplorerPage,
+  component: ExplorePage,
 });
 
-function DocumentsExplorerPage() {
+function ExplorePage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
 
   return (
     <ExplorerSurface
-      eyebrow="Archive Explorer"
-      title="Documents"
-      description="Switch between a dense list, a chronological timeline, and a semantic galaxy while keeping the same faceted sidebar pinned to the archive."
-      search={search}
+      eyebrow="Semantic Galaxy"
+      title="Explore"
+      description="A full-bleed view into semantic neighborhoods across the archive. Use the left rail to narrow the corpus, then scan clusters and open documents directly from the field."
+      search={{ ...search, view: "galaxy" }}
       onSearchChange={(next) =>
         navigate({
-          search: next,
+          search: { ...next, view: "galaxy" },
           replace: true,
         })
       }
@@ -29,6 +29,8 @@ function DocumentsExplorerPage() {
           params: { documentId },
         })
       }
+      allowViewSwitch={false}
+      forcedView="galaxy"
     />
   );
 }

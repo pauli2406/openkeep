@@ -3,7 +3,11 @@ import PgBoss from "pg-boss";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
-import { DOCUMENT_EMBEDDING_QUEUE, DOCUMENT_PROCESSING_QUEUE } from "./constants";
+import {
+  CORRESPONDENT_SUMMARY_QUEUE,
+  DOCUMENT_EMBEDDING_QUEUE,
+  DOCUMENT_PROCESSING_QUEUE,
+} from "./constants";
 
 @Injectable()
 export class BossService implements OnModuleInit, OnModuleDestroy {
@@ -36,6 +40,7 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     await this.boss.start();
     await this.boss.createQueue(DOCUMENT_PROCESSING_QUEUE);
     await this.boss.createQueue(DOCUMENT_EMBEDDING_QUEUE);
+    await this.boss.createQueue(CORRESPONDENT_SUMMARY_QUEUE);
     this.started = true;
   }
 

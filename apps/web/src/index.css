@@ -1,52 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.145 0 0);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.145 0 0);
-  --color-primary: oklch(0.205 0.042 265.755);
-  --color-primary-foreground: oklch(0.985 0 0);
-  --color-secondary: oklch(0.97 0 0);
-  --color-secondary-foreground: oklch(0.205 0.042 265.755);
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
-  --color-accent: oklch(0.97 0 0);
-  --color-accent-foreground: oklch(0.205 0.042 265.755);
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(0.577 0.245 27.325);
-  --color-border: oklch(0.922 0 0);
-  --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.708 0.165 254.624);
-  --color-chart-1: oklch(0.646 0.222 41.116);
-  --color-chart-2: oklch(0.6 0.118 184.704);
-  --color-chart-3: oklch(0.398 0.07 227.392);
-  --color-chart-4: oklch(0.828 0.189 84.429);
-  --color-chart-5: oklch(0.769 0.188 70.08);
-  --color-sidebar-background: oklch(0.985 0 0);
-  --color-sidebar-foreground: oklch(0.445 0 0);
-  --color-sidebar-primary: oklch(0.205 0.042 265.755);
-  --color-sidebar-primary-foreground: oklch(0.985 0 0);
-  --color-sidebar-accent: oklch(0.97 0 0);
-  --color-sidebar-accent-foreground: oklch(0.205 0.042 265.755);
-  --color-sidebar-border: oklch(0.922 0 0);
-  --color-sidebar-ring: oklch(0.708 0.165 254.624);
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --color-background: #f5efe4;
+  --color-foreground: #1b1610;
+  --color-card: #fffaf1;
+  --color-card-foreground: #1b1610;
+  --color-popover: #fffdf8;
+  --color-popover-foreground: #1b1610;
+  --color-primary: #3854a5;
+  --color-primary-foreground: #fefcf8;
+  --color-secondary: #f0e5d3;
+  --color-secondary-foreground: #2a2217;
+  --color-muted: #efe6d8;
+  --color-muted-foreground: #756858;
+  --color-accent: #ece1d0;
+  --color-accent-foreground: #1b1610;
+  --color-destructive: #bb4b2f;
+  --color-destructive-foreground: #fff8f3;
+  --color-border: #dccfba;
+  --color-input: #dccfba;
+  --color-ring: #3854a5;
+  --color-sidebar-background: #f7f1e7;
+  --color-sidebar-foreground: #2a2217;
+  --color-sidebar-primary: #3854a5;
+  --color-sidebar-primary-foreground: #fffaf4;
+  --color-sidebar-accent: #ece1d0;
+  --color-sidebar-accent-foreground: #1b1610;
+  --color-sidebar-border: #dccfba;
+  --color-sidebar-ring: #3854a5;
+  --radius-sm: 0.45rem;
+  --radius-md: 0.8rem;
+  --radius-lg: 1.15rem;
+  --radius-xl: 1.6rem;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+
+  --explorer-paper: #f5efe4;
+  --explorer-paper-strong: #ede2d0;
+  --explorer-panel: rgba(255, 251, 244, 0.86);
+  --explorer-border: rgba(80, 63, 37, 0.16);
+  --explorer-border-strong: rgba(80, 63, 37, 0.28);
+  --explorer-ink: #1b1610;
+  --explorer-muted: #726555;
+  --explorer-rust: #b74817;
+  --explorer-rust-soft: rgba(183, 72, 23, 0.12);
+  --explorer-cobalt: #3854a5;
+  --explorer-cobalt-soft: rgba(56, 84, 165, 0.12);
 }
 
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
+
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at top left, rgba(56, 84, 165, 0.12), transparent 32%),
+      radial-gradient(circle at 85% 0%, rgba(183, 72, 23, 0.1), transparent 28%),
+      linear-gradient(180deg, #f8f2e8 0%, #f1eadf 100%);
+  }
+
   body {
-    @apply bg-background text-foreground;
+    min-height: 100vh;
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    background:
+      radial-gradient(circle at top left, rgba(56, 84, 165, 0.08), transparent 36%),
+      radial-gradient(circle at 90% 10%, rgba(183, 72, 23, 0.08), transparent 24%),
+      linear-gradient(180deg, #f8f2e8 0%, #f1eadf 100%);
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(56, 84, 165, 0.18);
+    color: var(--explorer-ink);
   }
 }

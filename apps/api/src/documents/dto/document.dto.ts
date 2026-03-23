@@ -36,15 +36,35 @@ const CsvUuidArraySchema = z.preprocess((value) => {
   return undefined;
 }, z.array(z.string().uuid()).optional());
 
+const CsvStatusArraySchema = z.preprocess((value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return undefined;
+}, z.array(DocumentStatusSchema).optional());
+
 const SearchDocumentsQuerySchema = z.object({
   query: z.string().trim().optional(),
   year: z.coerce.number().int().min(1970).max(2100).optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   correspondentId: z.string().uuid().optional(),
+  correspondentIds: CsvUuidArraySchema,
   documentTypeId: z.string().uuid().optional(),
+  documentTypeIds: CsvUuidArraySchema,
   status: DocumentStatusSchema.optional(),
+  statuses: CsvStatusArraySchema,
   tags: CsvUuidArraySchema,
+  amountMin: z.coerce.number().optional(),
+  amountMax: z.coerce.number().optional(),
   sort: SearchDocumentsRequestSchema.shape.sort.default("createdAt"),
   direction: SearchDocumentsRequestSchema.shape.direction.default("desc"),
   page: z.coerce.number().int().min(1).default(1),

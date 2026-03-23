@@ -162,6 +162,7 @@ export class ArchiveService {
       })),
       correspondents: correspondentRows.map((row) => ({
         ...row,
+        summaryGeneratedAt: row.summaryGeneratedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
       })),
       documentTypes: documentTypeRows.map((row) => ({
@@ -763,6 +764,9 @@ export class ArchiveService {
         .values(
           snapshot.correspondents.map((row) => ({
             ...row,
+            summaryGeneratedAt: row.summaryGeneratedAt
+              ? this.parseTimestamp(row.summaryGeneratedAt)
+              : null,
             createdAt: this.parseTimestamp(row.createdAt),
           })),
         )
@@ -772,6 +776,8 @@ export class ArchiveService {
             name: sql`excluded.name`,
             slug: sql`excluded.slug`,
             normalizedName: sql`excluded.normalized_name`,
+            summary: sql`excluded.summary`,
+            summaryGeneratedAt: sql`excluded.summary_generated_at`,
             createdAt: sql`excluded.created_at`,
           },
         });

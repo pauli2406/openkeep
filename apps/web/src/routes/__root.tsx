@@ -19,6 +19,7 @@ import {
   X,
   FileText,
   LayoutDashboard,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -28,6 +29,7 @@ import { useAuth, type RouterContext } from "@/hooks/use-auth";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/documents", label: "Documents", icon: FileText },
+  { to: "/explore", label: "Explore", icon: Sparkles },
   { to: "/review", label: "Review", icon: ClipboardCheck },
   { to: "/search", label: "Search", icon: Search },
   { to: "/upload", label: "Upload", icon: Upload },
@@ -73,8 +75,8 @@ function RootComponent() {
     <>
       {/* Brand */}
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Archive className="h-5 w-5 text-primary" />
-        <span className="text-lg font-semibold tracking-tight text-foreground">
+        <Archive className="h-5 w-5 text-[color:var(--explorer-rust)]" />
+        <span className="font-[var(--font-display)] text-2xl tracking-tight text-[color:var(--explorer-ink)]">
           OpenKeep
         </span>
       </div>
@@ -88,10 +90,10 @@ function RootComponent() {
             key={item.to}
             to={item.to}
             onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] transition-colors hover:bg-[color:var(--explorer-paper-strong)] hover:text-[color:var(--explorer-ink)]"
             activeProps={{
               className:
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium bg-sidebar-accent text-sidebar-primary transition-colors",
+                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium bg-[color:var(--explorer-paper-strong)] text-[color:var(--explorer-ink)] transition-colors",
             }}
             activeOptions={{ exact: item.to === "/" }}
           >
@@ -109,10 +111,10 @@ function RootComponent() {
             key={item.to}
             to={item.to}
             onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] transition-colors hover:bg-[color:var(--explorer-paper-strong)] hover:text-[color:var(--explorer-ink)]"
             activeProps={{
               className:
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium bg-sidebar-accent text-sidebar-primary transition-colors",
+                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium bg-[color:var(--explorer-paper-strong)] text-[color:var(--explorer-ink)] transition-colors",
             }}
           >
             <item.icon className="h-4 w-4" />
@@ -121,7 +123,7 @@ function RootComponent() {
         ))}
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-destructive"
+          className="w-full justify-start gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] hover:bg-[color:var(--explorer-paper-strong)] hover:text-destructive"
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4" />
@@ -135,7 +137,7 @@ function RootComponent() {
     <TooltipProvider>
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Desktop sidebar */}
-        <aside className="hidden w-64 flex-col border-r border-sidebar-border bg-sidebar-background md:flex">
+        <aside className="hidden w-72 flex-col border-r border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]/90 backdrop-blur md:flex">
           {sidebarContent}
         </aside>
 
@@ -149,7 +151,7 @@ function RootComponent() {
 
         {/* Mobile sidebar drawer */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar-background transition-transform duration-200 ease-in-out md:hidden ${
+          className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] transition-transform duration-200 ease-in-out md:hidden ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -169,7 +171,7 @@ function RootComponent() {
         {/* Main content area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Mobile header */}
-          <header className="flex h-14 items-center gap-3 border-b px-4 md:hidden">
+          <header className="flex h-16 items-center gap-3 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]/90 px-4 md:hidden">
             <Button
               variant="ghost"
               size="icon"
@@ -179,8 +181,8 @@ function RootComponent() {
               <span className="sr-only">Open menu</span>
             </Button>
             <div className="flex items-center gap-2">
-              <Archive className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">OpenKeep</span>
+              <Archive className="h-4 w-4 text-[color:var(--explorer-rust)]" />
+              <span className="font-[var(--font-display)] text-xl text-[color:var(--explorer-ink)]">OpenKeep</span>
             </div>
           </header>
 

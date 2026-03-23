@@ -11,11 +11,13 @@ import { GenericContainer, Wait } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
+  correspondents,
   documentChunks,
   documentChunkEmbeddings,
   documentFiles,
   documentPages,
   documentTextBlocks,
+  documentTypes,
   documents,
   processingJobs,
   tags,
@@ -24,6 +26,7 @@ import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
 import { ObjectStorageService } from "../src/common/storage/storage.service";
 import { DocumentsService } from "../src/documents/documents.service";
+import { ExplorerService } from "../src/explorer/explorer.service";
 import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
 import { ProcessingService } from "../src/processing/processing.service";
 
@@ -38,6 +41,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let storageService: ObjectStorageService;
   let processingService: ProcessingService;
   let documentsService: DocumentsService;
+  let explorerService: ExplorerService;
   let accessToken = "";
   let apiToken = "";
   let ownerUserId = "";
@@ -62,6 +66,31 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
             headers: { "Content-Type": "application/json" },
           },
         );
+      }
+
+      if (url === "https://api.openai.com/v1/chat/completions") {
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+        const systemPrompt =
+          typeof body?.messages?.[0]?.content === "string" ? body.messages[0].content : "";
+
+        if (systemPrompt.includes("You summarize personal document correspondents")) {
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content:
+                      "Adidas appears to be a recurring retailer in your archive. The documents are mainly invoices and receipts tied to purchases over time.",
+                  },
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
       }
 
       return originalFetch(input as any, init);
@@ -131,6 +160,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     storageService = app.get(ObjectStorageService);
     processingService = app.get(ProcessingService);
     documentsService = app.get(DocumentsService);
+    explorerService = app.get(ExplorerService);
 
     const loginResponse = await request(app.getHttpServer()).post("/api/auth/login").send({
       email: process.env.OWNER_EMAIL,
@@ -856,6 +886,200 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(Number(tagLinkCount.rows[0]?.count ?? 0)).toBe(1);
     expect(deletedSource).toHaveLength(0);
+  });
+
+  it("serves explorer dashboard, correspondent insights, timeline, and projection", async () => {
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Adidas",
+        slug: `adidas-${randomUUID().slice(0, 8)}`,
+        normalizedName: "adidas",
+      })
+      .returning();
+
+    const [documentType] = await databaseService.db
+      .insert(documentTypes)
+      .values({
+        name: "Invoice",
+        slug: `invoice-${randomUUID().slice(0, 8)}`,
+        description: "Billing document",
+      })
+      .returning();
+
+    const [fileA] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "c"),
+        storageKey: `fixtures/${randomUUID()}/adidas-a.pdf`,
+        originalFilename: "adidas-a.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 128,
+      })
+      .returning();
+    const [fileB] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "d"),
+        storageKey: `fixtures/${randomUUID()}/adidas-b.pdf`,
+        originalFilename: "adidas-b.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 128,
+      })
+      .returning();
+
+    const [documentA] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: fileA.id,
+        title: "Adidas Invoice March",
+        mimeType: "application/pdf",
+        status: "ready",
+        issueDate: new Date("2026-03-10"),
+        dueDate: new Date("2026-03-31"),
+        amount: "149.99",
+        currency: "EUR",
+        correspondentId: correspondent.id,
+        documentTypeId: documentType.id,
+        fullText: "Adidas invoice for shoes and sportswear.",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+      } as never)
+      .returning();
+    const [documentB] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: fileB.id,
+        title: "Adidas Receipt February",
+        mimeType: "application/pdf",
+        status: "ready",
+        issueDate: new Date("2026-02-18"),
+        amount: "89.50",
+        currency: "EUR",
+        correspondentId: correspondent.id,
+        documentTypeId: documentType.id,
+        fullText: "Adidas receipt for an online order.",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+      } as never)
+      .returning();
+
+    await databaseService.db.insert(documentChunks).values([
+      {
+        documentId: documentA.id,
+        chunkIndex: 0,
+        heading: "Invoice",
+        text: "Adidas invoice for shoes and sportswear.",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "test",
+        contentHash: "a".repeat(64),
+      },
+      {
+        documentId: documentB.id,
+        chunkIndex: 0,
+        heading: "Receipt",
+        text: "Adidas receipt for an online order.",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "test",
+        contentHash: "b".repeat(64),
+      },
+    ]);
+
+    await databaseService.pool.query(
+      `INSERT INTO document_chunk_embeddings
+        (document_id, chunk_index, provider, model, dimensions, embedding, content_hash)
+       VALUES
+        ($1::uuid, 0, 'openai', 'text-embedding-3-small', 3072, '${serializeHalfVector(
+          padEmbedding([0.91, 0.11, 0.22]),
+        )}'::halfvec, $2),
+        ($3::uuid, 0, 'openai', 'text-embedding-3-small', 3072, '${serializeHalfVector(
+          padEmbedding([0.88, 0.18, 0.2]),
+        )}'::halfvec, $4)`,
+      [documentA.id, "a".repeat(64), documentB.id, "b".repeat(64)],
+    );
+
+    const dashboardResponse = await request(app.getHttpServer())
+      .get("/api/dashboard/insights")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(dashboardResponse.status).toBe(200);
+    expect(
+      dashboardResponse.body.topCorrespondents.some(
+        (item: { name: string }) => item.name === "Adidas",
+      ),
+    ).toBe(true);
+
+    const pendingInsightsResponse = await request(app.getHttpServer())
+      .get(`/api/correspondents/${correspondent.slug}/insights`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(pendingInsightsResponse.status).toBe(200);
+    expect(pendingInsightsResponse.body.summaryStatus).toBe("pending");
+    expect(pendingInsightsResponse.body.stats.documentCount).toBeGreaterThanOrEqual(2);
+
+    await explorerService.refreshCorrespondentSummary(correspondent.id);
+
+    const readyInsightsResponse = await request(app.getHttpServer())
+      .get(`/api/correspondents/${correspondent.slug}/insights`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(readyInsightsResponse.status).toBe(200);
+    expect(readyInsightsResponse.body.summaryStatus).toBe("ready");
+    expect(String(readyInsightsResponse.body.summary)).toContain("recurring retailer");
+
+    const timelineResponse = await request(app.getHttpServer())
+      .get(`/api/documents/timeline?correspondentIds=${correspondent.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(timelineResponse.status).toBe(200);
+    expect(timelineResponse.body.years.length).toBeGreaterThan(0);
+    expect(timelineResponse.body.years[0].months.length).toBeGreaterThan(0);
+
+    const projectionResponse = await request(app.getHttpServer())
+      .get(`/api/documents/projection?correspondentIds=${correspondent.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(projectionResponse.status).toBe(200);
+    expect(projectionResponse.body.points.length).toBeGreaterThanOrEqual(2);
+    expect(
+      projectionResponse.body.points.every(
+        (point: { x: number; y: number }) =>
+          point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1,
+      ),
+    ).toBe(true);
+
+    await databaseService.pool.query(
+      `DELETE FROM document_chunk_embeddings WHERE document_id = ANY($1::uuid[])`,
+      [[documentA.id, documentB.id]],
+    );
+    await databaseService.pool.query(
+      `DELETE FROM document_chunks WHERE document_id = ANY($1::uuid[])`,
+      [[documentA.id, documentB.id]],
+    );
+    await databaseService.pool.query(
+      `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+      [[documentA.id, documentB.id]],
+    );
+    await databaseService.pool.query(
+      `DELETE FROM document_files WHERE id = ANY($1::uuid[])`,
+      [[fileA.id, fileB.id]],
+    );
+    await databaseService.pool.query(
+      `DELETE FROM document_types WHERE id = $1::uuid`,
+      [documentType.id],
+    );
+    await databaseService.pool.query(
+      `DELETE FROM correspondents WHERE id = $1::uuid`,
+      [correspondent.id],
+    );
   });
 
   it("scans the watch folder and exports and imports archive snapshots", async () => {

@@ -10,13 +10,17 @@ import {
   ArchiveSnapshotSchema,
   AuthTokensSchema,
   CorrespondentSchema,
+  CorrespondentInsightsResponseSchema,
   CreateApiTokenResponseSchema,
   CurrentUserSchema,
+  DashboardInsightsResponseSchema,
   DocumentStatusSchema,
   DeleteTaxonomyResponseSchema,
   DocumentHistoryResponseSchema,
+  DocumentsProjectionResponseSchema,
   DocumentSchema,
   DocumentTextResponseSchema,
+  DocumentsTimelineResponseSchema,
   DocumentTypeSchema,
   HealthProvidersResponseSchema,
   HealthResponseSchema,
@@ -171,6 +175,33 @@ function patchQueryParameters(
       ? { explode: parameter.explode }
       : {}),
   }));
+}
+
+function patchCsvTagsQuery(document: Record<string, any>, path: string) {
+  const operation = ensureOperation(document, path, "get");
+  if (!operation?.parameters) {
+    return;
+  }
+
+  operation.parameters = operation.parameters.map((parameter: Record<string, any>) => {
+    if (
+      parameter.in === "query" &&
+      ["tags", "correspondentIds", "documentTypeIds", "statuses"].includes(parameter.name)
+    ) {
+      return {
+        ...parameter,
+        schema: {
+          type: "string",
+          description:
+            parameter.name === "statuses"
+              ? "Comma-separated status values"
+              : "Comma-separated UUIDs",
+        },
+      };
+    }
+
+    return parameter;
+  });
 }
 
 function patchBinaryDownload(document: Record<string, any>, path: string, description: string) {
@@ -425,6 +456,24 @@ function patchGeneratedDocument(document: Record<string, any>) {
   patchMultipartUpload(document);
   patchJsonResponse(
     document,
+    "/api/dashboard/insights",
+    "get",
+    200,
+    "Dashboard explorer insights",
+    "DashboardInsightsResponse",
+    DashboardInsightsResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/correspondents/{slug}/insights",
+    "get",
+    200,
+    "Correspondent explorer insights",
+    "CorrespondentInsightsResponse",
+    CorrespondentInsightsResponseSchema,
+  );
+  patchJsonResponse(
+    document,
     "/api/documents",
     "get",
     200,
@@ -433,6 +482,33 @@ function patchGeneratedDocument(document: Record<string, any>) {
     SearchDocumentsResponseSchema,
   );
   patchQueryParameters(document, "/api/documents", "get", [...searchDocumentQueryParameters]);
+  patchCsvTagsQuery(document, "/api/documents");
+  patchJsonResponse(
+    document,
+    "/api/documents/projection",
+    "get",
+    200,
+    "Projection response",
+    "DocumentsProjectionResponse",
+    DocumentsProjectionResponseSchema,
+  );
+  patchQueryParameters(document, "/api/documents/projection", "get", [
+    ...searchDocumentQueryParameters,
+  ]);
+  patchCsvTagsQuery(document, "/api/documents/projection");
+  patchJsonResponse(
+    document,
+    "/api/documents/timeline",
+    "get",
+    200,
+    "Timeline response",
+    "DocumentsTimelineResponse",
+    DocumentsTimelineResponseSchema,
+  );
+  patchQueryParameters(document, "/api/documents/timeline", "get", [
+    ...searchDocumentQueryParameters,
+  ]);
+  patchCsvTagsQuery(document, "/api/documents/timeline");
   patchJsonResponse(
     document,
     "/api/documents/review",
@@ -548,6 +624,7 @@ function patchGeneratedDocument(document: Record<string, any>) {
   patchQueryParameters(document, "/api/search/documents", "get", [
     ...searchDocumentQueryParameters,
   ]);
+  patchCsvTagsQuery(document, "/api/search/documents");
   patchJsonResponse(
     document,
     "/api/search/semantic",

@@ -15,9 +15,11 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DocumentsIndexRouteImport } from './routes/documents/index'
 import { Route as DocumentsDocumentIdRouteImport } from './routes/documents/$documentId'
+import { Route as CorrespondentsSlugRouteImport } from './routes/correspondents/$slug'
 
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
@@ -49,6 +51,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExploreRoute = ExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -64,38 +71,49 @@ const DocumentsDocumentIdRoute = DocumentsDocumentIdRouteImport.update({
   path: '/documents/$documentId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CorrespondentsSlugRoute = CorrespondentsSlugRouteImport.update({
+  id: '/correspondents/$slug',
+  path: '/correspondents/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
+  '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
   '/documents/': typeof DocumentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
+  '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
   '/documents': typeof DocumentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/explore': typeof ExploreRoute
   '/login': typeof LoginRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
+  '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
   '/documents/': typeof DocumentsIndexRoute
 }
@@ -103,46 +121,54 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/explore'
     | '/login'
     | '/review'
     | '/search'
     | '/settings'
     | '/setup'
     | '/upload'
+    | '/correspondents/$slug'
     | '/documents/$documentId'
     | '/documents/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/explore'
     | '/login'
     | '/review'
     | '/search'
     | '/settings'
     | '/setup'
     | '/upload'
+    | '/correspondents/$slug'
     | '/documents/$documentId'
     | '/documents'
   id:
     | '__root__'
     | '/'
+    | '/explore'
     | '/login'
     | '/review'
     | '/search'
     | '/settings'
     | '/setup'
     | '/upload'
+    | '/correspondents/$slug'
     | '/documents/$documentId'
     | '/documents/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ExploreRoute: typeof ExploreRoute
   LoginRoute: typeof LoginRoute
   ReviewRoute: typeof ReviewRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
   UploadRoute: typeof UploadRoute
+  CorrespondentsSlugRoute: typeof CorrespondentsSlugRoute
   DocumentsDocumentIdRoute: typeof DocumentsDocumentIdRoute
   DocumentsIndexRoute: typeof DocumentsIndexRoute
 }
@@ -191,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/explore': {
+      id: '/explore'
+      path: '/explore'
+      fullPath: '/explore'
+      preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -212,17 +245,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocumentsDocumentIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/correspondents/$slug': {
+      id: '/correspondents/$slug'
+      path: '/correspondents/$slug'
+      fullPath: '/correspondents/$slug'
+      preLoaderRoute: typeof CorrespondentsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ExploreRoute: ExploreRoute,
   LoginRoute: LoginRoute,
   ReviewRoute: ReviewRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
   UploadRoute: UploadRoute,
+  CorrespondentsSlugRoute: CorrespondentsSlugRoute,
   DocumentsDocumentIdRoute: DocumentsDocumentIdRoute,
   DocumentsIndexRoute: DocumentsIndexRoute,
 }

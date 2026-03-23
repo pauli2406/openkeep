@@ -5,7 +5,6 @@ import { apiUrl } from "./api-url";
 import { renderApp } from "./render-app";
 import {
   makeHealthResponse,
-  makeSearchDocumentsResponse,
   makeUser,
   makeDocument,
 } from "./fixtures";
@@ -13,27 +12,44 @@ import { server } from "./msw-server";
 
 function mockDashboardData() {
   server.use(
-    http.get(apiUrl("/api/documents"), () =>
-      HttpResponse.json(makeSearchDocumentsResponse([makeDocument()])),
-    ),
-    http.get(apiUrl("/api/documents/review"), () =>
+    http.get(apiUrl("/api/dashboard/insights"), () =>
       HttpResponse.json(
-        makeSearchDocumentsResponse([
-          makeDocument({
-            id: "99999999-9999-9999-9999-999999999999",
-            reviewStatus: "pending",
-            reviewReasons: ["low_confidence"],
-          }),
-        ]),
+        {
+          stats: {
+            totalDocuments: 1,
+            pendingReview: 1,
+            documentTypesCount: 1,
+            correspondentsCount: 1,
+          },
+          topCorrespondents: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              name: "Acme Corp",
+              slug: "acme-corp",
+              documentCount: 1,
+              totalAmount: 123.45,
+              currency: "EUR",
+              latestDocDate: "2026-03-20",
+              documentTypes: [{ name: "Invoice", count: 1 }],
+            },
+          ],
+          upcomingDeadlines: [
+            {
+              documentId: "11111111-1111-1111-1111-111111111111",
+              title: "March Invoice",
+              dueDate: "2026-03-31",
+              amount: 123.45,
+              currency: "EUR",
+              correspondentName: "Acme Corp",
+              daysUntilDue: 9,
+              isOverdue: false,
+            },
+          ],
+          overdueItems: [],
+          recentDocuments: [makeDocument()],
+          monthlyActivity: [{ month: "2026-03", count: 1 }],
+        },
       ),
-    ),
-    http.get(apiUrl("/api/documents/facets"), () =>
-      HttpResponse.json({
-        years: [{ year: 2026, count: 1 }],
-        correspondents: [{ id: "c1", name: "Acme Corp", count: 1 }],
-        documentTypes: [{ id: "d1", name: "Invoice", count: 1 }],
-        tags: [],
-      }),
     ),
   );
 }
@@ -42,20 +58,6 @@ describe("auth smoke", () => {
   it("redirects unauthenticated users to /login", async () => {
     server.use(
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
-      http.get(apiUrl("/api/documents"), () =>
-        HttpResponse.json(makeSearchDocumentsResponse([])),
-      ),
-      http.get(apiUrl("/api/documents/review"), () =>
-        HttpResponse.json(makeSearchDocumentsResponse([])),
-      ),
-      http.get(apiUrl("/api/documents/facets"), () =>
-        HttpResponse.json({
-          years: [],
-          correspondents: [],
-          documentTypes: [],
-          tags: [],
-        }),
-      ),
     );
 
     renderApp({ route: "/" });
@@ -95,7 +97,7 @@ describe("auth smoke", () => {
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(
-      await screen.findByText("Your document archive at a glance"),
+      await screen.findByText(/a high-level reading room for your archive/i),
     ).toBeInTheDocument();
     expect(localStorage.getItem("openkeep.access-token")).toBe("access-token");
     expect(localStorage.getItem("openkeep.refresh-token")).toBe("refresh-token");
@@ -115,9 +117,9 @@ describe("auth smoke", () => {
     });
 
     expect(
-      await screen.findByText("Your document archive at a glance"),
+      await screen.findByText(/a high-level reading room for your archive/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Pending Review")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming tasks")).toBeInTheDocument();
     expect(screen.queryByText("Sign in to your document archive")).not.toBeInTheDocument();
   });
 
@@ -126,20 +128,6 @@ describe("auth smoke", () => {
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
       http.get(apiUrl("/api/auth/me"), () => new HttpResponse(null, { status: 401 })),
       http.post(apiUrl("/api/auth/refresh"), () => new HttpResponse(null, { status: 401 })),
-      http.get(apiUrl("/api/documents"), () =>
-        HttpResponse.json(makeSearchDocumentsResponse([])),
-      ),
-      http.get(apiUrl("/api/documents/review"), () =>
-        HttpResponse.json(makeSearchDocumentsResponse([])),
-      ),
-      http.get(apiUrl("/api/documents/facets"), () =>
-        HttpResponse.json({
-          years: [],
-          correspondents: [],
-          documentTypes: [],
-          tags: [],
-        }),
-      ),
     );
 
     renderApp({

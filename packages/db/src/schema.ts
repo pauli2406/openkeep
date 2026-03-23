@@ -80,6 +80,8 @@ export const correspondents = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 255 }).notNull(),
     normalizedName: varchar("normalized_name", { length: 255 }).notNull(),
+    summary: text("summary"),
+    summaryGeneratedAt: timestamp("summary_generated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

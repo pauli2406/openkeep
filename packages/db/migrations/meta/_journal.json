@@ -29,6 +29,13 @@
       "when": 1774166400000,
       "tag": "0003_phase_2_5_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774209600000,
+      "tag": "0004_document_explorer_foundation",
+      "breakpoints": true
     }
   ]
 }

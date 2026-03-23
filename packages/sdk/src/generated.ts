@@ -464,6 +464,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExplorerController_getDashboardInsights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/correspondents/{slug}/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExplorerController_getCorrespondentInsights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/projection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExplorerController_getDocumentsProjection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExplorerController_getDocumentsTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/documents": {
         parameters: {
             query?: never;
@@ -713,11 +777,16 @@ export interface components {
                 dateTo?: string;
                 /** Format: uuid */
                 correspondentId?: string;
+                correspondentIds?: string[];
                 /** Format: uuid */
                 documentTypeId?: string;
+                documentTypeIds?: string[];
                 /** @enum {string} */
                 status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
             };
             /**
              * @default stale
@@ -733,11 +802,16 @@ export interface components {
                 dateTo?: string;
                 /** Format: uuid */
                 correspondentId?: string;
+                correspondentIds?: string[];
                 /** Format: uuid */
                 documentTypeId?: string;
+                documentTypeIds?: string[];
                 /** @enum {string} */
                 status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
             };
             /** @default 1 */
             page: number;
@@ -754,11 +828,16 @@ export interface components {
                 dateTo?: string;
                 /** Format: uuid */
                 correspondentId?: string;
+                correspondentIds?: string[];
                 /** Format: uuid */
                 documentTypeId?: string;
+                documentTypeIds?: string[];
                 /** @enum {string} */
                 status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
             };
             /** @default 3 */
             maxDocuments: number;
@@ -921,6 +1000,444 @@ export interface components {
         SuccessResponse: {
             success: boolean;
         };
+        DashboardInsightsResponse: {
+            stats: {
+                totalDocuments: number;
+                pendingReview: number;
+                documentTypesCount: number;
+                correspondentsCount: number;
+            };
+            topCorrespondents: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                documentCount: number;
+                totalAmount: number | null;
+                currency: string | null;
+                latestDocDate: string | null;
+                documentTypes: {
+                    name: string;
+                    count: number;
+                }[];
+            }[];
+            upcomingDeadlines: {
+                /** Format: uuid */
+                documentId: string;
+                title: string;
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                correspondentName: string | null;
+                daysUntilDue: number;
+                isOverdue: boolean;
+            }[];
+            overdueItems: {
+                /** Format: uuid */
+                documentId: string;
+                title: string;
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                correspondentName: string | null;
+                daysUntilDue: number;
+                isOverdue: boolean;
+            }[];
+            recentDocuments: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                /** @enum {string} */
+                source: "upload" | "watch-folder" | "email" | "api";
+                mimeType: string;
+                checksum: string;
+                storageKey: string;
+                /** @enum {string} */
+                status: "pending" | "processing" | "ready" | "failed";
+                language: string | null;
+                issueDate: string | null;
+                dueDate: string | null;
+                amount: number | null;
+                currency: string | null;
+                referenceNumber: string | null;
+                correspondent: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    summary?: string | null;
+                } | null;
+                documentType: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description?: string | null;
+                } | null;
+                tags: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                }[];
+                confidence: number | null;
+                /** @enum {string} */
+                reviewStatus: "not_required" | "pending" | "resolved";
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewedAt: string | null;
+                reviewNote: string | null;
+                searchablePdfAvailable: boolean;
+                /** @enum {string|null} */
+                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                /** @default 0 */
+                chunkCount: number;
+                /**
+                 * @default not_configured
+                 * @enum {string}
+                 */
+                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                /** @enum {string|null} */
+                embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                embeddingModel?: string | null;
+                /** @default false */
+                embeddingsStale: boolean;
+                lastProcessingError: string | null;
+                latestProcessingJob: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                latestEmbeddingJob?: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                metadata: {
+                    extractionStrategy?: string;
+                    normalizationStrategy?: string;
+                    /** @enum {string} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                    parseStrategy?: string;
+                    documentTypeName?: string | null;
+                    detectedKeywords?: string[];
+                    pageCount?: number;
+                    chunkCount?: number;
+                    searchablePdfGenerated?: boolean;
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    parse?: {
+                        /** @enum {string} */
+                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        strategy: string;
+                        fallbackUsed?: boolean;
+                        warnings?: string[];
+                        keyValueCount?: number;
+                        tableCount?: number;
+                        providerMetadata?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    chunking?: {
+                        strategy: string;
+                        chunkCount: number;
+                        usedProviderHints?: boolean;
+                    };
+                    embedding?: {
+                        /** @enum {string} */
+                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                        model?: string;
+                        configured?: boolean;
+                        chunkCount?: number;
+                    };
+                    reviewEvidence?: {
+                        /** @enum {string} */
+                        documentClass: "invoice" | "generic";
+                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        extracted: {
+                            correspondent: boolean;
+                            issueDate: boolean;
+                            amount: boolean;
+                            currency: boolean;
+                        };
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        confidence?: number | null;
+                        confidenceThreshold?: number;
+                        ocrTextLength?: number;
+                        ocrEmptyThreshold?: number;
+                    };
+                    manual?: {
+                        /** @default [] */
+                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        /** @default {} */
+                        values: {
+                            issueDate?: string | null;
+                            dueDate?: string | null;
+                            amount?: number | null;
+                            currency?: string | null;
+                            referenceNumber?: string | null;
+                            /** Format: uuid */
+                            correspondentId?: string | null;
+                            /** Format: uuid */
+                            documentTypeId?: string | null;
+                            tagIds?: string[];
+                        };
+                        updatedAt?: string | null;
+                        /** Format: uuid */
+                        updatedByUserId?: string | null;
+                    };
+                };
+                createdAt: string;
+                processedAt: string | null;
+                snippets?: string[];
+                matchingLines?: {
+                    /** Format: uuid */
+                    documentId: string;
+                    page: number;
+                    lineIndex: number;
+                    boundingBox: {
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                    };
+                    text: string;
+                }[];
+            }[];
+            monthlyActivity: {
+                month: string;
+                count: number;
+            }[];
+        };
+        CorrespondentInsightsResponse: {
+            correspondent: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                slug: string;
+                summary?: string | null;
+                summaryGeneratedAt?: string | null;
+            };
+            /** @enum {string} */
+            summaryStatus: "ready" | "pending" | "unavailable";
+            summary: string | null;
+            stats: {
+                documentCount: number;
+                totalAmount: number | null;
+                currency: string | null;
+                dateRange: {
+                    from: string | null;
+                    to: string | null;
+                };
+                avgConfidence: number | null;
+            };
+            documentTypeBreakdown: {
+                name: string;
+                count: number;
+            }[];
+            timeline: {
+                month: string;
+                count: number;
+            }[];
+            recentDocuments: {
+                /** Format: uuid */
+                id: string;
+                title: string;
+                /** @enum {string} */
+                source: "upload" | "watch-folder" | "email" | "api";
+                mimeType: string;
+                checksum: string;
+                storageKey: string;
+                /** @enum {string} */
+                status: "pending" | "processing" | "ready" | "failed";
+                language: string | null;
+                issueDate: string | null;
+                dueDate: string | null;
+                amount: number | null;
+                currency: string | null;
+                referenceNumber: string | null;
+                correspondent: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    summary?: string | null;
+                } | null;
+                documentType: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description?: string | null;
+                } | null;
+                tags: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string;
+                    slug: string;
+                }[];
+                confidence: number | null;
+                /** @enum {string} */
+                reviewStatus: "not_required" | "pending" | "resolved";
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewedAt: string | null;
+                reviewNote: string | null;
+                searchablePdfAvailable: boolean;
+                /** @enum {string|null} */
+                parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                /** @default 0 */
+                chunkCount: number;
+                /**
+                 * @default not_configured
+                 * @enum {string}
+                 */
+                embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                /** @enum {string|null} */
+                embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                embeddingModel?: string | null;
+                /** @default false */
+                embeddingsStale: boolean;
+                lastProcessingError: string | null;
+                latestProcessingJob: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                latestEmbeddingJob?: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "completed" | "failed";
+                    attempts: number;
+                    lastError: string | null;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    createdAt: string;
+                    updatedAt: string;
+                } | null;
+                metadata: {
+                    extractionStrategy?: string;
+                    normalizationStrategy?: string;
+                    /** @enum {string} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                    parseStrategy?: string;
+                    documentTypeName?: string | null;
+                    detectedKeywords?: string[];
+                    pageCount?: number;
+                    chunkCount?: number;
+                    searchablePdfGenerated?: boolean;
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    parse?: {
+                        /** @enum {string} */
+                        provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        strategy: string;
+                        fallbackUsed?: boolean;
+                        warnings?: string[];
+                        keyValueCount?: number;
+                        tableCount?: number;
+                        providerMetadata?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    chunking?: {
+                        strategy: string;
+                        chunkCount: number;
+                        usedProviderHints?: boolean;
+                    };
+                    embedding?: {
+                        /** @enum {string} */
+                        provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                        model?: string;
+                        configured?: boolean;
+                        chunkCount?: number;
+                    };
+                    reviewEvidence?: {
+                        /** @enum {string} */
+                        documentClass: "invoice" | "generic";
+                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        extracted: {
+                            correspondent: boolean;
+                            issueDate: boolean;
+                            amount: boolean;
+                            currency: boolean;
+                        };
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        confidence?: number | null;
+                        confidenceThreshold?: number;
+                        ocrTextLength?: number;
+                        ocrEmptyThreshold?: number;
+                    };
+                    manual?: {
+                        /** @default [] */
+                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        /** @default {} */
+                        values: {
+                            issueDate?: string | null;
+                            dueDate?: string | null;
+                            amount?: number | null;
+                            currency?: string | null;
+                            referenceNumber?: string | null;
+                            /** Format: uuid */
+                            correspondentId?: string | null;
+                            /** Format: uuid */
+                            documentTypeId?: string | null;
+                            tagIds?: string[];
+                        };
+                        updatedAt?: string | null;
+                        /** Format: uuid */
+                        updatedByUserId?: string | null;
+                    };
+                };
+                createdAt: string;
+                processedAt: string | null;
+                snippets?: string[];
+                matchingLines?: {
+                    /** Format: uuid */
+                    documentId: string;
+                    page: number;
+                    lineIndex: number;
+                    boundingBox: {
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                    };
+                    text: string;
+                }[];
+            }[];
+            upcomingDeadlines: {
+                /** Format: uuid */
+                documentId: string;
+                title: string;
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                correspondentName: string | null;
+                daysUntilDue: number;
+                isOverdue: boolean;
+            }[];
+        };
         SearchDocumentsResponse: {
             items: {
                 /** Format: uuid */
@@ -944,6 +1461,7 @@ export interface components {
                     id: string;
                     name: string;
                     slug: string;
+                    summary?: string | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -1105,12 +1623,52 @@ export interface components {
                 dateTo?: string;
                 /** Format: uuid */
                 correspondentId?: string;
+                correspondentIds?: string[];
                 /** Format: uuid */
                 documentTypeId?: string;
+                documentTypeIds?: string[];
                 /** @enum {string} */
                 status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
             };
+        };
+        DocumentsProjectionResponse: {
+            points: {
+                /** Format: uuid */
+                documentId: string;
+                x: number;
+                y: number;
+                title: string;
+                correspondentName: string | null;
+                correspondentSlug?: string | null;
+                typeName: string | null;
+                tags: string[];
+                issueDate: string | null;
+                year: number | null;
+                /** @enum {string} */
+                status: "pending" | "processing" | "ready" | "failed";
+            }[];
+            clusters: {
+                centroidX: number;
+                centroidY: number;
+                label: string;
+                documentIds: string[];
+            }[];
+        };
+        DocumentsTimelineResponse: {
+            years: {
+                year: number;
+                count: number;
+                months: {
+                    month: number;
+                    count: number;
+                    topCorrespondents: string[];
+                    topTypes: string[];
+                }[];
+            }[];
         };
         Document: {
             /** Format: uuid */
@@ -1134,6 +1692,7 @@ export interface components {
                 id: string;
                 name: string;
                 slug: string;
+                summary?: string | null;
             } | null;
             documentType: {
                 /** Format: uuid */
@@ -1353,6 +1912,7 @@ export interface components {
                         id: string;
                         name: string;
                         slug: string;
+                        summary?: string | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -1527,11 +2087,16 @@ export interface components {
                 dateTo?: string;
                 /** Format: uuid */
                 correspondentId?: string;
+                correspondentIds?: string[];
                 /** Format: uuid */
                 documentTypeId?: string;
+                documentTypeIds?: string[];
                 /** @enum {string} */
                 status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
             };
         };
         AnswerQueryResponse: {
@@ -1572,6 +2137,7 @@ export interface components {
                         id: string;
                         name: string;
                         slug: string;
+                        summary?: string | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -1757,12 +2323,14 @@ export interface components {
             id: string;
             name: string;
             slug: string;
+            summary?: string | null;
         }[];
         Correspondent: {
             /** Format: uuid */
             id: string;
             name: string;
             slug: string;
+            summary?: string | null;
         };
         DocumentTypeList: {
             /** Format: uuid */
@@ -1795,9 +2363,12 @@ export interface components {
                 id: string;
                 name: string;
                 slug: string;
+                summary?: string | null;
                 normalizedName: string;
                 /** Format: date-time */
                 createdAt: string;
+                /** Format: date-time */
+                summaryGeneratedAt?: string | null;
             }[];
             documentTypes: {
                 /** Format: uuid */
@@ -2075,9 +2646,12 @@ export interface components {
                     id: string;
                     name: string;
                     slug: string;
+                    summary?: string | null;
                     normalizedName: string;
                     /** Format: date-time */
                     createdAt: string;
+                    /** Format: date-time */
+                    summaryGeneratedAt?: string | null;
                 }[];
                 documentTypes: {
                     /** Format: uuid */
@@ -2347,6 +2921,14 @@ export interface components {
         WatchFolderScanResponse: {
             configuredPath: string;
             dryRun: boolean;
+            summary: {
+                total: number;
+                imported: number;
+                duplicate: number;
+                unsupported: number;
+                failed: number;
+                planned: number;
+            };
             items: {
                 path: string;
                 /** @enum {string} */
@@ -2355,6 +2937,20 @@ export interface components {
                 /** Format: uuid */
                 documentId: string | null;
                 reason: string;
+                mimeType: string | null;
+                /** @enum {string|null} */
+                failureCode: "mime_type_missing" | "mime_type_not_allowed" | "upload_failed" | null;
+                detail: string | null;
+            }[];
+            history: {
+                /** Format: date-time */
+                scannedAt: string;
+                dryRun: boolean;
+                imported: number;
+                duplicate: number;
+                unsupported: number;
+                failed: number;
+                planned: number;
             }[];
         };
     };
@@ -2730,7 +3326,7 @@ export interface operations {
                 /** @description Filter by processing status */
                 status?: "pending" | "processing" | "ready" | "failed";
                 /** @description Filter by tag IDs */
-                tags?: string[];
+                tags?: string;
                 /** @description Sort field */
                 sort?: "createdAt" | "issueDate" | "dueDate" | "title";
                 /** @description Sort direction */
@@ -3084,6 +3680,138 @@ export interface operations {
             };
         };
     };
+    ExplorerController_getDashboardInsights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dashboard explorer insights */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardInsightsResponse"];
+                };
+            };
+        };
+    };
+    ExplorerController_getCorrespondentInsights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Correspondent explorer insights */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrespondentInsightsResponse"];
+                };
+            };
+        };
+    };
+    ExplorerController_getDocumentsProjection: {
+        parameters: {
+            query?: {
+                /** @description Full-text search query */
+                query?: string;
+                /** @description Filter by issue year */
+                year?: number;
+                /** @description Lower issue date bound */
+                dateFrom?: string;
+                /** @description Upper issue date bound */
+                dateTo?: string;
+                /** @description Filter by correspondent */
+                correspondentId?: string;
+                /** @description Filter by document type */
+                documentTypeId?: string;
+                /** @description Filter by processing status */
+                status?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter by tag IDs */
+                tags?: string;
+                /** @description Sort field */
+                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+                /** @description Sort direction */
+                direction?: "asc" | "desc";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projection response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentsProjectionResponse"];
+                };
+            };
+        };
+    };
+    ExplorerController_getDocumentsTimeline: {
+        parameters: {
+            query?: {
+                /** @description Full-text search query */
+                query?: string;
+                /** @description Filter by issue year */
+                year?: number;
+                /** @description Lower issue date bound */
+                dateFrom?: string;
+                /** @description Upper issue date bound */
+                dateTo?: string;
+                /** @description Filter by correspondent */
+                correspondentId?: string;
+                /** @description Filter by document type */
+                documentTypeId?: string;
+                /** @description Filter by processing status */
+                status?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter by tag IDs */
+                tags?: string;
+                /** @description Sort field */
+                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+                /** @description Sort direction */
+                direction?: "asc" | "desc";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Timeline response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentsTimelineResponse"];
+                };
+            };
+        };
+    };
     SearchController_searchDocuments: {
         parameters: {
             query?: {
@@ -3102,7 +3830,7 @@ export interface operations {
                 /** @description Filter by processing status */
                 status?: "pending" | "processing" | "ready" | "failed";
                 /** @description Filter by tag IDs */
-                tags?: string[];
+                tags?: string;
                 /** @description Sort field */
                 sort?: "createdAt" | "issueDate" | "dueDate" | "title";
                 /** @description Sort direction */
