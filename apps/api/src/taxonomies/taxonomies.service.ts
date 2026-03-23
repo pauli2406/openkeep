@@ -29,11 +29,16 @@ import slugify from "slugify";
 
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
+import { DocumentTypePolicyService } from "../processing/document-type-policy.service";
 import { normalizeCorrespondentName } from "../processing/normalization.util";
 
 @Injectable()
 export class TaxonomiesService {
-  constructor(@Inject(DatabaseService) private readonly databaseService: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly databaseService: DatabaseService,
+    @Inject(DocumentTypePolicyService)
+    private readonly documentTypePolicyService: DocumentTypePolicyService,
+  ) {}
 
   async listTags(): Promise<Tag[]> {
     return this.databaseService.db.select().from(tags).orderBy(asc(tags.name));
@@ -216,8 +221,11 @@ export class TaxonomiesService {
         name: input.name.trim(),
         slug: this.createSlug(input.name),
         description: input.description ?? null,
+        requiredFields: input.requiredFields ?? [],
       })
       .returning();
+
+    this.documentTypePolicyService.invalidateCache();
 
     await this.recordAudit(principal.userId, "taxonomy.document_type_created", {
       documentTypeId: created.id,
@@ -238,9 +246,12 @@ export class TaxonomiesService {
         name: input.name?.trim() ?? current.name,
         slug: this.createSlug(input.name?.trim() ?? current.name),
         description: input.description === undefined ? current.description ?? null : input.description,
+        requiredFields: input.requiredFields ?? current.requiredFields ?? [],
       })
       .where(eq(documentTypes.id, id))
       .returning();
+
+    this.documentTypePolicyService.invalidateCache();
 
     await this.recordAudit(principal.userId, "taxonomy.document_type_updated", {
       documentTypeId: id,
@@ -255,6 +266,7 @@ export class TaxonomiesService {
   ): Promise<{ deleted: true }> {
     await this.requireDocumentType(id);
     await this.databaseService.db.delete(documentTypes).where(eq(documentTypes.id, id));
+    this.documentTypePolicyService.invalidateCache();
     await this.recordAudit(principal.userId, "taxonomy.document_type_deleted", {
       documentTypeId: id,
     });
@@ -282,6 +294,8 @@ export class TaxonomiesService {
         .where(eq(documents.documentTypeId, sourceId));
       await tx.delete(documentTypes).where(eq(documentTypes.id, sourceId));
     });
+
+    this.documentTypePolicyService.invalidateCache();
 
     await this.recordAudit(principal.userId, "taxonomy.document_type_merged", {
       sourceId,

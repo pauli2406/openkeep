@@ -8,7 +8,7 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import { apiTokens, documentTypes, users } from "@openkeep/db";
 import type { AuthTokens, CreateApiTokenInput, LoginInput, SetupOwnerInput } from "@openkeep/types";
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { compare, hash } from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
 
@@ -61,8 +61,13 @@ export class AuthService implements OnModuleInit {
       await tx
         .insert(documentTypes)
         .values(createDefaultDocumentTypeValues())
-        .onConflictDoNothing({
+        .onConflictDoUpdate({
           target: documentTypes.slug,
+          set: {
+            name: sql`excluded.name`,
+            description: sql`excluded.description`,
+            requiredFields: sql`excluded.required_fields`,
+          },
         });
 
       return createdUser!;
@@ -252,8 +257,13 @@ export class AuthService implements OnModuleInit {
     await this.databaseService.db
       .insert(documentTypes)
       .values(createDefaultDocumentTypeValues())
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
         target: documentTypes.slug,
+        set: {
+          name: sql`excluded.name`,
+          description: sql`excluded.description`,
+          requiredFields: sql`excluded.required_fields`,
+        },
       });
   }
 

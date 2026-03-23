@@ -432,6 +432,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/reprocess/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reprocess multiple documents by selection, filter, or full archive scope */
+        post: operations["DocumentsController_batchReprocessDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/reembed": {
         parameters: {
             query?: never;
@@ -746,15 +763,18 @@ export interface components {
             title?: string;
             dueDate?: string | null;
             issueDate?: string | null;
+            expiryDate?: string | null;
             amount?: number | null;
             currency?: string | null;
             referenceNumber?: string | null;
+            holderName?: string | null;
+            issuingAuthority?: string | null;
             /** Format: uuid */
             correspondentId?: string | null;
             /** Format: uuid */
             documentTypeId?: string | null;
             tagIds?: string[];
-            clearLockedFields?: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+            clearLockedFields?: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
             /** @enum {string} */
             status?: "pending" | "processing" | "ready" | "failed";
         };
@@ -766,6 +786,33 @@ export interface components {
             force: boolean;
         };
         ReprocessDocumentDto: {
+            /** @enum {string} */
+            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+        };
+        BatchReprocessDocumentsDto: {
+            /**
+             * @default selected
+             * @enum {string}
+             */
+            scope: "selected" | "filtered" | "all";
+            documentIds?: string[];
+            filters?: {
+                year?: number;
+                dateFrom?: string;
+                dateTo?: string;
+                /** Format: uuid */
+                correspondentId?: string;
+                correspondentIds?: string[];
+                /** Format: uuid */
+                documentTypeId?: string;
+                documentTypeIds?: string[];
+                /** @enum {string} */
+                status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
+                tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
+            };
             /** @enum {string} */
             parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
         };
@@ -865,10 +912,12 @@ export interface components {
         CreateDocumentTypeDto: {
             name: string;
             description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         };
         UpdateDocumentTypeDto: {
             name?: string;
             description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         };
         HealthResponse: {
             status: string;
@@ -1057,9 +1106,12 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
                 referenceNumber: string | null;
+                holderName: string | null;
+                issuingAuthority: string | null;
                 correspondent: {
                     /** Format: uuid */
                     id: string;
@@ -1073,6 +1125,8 @@ export interface components {
                     name: string;
                     slug: string;
                     description?: string | null;
+                    /** @default [] */
+                    requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                 } | null;
                 tags: {
                     /** Format: uuid */
@@ -1162,16 +1216,40 @@ export interface components {
                         configured?: boolean;
                         chunkCount?: number;
                     };
+                    correspondentExtraction?: {
+                        rawName?: string | null;
+                        rawNameNormalized?: string | null;
+                        resolvedName?: string | null;
+                        /** @enum {string} */
+                        matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                        confidence?: number | null;
+                        evidenceLines?: string[];
+                        candidateCorrespondents?: {
+                            /** Format: uuid */
+                            id?: string;
+                            name: string;
+                            reason?: string;
+                            score?: number;
+                        }[];
+                        blockedReason?: string | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "deterministic";
+                    };
                     reviewEvidence?: {
                         /** @enum {string} */
                         documentClass: "invoice" | "generic";
-                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                        missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
                             correspondent: boolean;
                             issueDate: boolean;
+                            dueDate: boolean;
                             amount: boolean;
                             currency: boolean;
+                            referenceNumber: boolean;
+                            expiryDate: boolean;
+                            holderName: boolean;
+                            issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                         confidence?: number | null;
@@ -1181,14 +1259,17 @@ export interface components {
                     };
                     manual?: {
                         /** @default [] */
-                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                         /** @default {} */
                         values: {
                             issueDate?: string | null;
                             dueDate?: string | null;
+                            expiryDate?: string | null;
                             amount?: number | null;
                             currency?: string | null;
                             referenceNumber?: string | null;
+                            holderName?: string | null;
+                            issuingAuthority?: string | null;
                             /** Format: uuid */
                             correspondentId?: string | null;
                             /** Format: uuid */
@@ -1266,9 +1347,12 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
                 referenceNumber: string | null;
+                holderName: string | null;
+                issuingAuthority: string | null;
                 correspondent: {
                     /** Format: uuid */
                     id: string;
@@ -1282,6 +1366,8 @@ export interface components {
                     name: string;
                     slug: string;
                     description?: string | null;
+                    /** @default [] */
+                    requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                 } | null;
                 tags: {
                     /** Format: uuid */
@@ -1371,16 +1457,40 @@ export interface components {
                         configured?: boolean;
                         chunkCount?: number;
                     };
+                    correspondentExtraction?: {
+                        rawName?: string | null;
+                        rawNameNormalized?: string | null;
+                        resolvedName?: string | null;
+                        /** @enum {string} */
+                        matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                        confidence?: number | null;
+                        evidenceLines?: string[];
+                        candidateCorrespondents?: {
+                            /** Format: uuid */
+                            id?: string;
+                            name: string;
+                            reason?: string;
+                            score?: number;
+                        }[];
+                        blockedReason?: string | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "deterministic";
+                    };
                     reviewEvidence?: {
                         /** @enum {string} */
                         documentClass: "invoice" | "generic";
-                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                        missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
                             correspondent: boolean;
                             issueDate: boolean;
+                            dueDate: boolean;
                             amount: boolean;
                             currency: boolean;
+                            referenceNumber: boolean;
+                            expiryDate: boolean;
+                            holderName: boolean;
+                            issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                         confidence?: number | null;
@@ -1390,14 +1500,17 @@ export interface components {
                     };
                     manual?: {
                         /** @default [] */
-                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                         /** @default {} */
                         values: {
                             issueDate?: string | null;
                             dueDate?: string | null;
+                            expiryDate?: string | null;
                             amount?: number | null;
                             currency?: string | null;
                             referenceNumber?: string | null;
+                            holderName?: string | null;
+                            issuingAuthority?: string | null;
                             /** Format: uuid */
                             correspondentId?: string | null;
                             /** Format: uuid */
@@ -1453,9 +1566,12 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
                 referenceNumber: string | null;
+                holderName: string | null;
+                issuingAuthority: string | null;
                 correspondent: {
                     /** Format: uuid */
                     id: string;
@@ -1469,6 +1585,8 @@ export interface components {
                     name: string;
                     slug: string;
                     description?: string | null;
+                    /** @default [] */
+                    requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                 } | null;
                 tags: {
                     /** Format: uuid */
@@ -1558,16 +1676,40 @@ export interface components {
                         configured?: boolean;
                         chunkCount?: number;
                     };
+                    correspondentExtraction?: {
+                        rawName?: string | null;
+                        rawNameNormalized?: string | null;
+                        resolvedName?: string | null;
+                        /** @enum {string} */
+                        matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                        confidence?: number | null;
+                        evidenceLines?: string[];
+                        candidateCorrespondents?: {
+                            /** Format: uuid */
+                            id?: string;
+                            name: string;
+                            reason?: string;
+                            score?: number;
+                        }[];
+                        blockedReason?: string | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "deterministic";
+                    };
                     reviewEvidence?: {
                         /** @enum {string} */
                         documentClass: "invoice" | "generic";
-                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                        missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
                             correspondent: boolean;
                             issueDate: boolean;
+                            dueDate: boolean;
                             amount: boolean;
                             currency: boolean;
+                            referenceNumber: boolean;
+                            expiryDate: boolean;
+                            holderName: boolean;
+                            issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                         confidence?: number | null;
@@ -1577,14 +1719,17 @@ export interface components {
                     };
                     manual?: {
                         /** @default [] */
-                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                         /** @default {} */
                         values: {
                             issueDate?: string | null;
                             dueDate?: string | null;
+                            expiryDate?: string | null;
                             amount?: number | null;
                             currency?: string | null;
                             referenceNumber?: string | null;
+                            holderName?: string | null;
+                            issuingAuthority?: string | null;
                             /** Format: uuid */
                             correspondentId?: string | null;
                             /** Format: uuid */
@@ -1684,9 +1829,12 @@ export interface components {
             language: string | null;
             issueDate: string | null;
             dueDate: string | null;
+            expiryDate: string | null;
             amount: number | null;
             currency: string | null;
             referenceNumber: string | null;
+            holderName: string | null;
+            issuingAuthority: string | null;
             correspondent: {
                 /** Format: uuid */
                 id: string;
@@ -1700,6 +1848,8 @@ export interface components {
                 name: string;
                 slug: string;
                 description?: string | null;
+                /** @default [] */
+                requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
             } | null;
             tags: {
                 /** Format: uuid */
@@ -1789,16 +1939,40 @@ export interface components {
                     configured?: boolean;
                     chunkCount?: number;
                 };
+                correspondentExtraction?: {
+                    rawName?: string | null;
+                    rawNameNormalized?: string | null;
+                    resolvedName?: string | null;
+                    /** @enum {string} */
+                    matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                    confidence?: number | null;
+                    evidenceLines?: string[];
+                    candidateCorrespondents?: {
+                        /** Format: uuid */
+                        id?: string;
+                        name: string;
+                        reason?: string;
+                        score?: number;
+                    }[];
+                    blockedReason?: string | null;
+                    /** @enum {string} */
+                    provider?: "openai" | "gemini" | "deterministic";
+                };
                 reviewEvidence?: {
                     /** @enum {string} */
                     documentClass: "invoice" | "generic";
-                    requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                    missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                    requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                    missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     extracted: {
                         correspondent: boolean;
                         issueDate: boolean;
+                        dueDate: boolean;
                         amount: boolean;
                         currency: boolean;
+                        referenceNumber: boolean;
+                        expiryDate: boolean;
+                        holderName: boolean;
+                        issuingAuthority: boolean;
                     };
                     activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                     confidence?: number | null;
@@ -1808,14 +1982,17 @@ export interface components {
                 };
                 manual?: {
                     /** @default [] */
-                    lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                    lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                     /** @default {} */
                     values: {
                         issueDate?: string | null;
                         dueDate?: string | null;
+                        expiryDate?: string | null;
                         amount?: number | null;
                         currency?: string | null;
                         referenceNumber?: string | null;
+                        holderName?: string | null;
+                        issuingAuthority?: string | null;
                         /** Format: uuid */
                         correspondentId?: string | null;
                         /** Format: uuid */
@@ -1891,6 +2068,40 @@ export interface components {
             /** Format: uuid */
             processingJobId: string;
         };
+        BatchReprocessDocumentsRequest: {
+            /**
+             * @default selected
+             * @enum {string}
+             */
+            scope: "selected" | "filtered" | "all";
+            documentIds?: string[];
+            filters?: {
+                year?: number;
+                dateFrom?: string;
+                dateTo?: string;
+                /** Format: uuid */
+                correspondentId?: string;
+                correspondentIds?: string[];
+                /** Format: uuid */
+                documentTypeId?: string;
+                documentTypeIds?: string[];
+                /** @enum {string} */
+                status?: "pending" | "processing" | "ready" | "failed";
+                statuses?: ("pending" | "processing" | "ready" | "failed")[];
+                tags?: string[];
+                amountMin?: number;
+                amountMax?: number;
+            };
+            /** @enum {string} */
+            parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+        };
+        BatchReprocessDocumentsResponse: {
+            queued: boolean;
+            queuedCount: number;
+            skippedCount: number;
+            queuedDocumentIds: string[];
+            skippedDocumentIds: string[];
+        };
         SemanticSearchResponse: {
             items: {
                 document: {
@@ -1907,9 +2118,12 @@ export interface components {
                     language: string | null;
                     issueDate: string | null;
                     dueDate: string | null;
+                    expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
                     referenceNumber: string | null;
+                    holderName: string | null;
+                    issuingAuthority: string | null;
                     correspondent: {
                         /** Format: uuid */
                         id: string;
@@ -1923,6 +2137,8 @@ export interface components {
                         name: string;
                         slug: string;
                         description?: string | null;
+                        /** @default [] */
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     } | null;
                     tags: {
                         /** Format: uuid */
@@ -2012,16 +2228,40 @@ export interface components {
                             configured?: boolean;
                             chunkCount?: number;
                         };
+                        correspondentExtraction?: {
+                            rawName?: string | null;
+                            rawNameNormalized?: string | null;
+                            resolvedName?: string | null;
+                            /** @enum {string} */
+                            matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                            confidence?: number | null;
+                            evidenceLines?: string[];
+                            candidateCorrespondents?: {
+                                /** Format: uuid */
+                                id?: string;
+                                name: string;
+                                reason?: string;
+                                score?: number;
+                            }[];
+                            blockedReason?: string | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "deterministic";
+                        };
                         reviewEvidence?: {
                             /** @enum {string} */
                             documentClass: "invoice" | "generic";
-                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                            missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
                                 correspondent: boolean;
                                 issueDate: boolean;
+                                dueDate: boolean;
                                 amount: boolean;
                                 currency: boolean;
+                                referenceNumber: boolean;
+                                expiryDate: boolean;
+                                holderName: boolean;
+                                issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                             confidence?: number | null;
@@ -2031,14 +2271,17 @@ export interface components {
                         };
                         manual?: {
                             /** @default [] */
-                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                             /** @default {} */
                             values: {
                                 issueDate?: string | null;
                                 dueDate?: string | null;
+                                expiryDate?: string | null;
                                 amount?: number | null;
                                 currency?: string | null;
                                 referenceNumber?: string | null;
+                                holderName?: string | null;
+                                issuingAuthority?: string | null;
                                 /** Format: uuid */
                                 correspondentId?: string | null;
                                 /** Format: uuid */
@@ -2132,9 +2375,12 @@ export interface components {
                     language: string | null;
                     issueDate: string | null;
                     dueDate: string | null;
+                    expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
                     referenceNumber: string | null;
+                    holderName: string | null;
+                    issuingAuthority: string | null;
                     correspondent: {
                         /** Format: uuid */
                         id: string;
@@ -2148,6 +2394,8 @@ export interface components {
                         name: string;
                         slug: string;
                         description?: string | null;
+                        /** @default [] */
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     } | null;
                     tags: {
                         /** Format: uuid */
@@ -2237,16 +2485,40 @@ export interface components {
                             configured?: boolean;
                             chunkCount?: number;
                         };
+                        correspondentExtraction?: {
+                            rawName?: string | null;
+                            rawNameNormalized?: string | null;
+                            resolvedName?: string | null;
+                            /** @enum {string} */
+                            matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                            confidence?: number | null;
+                            evidenceLines?: string[];
+                            candidateCorrespondents?: {
+                                /** Format: uuid */
+                                id?: string;
+                                name: string;
+                                reason?: string;
+                                score?: number;
+                            }[];
+                            blockedReason?: string | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "deterministic";
+                        };
                         reviewEvidence?: {
                             /** @enum {string} */
                             documentClass: "invoice" | "generic";
-                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                            missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
                                 correspondent: boolean;
                                 issueDate: boolean;
+                                dueDate: boolean;
                                 amount: boolean;
                                 currency: boolean;
+                                referenceNumber: boolean;
+                                expiryDate: boolean;
+                                holderName: boolean;
+                                issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                             confidence?: number | null;
@@ -2256,14 +2528,17 @@ export interface components {
                         };
                         manual?: {
                             /** @default [] */
-                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                             /** @default {} */
                             values: {
                                 issueDate?: string | null;
                                 dueDate?: string | null;
+                                expiryDate?: string | null;
                                 amount?: number | null;
                                 currency?: string | null;
                                 referenceNumber?: string | null;
+                                holderName?: string | null;
+                                issuingAuthority?: string | null;
                                 /** Format: uuid */
                                 correspondentId?: string | null;
                                 /** Format: uuid */
@@ -2341,6 +2616,8 @@ export interface components {
             name: string;
             slug: string;
             description?: string | null;
+            /** @default [] */
+            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         }[];
         DocumentType: {
             /** Format: uuid */
@@ -2348,6 +2625,8 @@ export interface components {
             name: string;
             slug: string;
             description?: string | null;
+            /** @default [] */
+            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         };
         ArchiveSnapshot: {
             version: number;
@@ -2379,6 +2658,8 @@ export interface components {
                 name: string;
                 slug: string;
                 description?: string | null;
+                /** @default [] */
+                requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                 /** Format: date-time */
                 createdAt: string;
             }[];
@@ -2412,9 +2693,12 @@ export interface components {
                 pageCount: number;
                 issueDate: string | null;
                 dueDate: string | null;
+                expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
                 referenceNumber: string | null;
+                holderName: string | null;
+                issuingAuthority: string | null;
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
@@ -2472,16 +2756,40 @@ export interface components {
                         configured?: boolean;
                         chunkCount?: number;
                     };
+                    correspondentExtraction?: {
+                        rawName?: string | null;
+                        rawNameNormalized?: string | null;
+                        resolvedName?: string | null;
+                        /** @enum {string} */
+                        matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                        confidence?: number | null;
+                        evidenceLines?: string[];
+                        candidateCorrespondents?: {
+                            /** Format: uuid */
+                            id?: string;
+                            name: string;
+                            reason?: string;
+                            score?: number;
+                        }[];
+                        blockedReason?: string | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "deterministic";
+                    };
                     reviewEvidence?: {
                         /** @enum {string} */
                         documentClass: "invoice" | "generic";
-                        requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                        missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                        missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
                             correspondent: boolean;
                             issueDate: boolean;
+                            dueDate: boolean;
                             amount: boolean;
                             currency: boolean;
+                            referenceNumber: boolean;
+                            expiryDate: boolean;
+                            holderName: boolean;
+                            issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                         confidence?: number | null;
@@ -2491,14 +2799,17 @@ export interface components {
                     };
                     manual?: {
                         /** @default [] */
-                        lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                        lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                         /** @default {} */
                         values: {
                             issueDate?: string | null;
                             dueDate?: string | null;
+                            expiryDate?: string | null;
                             amount?: number | null;
                             currency?: string | null;
                             referenceNumber?: string | null;
+                            holderName?: string | null;
+                            issuingAuthority?: string | null;
                             /** Format: uuid */
                             correspondentId?: string | null;
                             /** Format: uuid */
@@ -2662,6 +2973,8 @@ export interface components {
                     name: string;
                     slug: string;
                     description?: string | null;
+                    /** @default [] */
+                    requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     /** Format: date-time */
                     createdAt: string;
                 }[];
@@ -2695,9 +3008,12 @@ export interface components {
                     pageCount: number;
                     issueDate: string | null;
                     dueDate: string | null;
+                    expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
                     referenceNumber: string | null;
+                    holderName: string | null;
+                    issuingAuthority: string | null;
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
@@ -2755,16 +3071,40 @@ export interface components {
                             configured?: boolean;
                             chunkCount?: number;
                         };
+                        correspondentExtraction?: {
+                            rawName?: string | null;
+                            rawNameNormalized?: string | null;
+                            resolvedName?: string | null;
+                            /** @enum {string} */
+                            matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                            confidence?: number | null;
+                            evidenceLines?: string[];
+                            candidateCorrespondents?: {
+                                /** Format: uuid */
+                                id?: string;
+                                name: string;
+                                reason?: string;
+                                score?: number;
+                            }[];
+                            blockedReason?: string | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "deterministic";
+                        };
                         reviewEvidence?: {
                             /** @enum {string} */
                             documentClass: "invoice" | "generic";
-                            requiredFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
-                            missingFields: ("correspondent" | "issueDate" | "amount" | "currency")[];
+                            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                            missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
                                 correspondent: boolean;
                                 issueDate: boolean;
+                                dueDate: boolean;
                                 amount: boolean;
                                 currency: boolean;
+                                referenceNumber: boolean;
+                                expiryDate: boolean;
+                                holderName: boolean;
+                                issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
                             confidence?: number | null;
@@ -2774,14 +3114,17 @@ export interface components {
                         };
                         manual?: {
                             /** @default [] */
-                            lockedFields: ("issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
                             /** @default {} */
                             values: {
                                 issueDate?: string | null;
                                 dueDate?: string | null;
+                                expiryDate?: string | null;
                                 amount?: number | null;
                                 currency?: string | null;
                                 referenceNumber?: string | null;
+                                holderName?: string | null;
+                                issuingAuthority?: string | null;
                                 /** Format: uuid */
                                 correspondentId?: string | null;
                                 /** Format: uuid */
@@ -3661,6 +4004,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequeueDocumentProcessingResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_batchReprocessDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchReprocessDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk reprocess queue result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchReprocessDocumentsResponse"];
                 };
             };
         };

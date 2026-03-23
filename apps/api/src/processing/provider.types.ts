@@ -41,9 +41,12 @@ export interface MetadataExtractionResult {
   language: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
+  expiryDate: Date | null;
   amount: number | null;
   currency: string | null;
   referenceNumber: string | null;
+  holderName: string | null;
+  issuingAuthority: string | null;
   correspondentName: string | null;
   documentTypeName: string | null;
   tags: string[];

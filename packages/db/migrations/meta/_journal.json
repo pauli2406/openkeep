@@ -43,6 +43,13 @@
       "when": 1774231200000,
       "tag": "0005_correspondent_aliases",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774282102624,
+      "tag": "0006_quiet_kang",
+      "breakpoints": true
     }
   ]
 }

@@ -80,6 +80,7 @@ interface DocumentType {
   name: string;
   slug: string;
   description?: string | null;
+  requiredFields: string[];
 }
 
 interface TagItem {
@@ -95,8 +96,13 @@ interface ReviewEvidence {
   extracted: {
     correspondent: boolean;
     issueDate: boolean;
+    dueDate: boolean;
     amount: boolean;
     currency: boolean;
+    referenceNumber: boolean;
+    expiryDate: boolean;
+    holderName: boolean;
+    issuingAuthority: boolean;
   };
   activeReasons: string[];
   confidence?: number | null;
@@ -137,9 +143,12 @@ interface Document {
   language: string | null;
   issueDate: string | null;
   dueDate: string | null;
+  expiryDate: string | null;
   amount: number | null;
   currency: string | null;
   referenceNumber: string | null;
+  holderName: string | null;
+  issuingAuthority: string | null;
   correspondent: Correspondent | null;
   documentType: DocumentType | null;
   tags: TagItem[];
@@ -256,12 +265,18 @@ function formatManualOverrideField(field: ManualOverrideField): string {
       return "Issue Date";
     case "dueDate":
       return "Due Date";
+    case "expiryDate":
+      return "Expiry Date";
     case "amount":
       return "Amount";
     case "currency":
       return "Currency";
     case "referenceNumber":
       return "Reference Number";
+    case "holderName":
+      return "Holder Name";
+    case "issuingAuthority":
+      return "Issuing Authority";
     case "correspondentId":
       return "Correspondent";
     case "documentTypeId":
@@ -364,6 +379,8 @@ function renderManualOverrideValue(
       return formatDate(doc.issueDate);
     case "dueDate":
       return formatDate(doc.dueDate);
+    case "expiryDate":
+      return formatDate(doc.expiryDate);
     case "amount":
       return doc.amount !== null
         ? `${doc.amount.toLocaleString(undefined, {
@@ -375,6 +392,10 @@ function renderManualOverrideValue(
       return doc.currency ?? "-";
     case "referenceNumber":
       return doc.referenceNumber ?? "-";
+    case "holderName":
+      return doc.holderName ?? "-";
+    case "issuingAuthority":
+      return doc.issuingAuthority ?? "-";
     case "correspondentId":
       return doc.correspondent?.name ?? "Removed";
     case "documentTypeId":
@@ -412,9 +433,12 @@ function DocumentDetailPage() {
     title: "",
     issueDate: "",
     dueDate: "",
+    expiryDate: "",
     amount: "",
     currency: "",
     referenceNumber: "",
+    holderName: "",
+    issuingAuthority: "",
     correspondentId: EMPTY_SELECT_VALUE,
     documentTypeId: EMPTY_SELECT_VALUE,
     tagIds: [] as string[],
@@ -668,9 +692,12 @@ function DocumentDetailPage() {
       title: doc.title,
       issueDate: doc.issueDate ?? "",
       dueDate: doc.dueDate ?? "",
+      expiryDate: doc.expiryDate ?? "",
       amount: doc.amount !== null ? String(doc.amount) : "",
       currency: doc.currency ?? "",
       referenceNumber: doc.referenceNumber ?? "",
+      holderName: doc.holderName ?? "",
+      issuingAuthority: doc.issuingAuthority ?? "",
       correspondentId: doc.correspondent?.id ?? EMPTY_SELECT_VALUE,
       documentTypeId: doc.documentType?.id ?? EMPTY_SELECT_VALUE,
       tagIds: doc.tags.map((tag) => tag.id),
@@ -698,6 +725,9 @@ function DocumentDetailPage() {
     if ((doc.dueDate ?? "") !== editForm.dueDate) {
       body.dueDate = editForm.dueDate || null;
     }
+    if ((doc.expiryDate ?? "") !== editForm.expiryDate) {
+      body.expiryDate = editForm.expiryDate || null;
+    }
 
     const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
     if (doc.amount !== nextAmount) {
@@ -712,6 +742,16 @@ function DocumentDetailPage() {
     const nextReferenceNumber = editForm.referenceNumber.trim() || null;
     if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
       body.referenceNumber = nextReferenceNumber;
+    }
+
+    const nextHolderName = editForm.holderName.trim() || null;
+    if ((doc.holderName ?? null) !== nextHolderName) {
+      body.holderName = nextHolderName;
+    }
+
+    const nextIssuingAuthority = editForm.issuingAuthority.trim() || null;
+    if ((doc.issuingAuthority ?? null) !== nextIssuingAuthority) {
+      body.issuingAuthority = nextIssuingAuthority;
     }
 
     const nextCorrespondentId =
@@ -812,6 +852,9 @@ function DocumentDetailPage() {
     if ((doc.dueDate ?? "") !== editForm.dueDate) {
       pendingLockedFields.push("dueDate");
     }
+    if ((doc.expiryDate ?? "") !== editForm.expiryDate) {
+      pendingLockedFields.push("expiryDate");
+    }
 
     const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
     if (doc.amount !== nextAmount) {
@@ -826,6 +869,16 @@ function DocumentDetailPage() {
     const nextReferenceNumber = editForm.referenceNumber.trim() || null;
     if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
       pendingLockedFields.push("referenceNumber");
+    }
+
+    const nextHolderName = editForm.holderName.trim() || null;
+    if ((doc.holderName ?? null) !== nextHolderName) {
+      pendingLockedFields.push("holderName");
+    }
+
+    const nextIssuingAuthority = editForm.issuingAuthority.trim() || null;
+    if ((doc.issuingAuthority ?? null) !== nextIssuingAuthority) {
+      pendingLockedFields.push("issuingAuthority");
     }
 
     const nextCorrespondentId =
@@ -1425,6 +1478,48 @@ function DocumentDetailPage() {
                 </div>
               </div>
 
+              {/* Expiry Date */}
+              <div className="flex items-start gap-2">
+                <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Expiry Date</p>
+                    {lockedFields.includes("expiryDate") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("expiryDate")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        type="date"
+                        value={editForm.expiryDate}
+                        onChange={(e) => setEditForm((f) => ({ ...f, expiryDate: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("expiryDate") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm font-medium">{formatDate(doc.expiryDate)}</p>
+                  )}
+                </div>
+              </div>
+
               {/* Amount & Currency */}
               <div className="flex items-start gap-2">
                 <DollarSign className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
@@ -1525,6 +1620,90 @@ function DocumentDetailPage() {
                     </>
                   ) : (
                     <p className="text-sm font-medium">{doc.referenceNumber ?? "-"}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Holder Name */}
+              <div className="flex items-start gap-2">
+                <FileQuestion className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Holder Name</p>
+                    {lockedFields.includes("holderName") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("holderName")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        value={editForm.holderName}
+                        onChange={(e) => setEditForm((f) => ({ ...f, holderName: e.target.value }))}
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("holderName") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm font-medium">{doc.holderName ?? "-"}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Issuing Authority */}
+              <div className="flex items-start gap-2">
+                <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">Issuing Authority</p>
+                    {lockedFields.includes("issuingAuthority") && (
+                      <>
+                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
+                          onClick={() => clearOverrideMutation.mutate("issuingAuthority")}
+                          disabled={clearOverrideMutation.isPending}
+                        >
+                          <Unlock className="h-3 w-3" />
+                          Unlock
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <>
+                      <Input
+                        value={editForm.issuingAuthority}
+                        onChange={(e) =>
+                          setEditForm((f) => ({ ...f, issuingAuthority: e.target.value }))
+                        }
+                        className="mt-1"
+                      />
+                      {pendingNewLocks.includes("issuingAuthority") && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Saving will lock this field.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm font-medium">{doc.issuingAuthority ?? "-"}</p>
                   )}
                 </div>
               </div>

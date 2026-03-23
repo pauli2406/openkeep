@@ -13,6 +13,7 @@ import { CorrespondentResolutionService } from "./correspondent-resolution.servi
 import { DeterministicMetadataExtractor } from "./deterministic-metadata.extractor";
 import { DeterministicChunker } from "./deterministic-chunker";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
+import { DocumentTypePolicyService } from "./document-type-policy.service";
 import { EmbeddingProviderRegistry } from "./embedding-provider.registry";
 import { GeminiEmbeddingProvider } from "./gemini-embedding.provider";
 import {
@@ -34,6 +35,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     BossService,
     ProcessingService,
     CorrespondentResolutionService,
+    DocumentTypePolicyService,
     LocalDocumentParseProvider,
     GoogleDocumentAiEnterpriseOcrProvider,
     GoogleGeminiLayoutParseProvider,
@@ -115,6 +117,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     BossService,
     ProcessingService,
     CorrespondentResolutionService,
+    DocumentTypePolicyService,
     DOCUMENT_PARSE_PROVIDER,
     METADATA_EXTRACTOR,
     CHUNKER,

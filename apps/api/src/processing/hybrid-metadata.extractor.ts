@@ -4,6 +4,7 @@ import type { ReviewEvidenceField, ReviewReason } from "@openkeep/types";
 import { AppConfigService } from "../common/config/app-config.service";
 import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import { DeterministicMetadataExtractor } from "./deterministic-metadata.extractor";
+import { DocumentTypePolicyService } from "./document-type-policy.service";
 import { computeConfidence } from "./normalization.util";
 import type {
   MetadataExtractionInput,
@@ -16,6 +17,8 @@ export class HybridMetadataExtractor implements MetadataExtractor {
   constructor(
     @Inject(DeterministicMetadataExtractor)
     private readonly deterministicExtractor: DeterministicMetadataExtractor,
+    @Inject(DocumentTypePolicyService)
+    private readonly documentTypePolicyService: DocumentTypePolicyService,
     @Inject(CorrespondentResolutionService)
     private readonly correspondentResolutionService: CorrespondentResolutionService,
     @Inject(AppConfigService) private readonly configService: AppConfigService,
@@ -24,9 +27,9 @@ export class HybridMetadataExtractor implements MetadataExtractor {
   async extract(input: MetadataExtractionInput): Promise<MetadataExtractionResult> {
     const result = await this.deterministicExtractor.extract(input);
     const resolution = await this.correspondentResolutionService.resolve(input, result);
-    const reviewEvidence = this.normalizeReviewEvidence(
-      result.metadata.reviewEvidence as Record<string, unknown> | undefined,
-      Boolean(resolution.correspondentName),
+    const reviewEvidence = await this.normalizeReviewEvidence(
+      result,
+      resolution.correspondentName,
     );
     const reviewReasons = this.resolveReviewReasons(result.reviewReasons, reviewEvidence);
     const confidence = this.resolveConfidence(result, resolution.metadata.matchStrategy);
@@ -53,30 +56,24 @@ export class HybridMetadataExtractor implements MetadataExtractor {
     };
   }
 
-  private normalizeReviewEvidence(
-    raw: Record<string, unknown> | undefined,
-    correspondentExtracted: boolean,
+  private async normalizeReviewEvidence(
+    result: MetadataExtractionResult,
+    correspondentName: string | null,
   ) {
-    const requiredFields = Array.isArray(raw?.requiredFields)
-      ? (raw!.requiredFields as ReviewEvidenceField[])
-      : [];
-    const extracted =
-      raw?.extracted && typeof raw.extracted === "object" && raw.extracted !== null
-        ? (raw.extracted as Record<string, unknown>)
-        : {};
-    const normalizedExtracted = {
-      correspondent: correspondentExtracted,
-      issueDate: Boolean(extracted.issueDate),
-      amount: Boolean(extracted.amount),
-      currency: Boolean(extracted.currency),
+    const policy = await this.documentTypePolicyService.getPolicy(result.documentTypeName);
+    const extracted = {
+      correspondent: Boolean(correspondentName),
+      issueDate: Boolean(result.issueDate),
+      dueDate: Boolean(result.dueDate),
+      amount: Boolean(result.amount),
+      currency: Boolean(result.currency),
+      referenceNumber: Boolean(result.referenceNumber),
+      expiryDate: Boolean(result.expiryDate),
+      holderName: Boolean(result.holderName),
+      issuingAuthority: Boolean(result.issuingAuthority),
     };
 
-    return {
-      documentClass: raw?.documentClass === "invoice" ? "invoice" : "generic",
-      requiredFields,
-      missingFields: requiredFields.filter((field) => !normalizedExtracted[field]),
-      extracted: normalizedExtracted,
-    };
+    return this.documentTypePolicyService.buildReviewEvidence(policy, extracted);
   }
 
   private resolveReviewReasons(

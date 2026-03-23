@@ -5,6 +5,7 @@ import {
   embeddingStatuses,
   parseProviders,
   processingJobStatuses,
+  type ReviewEvidenceField,
   reviewStatuses,
 } from "@openkeep/types";
 import { sql } from "drizzle-orm";
@@ -121,6 +122,10 @@ export const documentTypes = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     slug: varchar("slug", { length: 255 }).notNull(),
     description: text("description"),
+    requiredFields: jsonb("required_fields")
+      .$type<ReviewEvidenceField[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -177,9 +182,12 @@ export const documents = pgTable(
     pageCount: integer("page_count").notNull().default(0),
     issueDate: date("issue_date", { mode: "date" }),
     dueDate: date("due_date", { mode: "date" }),
+    expiryDate: date("expiry_date", { mode: "date" }),
     amount: numeric("amount", { precision: 12, scale: 2 }),
     currency: varchar("currency", { length: 3 }),
     referenceNumber: varchar("reference_number", { length: 255 }),
+    holderName: varchar("holder_name", { length: 255 }),
+    issuingAuthority: varchar("issuing_authority", { length: 255 }),
     confidence: numeric("confidence", { precision: 3, scale: 2 }),
     reviewStatus: reviewStatusEnum("review_status").notNull().default("not_required"),
     reviewReasons: jsonb("review_reasons")

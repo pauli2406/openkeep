@@ -1,6 +1,8 @@
 import {
   AnswerQueryRequestSchema,
   AnswerQueryResponseSchema,
+  BatchReprocessDocumentsRequestSchema,
+  BatchReprocessDocumentsResponseSchema,
   DocumentSchema,
   DocumentStatusSchema,
   DocumentHistoryResponseSchema,
@@ -93,6 +95,12 @@ export class RequeueDocumentProcessingResponseDto extends createZodDto(
   RequeueDocumentProcessingResponseSchema,
 ) {}
 export class ReprocessDocumentDto extends createZodDto(ReprocessDocumentRequestSchema) {}
+export class BatchReprocessDocumentsDto extends createZodDto(
+  BatchReprocessDocumentsRequestSchema,
+) {}
+export class BatchReprocessDocumentsResponseDto extends createZodDto(
+  BatchReprocessDocumentsResponseSchema,
+) {}
 export class AnswerQueryDto extends createZodDto(AnswerQueryRequestSchema) {}
 export class AnswerQueryResponseDto extends createZodDto(AnswerQueryResponseSchema) {}
 export class SemanticSearchDto extends createZodDto(SemanticSearchRequestSchema) {}

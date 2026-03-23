@@ -143,9 +143,12 @@ export function makeDocument(overrides: Partial<Document> = {}): Document {
     language: "en",
     issueDate: "2026-03-01",
     dueDate: "2026-03-31",
+    expiryDate: null,
     amount: 123.45,
     currency: "EUR",
     referenceNumber: "INV-2026-03",
+    holderName: null,
+    issuingAuthority: null,
     correspondent: {
       id: "22222222-2222-2222-2222-222222222222",
       name: "Acme Corp",
@@ -156,6 +159,14 @@ export function makeDocument(overrides: Partial<Document> = {}): Document {
       name: "Invoice",
       slug: "invoice",
       description: null,
+      requiredFields: [
+        "correspondent",
+        "issueDate",
+        "dueDate",
+        "amount",
+        "currency",
+        "referenceNumber",
+      ],
     },
     tags: [],
     confidence: 0.94,
@@ -234,6 +245,14 @@ export function makeDocumentType(overrides: Partial<DocumentType> = {}): Documen
     name: "Invoice",
     slug: "invoice",
     description: "Billing documents",
+    requiredFields: [
+      "correspondent",
+      "issueDate",
+      "dueDate",
+      "amount",
+      "currency",
+      "referenceNumber",
+    ],
     ...overrides,
   };
 }

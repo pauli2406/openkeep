@@ -162,11 +162,24 @@ export const CorrespondentSchema = z.object({
   summary: z.string().nullable().optional(),
 });
 
+export const reviewEvidenceFields = [
+  "correspondent",
+  "issueDate",
+  "dueDate",
+  "amount",
+  "currency",
+  "referenceNumber",
+  "expiryDate",
+  "holderName",
+  "issuingAuthority",
+] as const;
+
 export const DocumentTypeSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   slug: z.string().min(1),
   description: z.string().nullable().optional(),
+  requiredFields: z.array(z.enum(reviewEvidenceFields)).default([]),
 });
 
 export const DocumentTextBlockSchema = z.object({
@@ -177,12 +190,7 @@ export const DocumentTextBlockSchema = z.object({
   text: z.string().min(1),
 });
 
-export const ReviewEvidenceFieldSchema = z.enum([
-  "correspondent",
-  "issueDate",
-  "amount",
-  "currency",
-]);
+export const ReviewEvidenceFieldSchema = z.enum(reviewEvidenceFields);
 
 export const ReviewEvidenceSchema = z.object({
   documentClass: z.enum(["invoice", "generic"]),
@@ -191,8 +199,13 @@ export const ReviewEvidenceSchema = z.object({
   extracted: z.object({
     correspondent: z.boolean(),
     issueDate: z.boolean(),
+    dueDate: z.boolean(),
     amount: z.boolean(),
     currency: z.boolean(),
+    referenceNumber: z.boolean(),
+    expiryDate: z.boolean(),
+    holderName: z.boolean(),
+    issuingAuthority: z.boolean(),
   }),
   activeReasons: z.array(ReviewReasonSchema),
   confidence: z.number().min(0).max(1).nullable().optional(),
@@ -225,9 +238,12 @@ export const CorrespondentExtractionSchema = z.object({
 export const ManualOverrideFieldSchema = z.enum([
   "issueDate",
   "dueDate",
+  "expiryDate",
   "amount",
   "currency",
   "referenceNumber",
+  "holderName",
+  "issuingAuthority",
   "correspondentId",
   "documentTypeId",
   "tagIds",
@@ -239,9 +255,12 @@ export const ManualOverridesSchema = z.object({
     .object({
       issueDate: z.string().nullable().optional(),
       dueDate: z.string().nullable().optional(),
+      expiryDate: z.string().nullable().optional(),
       amount: z.number().nullable().optional(),
       currency: z.string().length(3).nullable().optional(),
       referenceNumber: z.string().nullable().optional(),
+      holderName: z.string().nullable().optional(),
+      issuingAuthority: z.string().nullable().optional(),
       correspondentId: z.string().uuid().nullable().optional(),
       documentTypeId: z.string().uuid().nullable().optional(),
       tagIds: z.array(z.string().uuid()).optional(),
@@ -317,9 +336,12 @@ export const DocumentSchema = z.object({
   language: z.string().nullable(),
   issueDate: z.string().nullable(),
   dueDate: z.string().nullable(),
+  expiryDate: z.string().nullable(),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),
   referenceNumber: z.string().nullable(),
+  holderName: z.string().nullable(),
+  issuingAuthority: z.string().nullable(),
   correspondent: CorrespondentSchema.nullable(),
   documentType: DocumentTypeSchema.nullable(),
   tags: z.array(TagSchema),
@@ -544,9 +566,12 @@ export const UpdateDocumentSchema = z.object({
   title: z.string().trim().min(1).optional(),
   dueDate: z.string().nullable().optional(),
   issueDate: z.string().nullable().optional(),
+  expiryDate: z.string().nullable().optional(),
   amount: z.number().nullable().optional(),
   currency: z.string().length(3).nullable().optional(),
   referenceNumber: z.string().nullable().optional(),
+  holderName: z.string().nullable().optional(),
+  issuingAuthority: z.string().nullable().optional(),
   correspondentId: z.string().uuid().nullable().optional(),
   documentTypeId: z.string().uuid().nullable().optional(),
   tagIds: z.array(z.string().uuid()).optional(),
@@ -577,6 +602,31 @@ export const RequeueDocumentProcessingResponseSchema = z.object({
 
 export const ReprocessDocumentRequestSchema = z.object({
   parseProvider: ParseProviderSchema.optional(),
+});
+
+export const BatchReprocessDocumentsRequestSchema = z
+  .object({
+    scope: z.enum(["selected", "filtered", "all"]).default("selected"),
+    documentIds: z.array(z.string().uuid()).optional(),
+    filters: SearchDocumentsFiltersSchema.optional(),
+    parseProvider: ParseProviderSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.scope === "selected" && (!value.documentIds || value.documentIds.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["documentIds"],
+        message: "documentIds are required when scope is selected",
+      });
+    }
+  });
+
+export const BatchReprocessDocumentsResponseSchema = z.object({
+  queued: z.literal(true),
+  queuedCount: z.number().int().nonnegative(),
+  skippedCount: z.number().int().nonnegative(),
+  queuedDocumentIds: z.array(z.string().uuid()),
+  skippedDocumentIds: z.array(z.string().uuid()),
 });
 
 export const LoginSchema = z.object({
@@ -778,11 +828,13 @@ export const UpdateCorrespondentSchema = z.object({
 export const CreateDocumentTypeSchema = z.object({
   name: z.string().trim().min(1).max(255),
   description: z.string().trim().max(2_000).nullable().optional(),
+  requiredFields: z.array(ReviewEvidenceFieldSchema).optional(),
 });
 
 export const UpdateDocumentTypeSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   description: z.string().trim().max(2_000).nullable().optional(),
+  requiredFields: z.array(ReviewEvidenceFieldSchema).optional(),
 });
 
 export const MergeTaxonomySchema = z.object({
@@ -865,9 +917,12 @@ export const ArchiveDocumentSchema = z.object({
   pageCount: z.number().int().nonnegative(),
   issueDate: ArchiveDateSchema.nullable(),
   dueDate: ArchiveDateSchema.nullable(),
+  expiryDate: ArchiveDateSchema.nullable(),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),
   referenceNumber: z.string().nullable(),
+  holderName: z.string().nullable(),
+  issuingAuthority: z.string().nullable(),
   confidence: z.number().min(0).max(1).nullable(),
   reviewStatus: ReviewStatusSchema,
   reviewReasons: z.array(ReviewReasonSchema),
@@ -1101,6 +1156,12 @@ export type RequeueDocumentProcessingResponse = z.infer<
   typeof RequeueDocumentProcessingResponseSchema
 >;
 export type ReprocessDocumentRequest = z.infer<typeof ReprocessDocumentRequestSchema>;
+export type BatchReprocessDocumentsRequest = z.infer<
+  typeof BatchReprocessDocumentsRequestSchema
+>;
+export type BatchReprocessDocumentsResponse = z.infer<
+  typeof BatchReprocessDocumentsResponseSchema
+>;
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type SetupOwnerInput = z.infer<typeof SetupOwnerSchema>;
 export type RefreshInput = z.infer<typeof RefreshSchema>;

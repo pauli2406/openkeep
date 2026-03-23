@@ -167,6 +167,7 @@ export class ArchiveService {
       })),
       documentTypes: documentTypeRows.map((row) => ({
         ...row,
+        requiredFields: Array.isArray(row.requiredFields) ? row.requiredFields : [],
         createdAt: row.createdAt.toISOString(),
       })),
       files: fileRows.map((row) => ({
@@ -181,6 +182,9 @@ export class ArchiveService {
         confidence: row.confidence === null ? null : Number(row.confidence),
         issueDate: row.issueDate ? row.issueDate.toISOString().slice(0, 10) : null,
         dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
+        expiryDate: row.expiryDate ? row.expiryDate.toISOString().slice(0, 10) : null,
+        holderName: row.holderName,
+        issuingAuthority: row.issuingAuthority,
         reviewedAt: row.reviewedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
         processedAt: row.processedAt?.toISOString() ?? null,
@@ -789,6 +793,7 @@ export class ArchiveService {
         .values(
           snapshot.documentTypes.map((row) => ({
             ...row,
+            requiredFields: row.requiredFields ?? [],
             createdAt: this.parseTimestamp(row.createdAt),
           })),
         )
@@ -798,6 +803,7 @@ export class ArchiveService {
             name: sql`excluded.name`,
             slug: sql`excluded.slug`,
             description: sql`excluded.description`,
+            requiredFields: sql`excluded.required_fields`,
             createdAt: sql`excluded.created_at`,
           },
         });
@@ -857,6 +863,9 @@ export class ArchiveService {
           confidence: row.confidence === null ? null : row.confidence.toFixed(2),
           issueDate: this.parseDateOnly(row.issueDate),
           dueDate: this.parseDateOnly(row.dueDate),
+          expiryDate: this.parseDateOnly(row.expiryDate),
+          holderName: row.holderName,
+          issuingAuthority: row.issuingAuthority,
           reviewedAt: row.reviewedAt ? this.parseTimestamp(row.reviewedAt) : null,
           createdAt: this.parseTimestamp(row.createdAt),
           processedAt: row.processedAt ? this.parseTimestamp(row.processedAt) : null,
@@ -877,9 +886,12 @@ export class ArchiveService {
           pageCount: sql`excluded.page_count`,
           issueDate: sql`excluded.issue_date`,
           dueDate: sql`excluded.due_date`,
+          expiryDate: sql`excluded.expiry_date`,
           amount: sql`excluded.amount`,
           currency: sql`excluded.currency`,
           referenceNumber: sql`excluded.reference_number`,
+          holderName: sql`excluded.holder_name`,
+          issuingAuthority: sql`excluded.issuing_authority`,
           confidence: sql`excluded.confidence`,
           reviewStatus: sql`excluded.review_status`,
           reviewReasons: sql`excluded.review_reasons`,

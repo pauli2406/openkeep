@@ -28,6 +28,8 @@ import { CurrentPrincipal } from "../auth/current-principal.decorator";
 import { AccessAuthGuard } from "../auth/access-auth.guard";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
+  BatchReprocessDocumentsDto,
+  BatchReprocessDocumentsResponseDto,
   RequeueDocumentProcessingDto,
   RequeueDocumentProcessingResponseDto,
   ReprocessDocumentDto,
@@ -220,6 +222,16 @@ export class DocumentsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.reprocessDocument(id, principal, body?.parseProvider);
+  }
+
+  @Post("reprocess/bulk")
+  @ApiOperation({ summary: "Reprocess multiple documents by selection, filter, or full archive scope" })
+  @ApiCreatedResponse({ description: "Bulk reprocess queue result" })
+  async batchReprocessDocuments(
+    @Body() body: BatchReprocessDocumentsDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ): Promise<BatchReprocessDocumentsResponseDto> {
+    return this.documentsService.batchReprocessDocuments(body, principal);
   }
 
   @Post(":id/reembed")

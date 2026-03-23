@@ -44,6 +44,7 @@ import {
 } from "./constants";
 import { BossService } from "./boss.service";
 import { CorrespondentResolutionService } from "./correspondent-resolution.service";
+import { DocumentTypePolicyService } from "./document-type-policy.service";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
 import { EmbeddingProviderRegistry } from "./embedding-provider.registry";
 import { padEmbedding, serializeHalfVector } from "./embedding.util";
@@ -84,6 +85,8 @@ export class ProcessingService {
     @Inject(MetricsService) private readonly metricsService: MetricsService,
     @Inject(CorrespondentResolutionService)
     private readonly correspondentResolutionService: CorrespondentResolutionService,
+    @Inject(DocumentTypePolicyService)
+    private readonly documentTypePolicyService: DocumentTypePolicyService,
     @Inject(DOCUMENT_PARSE_PROVIDER)
     private readonly parseProviderRegistry: DocumentParseProviderRegistry,
     @Inject(EMBEDDING_PROVIDER_REGISTRY)
@@ -244,9 +247,12 @@ export class ProcessingService {
         {
           issueDate: metadata.issueDate,
           dueDate: metadata.dueDate,
+          expiryDate: metadata.expiryDate,
           amount: metadata.amount,
           currency: metadata.currency,
           referenceNumber: metadata.referenceNumber,
+          holderName: metadata.holderName,
+          issuingAuthority: metadata.issuingAuthority,
           correspondentId,
           documentTypeId,
           tagIds,
@@ -313,10 +319,13 @@ export class ProcessingService {
             pageCount: parsed.pages.length,
             issueDate: mergedArchiveFields.issueDate,
             dueDate: mergedArchiveFields.dueDate,
+            expiryDate: mergedArchiveFields.expiryDate,
             amount:
               mergedArchiveFields.amount === null ? null : mergedArchiveFields.amount.toFixed(2),
             currency: mergedArchiveFields.currency,
             referenceNumber: mergedArchiveFields.referenceNumber,
+            holderName: mergedArchiveFields.holderName,
+            issuingAuthority: mergedArchiveFields.issuingAuthority,
             confidence: metadata.confidence.toFixed(2),
             parseProvider: parsed.provider,
             chunkCount: chunks.length,
@@ -1209,7 +1218,8 @@ export class ProcessingService {
   }
 
   private async ensureDocumentType(name: string): Promise<string> {
-    const slug = this.createSlug(name);
+    const canonicalName = (await this.documentTypePolicyService.resolveCanonicalName(name)) ?? name;
+    const slug = this.createSlug(canonicalName);
     const [existing] = await this.databaseService.db
       .select({ id: documentTypes.id })
       .from(documentTypes)
@@ -1223,10 +1233,13 @@ export class ProcessingService {
     const [created] = await this.databaseService.db
       .insert(documentTypes)
       .values({
-        name,
+        name: canonicalName,
         slug,
+        requiredFields: (await this.documentTypePolicyService.getPolicy(canonicalName)).requiredFields,
       })
       .returning({ id: documentTypes.id });
+
+    this.documentTypePolicyService.invalidateCache();
 
     return created.id;
   }
@@ -1265,9 +1278,12 @@ export class ProcessingService {
     extracted: {
       issueDate: Date | null;
       dueDate: Date | null;
+      expiryDate: Date | null;
       amount: number | null;
       currency: string | null;
       referenceNumber: string | null;
+      holderName: string | null;
+      issuingAuthority: string | null;
       correspondentId: string | null;
       documentTypeId: string | null;
       tagIds: string[];
@@ -1282,6 +1298,9 @@ export class ProcessingService {
       dueDate: this.isFieldLocked(manualOverrides, "dueDate")
         ? this.toDateOrNull(manualOverrides.values.dueDate)
         : extracted.dueDate,
+      expiryDate: this.isFieldLocked(manualOverrides, "expiryDate")
+        ? this.toDateOrNull(manualOverrides.values.expiryDate)
+        : extracted.expiryDate,
       amount: this.isFieldLocked(manualOverrides, "amount")
         ? manualOverrides.values.amount ?? null
         : extracted.amount,
@@ -1291,6 +1310,12 @@ export class ProcessingService {
       referenceNumber: this.isFieldLocked(manualOverrides, "referenceNumber")
         ? manualOverrides.values.referenceNumber ?? null
         : extracted.referenceNumber,
+      holderName: this.isFieldLocked(manualOverrides, "holderName")
+        ? manualOverrides.values.holderName ?? null
+        : extracted.holderName,
+      issuingAuthority: this.isFieldLocked(manualOverrides, "issuingAuthority")
+        ? manualOverrides.values.issuingAuthority ?? null
+        : extracted.issuingAuthority,
       correspondentId: this.isFieldLocked(manualOverrides, "correspondentId")
         ? manualOverrides.values.correspondentId ?? null
         : extracted.correspondentId,
@@ -1325,6 +1350,9 @@ export class ProcessingService {
         dueDate: typeof values.dueDate === "string" || values.dueDate === null
           ? (values.dueDate as string | null)
           : undefined,
+        expiryDate: typeof values.expiryDate === "string" || values.expiryDate === null
+          ? (values.expiryDate as string | null)
+          : undefined,
         amount: typeof values.amount === "number" || values.amount === null
           ? (values.amount as number | null)
           : undefined,
@@ -1334,6 +1362,14 @@ export class ProcessingService {
         referenceNumber:
           typeof values.referenceNumber === "string" || values.referenceNumber === null
             ? (values.referenceNumber as string | null)
+            : undefined,
+        holderName:
+          typeof values.holderName === "string" || values.holderName === null
+            ? (values.holderName as string | null)
+            : undefined,
+        issuingAuthority:
+          typeof values.issuingAuthority === "string" || values.issuingAuthority === null
+            ? (values.issuingAuthority as string | null)
             : undefined,
         correspondentId:
           typeof values.correspondentId === "string" || values.correspondentId === null
@@ -1416,6 +1452,13 @@ export class ProcessingService {
       input.metadata.metadata.reviewEvidence !== null
         ? (input.metadata.metadata.reviewEvidence as Record<string, unknown>)
         : {};
+    const extractedRecord =
+      reviewEvidenceRecord.extracted &&
+      typeof reviewEvidenceRecord.extracted === "object" &&
+      reviewEvidenceRecord.extracted !== null
+        ? (reviewEvidenceRecord.extracted as Record<string, unknown>)
+        : {};
+    const emptyExtracted = this.documentTypePolicyService.emptyExtracted();
     const reviewEvidence: ReviewEvidence = {
       documentClass:
         reviewEvidenceRecord.documentClass === "invoice" ? "invoice" : "generic",
@@ -1425,30 +1468,21 @@ export class ProcessingService {
       missingFields: Array.isArray(reviewEvidenceRecord.missingFields)
         ? (reviewEvidenceRecord.missingFields as ReviewEvidence["missingFields"])
         : [],
-      extracted:
-        reviewEvidenceRecord.extracted &&
-        typeof reviewEvidenceRecord.extracted === "object" &&
-        reviewEvidenceRecord.extracted !== null
-          ? {
-              correspondent: Boolean(
-                (reviewEvidenceRecord.extracted as Record<string, unknown>).correspondent,
-              ),
-              issueDate: Boolean(
-                (reviewEvidenceRecord.extracted as Record<string, unknown>).issueDate,
-              ),
-              amount: Boolean(
-                (reviewEvidenceRecord.extracted as Record<string, unknown>).amount,
-              ),
-              currency: Boolean(
-                (reviewEvidenceRecord.extracted as Record<string, unknown>).currency,
-              ),
-            }
-          : {
-              correspondent: false,
-              issueDate: false,
-              amount: false,
-              currency: false,
-            },
+      extracted: {
+        correspondent: Boolean(extractedRecord.correspondent ?? emptyExtracted.correspondent),
+        issueDate: Boolean(extractedRecord.issueDate ?? emptyExtracted.issueDate),
+        dueDate: Boolean(extractedRecord.dueDate ?? emptyExtracted.dueDate),
+        amount: Boolean(extractedRecord.amount ?? emptyExtracted.amount),
+        currency: Boolean(extractedRecord.currency ?? emptyExtracted.currency),
+        referenceNumber: Boolean(
+          extractedRecord.referenceNumber ?? emptyExtracted.referenceNumber,
+        ),
+        expiryDate: Boolean(extractedRecord.expiryDate ?? emptyExtracted.expiryDate),
+        holderName: Boolean(extractedRecord.holderName ?? emptyExtracted.holderName),
+        issuingAuthority: Boolean(
+          extractedRecord.issuingAuthority ?? emptyExtracted.issuingAuthority,
+        ),
+      },
       activeReasons: input.reviewReasons,
       confidence: input.metadata.confidence,
       confidenceThreshold: this.configService.get("REVIEW_CONFIDENCE_THRESHOLD"),

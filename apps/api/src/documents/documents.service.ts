@@ -23,6 +23,8 @@ import type {
   AnswerQueryRequest,
   AnswerQueryResponse,
   AuditEvent,
+  BatchReprocessDocumentsRequest,
+  BatchReprocessDocumentsResponse,
   DeleteDocumentResponse,
   Document,
   DocumentMetadata,
@@ -77,9 +79,12 @@ interface DocumentRow {
   language: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
+  expiryDate: Date | null;
   amount: string | number | null;
   currency: string | null;
   referenceNumber: string | null;
+  holderName: string | null;
+  issuingAuthority: string | null;
   confidence: string | number | null;
   reviewStatus: Document["reviewStatus"];
   reviewReasons: ReviewReason[];
@@ -104,14 +109,22 @@ interface DocumentRow {
   documentTypeName: string | null;
   documentTypeSlug: string | null;
   documentTypeDescription: string | null;
+  documentTypeRequiredFields: Document["documentType"] extends infer T
+    ? T extends { requiredFields: infer Fields }
+      ? Fields | null
+      : null
+    : null;
 }
 
 const MANUAL_OVERRIDE_FIELDS: ManualOverrideField[] = [
   "issueDate",
   "dueDate",
+  "expiryDate",
   "amount",
   "currency",
   "referenceNumber",
+  "holderName",
+  "issuingAuthority",
   "correspondentId",
   "documentTypeId",
   "tagIds",
@@ -579,6 +592,12 @@ export class DocumentsService {
               : input.dueDate === null
                 ? null
                 : parseDateOnly(input.dueDate),
+          expiryDate:
+            input.expiryDate === undefined
+              ? undefined
+              : input.expiryDate === null
+                ? null
+                : parseDateOnly(input.expiryDate),
           issueDate:
             input.issueDate === undefined
               ? undefined
@@ -598,6 +617,8 @@ export class DocumentsService {
                 ? null
                 : normalizeCurrencyCode(input.currency),
           referenceNumber: input.referenceNumber ?? undefined,
+          holderName: input.holderName ?? undefined,
+          issuingAuthority: input.issuingAuthority ?? undefined,
           correspondentId:
             input.correspondentId === null ? null : input.correspondentId ?? undefined,
           documentTypeId:
@@ -801,6 +822,80 @@ export class DocumentsService {
     });
 
     return queued;
+  }
+
+  async batchReprocessDocuments(
+    input: BatchReprocessDocumentsRequest,
+    principal: AuthenticatedPrincipal,
+  ): Promise<BatchReprocessDocumentsResponse> {
+    const targetDocumentIds = await this.resolveBatchReprocessDocumentIds(input);
+    const queuedDocumentIds: string[] = [];
+    const skippedDocumentIds: string[] = [];
+
+    if (targetDocumentIds.length === 0) {
+      return {
+        queued: true,
+        queuedCount: 0,
+        skippedCount: 0,
+        queuedDocumentIds,
+        skippedDocumentIds,
+      };
+    }
+
+    const rows = await this.databaseService.db
+      .select({
+        id: documents.id,
+        status: documents.status,
+      })
+      .from(documents)
+      .where(inArray(documents.id, targetDocumentIds));
+
+    const statusById = new Map(rows.map((row) => [row.id, row.status]));
+
+    for (const documentId of targetDocumentIds) {
+      if (statusById.get(documentId) === "processing") {
+        skippedDocumentIds.push(documentId);
+        continue;
+      }
+
+      const queued = await this.processingService.enqueueDocumentProcessing(
+        documentId,
+        true,
+        input.parseProvider,
+      );
+
+      queuedDocumentIds.push(documentId);
+      await this.recordAuditEvent({
+        actorUserId: principal.userId,
+        documentId,
+        eventType: "document.reprocess_requested",
+        payload: {
+          parseProvider: input.parseProvider ?? null,
+          processingJobId: queued.processingJobId,
+          bulk: true,
+        },
+      });
+    }
+
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      eventType: "document.bulk_reprocess_requested",
+      payload: {
+        scope: input.scope,
+        parseProvider: input.parseProvider ?? null,
+        requestedCount: targetDocumentIds.length,
+        queuedCount: queuedDocumentIds.length,
+        skippedCount: skippedDocumentIds.length,
+      },
+    });
+
+    return {
+      queued: true,
+      queuedCount: queuedDocumentIds.length,
+      skippedCount: skippedDocumentIds.length,
+      queuedDocumentIds,
+      skippedDocumentIds,
+    };
   }
 
   async reembedDocument(documentId: string, principal: AuthenticatedPrincipal) {
@@ -1176,6 +1271,20 @@ export class DocumentsService {
     return result.rows.map((row) => row.id);
   }
 
+  private async resolveBatchReprocessDocumentIds(
+    input: BatchReprocessDocumentsRequest,
+  ): Promise<string[]> {
+    if (input.scope === "all") {
+      return this.listDocumentIdsByFilters({});
+    }
+
+    if (input.scope === "filtered") {
+      return this.listDocumentIdsByFilters(input.filters ?? {});
+    }
+
+    return [...new Set((input.documentIds ?? []).filter(Boolean))];
+  }
+
   private async filterStaleDocumentIds(documentIds: string[]) {
     if (documentIds.length === 0) {
       return [];
@@ -1200,9 +1309,12 @@ export class DocumentsService {
         language: documents.language,
         issueDate: documents.issueDate,
         dueDate: documents.dueDate,
+        expiryDate: documents.expiryDate,
         amount: documents.amount,
         currency: documents.currency,
         referenceNumber: documents.referenceNumber,
+        holderName: documents.holderName,
+        issuingAuthority: documents.issuingAuthority,
         confidence: documents.confidence,
         reviewStatus: documents.reviewStatus,
         reviewReasons: documents.reviewReasons,
@@ -1227,6 +1339,7 @@ export class DocumentsService {
         documentTypeName: documentTypes.name,
         documentTypeSlug: documentTypes.slug,
         documentTypeDescription: documentTypes.description,
+        documentTypeRequiredFields: documentTypes.requiredFields,
       })
       .from(documents)
       .innerJoin(documentFiles, eq(documents.fileId, documentFiles.id))
@@ -1557,9 +1670,12 @@ export class DocumentsService {
       language: row.language,
       issueDate: dateToIso(row.issueDate),
       dueDate: dateToIso(row.dueDate),
+      expiryDate: dateToIso(row.expiryDate),
       amount: row.amount === null ? null : Number(row.amount),
       currency: row.currency,
       referenceNumber: row.referenceNumber,
+      holderName: row.holderName,
+      issuingAuthority: row.issuingAuthority,
       correspondent:
         row.correspondentId && row.correspondentName && row.correspondentSlug
           ? {
@@ -1575,6 +1691,9 @@ export class DocumentsService {
               name: row.documentTypeName,
               slug: row.documentTypeSlug,
               description: row.documentTypeDescription,
+              requiredFields: Array.isArray(row.documentTypeRequiredFields)
+                ? row.documentTypeRequiredFields
+                : [],
             }
           : null,
       tags: documentTags,
@@ -1642,12 +1761,15 @@ export class DocumentsService {
 
     assignIfPresent("issueDate", input.issueDate ?? null);
     assignIfPresent("dueDate", input.dueDate ?? null);
+    assignIfPresent("expiryDate", input.expiryDate ?? null);
     assignIfPresent("amount", input.amount ?? null);
     assignIfPresent(
       "currency",
       input.currency === undefined ? undefined : normalizeCurrencyCode(input.currency),
     );
     assignIfPresent("referenceNumber", input.referenceNumber ?? null);
+    assignIfPresent("holderName", input.holderName ?? null);
+    assignIfPresent("issuingAuthority", input.issuingAuthority ?? null);
     assignIfPresent("correspondentId", input.correspondentId ?? null);
     assignIfPresent("documentTypeId", input.documentTypeId ?? null);
     assignIfPresent("tagIds", input.tagIds);

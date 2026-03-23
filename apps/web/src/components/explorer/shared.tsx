@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowRight,
   CalendarDays,
+  Check,
   CircleDot,
   FileText,
 } from "lucide-react";
@@ -206,9 +207,19 @@ export function DeadlineList({
 export function DocumentRows({
   documents,
   emptyLabel = "No documents found for the current selection.",
+  selectedIds = [],
+  selectionMode = false,
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
 }: {
   documents: Document[];
   emptyLabel?: string;
+  selectedIds?: string[];
+  selectionMode?: boolean;
+  onToggleSelect?: (documentId: string) => void;
+  onSelectAll?: () => void;
+  onClearSelection?: () => void;
 }) {
   if (documents.length === 0) {
     return (
@@ -218,17 +229,83 @@ export function DocumentRows({
     );
   }
 
+  const selectedCount = documents.filter((document) => selectedIds.includes(document.id)).length;
+  const allSelected = selectedCount === documents.length;
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.45rem] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.7),rgba(255,248,236,0.94))] px-4 py-3 shadow-[0_16px_40px_rgba(142,119,78,0.08)]">
+        <div className="space-y-1">
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+            List Curation
+          </p>
+          <p className="text-sm text-[color:var(--explorer-ink)]">
+            {selectionMode
+              ? `${selectedCount} of ${documents.length} visible documents selected`
+              : "Enable selection mode to curate or delete multiple documents at once."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectionMode ? (
+            <>
+              <button
+                type="button"
+                onClick={() => (allSelected ? onClearSelection?.() : onSelectAll?.())}
+                className="rounded-full border border-[color:var(--explorer-border)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
+              >
+                {allSelected ? "Clear visible" : "Select visible"}
+              </button>
+              <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-cobalt)]">
+                Selection mode
+              </span>
+            </>
+          ) : (
+            <span className="rounded-full border border-dashed border-[color:var(--explorer-border)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+              Open cards normally
+            </span>
+          )}
+        </div>
+      </div>
+
       {documents.map((document) => (
-        <Link
-          key={document.id}
-          to="/documents/$documentId"
-          params={{ documentId: document.id }}
-          className="group flex items-start justify-between gap-4 rounded-[1.5rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] px-4 py-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/40"
-        >
-          <div className="min-w-0 space-y-2">
-            <div className="flex items-center gap-2 text-[0.72rem] uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+        (() => {
+          const isSelected = selectedIds.includes(document.id);
+          const cardClassName = cn(
+            "group relative flex items-start justify-between gap-4 rounded-[1.5rem] border px-4 py-4 transition",
+            selectionMode
+              ? "border-[color:var(--explorer-border-strong)] bg-[linear-gradient(180deg,rgba(255,251,244,0.96),rgba(248,241,228,0.96))] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/45"
+              : "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/40",
+            isSelected &&
+              "border-[color:var(--explorer-cobalt)] bg-[linear-gradient(180deg,rgba(236,241,255,0.88),rgba(255,251,244,0.98))] shadow-[0_18px_38px_rgba(56,84,165,0.16)]",
+          );
+
+          const content = (
+            <>
+              {selectionMode ? (
+                <button
+                  type="button"
+                  aria-label={isSelected ? `Deselect ${document.title}` : `Select ${document.title}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleSelect?.(document.id);
+                  }}
+                  className={cn(
+                    "absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border transition",
+                    isSelected
+                      ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-white shadow-[0_10px_22px_rgba(56,84,165,0.25)]"
+                      : "border-[color:var(--explorer-border-strong)] bg-white/85 text-[color:var(--explorer-muted)] hover:border-[color:var(--explorer-cobalt)] hover:text-[color:var(--explorer-cobalt)]",
+                  )}
+                >
+                  <Check className="h-4 w-4" />
+                </button>
+              ) : null}
+              <div className="min-w-0 space-y-2">
+            <div
+              className={cn(
+                "flex items-center gap-2 text-[0.72rem] uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]",
+                selectionMode && "pl-11",
+              )}
+            >
               <CircleDot
                 className="h-3.5 w-3.5"
                 style={{
@@ -265,8 +342,55 @@ export function DocumentRows({
               />
             ) : null}
           </div>
-          <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[color:var(--explorer-muted)] transition group-hover:translate-x-0.5" />
-        </Link>
+              <div className="mt-1 flex shrink-0 items-center gap-2">
+                {selectionMode ? (
+                  <span
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                      isSelected
+                        ? "bg-[color:var(--explorer-cobalt)] text-white"
+                        : "bg-white/80 text-[color:var(--explorer-muted)]",
+                    )}
+                  >
+                    {isSelected ? "Selected" : "Select"}
+                  </span>
+                ) : null}
+                <ArrowRight className="h-4 w-4 text-[color:var(--explorer-muted)] transition group-hover:translate-x-0.5" />
+              </div>
+            </>
+          );
+
+          if (selectionMode) {
+            return (
+              <div
+                key={document.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onToggleSelect?.(document.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onToggleSelect?.(document.id);
+                  }
+                }}
+                className={cardClassName}
+              >
+                {content}
+              </div>
+            );
+          }
+
+          return (
+            <Link
+              key={document.id}
+              to="/documents/$documentId"
+              params={{ documentId: document.id }}
+              className={cardClassName}
+            >
+              {content}
+            </Link>
+          );
+        })()
       ))}
     </div>
   );

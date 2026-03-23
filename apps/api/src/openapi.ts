@@ -9,6 +9,8 @@ import {
   ArchiveImportResultSchema,
   ArchiveSnapshotSchema,
   AuthTokensSchema,
+  BatchReprocessDocumentsRequestSchema,
+  BatchReprocessDocumentsResponseSchema,
   CorrespondentSchema,
   CorrespondentInsightsResponseSchema,
   CreateApiTokenResponseSchema,
@@ -621,6 +623,22 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "Queued processing job metadata",
     "RequeueDocumentProcessingResponse",
     RequeueDocumentProcessingResponseSchema,
+  );
+  patchJsonRequest(
+    document,
+    "/api/documents/reprocess/bulk",
+    "post",
+    "BatchReprocessDocumentsRequest",
+    BatchReprocessDocumentsRequestSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/reprocess/bulk",
+    "post",
+    201,
+    "Bulk reprocess queue result",
+    "BatchReprocessDocumentsResponse",
+    BatchReprocessDocumentsResponseSchema,
   );
   patchJsonResponse(
     document,
