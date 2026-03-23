@@ -125,7 +125,7 @@ export const AppEnvSchema = z.object({
   PROCESSING_RETRY_LIMIT: NumberFromEnv.default(2),
   PROCESSING_RETRY_DELAY_SECONDS: NumberFromEnv.default(30),
   WATCH_FOLDER_PATH: EmptyStringToUndefined(z.string().optional()),
-  MAX_UPLOAD_BYTES: NumberFromEnv.default(26_214_400),
+  MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
   SEARCH_DEFAULT_PAGE_SIZE: NumberFromEnv.default(20),
   SEARCH_MAX_PAGE_SIZE: NumberFromEnv.default(100),
   LOG_LEVEL: z

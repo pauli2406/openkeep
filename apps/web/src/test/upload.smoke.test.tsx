@@ -104,4 +104,30 @@ describe("upload smoke", () => {
 
     expect(await screen.findByText("Unsupported file type")).toBeInTheDocument();
   });
+
+  it("shows payload-too-large errors from the API", async () => {
+    server.use(
+      http.post(apiUrl("/api/documents"), () =>
+        HttpResponse.text("request file too large", { status: 413 }),
+      ),
+    );
+
+    const { container, user } = renderAuthenticatedApp({
+      route: "/upload",
+    });
+
+    await screen.findByRole("heading", { name: /upload documents/i });
+
+    const input = container.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["large"], "large.pdf", { type: "application/pdf" })],
+      },
+    });
+    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
+
+    expect(await screen.findByText("request file too large")).toBeInTheDocument();
+  });
 });

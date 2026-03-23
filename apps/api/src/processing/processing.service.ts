@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   auditEvents,
+  correspondentAliases,
   documentChunkEmbeddings,
   correspondents,
   documentChunks,
@@ -42,9 +43,11 @@ import {
   METADATA_EXTRACTOR,
 } from "./constants";
 import { BossService } from "./boss.service";
+import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
 import { EmbeddingProviderRegistry } from "./embedding-provider.registry";
 import { padEmbedding, serializeHalfVector } from "./embedding.util";
+import { normalizeCorrespondentName } from "./normalization.util";
 import type {
   AnswerProvider,
   Chunker,
@@ -79,6 +82,8 @@ export class ProcessingService {
     @Inject(ObjectStorageService) private readonly storageService: ObjectStorageService,
     @Inject(BossService) private readonly bossService: BossService,
     @Inject(MetricsService) private readonly metricsService: MetricsService,
+    @Inject(CorrespondentResolutionService)
+    private readonly correspondentResolutionService: CorrespondentResolutionService,
     @Inject(DOCUMENT_PARSE_PROVIDER)
     private readonly parseProviderRegistry: DocumentParseProviderRegistry,
     @Inject(EMBEDDING_PROVIDER_REGISTRY)
@@ -247,6 +252,7 @@ export class ProcessingService {
           tagIds,
         },
       );
+      const extractedCorrespondent = this.readCorrespondentExtraction(metadata.metadata);
       const documentMetadata = this.buildDocumentMetadata({
         metadata,
         existingMetadata: record.metadata,
@@ -376,6 +382,36 @@ export class ProcessingService {
       this.metricsService.incrementParseJobsTotal(parsed.provider, "completed");
       if (fallbackUsed) {
         this.metricsService.incrementParseFallbackUsageTotal();
+      }
+      if (
+        extractedCorrespondent.rawName &&
+        mergedArchiveFields.correspondentId &&
+        mergedArchiveFields.correspondentId === correspondentId
+      ) {
+        await this.correspondentResolutionService.persistAlias({
+          correspondentId: mergedArchiveFields.correspondentId,
+          alias: extractedCorrespondent.rawName,
+          source:
+            extractedCorrespondent.matchStrategy === "llm_choice" ||
+            extractedCorrespondent.matchStrategy === "new"
+              ? "llm"
+              : "import",
+          confidence: extractedCorrespondent.confidence,
+          canonicalName: metadata.correspondentName,
+        });
+        await this.correspondentResolutionService.applyAliasToUnresolvedDocuments({
+          correspondentId: mergedArchiveFields.correspondentId,
+          alias: extractedCorrespondent.rawName,
+          resolvedName: metadata.correspondentName ?? extractedCorrespondent.resolvedName ?? "",
+          confidence: extractedCorrespondent.confidence,
+          matchStrategy:
+            extractedCorrespondent.matchStrategy === "exact" ||
+            extractedCorrespondent.matchStrategy === "alias" ||
+            extractedCorrespondent.matchStrategy === "fuzzy" ||
+            extractedCorrespondent.matchStrategy === "llm_choice"
+              ? extractedCorrespondent.matchStrategy
+              : "alias",
+        });
       }
       await this.enqueueDocumentEmbedding(record.documentId, Boolean(payload.force)).catch(
         async (error) => {
@@ -1121,7 +1157,7 @@ export class ProcessingService {
   }
 
   private async ensureCorrespondent(name: string): Promise<string> {
-    const normalizedName = name.trim().toLowerCase().replace(/\s+/g, " ");
+    const normalizedName = normalizeCorrespondentName(name) ?? name.trim().toLowerCase().replace(/\s+/g, " ");
     const [existing] = await this.databaseService.db
       .select({ id: correspondents.id })
       .from(correspondents)
@@ -1142,6 +1178,34 @@ export class ProcessingService {
       .returning({ id: correspondents.id });
 
     return created.id;
+  }
+
+  async persistManualCorrespondentAlias(input: {
+    documentId: string;
+    correspondentId: string;
+    canonicalName: string | null;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
+    const extraction = this.readCorrespondentExtraction(input.metadata);
+    if (!extraction.rawName) {
+      return;
+    }
+
+    await this.correspondentResolutionService.persistAlias({
+      correspondentId: input.correspondentId,
+      alias: extraction.rawName,
+      source: "manual",
+      confidence: extraction.confidence,
+      canonicalName: input.canonicalName,
+    });
+
+    await this.correspondentResolutionService.applyAliasToUnresolvedDocuments({
+      correspondentId: input.correspondentId,
+      alias: extraction.rawName,
+      resolvedName: input.canonicalName ?? extraction.resolvedName ?? extraction.rawName,
+      confidence: extraction.confidence,
+      matchStrategy: "alias",
+    });
   }
 
   private async ensureDocumentType(name: string): Promise<string> {
@@ -1428,6 +1492,32 @@ export class ProcessingService {
       },
       reviewReasons: input.reviewReasons,
       reviewEvidence,
+    };
+  }
+
+  private readCorrespondentExtraction(metadata: Record<string, unknown>) {
+    const extraction =
+      metadata.correspondentExtraction &&
+      typeof metadata.correspondentExtraction === "object" &&
+      metadata.correspondentExtraction !== null
+        ? (metadata.correspondentExtraction as Record<string, unknown>)
+        : {};
+
+    return {
+      rawName:
+        typeof extraction.rawName === "string" && extraction.rawName.trim().length > 0
+          ? extraction.rawName.trim()
+          : null,
+      resolvedName:
+        typeof extraction.resolvedName === "string" && extraction.resolvedName.trim().length > 0
+          ? extraction.resolvedName.trim()
+          : null,
+      matchStrategy:
+        typeof extraction.matchStrategy === "string" ? extraction.matchStrategy : null,
+      confidence:
+        typeof extraction.confidence === "number" ? extraction.confidence : null,
+      rawNameNormalized:
+        typeof extraction.rawNameNormalized === "string" ? extraction.rawNameNormalized : null,
     };
   }
 }

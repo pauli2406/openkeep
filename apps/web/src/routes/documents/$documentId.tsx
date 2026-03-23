@@ -58,6 +58,7 @@ import {
   Braces,
   History,
   Lock,
+  Trash2,
   Unlock,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -404,6 +405,7 @@ function DocumentDetailPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
   const [tagQuery, setTagQuery] = useState("");
   const [editForm, setEditForm] = useState({
@@ -627,6 +629,32 @@ function DocumentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document", documentId] });
       queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authFetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        let message = "Failed to delete document";
+        try {
+          const body = (await response.json()) as { message?: unknown };
+          message = getApiErrorMessage(body, message);
+        } catch {
+          // Keep the fallback message when the error body is absent or invalid.
+        }
+        throw new Error(message);
+      }
+    },
+    onSuccess: async () => {
+      setDeleteDialogOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.removeQueries({ queryKey: ["document", documentId] });
+      queryClient.removeQueries({ queryKey: ["document-history", documentId] });
+      queryClient.removeQueries({ queryKey: ["document-text", documentId] });
+      navigate({ to: "/documents" });
     },
   });
 
@@ -1922,6 +1950,35 @@ function DocumentDetailPage() {
                 </Button>
               )}
 
+              <Separator />
+
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={deleteDocumentMutation.isPending || doc.status === "processing"}
+              >
+                {deleteDocumentMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete Document
+              </Button>
+              {doc.status === "processing" && (
+                <p className="text-xs text-muted-foreground">
+                  Documents cannot be deleted while processing is in progress.
+                </p>
+              )}
+              {deleteDocumentMutation.isError && (
+                <p className="text-xs text-destructive">
+                  {deleteDocumentMutation.error instanceof Error
+                    ? deleteDocumentMutation.error.message
+                    : "Failed to delete document."}
+                </p>
+              )}
+
               {/* Processing error */}
               {doc.lastProcessingError && (
                 <>
@@ -1996,6 +2053,44 @@ function DocumentDetailPage() {
                     </>
                   ) : (
                     "Reprocess"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Document</DialogTitle>
+                <DialogDescription>
+                  This permanently deletes the document, its OCR output, embeddings, and
+                  generated files. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
+                <span className="font-medium">{doc.title}</span>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteDialogOpen(false)}
+                  disabled={deleteDocumentMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteDocumentMutation.mutate()}
+                  disabled={deleteDocumentMutation.isPending}
+                >
+                  {deleteDocumentMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete Permanently"
                   )}
                 </Button>
               </DialogFooter>

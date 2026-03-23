@@ -151,3 +151,23 @@ export const computeConfidence = (values: {
   const confidence = values.base + boosts - penalties;
   return Math.max(0, Math.min(1, Number(confidence.toFixed(2))));
 };
+
+export const stripDiacritics = (value: string): string =>
+  value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+
+export const normalizeCorrespondentName = (
+  raw: string | null | undefined,
+): string | null => {
+  if (!raw?.trim()) {
+    return null;
+  }
+
+  const normalized = stripDiacritics(raw)
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized.length > 0 ? normalized.slice(0, 255) : null;
+};

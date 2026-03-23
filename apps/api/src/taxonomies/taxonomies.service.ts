@@ -29,6 +29,7 @@ import slugify from "slugify";
 
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
+import { normalizeCorrespondentName } from "../processing/normalization.util";
 
 @Injectable()
 export class TaxonomiesService {
@@ -329,7 +330,7 @@ export class TaxonomiesService {
     return {
       name: trimmed,
       slug: this.createSlug(trimmed),
-      normalizedName: trimmed.toLowerCase().replace(/\s+/g, " "),
+      normalizedName: normalizeCorrespondentName(trimmed) ?? trimmed.toLowerCase().replace(/\s+/g, " "),
     };
   }
 

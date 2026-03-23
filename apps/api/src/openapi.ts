@@ -14,6 +14,7 @@ import {
   CreateApiTokenResponseSchema,
   CurrentUserSchema,
   DashboardInsightsResponseSchema,
+  DeleteDocumentResponseSchema,
   DocumentStatusSchema,
   DeleteTaxonomyResponseSchema,
   DocumentHistoryResponseSchema,
@@ -566,6 +567,15 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "Updated document",
     "Document",
     DocumentSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/{id}",
+    "delete",
+    200,
+    "Document deleted",
+    "DeleteDocumentResponse",
+    DeleteDocumentResponseSchema,
   );
   patchJsonResponse(
     document,

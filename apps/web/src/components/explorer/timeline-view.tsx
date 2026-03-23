@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { ChevronDown, ChevronRight, FolderClock } from "lucide-react";
 import type { ExplorerSearch } from "@/lib/explorer";
 import { fetchFilteredDocuments } from "@/lib/explorer";
@@ -13,7 +12,34 @@ type TimelineViewProps = {
   onToggleMonth: (monthKey: string) => void;
 };
 
+const MONTH_LABELS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+function isValidTimelineMonth(month: number) {
+  return Number.isInteger(month) && month >= 1 && month <= 12;
+}
+
+function getMonthLabel(month: number) {
+  return MONTH_LABELS[month - 1] ?? "Unknown month";
+}
+
 function monthBounds(year: number, month: number) {
+  if (!Number.isInteger(year) || !isValidTimelineMonth(month)) {
+    return null;
+  }
+
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
@@ -36,15 +62,26 @@ function MonthDocuments({
   const bounds = monthBounds(year, month);
   const documentsQuery = useQuery({
     queryKey: ["documents", "timeline-month", year, month, search],
+    enabled: bounds !== null,
     queryFn: () =>
-      fetchFilteredDocuments({
-        ...search,
-        dateFrom: bounds.start,
-        dateTo: bounds.end,
-        page: 1,
-        pageSize: 8,
-      }),
+      bounds
+        ? fetchFilteredDocuments({
+            ...search,
+            dateFrom: bounds.start,
+            dateTo: bounds.end,
+            page: 1,
+            pageSize: 8,
+          })
+        : Promise.reject(new Error("Invalid timeline month")),
   });
+
+  if (!bounds) {
+    return (
+      <div className="rounded-[1.4rem] border border-[#d8b7a8] bg-[#fff5f0] px-4 py-3 text-sm text-[color:var(--explorer-muted)]">
+        This timeline bucket has an invalid month value and cannot be expanded.
+      </div>
+    );
+  }
 
   if (documentsQuery.isLoading) {
     return <LoadingBlock label="Loading month documents" />;
@@ -115,10 +152,7 @@ export function TimelineView({
                       )}
                       <div>
                         <p className="text-base font-semibold text-[color:var(--explorer-ink)]">
-                          {format(
-                            new Date(`${yearBucket.year}-${String(monthBucket.month).padStart(2, "0")}-01T00:00:00`),
-                            "MMMM",
-                          )}
+                          {getMonthLabel(monthBucket.month)}
                         </p>
                         <p className="mt-1 flex flex-wrap gap-3 text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
                           <span>{monthBucket.count} docs</span>

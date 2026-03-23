@@ -327,7 +327,7 @@ export interface paths {
         get: operations["DocumentsController_getDocument"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: operations["DocumentsController_deleteDocument"];
         options?: never;
         head?: never;
         patch: operations["DocumentsController_updateDocument"];
@@ -1843,6 +1843,9 @@ export interface components {
                 };
                 text: string;
             }[];
+        };
+        DeleteDocumentResponse: {
+            deleted: boolean;
         };
         DocumentHistoryResponse: {
             /** Format: uuid */
@@ -3466,6 +3469,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Document"];
+                };
+            };
+        };
+    };
+    DocumentsController_deleteDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Document deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteDocumentResponse"];
                 };
             };
         };

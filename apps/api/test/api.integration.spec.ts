@@ -29,6 +29,7 @@ import { DocumentsService } from "../src/documents/documents.service";
 import { ExplorerService } from "../src/explorer/explorer.service";
 import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
 import { ProcessingService } from "../src/processing/processing.service";
+import { DEFAULT_DOCUMENT_TYPE_NAMES } from "../src/taxonomies/default-document-types";
 
 const shouldRun = process.env.RUN_TESTCONTAINERS === "1";
 const migrationsFolder = resolve(__dirname, "../../../packages/db/migrations");
@@ -72,6 +73,8 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
         const systemPrompt =
           typeof body?.messages?.[0]?.content === "string" ? body.messages[0].content : "";
+        const userPrompt =
+          typeof body?.messages?.[1]?.content === "string" ? body.messages[1].content : "";
 
         if (systemPrompt.includes("You summarize personal document correspondents")) {
           return new Response(
@@ -81,6 +84,42 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
                   message: {
                     content:
                       "Adidas appears to be a recurring retailer in your archive. The documents are mainly invoices and receipts tied to purchases over time.",
+                  },
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        if (systemPrompt.includes("You extract a document correspondent")) {
+          const evidence = userPrompt
+            .split("\n")
+            .filter((line: string) => /^\d+\.\s+/.test(line))
+            .map((line: string) => line.replace(/^\d+\.\s+/, "").trim())
+            .find(
+              (line: string) =>
+                line.length > 0 &&
+                !/invoice|rechnung|date|datum|amount|betrag|informationen über/i.test(line),
+            );
+          const name = evidence ?? "Example Telecom Ltd.";
+          return new Response(
+            JSON.stringify({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      rawName: name,
+                      cleanDisplayName: name,
+                      confidence: 0.92,
+                      evidenceLines: [name],
+                      isLikelyOrganizationOrPerson: true,
+                      shouldCreateNew: true,
+                      selectedCandidateId: null,
+                    }),
                   },
                 },
               ],
@@ -210,6 +249,17 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(Array.isArray(documentsResponse.body.items)).toBe(true);
   });
 
+  it("seeds default document types for a new instance", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/api/taxonomies/document-types")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.map((item: { name: string }) => item.name)).toEqual(
+      [...DEFAULT_DOCUMENT_TYPE_NAMES].sort((left, right) => left.localeCompare(right)),
+    );
+  });
+
   it("exposes readiness and metrics endpoints", async () => {
     const healthResponse = await request(app.getHttpServer()).get("/api/health");
     expect(healthResponse.status).toBe(200);
@@ -275,6 +325,85 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(Number(fileCount.rows[0]?.count ?? 0)).toBe(1);
     expect(Number(documentCount.rows[0]?.count ?? 0)).toBe(2);
     expect(Number(processingJobCount.rows[0]?.count ?? 0)).toBe(2);
+  });
+
+  it("deletes documents and only removes shared file metadata after the last reference", async () => {
+    const originalKey = `fixtures/${randomUUID()}`;
+    const searchableKey = `derived/${randomUUID()}.pdf`;
+    await storageService.uploadBuffer(originalKey, Buffer.from("original"), "application/pdf");
+    await storageService.uploadBuffer(searchableKey, Buffer.from("searchable"), "application/pdf");
+
+    const [sharedFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "c"),
+        storageKey: originalKey,
+        originalFilename: "shared.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 512,
+      })
+      .returning();
+
+    const [primaryDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: sharedFile.id,
+        title: "Delete Me",
+        mimeType: "application/pdf",
+        status: "ready",
+        searchablePdfStorageKey: searchableKey,
+      })
+      .returning();
+
+    const [duplicateDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: sharedFile.id,
+        title: "Duplicate Copy",
+        mimeType: "application/pdf",
+        status: "ready",
+      })
+      .returning();
+
+    const firstDelete = await request(app.getHttpServer())
+      .delete(`/api/documents/${primaryDocument.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(firstDelete.status).toBe(200);
+    expect(firstDelete.body).toEqual({ deleted: true });
+
+    const documentCountAfterFirstDelete = await databaseService.pool.query<{ count: string }>(
+      "SELECT count(*)::int AS count FROM documents WHERE file_id = $1",
+      [sharedFile.id],
+    );
+    const fileCountAfterFirstDelete = await databaseService.pool.query<{ count: string }>(
+      "SELECT count(*)::int AS count FROM document_files WHERE id = $1",
+      [sharedFile.id],
+    );
+
+    expect(Number(documentCountAfterFirstDelete.rows[0]?.count ?? 0)).toBe(1);
+    expect(Number(fileCountAfterFirstDelete.rows[0]?.count ?? 0)).toBe(1);
+
+    const secondDelete = await request(app.getHttpServer())
+      .delete(`/api/documents/${duplicateDocument.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(secondDelete.status).toBe(200);
+    expect(secondDelete.body).toEqual({ deleted: true });
+
+    const documentCountAfterSecondDelete = await databaseService.pool.query<{ count: string }>(
+      "SELECT count(*)::int AS count FROM documents WHERE file_id = $1",
+      [sharedFile.id],
+    );
+    const fileCountAfterSecondDelete = await databaseService.pool.query<{ count: string }>(
+      "SELECT count(*)::int AS count FROM document_files WHERE id = $1",
+      [sharedFile.id],
+    );
+
+    expect(Number(documentCountAfterSecondDelete.rows[0]?.count ?? 0)).toBe(0);
+    expect(Number(fileCountAfterSecondDelete.rows[0]?.count ?? 0)).toBe(0);
   });
 
   it("supports search, facets, and review resolve/requeue flows", async () => {
@@ -508,6 +637,49 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(missing.status).toBe(404);
+  });
+
+  it("downloads originals with unicode filenames using a safe content-disposition header", async () => {
+    const originalBuffer = Buffer.from("%PDF-1.4\n% unicode filename fixture\n", "utf8");
+    const originalKey = `fixtures/${randomUUID()}/unicode-original.pdf`;
+
+    await storageService.uploadBuffer(originalKey, originalBuffer, "application/pdf");
+
+    const [file] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "e"),
+        storageKey: originalKey,
+        originalFilename: "Gutschein über 100€.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: originalBuffer.length,
+      })
+      .returning();
+
+    const [document] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: file.id,
+        title: "Unicode filename",
+        mimeType: "application/pdf",
+        status: "ready",
+      })
+      .returning();
+
+    const downloadable = await request(app.getHttpServer())
+      .get(`/api/documents/${document.id}/download`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(downloadable.status).toBe(200);
+    expect(downloadable.header["content-type"]).toContain("application/pdf");
+    expect(downloadable.header["content-disposition"]).toContain(
+      'filename="Gutschein uber 100_.pdf"',
+    );
+    expect(downloadable.header["content-disposition"]).toContain("filename*=UTF-8''");
+    expect(downloadable.header["content-disposition"]).toContain(
+      "Gutschein%20u%CC%88ber%20100%E2%82%AC.pdf",
+    );
   });
 
   it("supports semantic search, embedding summaries, and manual reindexing", async () => {

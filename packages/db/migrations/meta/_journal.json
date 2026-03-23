@@ -36,6 +36,13 @@
       "when": 1774209600000,
       "tag": "0004_document_explorer_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774231200000,
+      "tag": "0005_correspondent_aliases",
+      "breakpoints": true
     }
   ]
 }

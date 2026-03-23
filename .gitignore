@@ -11,4 +11,3 @@ node_modules
 tmp
 data
 openapi.json
-pnpm-lock.yaml

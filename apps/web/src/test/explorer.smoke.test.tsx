@@ -107,4 +107,43 @@ describe("explorer smoke", () => {
       await screen.findByText(/summary generation is in progress/i),
     ).toBeInTheDocument();
   });
+
+  it("renders timeline buckets even when the API returns an invalid month", async () => {
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [{ year: 2026, count: 1 }],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          amountRange: { min: null, max: null },
+          statuses: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents/timeline"), () =>
+        HttpResponse.json({
+          years: [
+            {
+              year: 2026,
+              count: 1,
+              months: [
+                {
+                  month: 13,
+                  count: 1,
+                  topCorrespondents: ["Adidas"],
+                  topTypes: ["Invoice"],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    renderAuthenticatedApp({ route: "/documents?view=timeline" });
+
+    expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
+    expect(await screen.findByText("Unknown month")).toBeInTheDocument();
+    expect(screen.getAllByText("1 docs")).toHaveLength(2);
+  });
 });

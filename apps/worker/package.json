@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "scripts": {
-    "build": "tsup src/main.ts --format cjs --target node22 --out-dir dist",
+    "build": "tsup src/main.ts --format cjs --target node22 --out-dir dist --external class-validator --external class-transformer --external class-transformer/storage --external class-transformer/cjs/storage",
     "dev": "tsx watch --env-file ../../.env src/main.ts",
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo \"No tests for @openkeep/worker\"",
@@ -18,4 +18,3 @@
     "rxjs": "^7.8.2"
   }
 }
-

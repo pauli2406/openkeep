@@ -92,6 +92,28 @@ export const correspondents = pgTable(
   }),
 );
 
+export const correspondentAliases = pgTable(
+  "correspondent_aliases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    correspondentId: uuid("correspondent_id")
+      .notNull()
+      .references(() => correspondents.id, { onDelete: "cascade" }),
+    alias: varchar("alias", { length: 255 }).notNull(),
+    normalizedAlias: varchar("normalized_alias", { length: 255 }).notNull(),
+    source: varchar("source", { length: 32 }).notNull().default("import"),
+    confidence: numeric("confidence", { precision: 3, scale: 2 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    correspondentIdx: index("correspondent_aliases_correspondent_idx").on(table.correspondentId),
+    normalizedAliasIdx: uniqueIndex("correspondent_aliases_normalized_alias_idx").on(
+      table.normalizedAlias,
+    ),
+  }),
+);
+
 export const documentTypes = pgTable(
   "document_types",
   {

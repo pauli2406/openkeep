@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { AmazonTextractParseProvider } from "./amazon-textract.provider";
 import { BossService } from "./boss.service";
+import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import { DeterministicMetadataExtractor } from "./deterministic-metadata.extractor";
 import { DeterministicChunker } from "./deterministic-chunker";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
@@ -32,6 +33,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
   providers: [
     BossService,
     ProcessingService,
+    CorrespondentResolutionService,
     LocalDocumentParseProvider,
     GoogleDocumentAiEnterpriseOcrProvider,
     GoogleGeminiLayoutParseProvider,
@@ -112,6 +114,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
   exports: [
     BossService,
     ProcessingService,
+    CorrespondentResolutionService,
     DOCUMENT_PARSE_PROVIDER,
     METADATA_EXTRACTOR,
     CHUNKER,

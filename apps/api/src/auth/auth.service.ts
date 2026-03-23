@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { apiTokens, users } from "@openkeep/db";
+import { apiTokens, documentTypes, users } from "@openkeep/db";
 import type { AuthTokens, CreateApiTokenInput, LoginInput, SetupOwnerInput } from "@openkeep/types";
 import { and, count, eq } from "drizzle-orm";
 import { compare, hash } from "bcryptjs";
@@ -14,6 +14,7 @@ import { createHash, randomBytes } from "crypto";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
+import { createDefaultDocumentTypeValues } from "../taxonomies/default-document-types";
 import type { AuthenticatedPrincipal } from "./auth.types";
 
 interface JwtPayload {
@@ -36,6 +37,7 @@ export class AuthService implements OnModuleInit {
     }
 
     await this.ensureSeedOwner();
+    await this.ensureDefaultDocumentTypes();
   }
 
   async setupOwner(input: SetupOwnerInput): Promise<AuthTokens> {
@@ -45,15 +47,26 @@ export class AuthService implements OnModuleInit {
     }
 
     const passwordHash = await hash(input.password, 12);
-    const [user] = await this.databaseService.db
-      .insert(users)
-      .values({
-        email: input.email.toLowerCase(),
-        passwordHash,
-        displayName: input.displayName,
-        isOwner: true,
-      })
-      .returning();
+    const user = await this.databaseService.db.transaction(async (tx) => {
+      const [createdUser] = await tx
+        .insert(users)
+        .values({
+          email: input.email.toLowerCase(),
+          passwordHash,
+          displayName: input.displayName,
+          isOwner: true,
+        })
+        .returning();
+
+      await tx
+        .insert(documentTypes)
+        .values(createDefaultDocumentTypeValues())
+        .onConflictDoNothing({
+          target: documentTypes.slug,
+        });
+
+      return createdUser!;
+    });
 
     return this.issueTokens(user.id, user.email);
   }
@@ -218,12 +231,30 @@ export class AuthService implements OnModuleInit {
     }
 
     const passwordHash = await hash(this.configService.get("OWNER_PASSWORD"), 12);
-    await this.databaseService.db.insert(users).values({
-      email: this.configService.get("OWNER_EMAIL").toLowerCase(),
-      passwordHash,
-      displayName: this.configService.get("OWNER_NAME"),
-      isOwner: true,
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx.insert(users).values({
+        email: this.configService.get("OWNER_EMAIL").toLowerCase(),
+        passwordHash,
+        displayName: this.configService.get("OWNER_NAME"),
+        isOwner: true,
+      });
+
+      await tx
+        .insert(documentTypes)
+        .values(createDefaultDocumentTypeValues())
+        .onConflictDoNothing({
+          target: documentTypes.slug,
+        });
     });
+  }
+
+  private async ensureDefaultDocumentTypes(): Promise<void> {
+    await this.databaseService.db
+      .insert(documentTypes)
+      .values(createDefaultDocumentTypeValues())
+      .onConflictDoNothing({
+        target: documentTypes.slug,
+      });
   }
 
   private async ownerCount(): Promise<number> {

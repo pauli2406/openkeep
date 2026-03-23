@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -156,7 +157,7 @@ export class DocumentsController {
   async downloadDocument(@Param("id") id: string, @Res() reply: FastifyReply) {
     const { stream, filename, mimeType } = await this.documentsService.downloadDocument(id);
     reply.header("Content-Type", mimeType);
-    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    reply.header("Content-Disposition", this.createAttachmentDisposition(filename));
     return reply.send(stream);
   }
 
@@ -165,7 +166,7 @@ export class DocumentsController {
     const { stream, filename, mimeType } =
       await this.documentsService.downloadSearchableDocument(id);
     reply.header("Content-Type", mimeType);
-    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    reply.header("Content-Disposition", this.createAttachmentDisposition(filename));
     return reply.send(stream);
   }
 
@@ -177,6 +178,15 @@ export class DocumentsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.updateDocument(id, body, principal);
+  }
+
+  @Delete(":id")
+  @ApiOkResponse({ description: "Document deleted" })
+  async deleteDocument(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.deleteDocument(id, principal);
   }
 
   @Post(":id/review/resolve")
@@ -231,5 +241,17 @@ export class DocumentsController {
     const field = fields[name];
     const value = Array.isArray(field) ? field[0]?.value : field?.value;
     return typeof value === "string" ? value : undefined;
+  }
+
+  private createAttachmentDisposition(filename: string): string {
+    const fallback = filename
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\x20-\x7E]+/g, "_")
+      .replace(/[/\\"]/g, "_")
+      .replace(/[;\r\n]/g, "_")
+      .trim() || "download";
+
+    return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
   }
 }

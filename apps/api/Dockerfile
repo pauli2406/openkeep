@@ -10,6 +10,10 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @openkeep/types build
+RUN pnpm --filter @openkeep/sdk build
+RUN pnpm --filter @openkeep/config build
+RUN pnpm --filter @openkeep/db build
 RUN pnpm --filter @openkeep/web build
 RUN pnpm --filter @openkeep/api build
 

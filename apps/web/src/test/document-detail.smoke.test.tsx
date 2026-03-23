@@ -397,4 +397,74 @@ describe("document detail smoke", () => {
 
     expect(await screen.findByText(/2 fields locked/i)).toBeInTheDocument();
   });
+
+  it("deletes a document after confirmation and returns to the documents list", async () => {
+    const deleteCalls: string[] = [];
+
+    server.use(
+      ...taxonomyHandlers(),
+      http.get(apiUrl(`/api/documents/${documentId}`), () =>
+        HttpResponse.json(
+          makeDocument({
+            id: documentId,
+            searchablePdfAvailable: false,
+          }),
+        ),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/text`), () =>
+        HttpResponse.json({ documentId, blocks: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/history`), () =>
+        HttpResponse.json({ documentId, items: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/download`), () =>
+        new HttpResponse(new Uint8Array([1, 2, 3]), {
+          headers: { "Content-Type": "application/pdf" },
+        }),
+      ),
+      http.get(apiUrl("/api/health/providers"), () =>
+        HttpResponse.json(makeHealthProvidersResponse()),
+      ),
+      http.delete(apiUrl(`/api/documents/${documentId}`), () => {
+        deleteCalls.push(documentId);
+        return HttpResponse.json({ deleted: true });
+      }),
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          amountRange: { min: null, max: null },
+          statuses: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), () =>
+        HttpResponse.json({
+          items: [],
+          total: 0,
+          page: 1,
+          pageSize: 20,
+          appliedFilters: {},
+        }),
+      ),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: `/documents/${documentId}`,
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "March Invoice" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /delete document/i }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /delete permanently/i }));
+
+    await waitFor(() => {
+      expect(deleteCalls).toEqual([documentId]);
+    });
+    expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
+  });
 });

@@ -23,6 +23,7 @@ import type {
   AnswerQueryRequest,
   AnswerQueryResponse,
   AuditEvent,
+  DeleteDocumentResponse,
   Document,
   DocumentMetadata,
   DocumentTextBlock,
@@ -630,7 +631,84 @@ export class DocumentsService {
       },
     });
 
-    return this.getDocument(documentId);
+    const updated = await this.getDocument(documentId);
+
+    if (typeof input.correspondentId === "string") {
+      await this.processingService.persistManualCorrespondentAlias({
+        documentId,
+        correspondentId: input.correspondentId,
+        canonicalName: updated.correspondent?.name ?? null,
+        metadata: updated.metadata,
+      });
+    }
+
+    return updated;
+  }
+
+  async deleteDocument(
+    documentId: string,
+    principal: AuthenticatedPrincipal,
+  ): Promise<DeleteDocumentResponse> {
+    const [target] = await this.databaseService.db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        status: documents.status,
+        fileId: documents.fileId,
+        storageKey: documentFiles.storageKey,
+        searchablePdfStorageKey: documents.searchablePdfStorageKey,
+      })
+      .from(documents)
+      .innerJoin(documentFiles, eq(documents.fileId, documentFiles.id))
+      .where(eq(documents.id, documentId))
+      .limit(1);
+
+    if (!target) {
+      throw new NotFoundException("Document not found");
+    }
+
+    if (target.status === "processing") {
+      throw new BadRequestException("Document is currently processing and cannot be deleted");
+    }
+
+    let deleteOriginalFile = false;
+
+    await this.databaseService.db.transaction(async (tx) => {
+      await tx.delete(documents).where(eq(documents.id, documentId));
+
+      const [{ count }] = await tx
+        .select({
+          count: sql<number>`count(*)::int`,
+        })
+        .from(documents)
+        .where(eq(documents.fileId, target.fileId));
+
+      if (count === 0) {
+        await tx.delete(documentFiles).where(eq(documentFiles.id, target.fileId));
+        deleteOriginalFile = true;
+      }
+    });
+
+    if (target.searchablePdfStorageKey) {
+      await this.storageService.deleteObject(target.searchablePdfStorageKey).catch(() => undefined);
+    }
+
+    if (deleteOriginalFile) {
+      await this.storageService.deleteObject(target.storageKey).catch(() => undefined);
+    }
+
+    await this.recordAuditEvent({
+      actorUserId: principal.userId,
+      eventType: "document.deleted",
+      payload: {
+        documentId,
+        title: target.title,
+        deletedOriginalFile: deleteOriginalFile,
+        deletedSearchablePdf: Boolean(target.searchablePdfStorageKey),
+      },
+    });
+
+    return { deleted: true };
   }
 
   async resolveReview(

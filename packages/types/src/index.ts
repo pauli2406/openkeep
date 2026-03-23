@@ -201,6 +201,27 @@ export const ReviewEvidenceSchema = z.object({
   ocrEmptyThreshold: z.number().int().nonnegative().optional(),
 });
 
+export const CorrespondentExtractionCandidateSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1),
+  reason: z.string().optional(),
+  score: z.number().min(0).max(1).optional(),
+});
+
+export const CorrespondentExtractionSchema = z.object({
+  rawName: z.string().nullable().optional(),
+  rawNameNormalized: z.string().nullable().optional(),
+  resolvedName: z.string().nullable().optional(),
+  matchStrategy: z
+    .enum(["exact", "alias", "fuzzy", "llm_choice", "new", "review", "blocked", "none"])
+    .optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  evidenceLines: z.array(z.string()).optional(),
+  candidateCorrespondents: z.array(CorrespondentExtractionCandidateSchema).optional(),
+  blockedReason: z.string().nullable().optional(),
+  provider: z.enum(["openai", "gemini", "deterministic"]).optional(),
+});
+
 export const ManualOverrideFieldSchema = z.enum([
   "issueDate",
   "dueDate",
@@ -268,6 +289,7 @@ export const DocumentMetadataSchema = z
         chunkCount: z.number().int().nonnegative().optional(),
       })
       .optional(),
+    correspondentExtraction: CorrespondentExtractionSchema.optional(),
     reviewEvidence: ReviewEvidenceSchema.optional(),
     manual: ManualOverridesSchema.optional(),
   })
@@ -771,6 +793,10 @@ export const DeleteTaxonomyResponseSchema = z.object({
   deleted: z.literal(true),
 });
 
+export const DeleteDocumentResponseSchema = z.object({
+  deleted: z.literal(true),
+});
+
 export const AnswerCitationSchema = z.object({
   documentId: z.string().uuid(),
   documentTitle: z.string().min(1),
@@ -1112,6 +1138,7 @@ export type CreateDocumentTypeInput = z.infer<typeof CreateDocumentTypeSchema>;
 export type UpdateDocumentTypeInput = z.infer<typeof UpdateDocumentTypeSchema>;
 export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;
 export type DeleteTaxonomyResponse = z.infer<typeof DeleteTaxonomyResponseSchema>;
+export type DeleteDocumentResponse = z.infer<typeof DeleteDocumentResponseSchema>;
 export type AnswerCitation = z.infer<typeof AnswerCitationSchema>;
 export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
