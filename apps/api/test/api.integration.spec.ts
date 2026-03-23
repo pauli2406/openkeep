@@ -8,7 +8,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import request from "supertest";
 import { GenericContainer, Wait } from "testcontainers";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   documentChunks,
@@ -23,6 +23,7 @@ import {
 import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
 import { ObjectStorageService } from "../src/common/storage/storage.service";
+import { DocumentsService } from "../src/documents/documents.service";
 import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
 import { ProcessingService } from "../src/processing/processing.service";
 
@@ -36,6 +37,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let minioContainer: Awaited<ReturnType<GenericContainer["start"]>>;
   let storageService: ObjectStorageService;
   let processingService: ProcessingService;
+  let documentsService: DocumentsService;
   let accessToken = "";
   let apiToken = "";
   let ownerUserId = "";
@@ -128,6 +130,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     databaseService = app.get(DatabaseService);
     storageService = app.get(ObjectStorageService);
     processingService = app.get(ProcessingService);
+    documentsService = app.get(DocumentsService);
 
     const loginResponse = await request(app.getHttpServer()).post("/api/auth/login").send({
       email: process.env.OWNER_EMAIL,
@@ -947,6 +950,60 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(documentsResponse.body.total).toBe(exportResponse.body.documents.length);
   });
 
+  it("reports unsupported watch-folder MIME types with machine-readable failure details", async () => {
+    const unsupportedFile = resolve(watchFolderPath, `unsupported-${randomUUID()}.bin`);
+    await writeFile(unsupportedFile, Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+
+    const scanResponse = await request(app.getHttpServer())
+      .post("/api/archive/watch-folder/scan")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({});
+
+    expect(scanResponse.status).toBe(201);
+    expect(scanResponse.body.summary.unsupported).toBe(1);
+    expect(scanResponse.body.items).toHaveLength(1);
+    expect(scanResponse.body.items[0]?.action).toBe("unsupported");
+    expect(scanResponse.body.items[0]?.reason).toBe("unsupported_file_type");
+    expect(scanResponse.body.items[0]?.failureCode).toBe("mime_type_not_allowed");
+    expect(scanResponse.body.items[0]?.mimeType).toBe("application/octet-stream");
+    expect(String(scanResponse.body.items[0]?.detail)).toContain("Unsupported watch-folder MIME type");
+    expect(scanResponse.body.items[0]?.destinationPath).toContain("/failed/");
+    expect(scanResponse.body.history.length).toBeGreaterThan(0);
+  });
+
+  it("reports upload failures from the watch folder with structured error details", async () => {
+    const failingFile = resolve(watchFolderPath, `upload-fails-${randomUUID()}.txt`);
+    await writeFile(
+      failingFile,
+      "Invoice Number: FAIL-1\nInvoice Date: 2025-05-01\nAmount Due: EUR 19,99\n",
+      "utf8",
+    );
+
+    const uploadSpy = vi
+      .spyOn(documentsService, "uploadDocument")
+      .mockRejectedValueOnce(new Error("simulated upload failure"));
+
+    try {
+      const scanResponse = await request(app.getHttpServer())
+        .post("/api/archive/watch-folder/scan")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({});
+
+      expect(scanResponse.status).toBe(201);
+      expect(scanResponse.body.summary.failed).toBe(1);
+      expect(scanResponse.body.items).toHaveLength(1);
+      expect(scanResponse.body.items[0]?.action).toBe("failed");
+      expect(scanResponse.body.items[0]?.reason).toBe("upload_failed");
+      expect(scanResponse.body.items[0]?.failureCode).toBe("upload_failed");
+      expect(scanResponse.body.items[0]?.mimeType).toBe("text/plain");
+      expect(scanResponse.body.items[0]?.detail).toContain("simulated upload failure");
+      expect(scanResponse.body.items[0]?.destinationPath).toContain("/failed/");
+      expect(scanResponse.body.history.length).toBeGreaterThan(0);
+    } finally {
+      uploadSpy.mockRestore();
+    }
+  });
+
   it("merges partial archive snapshots by replacing scoped rows and preserving untouched documents", async () => {
     const timestamp = new Date().toISOString();
     const oldTagId = randomUUID();
@@ -1367,6 +1424,178 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ]);
     expect(targetEmbeddings.rows.map((row) => row.content_hash)).toEqual(["3".repeat(64)]);
     expect(untouchedEmbeddings.rows.map((row) => row.content_hash)).toEqual(["2".repeat(64)]);
+  });
+
+  it("runs answer regression fixtures through semantic ranking and grounded answer selection", async () => {
+    const [primaryFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: "d".repeat(64),
+        storageKey: `fixtures/${randomUUID()}/answer-primary.pdf`,
+        originalFilename: "answer-primary.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 512,
+      })
+      .returning();
+
+    const [supportingFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: "e".repeat(64),
+        storageKey: `fixtures/${randomUUID()}/answer-supporting.pdf`,
+        originalFilename: "answer-supporting.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 512,
+      })
+      .returning();
+
+    const [primaryDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: primaryFile.id,
+        title: "Electricity invoice April 2025",
+        source: "upload",
+        mimeType: "application/pdf",
+        status: "ready",
+        reviewStatus: "not_required",
+        parseProvider: "local-ocr",
+        chunkCount: 2,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        fullText:
+          "Invoice amount due EUR 42.50 for April electricity service. Please pay by 2025-04-30.",
+        processedAt: new Date(),
+        metadata: {
+          embedding: {
+            configured: true,
+            provider: "openai",
+            model: "text-embedding-3-small",
+            chunkCount: 2,
+          },
+        },
+      })
+      .returning();
+
+    const [supportingDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: supportingFile.id,
+        title: "Phone invoice April 2025",
+        source: "upload",
+        mimeType: "application/pdf",
+        status: "ready",
+        reviewStatus: "not_required",
+        parseProvider: "local-ocr",
+        chunkCount: 1,
+        embeddingStatus: "ready",
+        embeddingProvider: "openai",
+        embeddingModel: "text-embedding-3-small",
+        fullText:
+          "Invoice total due is EUR 42.50 for April phone service with payment due at month end.",
+        processedAt: new Date(),
+        metadata: {
+          embedding: {
+            configured: true,
+            provider: "openai",
+            model: "text-embedding-3-small",
+            chunkCount: 1,
+          },
+        },
+      })
+      .returning();
+
+    await databaseService.db.insert(documentChunks).values([
+      {
+        documentId: primaryDocument.id,
+        chunkIndex: 0,
+        heading: "Summary",
+        text: "Invoice amount due is EUR 42.50 for April electricity service.",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "4".repeat(64),
+        metadata: {},
+      },
+      {
+        documentId: primaryDocument.id,
+        chunkIndex: 1,
+        heading: "Summary duplicate",
+        text: "Invoice amount due is EUR 42.50 for April electricity service",
+        pageFrom: 1,
+        pageTo: 1,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "5".repeat(64),
+        metadata: {},
+      },
+      {
+        documentId: supportingDocument.id,
+        chunkIndex: 0,
+        heading: "Billing",
+        text: "The invoice total shown on this phone bill is EUR 42.50.",
+        pageFrom: 2,
+        pageTo: 2,
+        strategyVersion: "normalized-parse-v1",
+        contentHash: "6".repeat(64),
+        metadata: {},
+      },
+    ]);
+
+    await databaseService.pool.query(
+      `INSERT INTO document_chunk_embeddings (
+        document_id,
+        chunk_index,
+        provider,
+        model,
+        dimensions,
+        embedding,
+        content_hash
+      )
+      VALUES
+        ($1::uuid, 0, 'openai', 'text-embedding-3-small', 3, $2::halfvec, $3),
+        ($1::uuid, 1, 'openai', 'text-embedding-3-small', 3, $4::halfvec, $5),
+        ($6::uuid, 0, 'openai', 'text-embedding-3-small', 3, $7::halfvec, $8)`,
+      [
+        primaryDocument.id,
+        serializeHalfVector(padEmbedding([0.9, 0.1, 0.2])),
+        "4".repeat(64),
+        serializeHalfVector(padEmbedding([0.88, 0.12, 0.2])),
+        "5".repeat(64),
+        supportingDocument.id,
+        serializeHalfVector(padEmbedding([0.86, 0.14, 0.2])),
+        "6".repeat(64),
+      ],
+    );
+
+    const answeredResponse = await request(app.getHttpServer())
+      .post("/api/search/answer")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        query: "What is the invoice amount due?",
+      });
+
+    expect(answeredResponse.status).toBe(201);
+    expect(answeredResponse.body.status).toBe("answered");
+    expect(answeredResponse.body.answer).toContain("EUR 42.50");
+    expect(answeredResponse.body.results[0]?.document.id).toBe(primaryDocument.id);
+    expect(answeredResponse.body.citations).toHaveLength(2);
+    expect(answeredResponse.body.citations[0]?.documentId).toBe(primaryDocument.id);
+    expect(answeredResponse.body.citations[1]?.documentId).toBe(supportingDocument.id);
+
+    const insufficientResponse = await request(app.getHttpServer())
+      .post("/api/search/answer")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        query: "What is the policy number?",
+      });
+
+    expect(insufficientResponse.status).toBe(201);
+    expect(insufficientResponse.body.status).toBe("insufficient_evidence");
+    expect(insufficientResponse.body.answer).toBeNull();
+    expect(insufficientResponse.body.citations).toEqual([]);
+    expect(insufficientResponse.body.results.length).toBeGreaterThan(0);
   });
 
   it("rejects malformed archive snapshots before replacing stored data", async () => {

@@ -275,4 +275,126 @@ describe("document detail smoke", () => {
       expect(patchCalls[0]).toEqual({ clearLockedFields: ["issueDate"] });
     });
   });
+
+  it("shows pending lock feedback and filtered tag editing while saving overrides", async () => {
+    const importantTag = makeTag({
+      id: "aaa11111-1111-1111-1111-111111111111",
+      name: "Important",
+      slug: "important",
+    });
+    const urgentTag = makeTag({
+      id: "aaa22222-2222-2222-2222-222222222222",
+      name: "Urgent",
+      slug: "urgent",
+    });
+    const travelTag = makeTag({
+      id: "aaa33333-3333-3333-3333-333333333333",
+      name: "Travel",
+      slug: "travel",
+    });
+    const patchCalls: unknown[] = [];
+    let currentDocument = makeDocument({
+      id: documentId,
+      tags: [importantTag],
+      metadata: {
+        detectedKeywords: ["invoice"],
+        reviewReasons: [],
+        chunkCount: 2,
+        pageCount: 1,
+      },
+    });
+
+    server.use(
+      http.get(apiUrl("/api/taxonomies/tags"), () =>
+        HttpResponse.json([importantTag, urgentTag, travelTag]),
+      ),
+      http.get(apiUrl("/api/taxonomies/correspondents"), () =>
+        HttpResponse.json([makeCorrespondent()]),
+      ),
+      http.get(apiUrl("/api/taxonomies/document-types"), () =>
+        HttpResponse.json([makeDocumentType()]),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}`), () =>
+        HttpResponse.json(currentDocument),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/text`), () =>
+        HttpResponse.json({ documentId, blocks: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/history`), () =>
+        HttpResponse.json({ documentId, items: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/download`), () =>
+        new HttpResponse(new Uint8Array([1, 2, 3]), {
+          headers: { "Content-Type": "application/pdf" },
+        }),
+      ),
+      http.get(apiUrl("/api/health/providers"), () =>
+        HttpResponse.json(makeHealthProvidersResponse()),
+      ),
+      http.patch(apiUrl(`/api/documents/${documentId}`), async ({ request }) => {
+        const body = await request.json();
+        patchCalls.push(body);
+        currentDocument = makeDocument({
+          id: documentId,
+          amount: 88,
+          tags: [importantTag, urgentTag],
+          metadata: {
+            detectedKeywords: ["invoice"],
+            reviewReasons: [],
+            chunkCount: 2,
+            pageCount: 1,
+            manual: {
+              lockedFields: ["amount", "tagIds"],
+              values: {
+                amount: 88,
+                tagIds: [importantTag.id, urgentTag.id],
+              },
+              updatedAt: "2026-03-22T09:00:00.000Z",
+              updatedByUserId: "11111111-1111-1111-1111-111111111111",
+            },
+          },
+        });
+        return HttpResponse.json(currentDocument);
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: `/documents/${documentId}`,
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "March Invoice" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+    expect(
+      screen.getByText(/Only the fields you change will become sticky manual overrides/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Selected tags")).toBeInTheDocument();
+    expect(screen.getByText("Available tags")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText("Filter tags..."), "urg");
+    expect(screen.getByRole("button", { name: /Urgent/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Travel/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Urgent/i }));
+    await user.clear(screen.getByPlaceholderText("0.00"));
+    await user.type(screen.getByPlaceholderText("0.00"), "88");
+
+    expect(screen.getByText("Saving will lock Amount, Tags.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(patchCalls).toEqual([
+        {
+          amount: 88,
+          tagIds: [importantTag.id, urgentTag.id],
+        },
+      ]);
+    });
+
+    expect(await screen.findByText(/2 fields locked/i)).toBeInTheDocument();
+  });
 });
