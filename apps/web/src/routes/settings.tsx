@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ArchiveImportResult,
   ArchiveSnapshot,
+  ArchiveSnapshot as ArchiveSnapshotType,
   Correspondent,
   DocumentType,
   HealthProvidersResponse,
@@ -975,7 +976,7 @@ function ArchiveOperationsSection() {
 
   const importMutation = useMutation({
     mutationFn: async () => {
-      const snapshot = JSON.parse(snapshotText) as ArchiveSnapshot;
+      const snapshot = JSON.parse(snapshotText) as ArchiveSnapshotType;
       const { data, error } = await api.POST("/api/archive/import", {
         body: {
           mode: importMode,

@@ -27,6 +27,9 @@ export const reviewReasons = [
   "ocr_empty",
   "missing_key_fields",
   "unsupported_format",
+  "classification_ambiguous",
+  "correspondent_unresolved",
+  "validation_failed",
 ] as const;
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
@@ -311,6 +314,93 @@ export const DocumentMetadataSchema = z
     correspondentExtraction: CorrespondentExtractionSchema.optional(),
     reviewEvidence: ReviewEvidenceSchema.optional(),
     manual: ManualOverridesSchema.optional(),
+    intelligence: z
+      .object({
+        routing: z
+          .object({
+            documentType: z.string().nullable(),
+            subtype: z.string().nullable().optional(),
+            confidence: z.number().min(0).max(1).nullable().optional(),
+            reasoningHints: z.array(z.string()).optional(),
+            agentVersion: z.string().optional(),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        title: z
+          .object({
+            value: z.string().nullable(),
+            confidence: z.number().min(0).max(1).nullable().optional(),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        summary: z
+          .object({
+            value: z.string().nullable(),
+            confidence: z.number().min(0).max(1).nullable().optional(),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        extraction: z
+          .object({
+            documentType: z.string().nullable().optional(),
+            fields: z.record(z.string(), z.unknown()).default({}),
+            fieldConfidence: z.record(z.string(), z.number().min(0).max(1)).default({}),
+            fieldProvenance: z
+              .record(
+                z.string(),
+                z.object({
+                  source: z.string(),
+                  provider: z.string().optional(),
+                  page: z.number().int().positive().nullable().optional(),
+                  lineIndex: z.number().int().nonnegative().nullable().optional(),
+                  snippet: z.string().nullable().optional(),
+                }),
+              )
+              .default({}),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        tagging: z
+          .object({
+            tags: z.array(z.string()).default([]),
+            confidence: z.number().min(0).max(1).nullable().optional(),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        correspondentResolution: z
+          .object({
+            resolvedName: z.string().nullable(),
+            confidence: z.number().min(0).max(1).nullable().optional(),
+            strategy: z.string().optional(),
+            provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
+            model: z.string().optional(),
+          })
+          .optional(),
+        validation: z
+          .object({
+            normalizedFields: z.record(z.string(), z.unknown()).default({}),
+            errors: z.array(z.string()).default([]),
+            warnings: z.array(z.string()).default([]),
+            duplicateSignals: z.record(z.string(), z.unknown()).default({}),
+          })
+          .optional(),
+        pipeline: z
+          .object({
+            framework: z.string().optional(),
+            runId: z.string().optional(),
+            status: z.string().optional(),
+            providerOrder: z.array(z.enum(["mistral", "gemini", "openai"])).optional(),
+            durationsMs: z.record(z.string(), z.number().nonnegative()).default({}),
+            agentVersions: z.record(z.string(), z.string()).default({}),
+          })
+          .optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

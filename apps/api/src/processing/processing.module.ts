@@ -8,6 +8,7 @@ import {
   METADATA_EXTRACTOR,
 } from "./constants";
 import { AmazonTextractParseProvider } from "./amazon-textract.provider";
+import { AgenticDocumentIntelligenceService } from "./agentic-document-intelligence.service";
 import { BossService } from "./boss.service";
 import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import { DeterministicMetadataExtractor } from "./deterministic-metadata.extractor";
@@ -36,6 +37,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
   providers: [
     BossService,
     ProcessingService,
+    AgenticDocumentIntelligenceService,
     CorrespondentResolutionService,
     DocumentTypePolicyService,
     LocalDocumentParseProvider,
@@ -127,6 +129,7 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
   exports: [
     BossService,
     ProcessingService,
+    AgenticDocumentIntelligenceService,
     CorrespondentResolutionService,
     DocumentTypePolicyService,
     LlmService,

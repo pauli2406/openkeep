@@ -126,6 +126,74 @@ interface DocumentMetadata {
   pageCount?: number;
   reviewEvidence?: ReviewEvidence;
   manual?: ManualOverrides;
+  summary?: string;
+  intelligence?: {
+    routing?: {
+      documentType?: string | null;
+      subtype?: string | null;
+      confidence?: number | null;
+      reasoningHints?: string[];
+      agentVersion?: string;
+      provider?: string;
+      model?: string;
+    };
+    title?: {
+      value?: string | null;
+      confidence?: number | null;
+      provider?: string;
+      model?: string;
+    };
+    summary?: {
+      value?: string | null;
+      confidence?: number | null;
+      provider?: string;
+      model?: string;
+    };
+    extraction?: {
+      documentType?: string | null;
+      fields?: Record<string, unknown>;
+      fieldConfidence?: Record<string, number>;
+      fieldProvenance?: Record<
+        string,
+        {
+          source?: string;
+          provider?: string;
+          page?: number | null;
+          lineIndex?: number | null;
+          snippet?: string | null;
+        }
+      >;
+      provider?: string;
+      model?: string;
+    };
+    tagging?: {
+      tags?: string[];
+      confidence?: number | null;
+      provider?: string;
+      model?: string;
+    };
+    correspondentResolution?: {
+      resolvedName?: string | null;
+      confidence?: number | null;
+      strategy?: string;
+      provider?: string;
+      model?: string;
+    };
+    validation?: {
+      normalizedFields?: Record<string, unknown>;
+      warnings?: string[];
+      errors?: string[];
+      duplicateSignals?: Record<string, unknown>;
+    };
+    pipeline?: {
+      framework?: string;
+      runId?: string;
+      status?: string;
+      providerOrder?: string[];
+      durationsMs?: Record<string, number>;
+      agentVersions?: Record<string, string>;
+    };
+  };
   [key: string]: unknown;
 }
 
@@ -247,6 +315,31 @@ function formatReviewReason(reason: string): string {
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function formatAgentFieldLabel(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatAgentFieldValue(value: unknown): string {
+  if (value == null) return "-";
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(", ");
+  return JSON.stringify(value);
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1000) return `${durationMs} ms`;
+  return `${(durationMs / 1000).toFixed(2)} s`;
 }
 
 function formatDate(dateStr: string | null | undefined): string {
@@ -914,6 +1007,20 @@ function DocumentDetailPage() {
   );
   const selectedTags = (tagsQuery.data ?? []).filter((tag) => editForm.tagIds.includes(tag.id));
   const availableTags = filteredTags.filter((tag) => !editForm.tagIds.includes(tag.id));
+  const intelligence = doc.metadata.intelligence;
+  const extractionFields = intelligence?.extraction?.fields ?? {};
+  const normalizedFields = intelligence?.validation?.normalizedFields ?? {};
+  const fieldConfidence = intelligence?.extraction?.fieldConfidence ?? {};
+  const fieldProvenance = intelligence?.extraction?.fieldProvenance ?? {};
+  const visibleIntelligenceFields = Object.entries({
+    ...extractionFields,
+    ...normalizedFields,
+  }).filter(([, value]) => {
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  });
 
   // Group text blocks by page
   const textBlocksByPage: Record<number, TextBlock[]> = {};
@@ -974,6 +1081,10 @@ function DocumentDetailPage() {
               <TabsTrigger value="text" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
                 OCR Text
+              </TabsTrigger>
+              <TabsTrigger value="intelligence" className="gap-1.5">
+                <BrainCircuit className="h-3.5 w-3.5" />
+                Intelligence
               </TabsTrigger>
               <TabsTrigger value="details" className="gap-1.5">
                 <Hash className="h-3.5 w-3.5" />
@@ -1154,6 +1265,213 @@ function DocumentDetailPage() {
                         </div>
                       ))}
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="intelligence">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Document Intelligence</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!intelligence ? (
+                    <p className="text-sm text-muted-foreground">
+                      No agent intelligence available for this document yet.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-md border p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium">Routing</p>
+                            {intelligence.routing?.confidence != null && (
+                              <span className={`text-xs font-medium ${confidenceColor(intelligence.routing.confidence)}`}>
+                                {(intelligence.routing.confidence * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm space-y-1">
+                            <p>
+                              <span className="text-muted-foreground">Type:</span>{" "}
+                              {intelligence.routing?.documentType ?? "-"}
+                            </p>
+                            {intelligence.routing?.subtype && (
+                              <p>
+                                <span className="text-muted-foreground">Subtype:</span>{" "}
+                                {intelligence.routing.subtype}
+                              </p>
+                            )}
+                            {intelligence.routing?.provider && (
+                              <p>
+                                <span className="text-muted-foreground">Model:</span>{" "}
+                                {intelligence.routing.provider}
+                                {intelligence.routing.model ? ` / ${intelligence.routing.model}` : ""}
+                              </p>
+                            )}
+                          </div>
+                          {intelligence.routing?.reasoningHints?.length ? (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {intelligence.routing.reasoningHints.map((hint) => (
+                                <Badge key={hint} variant="outline" className="text-xs">
+                                  {hint}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="rounded-md border p-3 space-y-2">
+                          <p className="text-sm font-medium">Generated Summary</p>
+                          <p className="text-sm">{intelligence.summary?.value ?? doc.metadata.summary ?? "-"}</p>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            {intelligence.title?.value && <p>Title candidate: {intelligence.title.value}</p>}
+                            {intelligence.summary?.provider && (
+                              <p>
+                                Provider: {intelligence.summary.provider}
+                                {intelligence.summary.model ? ` / ${intelligence.summary.model}` : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">Type-specific Fields</p>
+                          {intelligence.extraction?.provider && (
+                            <span className="text-xs text-muted-foreground">
+                              {intelligence.extraction.provider}
+                              {intelligence.extraction.model ? ` / ${intelligence.extraction.model}` : ""}
+                            </span>
+                          )}
+                        </div>
+                        {visibleIntelligenceFields.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No extracted fields available.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {visibleIntelligenceFields.map(([field, value]) => {
+                              const provenance = fieldProvenance[field];
+                              const confidence = fieldConfidence[field];
+                              return (
+                                <div key={field} className="rounded-md border bg-muted/30 p-3 space-y-2">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-sm font-medium">{formatAgentFieldLabel(field)}</p>
+                                      <p className="text-sm text-muted-foreground">
+                                        {formatAgentFieldValue(value)}
+                                      </p>
+                                    </div>
+                                    {confidence != null && (
+                                      <Badge variant="outline" className="text-xs">
+                                        {(confidence * 100).toFixed(0)}%
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {provenance && (
+                                    <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
+                                      <p>
+                                        <span className="text-muted-foreground">Source:</span>{" "}
+                                        {provenance.source ?? "-"}
+                                        {provenance.provider ? ` / ${provenance.provider}` : ""}
+                                      </p>
+                                      {(provenance.page != null || provenance.lineIndex != null) && (
+                                        <p>
+                                          <span className="text-muted-foreground">Location:</span>{" "}
+                                          {provenance.page != null ? `Page ${provenance.page}` : ""}
+                                          {provenance.lineIndex != null ? `, line ${provenance.lineIndex}` : ""}
+                                        </p>
+                                      )}
+                                      {provenance.snippet && (
+                                        <p className="font-mono text-[11px] text-muted-foreground whitespace-pre-wrap">
+                                          {provenance.snippet}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-md border p-3 space-y-2">
+                          <p className="text-sm font-medium">Tagging & Correspondent</p>
+                          <div className="flex flex-wrap gap-1">
+                            {(intelligence.tagging?.tags ?? []).map((tagValue) => (
+                              <Badge key={tagValue} variant="secondary" className="text-xs">
+                                {tagValue}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <p>
+                              Correspondent: {intelligence.correspondentResolution?.resolvedName ?? "-"}
+                            </p>
+                            <p>
+                              Strategy: {intelligence.correspondentResolution?.strategy ?? "-"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border p-3 space-y-2">
+                          <p className="text-sm font-medium">Validation</p>
+                          {(intelligence.validation?.warnings?.length ?? 0) > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Warnings</p>
+                              <div className="flex flex-wrap gap-1">
+                                {intelligence.validation?.warnings?.map((warning) => (
+                                  <Badge key={warning} variant="warning" className="text-xs">
+                                    {formatReviewReason(warning)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {(intelligence.validation?.errors?.length ?? 0) > 0 && (
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Errors</p>
+                              <div className="flex flex-wrap gap-1">
+                                {intelligence.validation?.errors?.map((error) => (
+                                  <Badge key={error} variant="destructive" className="text-xs">
+                                    {formatReviewReason(error)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {Object.entries(intelligence.validation?.duplicateSignals ?? {}).length > 0 && (
+                            <div className="rounded-md border bg-muted/30 p-2 text-xs font-mono whitespace-pre-wrap">
+                              {JSON.stringify(intelligence.validation?.duplicateSignals ?? {}, null, 2)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border p-3 space-y-2">
+                        <p className="text-sm font-medium">Pipeline</p>
+                        <div className="grid gap-2 md:grid-cols-2 text-xs text-muted-foreground">
+                          <p>Framework: {intelligence.pipeline?.framework ?? "-"}</p>
+                          <p>Status: {intelligence.pipeline?.status ?? "-"}</p>
+                          <p>Run ID: {intelligence.pipeline?.runId ?? "-"}</p>
+                          <p>
+                            Provider order: {(intelligence.pipeline?.providerOrder ?? []).join(" -> ") || "-"}
+                          </p>
+                        </div>
+                        {Object.entries(intelligence.pipeline?.durationsMs ?? {}).length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {Object.entries(intelligence.pipeline?.durationsMs ?? {}).map(([key, value]) => (
+                              <Badge key={key} variant="outline" className="text-xs">
+                                {formatAgentFieldLabel(key)}: {formatDuration(value)}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>

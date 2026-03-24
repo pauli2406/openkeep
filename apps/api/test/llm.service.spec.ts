@@ -79,6 +79,49 @@ describe("LlmService", () => {
     );
   });
 
+  it("supports explicit provider fallback order", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ candidates: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "Mistral answer" } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const result = await service.completeWithFallback(
+      {
+        messages: [{ role: "user", content: "Hello" }],
+        jsonMode: true,
+      },
+      ["gemini", "mistral"],
+    );
+
+    expect(result).toEqual({
+      text: "Mistral answer",
+      provider: "mistral",
+      model: "mistral-small-latest",
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("streams Mistral SSE chat completions", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(

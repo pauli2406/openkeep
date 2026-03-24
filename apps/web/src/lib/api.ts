@@ -127,7 +127,7 @@ async function refreshAccessToken(): Promise<boolean> {
     return false;
   }
 
-  const refreshResponse = await fetch(toApiUrl("/api/auth/refresh"), {
+  const refreshResponse = await fetchWithCurrentGlobal(toApiUrl("/api/auth/refresh"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken }),
@@ -156,7 +156,7 @@ export async function authFetch(input: string, init?: RequestInit): Promise<Resp
 
   const url = toApiUrl(input);
 
-  let response = await fetch(url, {
+  let response = await fetchWithCurrentGlobal(url, {
     ...init,
     headers,
   });
@@ -167,7 +167,7 @@ export async function authFetch(input: string, init?: RequestInit): Promise<Resp
       retryHeaders.set("Authorization", `Bearer ${accessToken}`);
     }
 
-    response = await fetch(url, {
+    response = await fetchWithCurrentGlobal(url, {
       ...init,
       headers: retryHeaders,
     });
@@ -212,7 +212,7 @@ client.use({
           headers: new Headers(request.headers),
         });
         retryRequest.headers.set("Authorization", `Bearer ${accessToken}`);
-        return fetch(retryRequest);
+        return fetchWithCurrentGlobal(retryRequest);
       }
     }
     return response;

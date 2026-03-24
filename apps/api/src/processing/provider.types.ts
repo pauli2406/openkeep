@@ -38,6 +38,8 @@ export interface MetadataExtractionInput {
 }
 
 export interface MetadataExtractionResult {
+  title: string | null;
+  summary: string | null;
   language: string | null;
   issueDate: Date | null;
   dueDate: Date | null;

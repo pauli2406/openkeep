@@ -102,6 +102,8 @@ export class DeterministicMetadataExtractor implements MetadataExtractor {
     });
 
     return {
+      title: input.title,
+      summary: null,
       language: input.parsed.language,
       issueDate,
       dueDate,

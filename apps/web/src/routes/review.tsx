@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  BrainCircuit,
   ClipboardCheck,
   AlertTriangle,
   CheckCircle,
@@ -29,6 +30,13 @@ import {
   Inbox,
 } from "lucide-react";
 import { format } from "date-fns";
+
+function formatReviewReason(reason: string): string {
+  return reason
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 export const Route = createFileRoute("/review")({
   component: ReviewPage,
@@ -283,7 +291,7 @@ function ReviewPage() {
                 {item.reviewReasons.map((reason) => (
                   <Badge key={reason} variant="warning">
                     <AlertTriangle className="mr-1 h-3 w-3" />
-                    {reason}
+                    {formatReviewReason(reason)}
                   </Badge>
                 ))}
                 {item.confidence !== null && item.confidence !== undefined && (
@@ -291,7 +299,27 @@ function ReviewPage() {
                     Confidence: {Math.round(item.confidence * 100)}%
                   </Badge>
                 )}
+                {item.metadata?.intelligence?.routing?.documentType && (
+                  <Badge variant="outline">
+                    <BrainCircuit className="mr-1 h-3 w-3" />
+                    {item.metadata.intelligence.routing.documentType}
+                  </Badge>
+                )}
               </div>
+              {(item.metadata?.intelligence?.validation?.warnings?.length ?? 0) > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.metadata?.intelligence?.validation?.warnings?.map((warning) => (
+                    <Badge key={warning} variant="outline" className="text-xs">
+                      {formatReviewReason(warning)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {item.metadata?.intelligence?.summary?.value && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  {item.metadata.intelligence.summary.value}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}

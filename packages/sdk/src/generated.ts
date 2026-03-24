@@ -1213,7 +1213,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -1267,7 +1267,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -1327,7 +1327,7 @@ export interface components {
                             holderName: boolean;
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -1355,6 +1355,100 @@ export interface components {
                         updatedAt?: string | null;
                         /** Format: uuid */
                         updatedByUserId?: string | null;
+                    };
+                    intelligence?: {
+                        routing?: {
+                            documentType: string | null;
+                            subtype?: string | null;
+                            confidence?: number | null;
+                            reasoningHints?: string[];
+                            agentVersion?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        title?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        summary?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        extraction?: {
+                            documentType?: string | null;
+                            /** @default {} */
+                            fields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default {} */
+                            fieldConfidence: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            fieldProvenance: {
+                                [key: string]: {
+                                    source: string;
+                                    provider?: string;
+                                    page?: number | null;
+                                    lineIndex?: number | null;
+                                    snippet?: string | null;
+                                };
+                            };
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        tagging?: {
+                            /** @default [] */
+                            tags: string[];
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        correspondentResolution?: {
+                            resolvedName: string | null;
+                            confidence?: number | null;
+                            strategy?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        validation?: {
+                            /** @default {} */
+                            normalizedFields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default [] */
+                            errors: string[];
+                            /** @default [] */
+                            warnings: string[];
+                            /** @default {} */
+                            duplicateSignals: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        pipeline?: {
+                            framework?: string;
+                            runId?: string;
+                            status?: string;
+                            providerOrder?: ("mistral" | "gemini" | "openai")[];
+                            /** @default {} */
+                            durationsMs: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            agentVersions: {
+                                [key: string]: string;
+                            };
+                        };
                     };
                 };
                 createdAt: string;
@@ -1454,7 +1548,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -1508,7 +1602,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -1568,7 +1662,7 @@ export interface components {
                             holderName: boolean;
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -1596,6 +1690,100 @@ export interface components {
                         updatedAt?: string | null;
                         /** Format: uuid */
                         updatedByUserId?: string | null;
+                    };
+                    intelligence?: {
+                        routing?: {
+                            documentType: string | null;
+                            subtype?: string | null;
+                            confidence?: number | null;
+                            reasoningHints?: string[];
+                            agentVersion?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        title?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        summary?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        extraction?: {
+                            documentType?: string | null;
+                            /** @default {} */
+                            fields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default {} */
+                            fieldConfidence: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            fieldProvenance: {
+                                [key: string]: {
+                                    source: string;
+                                    provider?: string;
+                                    page?: number | null;
+                                    lineIndex?: number | null;
+                                    snippet?: string | null;
+                                };
+                            };
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        tagging?: {
+                            /** @default [] */
+                            tags: string[];
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        correspondentResolution?: {
+                            resolvedName: string | null;
+                            confidence?: number | null;
+                            strategy?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        validation?: {
+                            /** @default {} */
+                            normalizedFields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default [] */
+                            errors: string[];
+                            /** @default [] */
+                            warnings: string[];
+                            /** @default {} */
+                            duplicateSignals: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        pipeline?: {
+                            framework?: string;
+                            runId?: string;
+                            status?: string;
+                            providerOrder?: ("mistral" | "gemini" | "openai")[];
+                            /** @default {} */
+                            durationsMs: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            agentVersions: {
+                                [key: string]: string;
+                            };
+                        };
                     };
                 };
                 createdAt: string;
@@ -1673,7 +1861,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -1727,7 +1915,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -1787,7 +1975,7 @@ export interface components {
                             holderName: boolean;
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -1815,6 +2003,100 @@ export interface components {
                         updatedAt?: string | null;
                         /** Format: uuid */
                         updatedByUserId?: string | null;
+                    };
+                    intelligence?: {
+                        routing?: {
+                            documentType: string | null;
+                            subtype?: string | null;
+                            confidence?: number | null;
+                            reasoningHints?: string[];
+                            agentVersion?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        title?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        summary?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        extraction?: {
+                            documentType?: string | null;
+                            /** @default {} */
+                            fields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default {} */
+                            fieldConfidence: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            fieldProvenance: {
+                                [key: string]: {
+                                    source: string;
+                                    provider?: string;
+                                    page?: number | null;
+                                    lineIndex?: number | null;
+                                    snippet?: string | null;
+                                };
+                            };
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        tagging?: {
+                            /** @default [] */
+                            tags: string[];
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        correspondentResolution?: {
+                            resolvedName: string | null;
+                            confidence?: number | null;
+                            strategy?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        validation?: {
+                            /** @default {} */
+                            normalizedFields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default [] */
+                            errors: string[];
+                            /** @default [] */
+                            warnings: string[];
+                            /** @default {} */
+                            duplicateSignals: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        pipeline?: {
+                            framework?: string;
+                            runId?: string;
+                            status?: string;
+                            providerOrder?: ("mistral" | "gemini" | "openai")[];
+                            /** @default {} */
+                            durationsMs: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            agentVersions: {
+                                [key: string]: string;
+                            };
+                        };
                     };
                 };
                 createdAt: string;
@@ -1936,7 +2218,7 @@ export interface components {
             confidence: number | null;
             /** @enum {string} */
             reviewStatus: "not_required" | "pending" | "resolved";
-            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
             reviewedAt: string | null;
             reviewNote: string | null;
             searchablePdfAvailable: boolean;
@@ -1990,7 +2272,7 @@ export interface components {
                 pageCount?: number;
                 chunkCount?: number;
                 searchablePdfGenerated?: boolean;
-                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 parse?: {
                     /** @enum {string} */
                     provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2050,7 +2332,7 @@ export interface components {
                         holderName: boolean;
                         issuingAuthority: boolean;
                     };
-                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     confidence?: number | null;
                     confidenceThreshold?: number;
                     ocrTextLength?: number;
@@ -2078,6 +2360,100 @@ export interface components {
                     updatedAt?: string | null;
                     /** Format: uuid */
                     updatedByUserId?: string | null;
+                };
+                intelligence?: {
+                    routing?: {
+                        documentType: string | null;
+                        subtype?: string | null;
+                        confidence?: number | null;
+                        reasoningHints?: string[];
+                        agentVersion?: string;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    title?: {
+                        value: string | null;
+                        confidence?: number | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    summary?: {
+                        value: string | null;
+                        confidence?: number | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    extraction?: {
+                        documentType?: string | null;
+                        /** @default {} */
+                        fields: {
+                            [key: string]: unknown;
+                        };
+                        /** @default {} */
+                        fieldConfidence: {
+                            [key: string]: number;
+                        };
+                        /** @default {} */
+                        fieldProvenance: {
+                            [key: string]: {
+                                source: string;
+                                provider?: string;
+                                page?: number | null;
+                                lineIndex?: number | null;
+                                snippet?: string | null;
+                            };
+                        };
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    tagging?: {
+                        /** @default [] */
+                        tags: string[];
+                        confidence?: number | null;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    correspondentResolution?: {
+                        resolvedName: string | null;
+                        confidence?: number | null;
+                        strategy?: string;
+                        /** @enum {string} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        model?: string;
+                    };
+                    validation?: {
+                        /** @default {} */
+                        normalizedFields: {
+                            [key: string]: unknown;
+                        };
+                        /** @default [] */
+                        errors: string[];
+                        /** @default [] */
+                        warnings: string[];
+                        /** @default {} */
+                        duplicateSignals: {
+                            [key: string]: unknown;
+                        };
+                    };
+                    pipeline?: {
+                        framework?: string;
+                        runId?: string;
+                        status?: string;
+                        providerOrder?: ("mistral" | "gemini" | "openai")[];
+                        /** @default {} */
+                        durationsMs: {
+                            [key: string]: number;
+                        };
+                        /** @default {} */
+                        agentVersions: {
+                            [key: string]: string;
+                        };
+                    };
                 };
             };
             createdAt: string;
@@ -2225,7 +2601,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     reviewedAt: string | null;
                     reviewNote: string | null;
                     searchablePdfAvailable: boolean;
@@ -2279,7 +2655,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2339,7 +2715,7 @@ export interface components {
                                 holderName: boolean;
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -2367,6 +2743,100 @@ export interface components {
                             updatedAt?: string | null;
                             /** Format: uuid */
                             updatedByUserId?: string | null;
+                        };
+                        intelligence?: {
+                            routing?: {
+                                documentType: string | null;
+                                subtype?: string | null;
+                                confidence?: number | null;
+                                reasoningHints?: string[];
+                                agentVersion?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            title?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            summary?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            extraction?: {
+                                documentType?: string | null;
+                                /** @default {} */
+                                fields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default {} */
+                                fieldConfidence: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                fieldProvenance: {
+                                    [key: string]: {
+                                        source: string;
+                                        provider?: string;
+                                        page?: number | null;
+                                        lineIndex?: number | null;
+                                        snippet?: string | null;
+                                    };
+                                };
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            tagging?: {
+                                /** @default [] */
+                                tags: string[];
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            correspondentResolution?: {
+                                resolvedName: string | null;
+                                confidence?: number | null;
+                                strategy?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            validation?: {
+                                /** @default {} */
+                                normalizedFields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default [] */
+                                errors: string[];
+                                /** @default [] */
+                                warnings: string[];
+                                /** @default {} */
+                                duplicateSignals: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            pipeline?: {
+                                framework?: string;
+                                runId?: string;
+                                status?: string;
+                                providerOrder?: ("mistral" | "gemini" | "openai")[];
+                                /** @default {} */
+                                durationsMs: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                agentVersions: {
+                                    [key: string]: string;
+                                };
+                            };
                         };
                     };
                     createdAt: string;
@@ -2482,7 +2952,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     reviewedAt: string | null;
                     reviewNote: string | null;
                     searchablePdfAvailable: boolean;
@@ -2536,7 +3006,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2596,7 +3066,7 @@ export interface components {
                                 holderName: boolean;
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -2624,6 +3094,100 @@ export interface components {
                             updatedAt?: string | null;
                             /** Format: uuid */
                             updatedByUserId?: string | null;
+                        };
+                        intelligence?: {
+                            routing?: {
+                                documentType: string | null;
+                                subtype?: string | null;
+                                confidence?: number | null;
+                                reasoningHints?: string[];
+                                agentVersion?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            title?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            summary?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            extraction?: {
+                                documentType?: string | null;
+                                /** @default {} */
+                                fields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default {} */
+                                fieldConfidence: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                fieldProvenance: {
+                                    [key: string]: {
+                                        source: string;
+                                        provider?: string;
+                                        page?: number | null;
+                                        lineIndex?: number | null;
+                                        snippet?: string | null;
+                                    };
+                                };
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            tagging?: {
+                                /** @default [] */
+                                tags: string[];
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            correspondentResolution?: {
+                                resolvedName: string | null;
+                                confidence?: number | null;
+                                strategy?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            validation?: {
+                                /** @default {} */
+                                normalizedFields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default [] */
+                                errors: string[];
+                                /** @default [] */
+                                warnings: string[];
+                                /** @default {} */
+                                duplicateSignals: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            pipeline?: {
+                                framework?: string;
+                                runId?: string;
+                                status?: string;
+                                providerOrder?: ("mistral" | "gemini" | "openai")[];
+                                /** @default {} */
+                                durationsMs: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                agentVersions: {
+                                    [key: string]: string;
+                                };
+                            };
                         };
                     };
                     createdAt: string;
@@ -2778,7 +3342,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 /** Format: date-time */
                 reviewedAt: string | null;
                 reviewNote: string | null;
@@ -2807,7 +3371,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2867,7 +3431,7 @@ export interface components {
                             holderName: boolean;
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -2895,6 +3459,100 @@ export interface components {
                         updatedAt?: string | null;
                         /** Format: uuid */
                         updatedByUserId?: string | null;
+                    };
+                    intelligence?: {
+                        routing?: {
+                            documentType: string | null;
+                            subtype?: string | null;
+                            confidence?: number | null;
+                            reasoningHints?: string[];
+                            agentVersion?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        title?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        summary?: {
+                            value: string | null;
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        extraction?: {
+                            documentType?: string | null;
+                            /** @default {} */
+                            fields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default {} */
+                            fieldConfidence: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            fieldProvenance: {
+                                [key: string]: {
+                                    source: string;
+                                    provider?: string;
+                                    page?: number | null;
+                                    lineIndex?: number | null;
+                                    snippet?: string | null;
+                                };
+                            };
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        tagging?: {
+                            /** @default [] */
+                            tags: string[];
+                            confidence?: number | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        correspondentResolution?: {
+                            resolvedName: string | null;
+                            confidence?: number | null;
+                            strategy?: string;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                            model?: string;
+                        };
+                        validation?: {
+                            /** @default {} */
+                            normalizedFields: {
+                                [key: string]: unknown;
+                            };
+                            /** @default [] */
+                            errors: string[];
+                            /** @default [] */
+                            warnings: string[];
+                            /** @default {} */
+                            duplicateSignals: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        pipeline?: {
+                            framework?: string;
+                            runId?: string;
+                            status?: string;
+                            providerOrder?: ("mistral" | "gemini" | "openai")[];
+                            /** @default {} */
+                            durationsMs: {
+                                [key: string]: number;
+                            };
+                            /** @default {} */
+                            agentVersions: {
+                                [key: string]: string;
+                            };
+                        };
                     };
                 };
                 /** Format: date-time */
@@ -3093,7 +3751,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     /** Format: date-time */
                     reviewedAt: string | null;
                     reviewNote: string | null;
@@ -3122,7 +3780,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -3182,7 +3840,7 @@ export interface components {
                                 holderName: boolean;
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -3210,6 +3868,100 @@ export interface components {
                             updatedAt?: string | null;
                             /** Format: uuid */
                             updatedByUserId?: string | null;
+                        };
+                        intelligence?: {
+                            routing?: {
+                                documentType: string | null;
+                                subtype?: string | null;
+                                confidence?: number | null;
+                                reasoningHints?: string[];
+                                agentVersion?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            title?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            summary?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            extraction?: {
+                                documentType?: string | null;
+                                /** @default {} */
+                                fields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default {} */
+                                fieldConfidence: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                fieldProvenance: {
+                                    [key: string]: {
+                                        source: string;
+                                        provider?: string;
+                                        page?: number | null;
+                                        lineIndex?: number | null;
+                                        snippet?: string | null;
+                                    };
+                                };
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            tagging?: {
+                                /** @default [] */
+                                tags: string[];
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            correspondentResolution?: {
+                                resolvedName: string | null;
+                                confidence?: number | null;
+                                strategy?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            validation?: {
+                                /** @default {} */
+                                normalizedFields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default [] */
+                                errors: string[];
+                                /** @default [] */
+                                warnings: string[];
+                                /** @default {} */
+                                duplicateSignals: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            pipeline?: {
+                                framework?: string;
+                                runId?: string;
+                                status?: string;
+                                providerOrder?: ("mistral" | "gemini" | "openai")[];
+                                /** @default {} */
+                                durationsMs: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                agentVersions: {
+                                    [key: string]: string;
+                                };
+                            };
                         };
                     };
                     /** Format: date-time */
@@ -3825,7 +4577,7 @@ export interface operations {
                 /** @description Filter review queue by processing status */
                 processingStatus?: "pending" | "processing" | "ready" | "failed";
                 /** @description Filter review queue by review reason */
-                reason?: "low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format";
+                reason?: "low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed";
                 /** @description Page number */
                 page?: number;
                 /** @description Page size */

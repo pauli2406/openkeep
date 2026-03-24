@@ -45,6 +45,49 @@ describe("document detail smoke", () => {
               reviewReasons: ["low_confidence"],
               chunkCount: 2,
               pageCount: 1,
+              intelligence: {
+                routing: {
+                  documentType: "invoice",
+                  confidence: 0.82,
+                  reasoningHints: ["keyword:invoice"],
+                },
+                summary: {
+                  value: "Invoice for March services with payment due at month end.",
+                },
+                extraction: {
+                  fields: {
+                    amount: 123.45,
+                    referenceNumber: "INV-2026-03",
+                  },
+                  fieldConfidence: {
+                    amount: 0.91,
+                  },
+                  fieldProvenance: {
+                    amount: {
+                      source: "llm_structured_extraction",
+                      provider: "mistral",
+                      page: 1,
+                      lineIndex: 0,
+                      snippet: "Invoice line one",
+                    },
+                  },
+                },
+                validation: {
+                  normalizedFields: {
+                    amount: 123.45,
+                  },
+                  warnings: ["routing_low_confidence"],
+                  errors: [],
+                  duplicateSignals: {},
+                },
+                pipeline: {
+                  framework: "langgraph-ready",
+                  status: "completed",
+                  providerOrder: ["mistral", "gemini", "openai"],
+                  durationsMs: { routing: 12 },
+                  agentVersions: { routing: "v1" },
+                },
+              },
               manual: {
                 lockedFields: ["issueDate", "amount"],
                 values: {
@@ -134,6 +177,11 @@ describe("document detail smoke", () => {
     await user.click(screen.getByRole("tab", { name: /history/i }));
     expect(await screen.findByText("Document Updated")).toBeInTheDocument();
     expect(screen.getByText("Owner")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /intelligence/i }));
+    expect(await screen.findByText("Document Intelligence")).toBeInTheDocument();
+    expect(screen.getByText("Invoice for March services with payment due at month end.")).toBeInTheDocument();
+    expect(screen.getByText("llm_structured_extraction / mistral")).toBeInTheDocument();
 
     await user.click(screen.getAllByRole("button", { name: /reprocess document/i })[0]);
     await user.click(screen.getByRole("combobox", { name: /ocr provider/i }));

@@ -19,8 +19,16 @@ export interface LlmStreamChunk {
   done: boolean;
 }
 
+export type LlmProviderId = "openai" | "gemini" | "mistral";
+
+export interface LlmCompletionResult {
+  text: string | null;
+  provider: LlmProviderId | null;
+  model: string | null;
+}
+
 interface LlmProviderConfig {
-  provider: "openai" | "gemini" | "mistral";
+  provider: LlmProviderId;
   apiKey: string;
   model: string;
 }
@@ -35,13 +43,20 @@ export class LlmService {
     return this.getProviderConfig() !== null;
   }
 
-  getProviderInfo(): { provider: string; model: string } | null {
-    const config = this.getProviderConfig();
+  getProviderInfo(providerOrder?: LlmProviderId[]): { provider: string; model: string } | null {
+    const config = this.getProviderConfig(providerOrder);
     if (!config) {
       return null;
     }
 
     return { provider: config.provider, model: config.model };
+  }
+
+  getAvailableProviderInfos(providerOrder?: LlmProviderId[]): Array<{ provider: string; model: string }> {
+    return this.getProviderConfigs(providerOrder ?? ["openai", "gemini", "mistral"]).map((config) => ({
+      provider: config.provider,
+      model: config.model,
+    }));
   }
 
   async complete(options: LlmCompletionOptions): Promise<string | null> {
@@ -53,6 +68,47 @@ export class LlmService {
       return null;
     }
 
+    return this.completeWithConfig(config, options);
+  }
+
+  async completeWithFallback(
+    options: LlmCompletionOptions,
+    providerOrder: LlmProviderId[],
+  ): Promise<LlmCompletionResult> {
+    const providers = this.getProviderConfigs(providerOrder);
+    if (providers.length === 0) {
+      this.logger.warn(
+        "No LLM provider configured (set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY)",
+      );
+      return {
+        text: null,
+        provider: null,
+        model: null,
+      };
+    }
+
+    for (const provider of providers) {
+      const text = await this.completeWithConfig(provider, options);
+      if (text && text.trim().length > 0) {
+        return {
+          text,
+          provider: provider.provider,
+          model: provider.model,
+        };
+      }
+    }
+
+    return {
+      text: null,
+      provider: null,
+      model: null,
+    };
+  }
+
+  private async completeWithConfig(
+    config: LlmProviderConfig,
+    options: LlmCompletionOptions,
+  ): Promise<string | null> {
     if (config.provider === "openai") {
       return this.completeOpenAi(config, options);
     }
@@ -87,35 +143,47 @@ export class LlmService {
   // Provider config resolution
   // ---------------------------------------------------------------------------
 
-  private getProviderConfig(): LlmProviderConfig | null {
-    const openAiKey = this.configService.get("OPENAI_API_KEY");
-    if (openAiKey) {
-      return {
-        provider: "openai",
-        apiKey: openAiKey,
-        model: this.configService.get("OPENAI_MODEL"),
-      };
+  private getProviderConfig(providerOrder: LlmProviderId[] = ["openai", "gemini", "mistral"]): LlmProviderConfig | null {
+    return this.getProviderConfigs(providerOrder)[0] ?? null;
+  }
+
+  private getProviderConfigs(providerOrder: LlmProviderId[]): LlmProviderConfig[] {
+    return providerOrder
+      .map((provider) => this.getProviderConfigById(provider))
+      .filter((provider): provider is LlmProviderConfig => provider !== null);
+  }
+
+  private getProviderConfigById(provider: LlmProviderId): LlmProviderConfig | null {
+    if (provider === "openai") {
+      const openAiKey = this.configService.get("OPENAI_API_KEY");
+      return openAiKey
+        ? {
+            provider,
+            apiKey: openAiKey,
+            model: this.configService.get("OPENAI_MODEL"),
+          }
+        : null;
     }
 
-    const geminiKey = this.configService.get("GEMINI_API_KEY");
-    if (geminiKey) {
-      return {
-        provider: "gemini",
-        apiKey: geminiKey,
-        model: this.configService.get("GEMINI_MODEL"),
-      };
+    if (provider === "gemini") {
+      const geminiKey = this.configService.get("GEMINI_API_KEY");
+      return geminiKey
+        ? {
+            provider,
+            apiKey: geminiKey,
+            model: this.configService.get("GEMINI_MODEL"),
+          }
+        : null;
     }
 
     const mistralKey = this.configService.get("MISTRAL_API_KEY");
-    if (mistralKey) {
-      return {
-        provider: "mistral",
-        apiKey: mistralKey,
-        model: this.configService.get("MISTRAL_MODEL"),
-      };
-    }
-
-    return null;
+    return mistralKey
+      ? {
+          provider,
+          apiKey: mistralKey,
+          model: this.configService.get("MISTRAL_MODEL"),
+        }
+      : null;
   }
 
   // ---------------------------------------------------------------------------

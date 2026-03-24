@@ -48,6 +48,8 @@ const buildInput = (lines: string[]) => ({
 });
 
 const buildDeterministicResult = (correspondentName: string | null) => ({
+  title: "Test document",
+  summary: null,
   language: "de",
   issueDate: null,
   dueDate: null,

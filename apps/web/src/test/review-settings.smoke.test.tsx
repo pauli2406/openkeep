@@ -26,7 +26,23 @@ describe("review smoke", () => {
               id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
               title: "Review Invoice",
               reviewStatus: "pending",
-              reviewReasons: ["low_confidence"],
+              reviewReasons: ["classification_ambiguous"],
+              metadata: {
+                intelligence: {
+                  routing: {
+                    documentType: "invoice",
+                  },
+                  summary: {
+                    value: "Supplier invoice with unclear classification confidence.",
+                  },
+                  validation: {
+                    normalizedFields: {},
+                    warnings: ["routing_low_confidence"],
+                    errors: [],
+                    duplicateSignals: {},
+                  },
+                },
+              },
             }),
             makeDocument({
               id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
@@ -74,6 +90,11 @@ describe("review smoke", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Review Invoice")).toBeInTheDocument();
     expect(screen.getByText("Requeue Invoice")).toBeInTheDocument();
+    expect(screen.getByText("Classification Ambiguous")).toBeInTheDocument();
+    expect(screen.getByText("invoice")).toBeInTheDocument();
+    expect(
+      screen.getByText("Supplier invoice with unclear classification confidence."),
+    ).toBeInTheDocument();
 
     await user.click(screen.getAllByRole("button", { name: /^resolve$/i })[0]);
     await waitFor(() => {

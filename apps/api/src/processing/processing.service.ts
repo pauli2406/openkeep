@@ -313,6 +313,7 @@ export class ProcessingService {
         await tx
           .update(documents)
           .set({
+            title: metadata.title?.trim() || record.title,
             status: "ready",
             language: metadata.language,
             fullText: parsed.text,
@@ -1447,7 +1448,7 @@ export class ProcessingService {
   }
 
   private buildDocumentMetadata(input: {
-    metadata: { confidence: number; metadata: Record<string, unknown> };
+    metadata: { confidence: number; metadata: Record<string, unknown>; summary: string | null };
     existingMetadata: Record<string, unknown>;
     parsed: {
       provider: DocumentMetadata["parseProvider"];
@@ -1517,6 +1518,9 @@ export class ProcessingService {
       ...input.metadata.metadata,
       ...(this.readManualOverrides(input.existingMetadata).lockedFields.length > 0
         ? { manual: this.readManualOverrides(input.existingMetadata) }
+        : {}),
+      ...(typeof input.metadata.summary === "string" && input.metadata.summary.trim().length > 0
+        ? { summary: input.metadata.summary.trim() }
         : {}),
       parseProvider: input.parsed.provider ?? undefined,
       parseStrategy: input.parsed.parseStrategy,

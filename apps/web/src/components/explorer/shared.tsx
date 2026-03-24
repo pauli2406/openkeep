@@ -17,6 +17,13 @@ import type {
 import { cn } from "@/lib/utils";
 import { colorForValue, formatCurrency } from "@/lib/explorer";
 
+function formatSignal(signal: string): string {
+  return signal
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function ExplorerSectionHeader({
   eyebrow,
   title,
@@ -334,12 +341,41 @@ export function DocumentRows({
                   <span>{formatCurrency(document.amount, document.currency ?? "EUR")}</span>
                 ) : null}
               </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {document.reviewReasons.includes("classification_ambiguous") ? (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-800">
+                    Classification Ambiguous
+                  </span>
+                ) : null}
+                {document.reviewReasons.includes("correspondent_unresolved") ? (
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-rose-800">
+                    Correspondent Unresolved
+                  </span>
+                ) : null}
+                {document.metadata.intelligence?.routing?.documentType ? (
+                  <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--explorer-cobalt)]">
+                    {document.metadata.intelligence.routing.documentType}
+                  </span>
+                ) : null}
+                {(document.metadata.intelligence?.validation?.warnings ?? []).slice(0, 2).map((warning) => (
+                  <span
+                    key={warning}
+                    className="rounded-full border border-[color:var(--explorer-border)] bg-white/80 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--explorer-muted)]"
+                  >
+                    {formatSignal(warning)}
+                  </span>
+                ))}
+              </div>
             </div>
             {document.snippets && document.snippets.length > 0 ? (
               <p
                 className="line-clamp-2 text-sm text-[color:var(--explorer-muted)]"
                 dangerouslySetInnerHTML={{ __html: document.snippets[0] ?? "" }}
               />
+            ) : document.metadata.intelligence?.summary?.value ? (
+              <p className="line-clamp-2 text-sm text-[color:var(--explorer-muted)]">
+                {document.metadata.intelligence.summary.value}
+              </p>
             ) : null}
           </div>
               <div className="mt-1 flex shrink-0 items-center gap-2">

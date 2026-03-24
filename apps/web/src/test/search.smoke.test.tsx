@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { apiUrl } from "./api-url";
 import {
   makeDocument,
@@ -11,68 +11,129 @@ import { server } from "./msw-server";
 
 describe("search smoke", () => {
   it("renders grounded answer results with citations", async () => {
+    const originalFetch = globalThis.fetch;
+
     server.use(
-      http.post(apiUrl("/api/search/answer"), async ({ request }) => {
+      http.post(apiUrl("/api/search/semantic"), async ({ request }) => {
         const body = (await request.json()) as { query: string };
         expect(body).toEqual({
           query: "When is the invoice due?",
-          maxDocuments: 3,
-          maxCitations: 4,
-          maxChunkMatches: 4,
+          page: 1,
+          pageSize: 20,
+          maxChunkMatches: 6,
         });
 
-        return HttpResponse.json({
-          status: "answered",
-          answer: "The invoice is due on March 31, 2026.",
-          reasoning: "Matched invoice due date fields in the top ranked document.",
-          citations: [
-            {
-              documentId: "11111111-1111-1111-1111-111111111111",
-              documentTitle: "March Invoice",
-              chunkIndex: 0,
-              pageFrom: 1,
-              pageTo: 1,
-              quote: "Due date: 2026-03-31",
-              score: 0.96,
-            },
-          ],
-          results: [
-            {
-              document: makeDocument(),
-              score: 0.96,
-              semanticScore: 0.91,
-              keywordScore: 0.88,
-              matchedChunks: [
-                {
-                  chunkIndex: 0,
-                  heading: "Payment details",
-                  text: "Due date: 2026-03-31",
-                  pageFrom: 1,
-                  pageTo: 1,
-                  score: 0.96,
-                  distance: 0.04,
-                },
-              ],
-            },
-          ],
-        });
+        return HttpResponse.json(
+          makeSemanticSearchResponse({
+            items: [
+              {
+                document: makeDocument(),
+                score: 0.96,
+                semanticScore: 0.91,
+                keywordScore: 0.88,
+                matchedChunks: [
+                  {
+                    chunkIndex: 0,
+                    heading: "Payment details",
+                    text: "Due date: 2026-03-31",
+                    pageFrom: 1,
+                    pageTo: 1,
+                    score: 0.96,
+                    distance: 0.04,
+                  },
+                ],
+              },
+            ],
+            total: 1,
+          }),
+        );
       }),
     );
 
-    renderAuthenticatedApp({
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url === apiUrl("/api/search/answer/stream")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          query: "When is the invoice due?",
+          maxDocuments: 5,
+          maxCitations: 6,
+          maxChunkMatches: 6,
+        });
+
+        return Promise.resolve(
+          new Response(
+            [
+              'event: search-results\n',
+              `data: ${JSON.stringify({
+                results: [
+                  {
+                    document: makeDocument(),
+                    score: 0.96,
+                    semanticScore: 0.91,
+                    keywordScore: 0.88,
+                    matchedChunks: [
+                      {
+                        chunkIndex: 0,
+                        heading: "Payment details",
+                        text: "Due date: 2026-03-31",
+                        pageFrom: 1,
+                        pageTo: 1,
+                        score: 0.96,
+                        distance: 0.04,
+                      },
+                    ],
+                  },
+                ],
+              })}\n\n`,
+              'event: answer-token\n',
+              `data: ${JSON.stringify({ text: "The invoice is due on March 31, 2026." })}\n\n`,
+              'event: done\n',
+              `data: ${JSON.stringify({
+                fullAnswer: "The invoice is due on March 31, 2026.",
+                citations: [
+                  {
+                    documentId: "11111111-1111-1111-1111-111111111111",
+                    documentTitle: "March Invoice",
+                    chunkIndex: 0,
+                    pageFrom: 1,
+                    pageTo: 1,
+                    quote: "Due date: 2026-03-31",
+                    score: 0.96,
+                  },
+                ],
+              })}\n\n`,
+            ].join(""),
+            {
+              headers: { "Content-Type": "text/event-stream" },
+            },
+          ),
+        );
+      }
+
+      return originalFetch(input, init);
+    });
+
+    const { user } = renderAuthenticatedApp({
       route: "/search?mode=answer&q=When%20is%20the%20invoice%20due%3F",
     });
 
     expect(
       await screen.findByRole("heading", { name: /search/i }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Document Answer")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /ai answer/i }));
+    await screen.findByText("Answer ready", {}, { timeout: 3000 });
     expect(
-      screen.getByText("The invoice is due on March 31, 2026."),
+      screen.getByText("Sources"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Citations")).toBeInTheDocument();
+    expect(screen.getByText("The invoice is due on March 31, 2026.")).toBeInTheDocument();
     expect(screen.getAllByText("Due date: 2026-03-31").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Supporting Documents")).toBeInTheDocument();
+    expect(screen.getByText(/1 result/i)).toBeInTheDocument();
   });
 
   it("renders semantic search results with scores and matched chunks", async () => {
@@ -83,7 +144,7 @@ describe("search smoke", () => {
           query: "professional services",
           page: 1,
           pageSize: 20,
-          maxChunkMatches: 3,
+          maxChunkMatches: 6,
         });
 
         return HttpResponse.json(
@@ -133,7 +194,7 @@ describe("search smoke", () => {
       }),
     );
 
-    renderAuthenticatedApp({
+    const { user } = renderAuthenticatedApp({
       route: "/search?mode=semantic&q=professional%20services",
     });
 
@@ -144,17 +205,17 @@ describe("search smoke", () => {
     // Should display both results
     expect(await screen.findByText("March Invoice")).toBeInTheDocument();
     expect(screen.getByText("Consulting Agreement")).toBeInTheDocument();
-    expect(screen.getByText("2 results found")).toBeInTheDocument();
+    expect(screen.getByText("2 results")).toBeInTheDocument();
 
-    // Should show combined scores
-    expect(screen.getByText("Score: 88%")).toBeInTheDocument();
-    expect(screen.getByText("Score: 72%")).toBeInTheDocument();
+    // Semantic score badges should be visible
+    expect(screen.getByText("92%")).toBeInTheDocument();
+    expect(screen.getByText("68%")).toBeInTheDocument();
 
-    // Should show semantic scores
-    expect(screen.getByText("Semantic: 92%")).toBeInTheDocument();
-    expect(screen.getByText("Semantic: 68%")).toBeInTheDocument();
+    // Matched chunks are collapsed by default and can be expanded
+    const excerptButtons = screen.getAllByRole("button", { name: /1 matched excerpt/i });
+    await user.click(excerptButtons[0]!);
+    await user.click(excerptButtons[1]!);
 
-    // Should show matched chunk text
     expect(
       screen.getByText("Professional services rendered in March."),
     ).toBeInTheDocument();
@@ -164,25 +225,65 @@ describe("search smoke", () => {
   });
 
   it("shows insufficient evidence fallback for unanswerable queries", async () => {
+    const originalFetch = globalThis.fetch;
+
     server.use(
-      http.post(apiUrl("/api/search/answer"), () =>
-        HttpResponse.json({
-          status: "insufficient_evidence",
-          answer: null,
-          reasoning: null,
-          citations: [],
-          results: [],
-        }),
-      ),
+      http.post(apiUrl("/api/search/semantic"), async ({ request }) => {
+        const body = (await request.json()) as { query: string };
+        expect(body).toEqual({
+          query: "What is the meaning of life?",
+          page: 1,
+          pageSize: 20,
+          maxChunkMatches: 6,
+        });
+        return HttpResponse.json(makeSemanticSearchResponse({ items: [], total: 0 }));
+      }),
     );
 
-    renderAuthenticatedApp({
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url === apiUrl("/api/search/answer/stream")) {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          query: "What is the meaning of life?",
+          maxDocuments: 5,
+          maxCitations: 6,
+          maxChunkMatches: 6,
+        });
+
+        return Promise.resolve(
+          new Response(
+            [
+              'event: search-results\n',
+              `data: ${JSON.stringify({ results: [] })}\n\n`,
+              'event: done\n',
+              `data: ${JSON.stringify({ fullAnswer: "", citations: [] })}\n\n`,
+            ].join(""),
+            {
+              headers: { "Content-Type": "text/event-stream" },
+            },
+          ),
+        );
+      }
+
+      return originalFetch(input, init);
+    });
+
+    const { user } = renderAuthenticatedApp({
       route: "/search?mode=answer&q=What%20is%20the%20meaning%20of%20life%3F",
     });
 
+    await user.click(await screen.findByRole("button", { name: /ai answer/i }));
+    await screen.findByText("Answer ready", {}, { timeout: 3000 });
+
     expect(
-      await screen.findByText(
-        /not enough grounded evidence to answer confidently/i,
+      screen.getByText(
+        /Not enough evidence in your archive to answer this question confidently\./i,
       ),
     ).toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { ReviewEvidenceField, ReviewReason } from "@openkeep/types";
 
+import { AgenticDocumentIntelligenceService } from "./agentic-document-intelligence.service";
 import { AppConfigService } from "../common/config/app-config.service";
 import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import { DeterministicMetadataExtractor } from "./deterministic-metadata.extractor";
@@ -15,6 +16,8 @@ import type {
 @Injectable()
 export class HybridMetadataExtractor implements MetadataExtractor {
   constructor(
+    @Inject(AgenticDocumentIntelligenceService)
+    private readonly agenticDocumentIntelligenceService: AgenticDocumentIntelligenceService,
     @Inject(DeterministicMetadataExtractor)
     private readonly deterministicExtractor: DeterministicMetadataExtractor,
     @Inject(DocumentTypePolicyService)
@@ -25,6 +28,10 @@ export class HybridMetadataExtractor implements MetadataExtractor {
   ) {}
 
   async extract(input: MetadataExtractionInput): Promise<MetadataExtractionResult> {
+    if (this.llmServiceConfigured()) {
+      return this.agenticDocumentIntelligenceService.extract(input);
+    }
+
     const result = await this.deterministicExtractor.extract(input);
     const resolution = await this.correspondentResolutionService.resolve(input, result);
     const reviewEvidence = await this.normalizeReviewEvidence(
@@ -118,5 +125,13 @@ export class HybridMetadataExtractor implements MetadataExtractor {
     });
 
     return confidence;
+  }
+
+  private llmServiceConfigured(): boolean {
+    return (
+      Boolean(this.configService.get("OPENAI_API_KEY")) ||
+      Boolean(this.configService.get("GEMINI_API_KEY")) ||
+      Boolean(this.configService.get("MISTRAL_API_KEY"))
+    );
   }
 }
