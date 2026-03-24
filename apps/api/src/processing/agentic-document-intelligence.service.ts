@@ -542,6 +542,7 @@ export class AgenticDocumentIntelligenceService {
       ...fallback.fields,
       ...(parsed.fields as Record<string, unknown>),
     };
+    const refinedFields = typeSpecificExtractor.refineFields?.(input, fields) ?? fields;
     const fieldConfidence = {
       ...fallback.fieldConfidence,
       ...this.normalizeFieldConfidenceMap(parsed.fieldConfidence),
@@ -549,11 +550,11 @@ export class AgenticDocumentIntelligenceService {
 
     return {
       ...fallback,
-      fields,
+      fields: refinedFields,
       fieldConfidence,
       fieldProvenance: this.buildFieldProvenance(
         input,
-        fields,
+        refinedFields,
         providerResult.provider ?? fallback.provider,
         fallback.fieldProvenance,
       ),
@@ -653,8 +654,18 @@ export class AgenticDocumentIntelligenceService {
     const normalizedIssueDate = this.normalizeDateField(fields.issueDate);
     const normalizedDueDate = this.normalizeDateField(fields.dueDate);
     const normalizedExpiryDate = this.normalizeDateField(fields.expiryDate);
-    const normalizedAmount = this.normalizeAmountField(fields.amount);
-    const normalizedCurrency = this.normalizeCurrencyField(fields.currency, fields.amount);
+    let normalizedAmount = this.normalizeAmountField(fields.amount);
+    let normalizedCurrency = this.normalizeCurrencyField(fields.currency, fields.amount);
+    if (routing.documentType === "insurance_document") {
+      const insuranceAmount = this.resolveInsurancePremiumAmount(input.parsed.text);
+      if (insuranceAmount === null) {
+        normalizedAmount = null;
+        normalizedCurrency = null;
+      } else {
+        normalizedAmount = insuranceAmount.amount;
+        normalizedCurrency = insuranceAmount.currency;
+      }
+    }
     const normalizedReferenceNumber = this.cleanReferenceNumber(fields.referenceNumber);
     const normalizedHolderName = this.cleanNullableString(fields.holderName);
     const normalizedIssuingAuthority = this.cleanNullableString(fields.issuingAuthority);
@@ -1152,6 +1163,41 @@ export class AgenticDocumentIntelligenceService {
           ),
       ) ?? null
     );
+  }
+
+  private resolveInsurancePremiumAmount(
+    text: string,
+  ): { amount: number; currency: string } | null {
+    const normalized = text.replace(/\u00a0/g, " ");
+    const activePremiumPatterns = [
+      /(?:gesamtmonatsbeitrag|monatsbeitrag(?:\s+f(?:ü|ue)r\s+den\s+gesamten\s+vertrag)?|ihr neuer beitrag ab [^\n]*|neuer beitrag ab [^\n]*).*?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:,\d{2})?)\s*(EUR|€)/i,
+      /(?:monatliche(?:n)?\s+beitr(?:a|ä)ge|monatlicher\s+beitrag|h(?:ö|oe)he der monatlichen beitr(?:a|ä)ge).*?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:,\d{2})?)\s*(EUR|€)/i,
+    ];
+
+    for (const pattern of activePremiumPatterns) {
+      const match = normalized.match(pattern);
+      if (match?.[1]) {
+        return {
+          amount: Number(match[1].replace(/\./g, "").replace(",", ".")),
+          currency: match[2] === "€" ? "EUR" : match[2].trim().toUpperCase(),
+        };
+      }
+    }
+
+    const lineBasedMonthly = normalized.match(
+      /(?:gesamtmonatsbeitrag\s+ab\s+\d{2}\.\d{2}\.\d{2,4}|monatsbeitrag\s+f(?:ü|ue)r\s+den\s+gesamten\s+vertrag\s+ab\s+\d{2}\.\d{2}\.\d{2,4})[^\n]*?((?:\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:,\d{2})?))(?:\s*(EUR|€))?/i,
+    );
+    if (lineBasedMonthly?.[1]) {
+      return {
+        amount: Number(lineBasedMonthly[1].replace(/\./g, "").replace(",", ".")),
+        currency: lineBasedMonthly[2] === "€" || !lineBasedMonthly[2] ? "EUR" : lineBasedMonthly[2].trim().toUpperCase(),
+      };
+    }
+
+    const hasTotalsOnly = /(gesamtbeitrag in\s+20\d{2}|arbeitgeberzuschuss|vorsorgebeitrag|steuer|elstam)/i.test(
+      normalized,
+    );
+    return hasTotalsOnly ? null : null;
   }
 
   private buildFieldProvenance(

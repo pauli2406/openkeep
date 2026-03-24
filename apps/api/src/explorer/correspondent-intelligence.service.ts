@@ -122,7 +122,7 @@ export class CorrespondentIntelligenceService {
 
     const seed = buildDeterministicIntelligence(correspondent.name, docs);
     const generated = await this.generateIntelligence(correspondent.name, docs, seed);
-    const intelligence = generated ?? seed;
+    const intelligence = normalizeIntelligence(generated ?? seed, docs);
     const now = new Date();
 
     await this.databaseService.db
@@ -211,21 +211,24 @@ function buildDeterministicIntelligence(
   const insuranceDocs = docs.filter((doc) => normalizeTypeName(doc.typeName) === "insurance");
   const profileCategory = insuranceDocs.length > 0 ? "insurance" : inferGenericCategory(docs);
   const changes = detectChanges(sortedByDate);
-  const timeline = sortedByDate.slice(-6).map((doc) => ({
-    date: doc.issueDate,
-    title: doc.title,
-    description: summarizeDoc(doc),
-    documentId: doc.id,
-    documentTitle: doc.title,
-  }));
-  const currentState = buildCurrentState(latestDoc, insuranceDocs);
-  const latestPremiumDoc = [...sortedByDate].reverse().find((doc) => doc.amount && doc.currency) ?? null;
+  const timeline = sortedByDate
+    .slice(-6)
+    .reverse()
+    .map((doc) => ({
+      date: doc.issueDate,
+      title: doc.title,
+      description: summarizeDoc(doc),
+      documentId: doc.id,
+      documentTitle: doc.title,
+    }));
+  const latestPremium = readLatestInsurancePremium(insuranceDocs);
+  const currentState = buildCurrentState(latestDoc, insuranceDocs, latestPremium);
   const insuranceInsight =
     insuranceDocs.length > 0
       ? {
           policyReferences: uniqueValues(insuranceDocs.map((doc) => readReferenceNumber(doc)).filter(Boolean)),
-          latestPremiumAmount: latestPremiumDoc?.amount ? Number(latestPremiumDoc.amount) : null,
-          latestPremiumCurrency: latestPremiumDoc?.currency ?? null,
+          latestPremiumAmount: latestPremium?.amount ?? null,
+          latestPremiumCurrency: latestPremium?.currency ?? null,
           premiumChangeSummary:
             changes.find((change) => change.category === "price")?.description ?? null,
           coverageHighlights: uniqueValues(
@@ -294,6 +297,47 @@ function buildIntelligencePrompt(
   ].join("\n");
 }
 
+function normalizeIntelligence(
+  intelligence: CorrespondentIntelligence,
+  docs: CorrespondentDocumentRow[],
+): CorrespondentIntelligence {
+  if (docs.length === 0) {
+    return intelligence;
+  }
+
+  const sortedByDate = [...docs].sort((left, right) => compareDates(left.issueDate, right.issueDate));
+  const latestDoc = sortedByDate.at(-1) ?? docs[0]!;
+  const insuranceDocs = docs.filter((doc) => normalizeTypeName(doc.typeName) === "insurance");
+  const latestPremium = readLatestInsurancePremium(insuranceDocs);
+
+  return {
+    ...intelligence,
+    timeline: [...(intelligence.timeline ?? [])].sort((left, right) => compareDates(right.date, left.date)),
+    currentState: buildCurrentState(latestDoc, insuranceDocs, latestPremium),
+    domainInsights:
+      insuranceDocs.length > 0
+        ? {
+            ...intelligence.domainInsights,
+            insurance: {
+              ...intelligence.domainInsights.insurance,
+              policyReferences: uniqueValues(insuranceDocs.map((doc) => readReferenceNumber(doc)).filter(Boolean)),
+              latestPremiumAmount:
+                latestPremium?.amount ?? intelligence.domainInsights.insurance?.latestPremiumAmount ?? null,
+              latestPremiumCurrency:
+                latestPremium?.currency ?? intelligence.domainInsights.insurance?.latestPremiumCurrency ?? null,
+              coverageHighlights: uniqueValues(
+                insuranceDocs.flatMap((doc) => readCoverageHighlights(doc)),
+              ).slice(0, 5),
+              renewalDate: intelligence.domainInsights.insurance?.renewalDate ?? latestDoc.expiryDate,
+              cancellationWindow:
+                intelligence.domainInsights.insurance?.cancellationWindow ?? readCancellationWindow(insuranceDocs),
+            },
+          }
+        : intelligence.domainInsights,
+    sourceDocumentIds: intelligence.sourceDocumentIds?.length > 0 ? intelligence.sourceDocumentIds : docs.map((doc) => doc.id),
+  };
+}
+
 function readDocumentIntelligence(doc: CorrespondentDocumentRow): {
   summary: string | null;
   fields: Record<string, unknown>;
@@ -338,6 +382,81 @@ function readCancellationWindow(docs: CorrespondentDocumentRow[]): string | null
     }
   }
   return null;
+}
+
+function readLatestInsurancePremium(
+  docs: CorrespondentDocumentRow[],
+): { amount: number; currency: string; asOf: string | null } | null {
+  const datedDocs = [...docs].sort((left, right) => compareDates(right.issueDate, left.issueDate));
+  const prioritized = datedDocs
+    .map((doc) => ({
+      doc,
+      premium: readInsurancePremiumValue(doc),
+      signaled: hasInsurancePremiumSignal(doc),
+    }))
+    .filter(
+      (entry): entry is {
+        doc: CorrespondentDocumentRow;
+        premium: { amount: number; currency: string };
+        signaled: boolean;
+      } => entry.premium !== null,
+    );
+
+  const preferred = prioritized.find((entry) => entry.signaled) ?? prioritized[0];
+  return preferred
+    ? {
+        amount: preferred.premium.amount,
+        currency: preferred.premium.currency,
+        asOf: preferred.doc.issueDate,
+      }
+    : null;
+}
+
+function readInsurancePremiumValue(doc: CorrespondentDocumentRow): { amount: number; currency: string } | null {
+  const fields = readDocumentIntelligence(doc).fields;
+  const fieldAmountCandidates = [
+    fields.monthlyPremiumAmount,
+    fields.yearlyPremiumAmount,
+    fields.annualPremiumAmount,
+    fields.premiumAmount,
+    fields.monthlyAmount,
+    fields.yearlyAmount,
+    fields.annualAmount,
+    fields.monthlyPremium,
+    fields.yearlyPremium,
+    fields.annualPremium,
+  ];
+  const extractedAmount = fieldAmountCandidates.map(asNullableNumber).find((value) => value !== null) ?? null;
+  const extractedCurrency = [
+    asNullableString(fields.monthlyPremiumCurrency),
+    asNullableString(fields.yearlyPremiumCurrency),
+    asNullableString(fields.annualPremiumCurrency),
+    asNullableString(fields.premiumCurrency),
+    doc.currency,
+  ].find((value): value is string => Boolean(value));
+
+  if (extractedAmount !== null && extractedCurrency) {
+    return { amount: extractedAmount, currency: extractedCurrency };
+  }
+
+  if (doc.amount && doc.currency) {
+    return { amount: Number(doc.amount), currency: doc.currency };
+  }
+
+  return null;
+}
+
+function hasInsurancePremiumSignal(doc: CorrespondentDocumentRow): boolean {
+  const fields = readDocumentIntelligence(doc).fields;
+  const fieldKeys = Object.keys(fields).join(" ").toLowerCase();
+  const searchableText = [doc.title, readDocumentIntelligence(doc).summary, fieldKeys]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+
+  return /(premium|contribution|beitrag|beitrags|monthly|monat|monatlich|yearly|annual|jahr|jährlich|jaehrlich)/i.test(
+    searchableText,
+  );
 }
 
 function detectChanges(docs: CorrespondentDocumentRow[]): CorrespondentIntelligence["changes"] {
@@ -387,17 +506,18 @@ function detectChanges(docs: CorrespondentDocumentRow[]): CorrespondentIntellige
 function buildCurrentState(
   latestDoc: CorrespondentDocumentRow,
   insuranceDocs: CorrespondentDocumentRow[],
+  latestPremium?: { amount: number; currency: string; asOf: string | null } | null,
 ): CorrespondentIntelligence["currentState"] {
   const fields = readDocumentIntelligence(latestDoc).fields;
   const facts: CorrespondentIntelligence["currentState"] = [];
-  const addFact = (label: string, value: string | null | undefined) => {
+  const addFact = (label: string, value: string | null | undefined, asOf = latestDoc.issueDate) => {
     if (!value) {
       return;
     }
     facts.push({
       label,
       value,
-      asOf: latestDoc.issueDate,
+      asOf,
       documentId: latestDoc.id,
       documentTitle: latestDoc.title,
     });
@@ -408,7 +528,14 @@ function buildCurrentState(
   addFact("Renewal / expiry", latestDoc.expiryDate);
   addFact(
     "Latest amount",
-    latestDoc.amount && latestDoc.currency ? formatAmount(Number(latestDoc.amount), latestDoc.currency) : null,
+    insuranceDocs.length > 0
+      ? latestPremium
+        ? formatAmount(latestPremium.amount, latestPremium.currency)
+        : null
+      : latestDoc.amount && latestDoc.currency
+        ? formatAmount(Number(latestDoc.amount), latestDoc.currency)
+        : null,
+    insuranceDocs.length > 0 ? latestPremium?.asOf ?? latestDoc.issueDate : latestDoc.issueDate,
   );
   addFact("Holder", asNullableString(fields.holderName));
   addFact("Tariff / plan", asNullableString(fields.tariff) ?? asNullableString(fields.plan));
@@ -495,6 +622,18 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.replace(/[^\d,.-]/g, "").replace(/\.(?=.*\.)/g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function formatAmount(amount: number, currency: string): string {

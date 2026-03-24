@@ -17,4 +17,8 @@ export interface TypeSpecificExtractor {
     input: MetadataExtractionInput,
     helpers: DeterministicExtractionHelpers,
   ) => Record<string, unknown>;
+  refineFields?: (
+    input: MetadataExtractionInput,
+    fields: Record<string, unknown>,
+  ) => Record<string, unknown>;
 }

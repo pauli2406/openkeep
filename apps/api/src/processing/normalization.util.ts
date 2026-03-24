@@ -94,6 +94,22 @@ export const parseDateOnly = (raw: string | null | undefined): Date | null => {
     return toUtcDateOnly(Number(textualMatch[3]), month, Number(textualMatch[2]));
   }
 
+  const monthYearMatch = normalized.match(
+    /(?:^|\s)(?:im\s+)?([A-Za-zÄÖÜäöüß.]+)\s+(\d{2}|\d{4})(?:$|\s)/i,
+  );
+  if (monthYearMatch) {
+    const month = monthMap[monthYearMatch[1].replace(/\./g, "").toLowerCase()];
+    if (month) {
+      const yearText = monthYearMatch[2];
+      const year = yearText.length === 2 ? Number(`20${yearText}`) : Number(yearText);
+      return toUtcDateOnly(year, month, 1);
+    }
+  }
+
+  if (/[A-Za-zÄÖÜäöüß]/.test(normalized) && !/\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}/.test(normalized)) {
+    return null;
+  }
+
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return null;

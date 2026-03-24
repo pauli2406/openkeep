@@ -249,11 +249,11 @@ describe("DeterministicMetadataExtractor", () => {
         parseStrategy: "fixture",
         text: [
           "PERSONALAUSWEIS",
-          "Name: Marcel Pochert",
+          "Name: Alex Example",
           "Document No: C01X00ABC",
           "Issued on: 01.02.2024",
           "Valid until: 01.02.2034",
-          "Issuing Authority: Freie und Hansestadt Hamburg",
+          "Issuing Authority: Example City Authority",
         ].join("\n"),
         language: "de",
         tables: [],
@@ -269,11 +269,11 @@ describe("DeterministicMetadataExtractor", () => {
             height: null,
             lines: [
               "PERSONALAUSWEIS",
-              "Name: Marcel Pochert",
+              "Name: Alex Example",
               "Document No: C01X00ABC",
               "Issued on: 01.02.2024",
               "Valid until: 01.02.2034",
-              "Issuing Authority: Freie und Hansestadt Hamburg",
+              "Issuing Authority: Example City Authority",
             ].map((text, lineIndex) => ({
               lineIndex,
               text,
@@ -286,8 +286,8 @@ describe("DeterministicMetadataExtractor", () => {
     });
 
     expect(result.documentTypeName).toBe("ID");
-    expect(result.holderName).toBe("Marcel Pochert");
-    expect(result.issuingAuthority).toBe("Freie und Hansestadt Hamburg");
+    expect(result.holderName).toBe("Alex Example");
+    expect(result.issuingAuthority).toBe("Example City Authority");
     expect(result.expiryDate?.toISOString().slice(0, 10)).toBe("2034-02-01");
     expect(result.reviewReasons).not.toContain("missing_key_fields");
   });
@@ -295,13 +295,13 @@ describe("DeterministicMetadataExtractor", () => {
   it("requires due date and reference number for utility bills", async () => {
     const result = await extractor.extract({
       documentId: "11111111-1111-1111-1111-111111111111",
-      title: "hamburg-wasser.txt",
+      title: "city-water.txt",
       mimeType: "application/pdf",
       parsed: {
         provider: "local-ocr",
         parseStrategy: "fixture",
         text: [
-          "HAMBURG WASSER",
+          "CITY WATER",
           "Informationen über die Beschaffenheit des Trinkwassers",
           "Datum: 01.02.2025",
           "Gesamtbetrag: EUR 42,50",
@@ -319,7 +319,7 @@ describe("DeterministicMetadataExtractor", () => {
             width: null,
             height: null,
             lines: [
-              "HAMBURG WASSER",
+              "CITY WATER",
               "Informationen über die Beschaffenheit des Trinkwassers",
               "Datum: 01.02.2025",
               "Gesamtbetrag: EUR 42,50",
@@ -384,12 +384,12 @@ describe("DeterministicMetadataExtractor", () => {
   it("canonicalizes tax-like detections to Tax Document", async () => {
     const result = await extractor.extract({
       documentId: "11111111-1111-1111-1111-111111111111",
-      title: "steuerbescheid.pdf",
+      title: "tax-notice.pdf",
       mimeType: "application/pdf",
       parsed: {
         provider: "local-ocr",
         parseStrategy: "fixture",
-        text: "Steuerbescheid\nFinanzamt Hamburg\nDatum: 01.02.2025\n",
+        text: "Steuerbescheid\nFinanzamt Beispielstadt\nDatum: 01.02.2025\n",
         language: "de",
         tables: [],
         keyValues: [],
@@ -402,7 +402,7 @@ describe("DeterministicMetadataExtractor", () => {
             pageNumber: 1,
             width: null,
             height: null,
-            lines: ["Steuerbescheid", "Finanzamt Hamburg", "Datum: 01.02.2025"].map(
+            lines: ["Steuerbescheid", "Finanzamt Beispielstadt", "Datum: 01.02.2025"].map(
               (text, lineIndex) => ({
                 lineIndex,
                 text,

@@ -208,4 +208,130 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(result.reviewReasons).toContain("correspondent_unresolved");
     expect(intelligence?.validation?.warnings).toContain("correspondent_missing");
   });
+
+  it("does not treat ELStAM yearly totals as the active insurance premium", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "insurance_document",
+        subtype: "premium_notification",
+        confidence: 0.95,
+        reasoningHints: ["versicherung", "beitrag"],
+      }),
+      JSON.stringify({
+        title: "Insurance ELStAM Notice",
+        titleConfidence: 0.9,
+        summary:
+          "ELStAM notice with employer subsidy and tax contribution reporting for 2026.",
+        summaryConfidence: 0.88,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "27.11.2025",
+          amount: 908,
+          currency: "EUR",
+          referenceNumber: "POL-123456",
+          correspondentName: "Example Health Insurance Co.",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+          amount: 0.95,
+          currency: 0.98,
+        },
+      }),
+      JSON.stringify({
+        tags: ["insurance-document", "elstam"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Health Insurance" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Example Health Insurance",
+          "27.11.2025",
+          "Policy No.: POL-123456 - Initial ELStAM reporting notice",
+          "Arbeitgeberzuschuss",
+          "Hoehe der monatlichen Beitraege fuer eine private Krankenversicherung.",
+          "| Alex Example | Januar bis Dezember | 908,00 EUR |",
+          "Vorsorgebeitrag",
+          "| Alex Example | Januar bis Dezember | 679,00 EUR |",
+        ].join("\n"),
+        "insurance.pdf",
+      ),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    expect(result.amount).toBeNull();
+    expect(result.currency).toBeNull();
+    expect(intelligence?.validation?.normalizedFields?.amount).toBeNull();
+  });
+
+  it("extracts the active insurance premium from a contribution adjustment document", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "insurance_document",
+        subtype: "contribution_adjustment_notice",
+        confidence: 0.97,
+        reasoningHints: ["beitragsanpassung", "versicherungsschein"],
+      }),
+      JSON.stringify({
+        title: "Insurance Contribution Adjustment 2026",
+        titleConfidence: 0.9,
+        summary: "Insurance contribution adjustment with new monthly premium from 2026.",
+        summaryConfidence: 0.88,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "25.11.2025",
+          amount: null,
+          currency: null,
+          referenceNumber: "POL-123456",
+          correspondentName: "Example Health Insurance Co.",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+        },
+      }),
+      JSON.stringify({
+        tags: ["insurance-document", "beitragsanpassung"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Health Insurance" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Example City, im Nov. 25",
+          "Policy No. POL-123456 - Coverage certificate",
+          "Ihr neuer Beitrag ab 01.01.2026",
+          "Gesamtmonatsbeitrag ab 01.01.26 963,58",
+          "Gesamtmonatsbeitrag bis 31.12.25 918,61",
+          "Monatsbeitrag fuer den gesamten Vertrag ab 01.01.26 963,58",
+        ].join("\n"),
+        "insurance-adjustment.pdf",
+      ),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    expect(result.amount).toBe(963.58);
+    expect(result.currency).toBe("EUR");
+    expect(result.issueDate?.toISOString().slice(0, 10)).toBe("2025-11-25");
+    expect(intelligence?.validation?.normalizedFields?.amount).toBe(963.58);
+  });
 });

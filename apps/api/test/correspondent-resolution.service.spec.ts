@@ -112,7 +112,7 @@ describe("CorrespondentResolutionService", () => {
 
   it("trims slogan suffixes from acronym-based correspondent names", () => {
     const service = createService();
-    expect((service as any).cleanDisplayName("SDK Einfach für Ihr Leben da")).toBe("SDK");
+    expect((service as any).cleanDisplayName("ABC Einfach fuer alle da")).toBe("ABC");
   });
 
   it("resolves an exact canonical correspondent", async () => {
@@ -120,19 +120,19 @@ describe("CorrespondentResolutionService", () => {
     (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([
       {
         id: "c1",
-        name: "SDK",
-        normalizedName: "sdk",
+        name: "ABC",
+        normalizedName: "abc",
         reason: "exact",
         score: 1,
       },
     ]);
 
     const result = await service.resolve(
-      buildInput(["SDK", "Mitgliedsservice"]),
-      buildDeterministicResult("SDK"),
+      buildInput(["ABC", "Mitgliederservice"]),
+      buildDeterministicResult("ABC"),
     );
 
-    expect(result.correspondentName).toBe("SDK");
+    expect(result.correspondentName).toBe("ABC");
     expect(result.metadata.matchStrategy).toBe("exact");
   });
 
@@ -141,19 +141,19 @@ describe("CorrespondentResolutionService", () => {
     (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([
       {
         id: "c1",
-        name: "SDK",
-        normalizedName: "sdk",
+        name: "ABC",
+        normalizedName: "abc",
         reason: "alias",
         score: 0.98,
       },
     ]);
 
     const result = await service.resolve(
-      buildInput(["ISDK", "Einfach für Ihr Leben da"]),
-      buildDeterministicResult("ISDK"),
+      buildInput(["IABC", "Einfach fuer alle da"]),
+      buildDeterministicResult("IABC"),
     );
 
-    expect(result.correspondentName).toBe("SDK");
+    expect(result.correspondentName).toBe("ABC");
     expect(result.metadata.matchStrategy).toBe("alias");
   });
 
@@ -183,17 +183,17 @@ describe("CorrespondentResolutionService", () => {
     (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([
       {
         id: "c1",
-        name: "Hamburg Wasser",
-        normalizedName: "hamburg wasser",
+        name: "City Water",
+        normalizedName: "city water",
         reason: "fuzzy",
         score: 0.71,
       },
     ]);
     (service as any).resolveWithLlm = vi.fn().mockResolvedValue({
-      rawName: "Hamburg Wasser Kundenkonto",
-      cleanDisplayName: "Hamburg Wasser",
+      rawName: "City Water Customer Account",
+      cleanDisplayName: "City Water",
       confidence: 0.58,
-      evidenceLines: ["Hamburg Wasser Kundenkonto"],
+      evidenceLines: ["City Water Customer Account"],
       isLikelyOrganizationOrPerson: true,
       shouldCreateNew: false,
       selectedCandidateId: "c1",
@@ -205,8 +205,8 @@ describe("CorrespondentResolutionService", () => {
     }));
 
     const result = await service.resolve(
-      buildInput(["Hamburg Wasser Kundenkonto", "INFORMATIONEN ÜBER DIE BESCHAFFENHEIT DES TRINKWASSERS"]),
-      buildDeterministicResult("Hamburg Wasser Kundenkonto"),
+      buildInput(["City Water Customer Account", "INFORMATIONEN UEBER DIE BESCHAFFENHEIT DES TRINKWASSERS"]),
+      buildDeterministicResult("City Water Customer Account"),
     );
 
     expect(result.correspondentName).toBeNull();

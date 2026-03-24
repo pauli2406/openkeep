@@ -10,6 +10,12 @@ describe("normalization.util", () => {
   it("parses date-only values into UTC calendar dates", () => {
     expect(parseDateOnly("15.04.2025")?.toISOString().slice(0, 10)).toBe("2025-04-15");
     expect(parseDateOnly("2025-03-02")?.toISOString().slice(0, 10)).toBe("2025-03-02");
+    expect(parseDateOnly("im Nov. 25")?.toISOString().slice(0, 10)).toBe("2025-11-01");
+  });
+
+  it("does not let free-form month text fall through to native Date parsing", () => {
+    expect(parseDateOnly("Fellbach, im Nov. 25")?.toISOString().slice(0, 10)).toBe("2025-11-01");
+    expect(parseDateOnly("im unbekannt 25")).toBeNull();
   });
 
   it("normalizes localized amount formats", () => {

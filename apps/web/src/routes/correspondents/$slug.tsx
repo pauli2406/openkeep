@@ -4,6 +4,7 @@ import { ArrowLeft, Orbit } from "lucide-react";
 import type {
   CorrespondentInsightsResponse,
   CorrespondentIntelligence,
+  Document,
 } from "@openkeep/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,7 +49,7 @@ function CorrespondentDetailPage() {
           : undefined,
         page: 1,
         pageSize: 20,
-        sort: "createdAt",
+        sort: "issueDate",
         direction: "desc",
       }),
     enabled: Boolean(insightsQuery.data?.correspondent.id),
@@ -76,6 +77,13 @@ function CorrespondentDetailPage() {
   const data = insightsQuery.data;
   const intelligence = data.intelligence;
   const intelligenceStatus = data.intelligenceStatus;
+  const timelineEvents = [...(intelligence?.timeline ?? [])].sort((left, right) =>
+    compareIsoDates(right.date, left.date),
+  );
+  const orderedDocuments = [...(documentsQuery.data?.items ?? [])].sort((left, right) =>
+    compareDocumentsNewestFirst(left, right),
+  );
+  const smartHighlight = buildSmartHighlight(data, intelligence);
 
   return (
     <div className="space-y-8 p-6 md:p-8">
@@ -96,18 +104,10 @@ function CorrespondentDetailPage() {
             label: "Documents",
             value: data.stats.documentCount.toLocaleString(),
           },
+          smartHighlight,
           {
-            label: "Total Spend",
-            value:
-              formatCurrency(data.stats.totalAmount, data.stats.currency ?? "EUR") ?? "Mixed",
-            tone: "rust",
-          },
-          {
-            label: "Date Range",
-            value:
-              data.stats.dateRange.from && data.stats.dateRange.to
-                ? `${data.stats.dateRange.from.slice(0, 7)} → ${data.stats.dateRange.to.slice(0, 7)}`
-                : "Undated",
+            label: "Last Document",
+            value: data.stats.dateRange.to ?? "Undated",
             tone: "neutral",
           },
           {
@@ -236,8 +236,8 @@ function CorrespondentDetailPage() {
             Timeline Highlights
           </p>
           <div className="mt-4 space-y-3">
-            {(intelligence?.timeline ?? []).length > 0 ? (
-              intelligence!.timeline.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
+            {timelineEvents.length > 0 ? (
+              timelineEvents.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
                 <div
                   key={`${event.title}-${index}`}
                   className="rounded-[1.4rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
@@ -364,7 +364,7 @@ function CorrespondentDetailPage() {
             }
           />
         ) : (
-          <DocumentRows documents={documentsQuery.data?.items ?? []} />
+          <DocumentRows documents={orderedDocuments} />
         )}
       </section>
     </div>
@@ -374,6 +374,59 @@ function CorrespondentDetailPage() {
 type CorrespondentIntelligenceChange = CorrespondentIntelligence["changes"][number];
 type CorrespondentIntelligenceFact = CorrespondentIntelligence["currentState"][number];
 type CorrespondentIntelligenceTimelineEvent = CorrespondentIntelligence["timeline"][number];
+
+function compareDocumentsNewestFirst(left: Document, right: Document): number {
+  return compareIsoDates(right.issueDate ?? right.createdAt, left.issueDate ?? left.createdAt);
+}
+
+function compareIsoDates(left: string | null | undefined, right: string | null | undefined): number {
+  return (left ?? "").localeCompare(right ?? "");
+}
+
+function buildSmartHighlight(
+  data: CorrespondentInsightsResponse,
+  intelligence: CorrespondentIntelligence | null,
+): { label: string; value: string; tone?: "neutral" | "rust" | "cobalt" } {
+  const insurance = intelligence?.domainInsights.insurance;
+  if (insurance?.latestPremiumAmount != null && insurance.latestPremiumCurrency) {
+    return {
+      label: "Latest Premium",
+      value: formatCurrency(insurance.latestPremiumAmount, insurance.latestPremiumCurrency) ?? "n/a",
+      tone: "rust",
+    };
+  }
+
+  const latestAmount = findCurrentStateFact(intelligence, "Latest amount");
+  if (latestAmount) {
+    return {
+      label: "Latest Amount",
+      value: latestAmount,
+      tone: "rust",
+    };
+  }
+
+  const latestDocumentType = findCurrentStateFact(intelligence, "Latest document type");
+  if (latestDocumentType) {
+    return {
+      label: "Latest Type",
+      value: latestDocumentType,
+      tone: "rust",
+    };
+  }
+
+  return {
+    label: "Top Type",
+    value: data.documentTypeBreakdown[0]?.name ?? "n/a",
+    tone: "rust",
+  };
+}
+
+function findCurrentStateFact(
+  intelligence: CorrespondentIntelligence | null,
+  label: string,
+): string | null {
+  return intelligence?.currentState.find((fact) => fact.label.toLowerCase() === label.toLowerCase())?.value ?? null;
+}
 
 function FactPanel({ label, value }: { label: string; value: string }) {
   return (
