@@ -70,11 +70,41 @@ describe("explorer smoke", () => {
             name: "Adidas",
             slug: "adidas",
             summaryGeneratedAt: null,
+            intelligenceGeneratedAt: null,
           },
           summaryStatus: hits > 1 ? "ready" : "pending",
           summary:
             hits > 1
               ? "Adidas is a recurring retailer in your archive."
+              : null,
+          intelligenceStatus: hits > 1 ? "ready" : "pending",
+          intelligence:
+            hits > 1
+              ? {
+                  overview: "Adidas appears as a recurring retailer relationship in your archive.",
+                  profile: {
+                    category: "retail",
+                    narrative: "Adidas appears to be a merchant relationship.",
+                    keySignals: ["2 documents linked"],
+                  },
+                  timeline: [
+                    {
+                      date: "2026-03-10",
+                      title: "Invoice recorded",
+                      description: "A recent invoice appears in the archive.",
+                    },
+                  ],
+                  changes: [],
+                  currentState: [
+                    {
+                      label: "Latest document type",
+                      value: "Invoice",
+                      asOf: "2026-03-10",
+                    },
+                  ],
+                  domainInsights: {},
+                  sourceDocumentIds: ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+                }
               : null,
           stats: {
             documentCount: 2,
@@ -104,7 +134,7 @@ describe("explorer smoke", () => {
 
     expect(await screen.findByRole("heading", { name: /^adidas$/i })).toBeInTheDocument();
     expect(
-      await screen.findByText(/summary generation is in progress/i),
+      await screen.findByText(/intelligence generation is in progress/i),
     ).toBeInTheDocument();
   });
 

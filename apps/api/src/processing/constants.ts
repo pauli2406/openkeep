@@ -1,6 +1,7 @@
 export const DOCUMENT_PROCESSING_QUEUE = "document.process";
 export const DOCUMENT_EMBEDDING_QUEUE = "document.embed";
 export const CORRESPONDENT_SUMMARY_QUEUE = "correspondent.summary";
+export const CORRESPONDENT_INTELLIGENCE_QUEUE = "correspondent.intelligence";
 export const DOCUMENT_PARSE_PROVIDER = Symbol("DOCUMENT_PARSE_PROVIDER");
 export const METADATA_EXTRACTOR = Symbol("METADATA_EXTRACTOR");
 export const CHUNKER = Symbol("CHUNKER");

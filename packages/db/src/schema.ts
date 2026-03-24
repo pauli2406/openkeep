@@ -83,6 +83,8 @@ export const correspondents = pgTable(
     normalizedName: varchar("normalized_name", { length: 255 }).notNull(),
     summary: text("summary"),
     summaryGeneratedAt: timestamp("summary_generated_at", { withTimezone: true }),
+    intelligence: jsonb("intelligence").$type<Record<string, unknown>>(),
+    intelligenceGeneratedAt: timestamp("intelligence_generated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

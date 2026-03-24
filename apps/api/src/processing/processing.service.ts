@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   auditEvents,
   correspondentAliases,
@@ -33,6 +33,7 @@ import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
+import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
 import {
   ANSWER_PROVIDER,
   CHUNKER,
@@ -83,6 +84,8 @@ export class ProcessingService {
     @Inject(ObjectStorageService) private readonly storageService: ObjectStorageService,
     @Inject(BossService) private readonly bossService: BossService,
     @Inject(MetricsService) private readonly metricsService: MetricsService,
+    @Inject(forwardRef(() => CorrespondentIntelligenceService))
+    private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
     @Inject(CorrespondentResolutionService)
     private readonly correspondentResolutionService: CorrespondentResolutionService,
     @Inject(DocumentTypePolicyService)
@@ -421,7 +424,10 @@ export class ProcessingService {
             extractedCorrespondent.matchStrategy === "llm_choice"
               ? extractedCorrespondent.matchStrategy
               : "alias",
-        });
+          });
+      }
+      if (mergedArchiveFields.correspondentId) {
+        await this.correspondentIntelligenceService.enqueueRefresh(mergedArchiveFields.correspondentId);
       }
       await this.enqueueDocumentEmbedding(record.documentId, Boolean(payload.force)).catch(
         async (error) => {
@@ -1239,6 +1245,8 @@ export class ProcessingService {
       confidence: extraction.confidence,
       matchStrategy: "alias",
     });
+
+    await this.correspondentIntelligenceService.enqueueRefresh(input.correspondentId);
   }
 
   private async ensureDocumentType(name: string): Promise<string> {

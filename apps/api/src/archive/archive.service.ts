@@ -163,6 +163,7 @@ export class ArchiveService {
       correspondents: correspondentRows.map((row) => ({
         ...row,
         summaryGeneratedAt: row.summaryGeneratedAt?.toISOString() ?? null,
+        intelligenceGeneratedAt: row.intelligenceGeneratedAt?.toISOString() ?? null,
         createdAt: row.createdAt.toISOString(),
       })),
       documentTypes: documentTypeRows.map((row) => ({
@@ -771,6 +772,9 @@ export class ArchiveService {
             summaryGeneratedAt: row.summaryGeneratedAt
               ? this.parseTimestamp(row.summaryGeneratedAt)
               : null,
+            intelligenceGeneratedAt: row.intelligenceGeneratedAt
+              ? this.parseTimestamp(row.intelligenceGeneratedAt)
+              : null,
             createdAt: this.parseTimestamp(row.createdAt),
           })),
         )
@@ -781,7 +785,9 @@ export class ArchiveService {
             slug: sql`excluded.slug`,
             normalizedName: sql`excluded.normalized_name`,
             summary: sql`excluded.summary`,
+            intelligence: sql`excluded.intelligence`,
             summaryGeneratedAt: sql`excluded.summary_generated_at`,
+            intelligenceGeneratedAt: sql`excluded.intelligence_generated_at`,
             createdAt: sql`excluded.created_at`,
           },
         });

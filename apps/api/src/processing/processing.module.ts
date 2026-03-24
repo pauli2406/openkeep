@@ -1,4 +1,6 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
+
+import { ExplorerModule } from "../explorer/explorer.module";
 
 import {
   ANSWER_PROVIDER,
@@ -34,6 +36,7 @@ import { ExtractiveAnswerProvider } from "./extractive-answer.provider";
 import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
 
 @Module({
+  imports: [forwardRef(() => ExplorerModule)],
   providers: [
     BossService,
     ProcessingService,

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -31,6 +32,7 @@ import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
 import { DocumentTypePolicyService } from "../processing/document-type-policy.service";
 import { normalizeCorrespondentName } from "../processing/normalization.util";
+import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
 
 @Injectable()
 export class TaxonomiesService {
@@ -38,6 +40,8 @@ export class TaxonomiesService {
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(DocumentTypePolicyService)
     private readonly documentTypePolicyService: DocumentTypePolicyService,
+    @Inject(forwardRef(() => CorrespondentIntelligenceService))
+    private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
   ) {}
 
   async listTags(): Promise<Tag[]> {
@@ -144,6 +148,7 @@ export class TaxonomiesService {
       correspondentId: created.id,
       name: created.name,
     });
+    await this.correspondentIntelligenceService.enqueueRefresh(created.id);
     return created;
   }
 
@@ -204,6 +209,7 @@ export class TaxonomiesService {
       sourceId,
       targetId: input.targetId,
     });
+    await this.correspondentIntelligenceService.enqueueRefresh(input.targetId);
     return target;
   }
 

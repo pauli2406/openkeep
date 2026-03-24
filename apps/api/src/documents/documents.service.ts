@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   Inject,
   Injectable,
   Logger,
@@ -60,6 +61,7 @@ import { type AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
+import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
 import { padEmbedding, serializeHalfVector } from "../processing/embedding.util";
 import { LlmAnswerProvider } from "../processing/llm-answer.provider";
 import { LlmService } from "../processing/llm.service";
@@ -142,8 +144,11 @@ export class DocumentsService {
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(ObjectStorageService) private readonly storageService: ObjectStorageService,
-    @Inject(ProcessingService) private readonly processingService: ProcessingService,
+    @Inject(forwardRef(() => ProcessingService))
+    private readonly processingService: ProcessingService,
     @Inject(MetricsService) private readonly metricsService: MetricsService,
+    @Inject(forwardRef(() => CorrespondentIntelligenceService))
+    private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
     @Inject(LlmService) private readonly llmService: LlmService,
     @Inject(LlmAnswerProvider) private readonly llmAnswerProvider: LlmAnswerProvider,
   ) {}
@@ -599,6 +604,7 @@ export class DocumentsService {
     principal: AuthenticatedPrincipal,
   ): Promise<Document> {
     const existing = await this.getDocument(documentId);
+    const previousCorrespondentId = existing.correspondent?.id ?? null;
     const manualOverrides = this.buildManualOverrides(existing, input, principal.userId);
 
     await this.databaseService.db.transaction(async (tx) => {
@@ -681,6 +687,14 @@ export class DocumentsService {
         canonicalName: updated.correspondent?.name ?? null,
         metadata: updated.metadata,
       });
+    }
+
+    const currentCorrespondentId = updated.correspondent?.id ?? null;
+    if (previousCorrespondentId && previousCorrespondentId !== currentCorrespondentId) {
+      await this.correspondentIntelligenceService.enqueueRefresh(previousCorrespondentId);
+    }
+    if (currentCorrespondentId) {
+      await this.correspondentIntelligenceService.enqueueRefresh(currentCorrespondentId);
     }
 
     return updated;

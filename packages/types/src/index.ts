@@ -165,6 +165,70 @@ export const CorrespondentSchema = z.object({
   summary: z.string().nullable().optional(),
 });
 
+export const CorrespondentIntelligenceProfileSchema = z.object({
+  category: z.string().nullable(),
+  subcategory: z.string().nullable().optional(),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  narrative: z.string().nullable().optional(),
+  keySignals: z.array(z.string()).default([]),
+});
+
+export const CorrespondentIntelligenceTimelineEventSchema = z.object({
+  date: z.string().nullable(),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  documentId: z.string().uuid().nullable().optional(),
+  documentTitle: z.string().nullable().optional(),
+});
+
+export const CorrespondentIntelligenceChangeSchema = z.object({
+  category: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  effectiveDate: z.string().nullable(),
+  direction: z.enum(["increase", "decrease", "update", "notice", "unknown"]),
+  valueBefore: z.string().nullable().optional(),
+  valueAfter: z.string().nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  documentId: z.string().uuid().nullable().optional(),
+  documentTitle: z.string().nullable().optional(),
+});
+
+export const CorrespondentIntelligenceFactSchema = z.object({
+  label: z.string().min(1),
+  value: z.string().min(1),
+  asOf: z.string().nullable().optional(),
+  documentId: z.string().uuid().nullable().optional(),
+  documentTitle: z.string().nullable().optional(),
+});
+
+export const CorrespondentInsuranceInsightSchema = z.object({
+  policyReferences: z.array(z.string()).default([]),
+  latestPremiumAmount: z.number().nullable().optional(),
+  latestPremiumCurrency: z.string().length(3).nullable().optional(),
+  premiumChangeSummary: z.string().nullable().optional(),
+  coverageHighlights: z.array(z.string()).default([]),
+  renewalDate: z.string().nullable().optional(),
+  cancellationWindow: z.string().nullable().optional(),
+});
+
+export const CorrespondentIntelligenceSchema = z.object({
+  overview: z.string().nullable(),
+  profile: CorrespondentIntelligenceProfileSchema.optional(),
+  timeline: z.array(CorrespondentIntelligenceTimelineEventSchema).default([]),
+  changes: z.array(CorrespondentIntelligenceChangeSchema).default([]),
+  currentState: z.array(CorrespondentIntelligenceFactSchema).default([]),
+  domainInsights: z
+    .object({
+      insurance: CorrespondentInsuranceInsightSchema.optional(),
+    })
+    .default({}),
+  sourceDocumentIds: z.array(z.string().uuid()).default([]),
+  provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).nullable().optional(),
+  model: z.string().nullable().optional(),
+  generatedAt: z.string().nullable().optional(),
+});
+
 export const reviewEvidenceFields = [
   "correspondent",
   "issueDate",
@@ -585,9 +649,12 @@ export const CorrespondentTimelinePointSchema = z.object({
 export const CorrespondentInsightsResponseSchema = z.object({
   correspondent: CorrespondentSchema.extend({
     summaryGeneratedAt: z.string().nullable().optional(),
+    intelligenceGeneratedAt: z.string().nullable().optional(),
   }),
   summaryStatus: CorrespondentSummaryStatusSchema,
   summary: z.string().nullable(),
+  intelligenceStatus: CorrespondentSummaryStatusSchema,
+  intelligence: CorrespondentIntelligenceSchema.nullable(),
   stats: z.object({
     documentCount: z.number().int().nonnegative(),
     totalAmount: z.number().nullable(),
@@ -1004,6 +1071,8 @@ export const ArchiveCorrespondentSchema = CorrespondentSchema.extend({
   createdAt: ArchiveTimestampSchema,
   summary: z.string().nullable().optional(),
   summaryGeneratedAt: ArchiveTimestampSchema.nullable().optional(),
+  intelligence: CorrespondentIntelligenceSchema.nullable().optional(),
+  intelligenceGeneratedAt: ArchiveTimestampSchema.nullable().optional(),
 });
 
 export const ArchiveDocumentTypeSchema = DocumentTypeSchema.extend({
@@ -1226,6 +1295,7 @@ export type DocumentChunk = z.infer<typeof DocumentChunkSchema>;
 export type DocumentChunkEmbedding = z.infer<typeof DocumentChunkEmbeddingSchema>;
 export type Tag = z.infer<typeof TagSchema>;
 export type Correspondent = z.infer<typeof CorrespondentSchema>;
+export type CorrespondentIntelligence = z.infer<typeof CorrespondentIntelligenceSchema>;
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;
 export type DocumentTextBlock = z.infer<typeof DocumentTextBlockSchema>;
 export type ReviewEvidenceField = z.infer<typeof ReviewEvidenceFieldSchema>;

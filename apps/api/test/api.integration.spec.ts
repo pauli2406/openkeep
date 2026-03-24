@@ -26,6 +26,7 @@ import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
 import { ObjectStorageService } from "../src/common/storage/storage.service";
 import { DocumentsService } from "../src/documents/documents.service";
+import { CorrespondentIntelligenceService } from "../src/explorer/correspondent-intelligence.service";
 import { ExplorerService } from "../src/explorer/explorer.service";
 import { padEmbedding, serializeHalfVector } from "../src/processing/embedding.util";
 import { ProcessingService } from "../src/processing/processing.service";
@@ -1195,9 +1196,11 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(pendingInsightsResponse.status).toBe(200);
     expect(pendingInsightsResponse.body.summaryStatus).toBe("pending");
+    expect(pendingInsightsResponse.body.intelligenceStatus).toBe("pending");
     expect(pendingInsightsResponse.body.stats.documentCount).toBeGreaterThanOrEqual(2);
 
     await explorerService.refreshCorrespondentSummary(correspondent.id);
+    await app.get(CorrespondentIntelligenceService).refresh(correspondent.id);
 
     const readyInsightsResponse = await request(app.getHttpServer())
       .get(`/api/correspondents/${correspondent.slug}/insights`)
@@ -1205,7 +1208,9 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(readyInsightsResponse.status).toBe(200);
     expect(readyInsightsResponse.body.summaryStatus).toBe("ready");
+    expect(readyInsightsResponse.body.intelligenceStatus).toBe("ready");
     expect(String(readyInsightsResponse.body.summary)).toContain("recurring retailer");
+    expect(String(readyInsightsResponse.body.intelligence?.overview)).toContain("Adidas");
 
     const timelineResponse = await request(app.getHttpServer())
       .get(`/api/documents/timeline?correspondentIds=${correspondent.id}`)

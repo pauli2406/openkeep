@@ -4,6 +4,7 @@ import PgBoss from "pg-boss";
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
 import {
+  CORRESPONDENT_INTELLIGENCE_QUEUE,
   CORRESPONDENT_SUMMARY_QUEUE,
   DOCUMENT_EMBEDDING_QUEUE,
   DOCUMENT_PROCESSING_QUEUE,
@@ -41,6 +42,7 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     await this.boss.createQueue(DOCUMENT_PROCESSING_QUEUE);
     await this.boss.createQueue(DOCUMENT_EMBEDDING_QUEUE);
     await this.boss.createQueue(CORRESPONDENT_SUMMARY_QUEUE);
+    await this.boss.createQueue(CORRESPONDENT_INTELLIGENCE_QUEUE);
     this.started = true;
   }
 

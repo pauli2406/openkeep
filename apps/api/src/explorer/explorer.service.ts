@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type {
   CorrespondentInsightsResponse,
   CorrespondentSummaryStatus,
@@ -15,11 +15,8 @@ import { UMAP } from "umap-js";
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
 import { DocumentsService } from "../documents/documents.service";
-import { BossService } from "../processing/boss.service";
-import { CORRESPONDENT_SUMMARY_QUEUE } from "../processing/constants";
 import { ProcessingService } from "../processing/processing.service";
-
-const SUMMARY_ENQUEUE_COOLDOWN_MS = 5 * 60_000;
+import { CorrespondentIntelligenceService } from "./correspondent-intelligence.service";
 
 type SummaryProvider =
   | { provider: "openai"; apiKey: string; model: string }
@@ -29,14 +26,15 @@ type SummaryProvider =
 export class ExplorerService {
   private readonly logger = new Logger(ExplorerService.name);
   private readonly projectionCache = new Map<string, DocumentsProjectionResponse>();
-  private readonly summaryCooldown = new Map<string, number>();
 
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
-    @Inject(DocumentsService) private readonly documentsService: DocumentsService,
+    @Inject(forwardRef(() => DocumentsService))
+    private readonly documentsService: DocumentsService,
     @Inject(ProcessingService) private readonly processingService: ProcessingService,
-    @Inject(BossService) private readonly bossService: BossService,
     @Inject(AppConfigService) private readonly configService: AppConfigService,
+    @Inject(forwardRef(() => CorrespondentIntelligenceService))
+    private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
   ) {}
 
   async getDashboardInsights(): Promise<DashboardInsightsResponse> {
@@ -261,6 +259,12 @@ export class ExplorerService {
       },
       latestActivityAt,
     );
+    const intelligenceState = await this.correspondentIntelligenceService.resolveState({
+      correspondentId: correspondent.id,
+      intelligence: (correspondent.intelligence as Record<string, unknown> | null | undefined) ?? null,
+      intelligenceGeneratedAt: correspondent.intelligenceGeneratedAt ?? null,
+      latestActivityAt,
+    });
 
     return {
       correspondent: {
@@ -269,9 +273,12 @@ export class ExplorerService {
         slug: correspondent.slug,
         summary: correspondent.summary ?? null,
         summaryGeneratedAt: correspondent.summaryGeneratedAt?.toISOString() ?? null,
+        intelligenceGeneratedAt: correspondent.intelligenceGeneratedAt?.toISOString() ?? null,
       },
       summaryStatus: summaryState.status,
       summary: summaryState.summary,
+      intelligenceStatus: intelligenceState.status,
+      intelligence: intelligenceState.intelligence,
       stats: {
         documentCount: Number(stats?.document_count ?? 0),
         totalAmount: toNullableNumber(stats?.total_amount ?? null),
@@ -625,7 +632,7 @@ export class ExplorerService {
 
     if (hasSummary) {
       if (isStale && provider) {
-        await this.enqueueSummaryJob(correspondent.id);
+        await this.correspondentIntelligenceService.enqueueRefresh(correspondent.id);
       }
       return {
         status: "ready",
@@ -640,31 +647,11 @@ export class ExplorerService {
       };
     }
 
-    await this.enqueueSummaryJob(correspondent.id);
+    await this.correspondentIntelligenceService.enqueueRefresh(correspondent.id);
     return {
       status: "pending",
       summary: null,
     };
-  }
-
-  private async enqueueSummaryJob(correspondentId: string): Promise<void> {
-    const now = Date.now();
-    const nextAllowed = this.summaryCooldown.get(correspondentId) ?? 0;
-    if (nextAllowed > now) {
-      return;
-    }
-
-    this.summaryCooldown.set(correspondentId, now + SUMMARY_ENQUEUE_COOLDOWN_MS);
-    try {
-      await this.bossService.publish(CORRESPONDENT_SUMMARY_QUEUE, {
-        correspondentId,
-      });
-    } catch (error) {
-      this.summaryCooldown.delete(correspondentId);
-      this.logger.warn(
-        `Failed to enqueue summary refresh for correspondent ${correspondentId}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private getSummaryProvider(): SummaryProvider | null {
