@@ -623,8 +623,11 @@ export class ProcessingService {
         id: documents.id,
         status: documents.status,
         chunkCount: documents.chunkCount,
+        title: documents.title,
+        correspondentName: correspondents.name,
       })
       .from(documents)
+      .leftJoin(correspondents, eq(documents.correspondentId, correspondents.id))
       .where(eq(documents.id, payload.documentId))
       .limit(1);
 
@@ -682,8 +685,28 @@ export class ProcessingService {
 
     try {
       if (chunksToEmbed.length > 0) {
+        // Build contextual prefix for embedding enrichment
+        const contextParts: string[] = [];
+        if (document.title) {
+          contextParts.push(`Document: ${document.title}`);
+        }
+        if (document.correspondentName) {
+          contextParts.push(`Correspondent: ${document.correspondentName}`);
+        }
+        const contextPrefix = contextParts.length > 0 ? `[${contextParts.join(" | ")}]\n` : "";
+
         const embedded = await this.embeddingProviderRegistry.embed({
-          texts: chunksToEmbed.map((chunk) => chunk.text),
+          texts: chunksToEmbed.map((chunk) => {
+            const parts: string[] = [];
+            if (contextPrefix) {
+              parts.push(contextPrefix.trimEnd());
+            }
+            if (chunk.heading) {
+              parts.push(`[Section: ${chunk.heading}]`);
+            }
+            parts.push(chunk.text);
+            return parts.join("\n");
+          }),
           inputType: "document",
         });
 

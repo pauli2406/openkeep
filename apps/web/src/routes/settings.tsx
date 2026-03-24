@@ -6,8 +6,10 @@ import type {
   ArchiveSnapshot,
   Correspondent,
   DocumentType,
+  HealthProvidersResponse,
   HealthResponse,
   ProcessingStatusResponse,
+  ProviderConfig,
   ReadinessResponse,
   Tag,
   WatchFolderScanResponse,
@@ -63,6 +65,7 @@ import {
   Check,
   X,
   FolderSearch,
+  Brain,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
@@ -274,6 +277,11 @@ function SettingsPage() {
 
       {/* Processing Activity */}
       <ProcessingActivitySection />
+
+      <Separator />
+
+      {/* AI & Providers */}
+      <AiProvidersSection />
 
       <Separator />
 
@@ -1498,6 +1506,253 @@ function formatJobTime(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+// --- AI & Providers ---
+
+const CHAT_PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  gemini: "Gemini",
+  mistral: "Mistral",
+};
+
+const EMBEDDING_PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  "google-gemini": "Google Gemini",
+  voyage: "Voyage AI",
+  mistral: "Mistral",
+};
+
+const PARSE_PROVIDER_LABELS: Record<string, string> = {
+  "local-ocr": "Local OCR",
+  "google-document-ai-enterprise-ocr": "Google Doc AI Enterprise",
+  "google-document-ai-gemini-layout-parser": "Google Doc AI Gemini",
+  "amazon-textract": "Amazon Textract",
+  "azure-ai-document-intelligence": "Azure Document Intelligence",
+  "mistral-ocr": "Mistral OCR",
+};
+
+function resolveChatProvider(cfg: ProviderConfig): {
+  name: string;
+  model: string | undefined;
+  configured: boolean;
+} | null {
+  if (cfg.hasOpenAiKey) {
+    return { name: "OpenAI", model: cfg.openaiModel, configured: true };
+  }
+  if (cfg.hasGeminiKey) {
+    return { name: "Gemini", model: cfg.geminiModel, configured: true };
+  }
+  if (cfg.hasMistralKey) {
+    return { name: "Mistral", model: cfg.mistralModel, configured: true };
+  }
+  return null;
+}
+
+function AiProvidersSection() {
+  const healthQuery = useQuery({
+    queryKey: ["health"],
+    queryFn: async () => {
+      const { data, error, response } = await api.GET("/api/health");
+      if (!response.ok || error || !data) {
+        throw error ?? new Error("Failed to fetch health");
+      }
+      return data as HealthResponse;
+    },
+    refetchInterval: 30000,
+  });
+
+  const providersQuery = useQuery({
+    queryKey: ["health", "providers"],
+    queryFn: async () => {
+      const { data, error, response } = await api.GET("/api/health/providers");
+      if (!response.ok || error || !data) {
+        throw error ?? new Error("Failed to fetch providers");
+      }
+      return data as HealthProvidersResponse;
+    },
+    refetchInterval: 30000,
+  });
+
+  const cfg = healthQuery.data?.provider as ProviderConfig | undefined;
+  const activeChat = cfg ? resolveChatProvider(cfg) : null;
+
+  // All chat providers with their key status
+  const chatProviders = cfg
+    ? [
+        { id: "openai", label: "OpenAI", model: cfg.openaiModel, hasKey: cfg.hasOpenAiKey },
+        { id: "gemini", label: "Gemini", model: cfg.geminiModel, hasKey: cfg.hasGeminiKey },
+        { id: "mistral", label: "Mistral", model: cfg.mistralModel, hasKey: cfg.hasMistralKey },
+      ]
+    : [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Brain className="h-5 w-5" />
+          AI & Providers
+        </CardTitle>
+        <CardDescription>
+          Configured AI providers for chat, embeddings, and document parsing
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {healthQuery.isLoading && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading provider configuration...
+          </div>
+        )}
+
+        {healthQuery.isError && (
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            Unable to load provider configuration
+          </div>
+        )}
+
+        {cfg && (
+          <>
+            {/* Active Chat Model */}
+            <div>
+              <p className="mb-2 text-sm font-medium">Chat Model</p>
+              {activeChat ? (
+                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    <span className="text-sm font-medium">{activeChat.name}</span>
+                    {activeChat.model && (
+                      <Badge variant="secondary">{activeChat.model}</Badge>
+                    )}
+                  </div>
+                  <Badge variant="success">active</Badge>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4" />
+                  No chat provider configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY.
+                </div>
+              )}
+            </div>
+
+            {/* All Chat Providers */}
+            <div>
+              <p className="mb-2 text-sm font-medium">Chat Providers</p>
+              <div className="space-y-2">
+                {chatProviders.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-md border px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      {p.hasKey ? (
+                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="text-sm">{p.label}</span>
+                      {p.hasKey && p.model && (
+                        <Badge variant="outline">{p.model}</Badge>
+                      )}
+                    </div>
+                    <Badge variant={p.hasKey ? "success" : "secondary"}>
+                      {p.hasKey ? "configured" : "not configured"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Embedding Providers */}
+            {providersQuery.data && (
+              <div>
+                <p className="mb-2 text-sm font-medium">Embedding Providers</p>
+                <div className="space-y-2">
+                  {providersQuery.data.embeddingProviders.map((ep) => (
+                    <div
+                      key={ep.id}
+                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        {ep.available ? (
+                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="text-sm">
+                          {EMBEDDING_PROVIDER_LABELS[ep.id] ?? ep.id}
+                        </span>
+                        {ep.model && (
+                          <Badge variant="outline">{ep.model}</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ep.id === cfg.activeEmbeddingProvider && (
+                          <Badge variant="success">active</Badge>
+                        )}
+                        <Badge variant={ep.available ? "success" : "secondary"}>
+                          {ep.available ? "available" : "not configured"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Separator />
+
+            {/* Parse Providers */}
+            {providersQuery.data && (
+              <div>
+                <p className="mb-2 text-sm font-medium">Parse Providers</p>
+                <div className="space-y-2">
+                  {providersQuery.data.parseProviders.map((pp) => (
+                    <div
+                      key={pp.id}
+                      className="flex items-center justify-between rounded-md border px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        {pp.available ? (
+                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <span className="text-sm">
+                          {PARSE_PROVIDER_LABELS[pp.id] ?? pp.id}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pp.id === cfg.activeParseProvider && (
+                          <Badge variant="success">active</Badge>
+                        )}
+                        {pp.id === cfg.fallbackParseProvider && (
+                          <Badge variant="warning">fallback</Badge>
+                        )}
+                        <Badge variant={pp.available ? "success" : "secondary"}>
+                          {pp.available ? "available" : "not configured"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Processing mode */}
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Processing Mode</span>
+              <Badge variant="outline">{cfg.mode}</Badge>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 // --- System Health ---

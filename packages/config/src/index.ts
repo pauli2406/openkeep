@@ -100,6 +100,7 @@ export const AppEnvSchema = z.object({
   VOYAGE_API_KEY: EmptyStringToUndefined(z.string().optional()),
   VOYAGE_API_BASE_URL: z.string().url().default("https://api.voyageai.com/v1"),
   VOYAGE_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
+  MISTRAL_MODEL: z.string().default("mistral-small-latest"),
   GOOGLE_CLOUD_PROJECT_ID: EmptyStringToUndefined(z.string().optional()),
   GOOGLE_CLOUD_LOCATION: z.string().default("eu"),
   GOOGLE_CLOUD_ACCESS_TOKEN: EmptyStringToUndefined(z.string().optional()),
@@ -148,12 +149,14 @@ export const providerConfig = (config: AppConfig) => ({
   activeEmbeddingProvider: config.ACTIVE_EMBEDDING_PROVIDER ?? null,
   openaiModel: config.OPENAI_MODEL,
   geminiModel: config.GEMINI_MODEL,
+  mistralModel: config.MISTRAL_MODEL,
   openaiEmbeddingModel: config.OPENAI_EMBEDDING_MODEL,
   geminiEmbeddingModel: config.GEMINI_EMBEDDING_MODEL,
   voyageEmbeddingModel: config.VOYAGE_EMBEDDING_MODEL,
   mistralEmbeddingModel: config.MISTRAL_EMBEDDING_MODEL,
   hasOpenAiKey: Boolean(config.OPENAI_API_KEY),
   hasGeminiKey: Boolean(config.GEMINI_API_KEY),
+  hasMistralKey: Boolean(config.MISTRAL_API_KEY),
   hasVoyageKey: Boolean(config.VOYAGE_API_KEY),
   hasGoogleCloudConfig: Boolean(
     config.GOOGLE_CLOUD_PROJECT_ID &&

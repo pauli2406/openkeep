@@ -201,6 +201,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     const publicPaths = ["/login", "/setup"];
     const isPublicRoute = publicPaths.some((p) => location.pathname === p);
 
+    // Don't redirect while auth is still loading — the RootComponent
+    // already shows a loading spinner during this phase.  Redirecting
+    // early loses the original URL because the login route bounces
+    // authenticated users back to "/".
+    if (context.auth.isLoading) return;
+
     if (!context.auth.isAuthenticated && !isPublicRoute) {
       throw redirect({ to: "/login" });
     }

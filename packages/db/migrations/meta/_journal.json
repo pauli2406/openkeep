@@ -50,6 +50,13 @@
       "when": 1774282102624,
       "tag": "0006_quiet_kang",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774486400000,
+      "tag": "0007_search_improvements",
+      "breakpoints": true
     }
   ]
 }

@@ -396,4 +396,39 @@ export const auditEvents = pgTable(
   }),
 );
 
+export const documentQaHistory = pgTable(
+  "document_qa_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    answer: text("answer").notNull(),
+    citations: jsonb("citations")
+      .$type<
+        Array<{
+          chunkIndex: number;
+          pageFrom: number | null;
+          pageTo: number | null;
+          quote: string;
+          score: number;
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    documentIdx: index("document_qa_history_document_idx").on(table.documentId),
+    userDocumentIdx: index("document_qa_history_user_document_idx").on(
+      table.userId,
+      table.documentId,
+    ),
+  }),
+);
+
 export type ProcessingJobStatus = (typeof processingJobStatuses)[number];

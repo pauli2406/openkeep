@@ -465,6 +465,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/{id}/summarize/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream an AI-generated summary for a document via SSE */
+        post: operations["DocumentsController_streamDocumentSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/ask/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream an AI-generated answer to a question about a document via SSE */
+        post: operations["DocumentsController_streamDocumentAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/{id}/qa-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Q&A history for a document */
+        get: operations["DocumentsController_getQaHistory"];
+        put?: never;
+        /** Save a Q&A entry for a document */
+        post: operations["DocumentsController_saveQaEntry"];
+        /** Clear Q&A history for a document */
+        delete: operations["DocumentsController_clearQaHistory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/embeddings/reindex": {
         parameters: {
             query?: never;
@@ -587,6 +640,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["SearchController_answerQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/answer/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream an LLM-generated answer for a search query via SSE */
+        post: operations["SearchController_streamAnswer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -816,6 +886,9 @@ export interface components {
             /** @enum {string} */
             parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
         };
+        DocumentAskDto: {
+            question: string;
+        };
         ReindexEmbeddingsDto: {
             documentIds?: string[];
             filters?: {
@@ -886,11 +959,11 @@ export interface components {
                 amountMin?: number;
                 amountMax?: number;
             };
-            /** @default 3 */
+            /** @default 5 */
             maxDocuments: number;
-            /** @default 4 */
+            /** @default 6 */
             maxCitations: number;
-            /** @default 4 */
+            /** @default 6 */
             maxChunkMatches: number;
         };
         CreateTagDto: {
@@ -932,6 +1005,7 @@ export interface components {
                 activeEmbeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
                 openaiModel?: string;
                 geminiModel?: string;
+                mistralModel?: string;
                 openaiEmbeddingModel?: string;
                 geminiEmbeddingModel?: string;
                 voyageEmbeddingModel?: string;
@@ -940,6 +1014,8 @@ export interface components {
                 hasOpenAiKey: boolean;
                 /** @default false */
                 hasGeminiKey: boolean;
+                /** @default false */
+                hasMistralKey: boolean;
                 /** @default false */
                 hasVoyageKey: boolean;
                 /** @default false */
@@ -1233,7 +1309,7 @@ export interface components {
                         }[];
                         blockedReason?: string | null;
                         /** @enum {string} */
-                        provider?: "openai" | "gemini" | "deterministic";
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
                     };
                     reviewEvidence?: {
                         /** @enum {string} */
@@ -1474,7 +1550,7 @@ export interface components {
                         }[];
                         blockedReason?: string | null;
                         /** @enum {string} */
-                        provider?: "openai" | "gemini" | "deterministic";
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
                     };
                     reviewEvidence?: {
                         /** @enum {string} */
@@ -1693,7 +1769,7 @@ export interface components {
                         }[];
                         blockedReason?: string | null;
                         /** @enum {string} */
-                        provider?: "openai" | "gemini" | "deterministic";
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
                     };
                     reviewEvidence?: {
                         /** @enum {string} */
@@ -1956,7 +2032,7 @@ export interface components {
                     }[];
                     blockedReason?: string | null;
                     /** @enum {string} */
-                    provider?: "openai" | "gemini" | "deterministic";
+                    provider?: "openai" | "gemini" | "mistral" | "deterministic";
                 };
                 reviewEvidence?: {
                     /** @enum {string} */
@@ -2245,7 +2321,7 @@ export interface components {
                             }[];
                             blockedReason?: string | null;
                             /** @enum {string} */
-                            provider?: "openai" | "gemini" | "deterministic";
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
                         };
                         reviewEvidence?: {
                             /** @enum {string} */
@@ -2502,7 +2578,7 @@ export interface components {
                             }[];
                             blockedReason?: string | null;
                             /** @enum {string} */
-                            provider?: "openai" | "gemini" | "deterministic";
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
                         };
                         reviewEvidence?: {
                             /** @enum {string} */
@@ -2773,7 +2849,7 @@ export interface components {
                         }[];
                         blockedReason?: string | null;
                         /** @enum {string} */
-                        provider?: "openai" | "gemini" | "deterministic";
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic";
                     };
                     reviewEvidence?: {
                         /** @enum {string} */
@@ -3088,7 +3164,7 @@ export interface components {
                             }[];
                             blockedReason?: string | null;
                             /** @enum {string} */
-                            provider?: "openai" | "gemini" | "deterministic";
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
                         };
                         reviewEvidence?: {
                             /** @enum {string} */
@@ -4051,6 +4127,110 @@ export interface operations {
             };
         };
     };
+    DocumentsController_streamDocumentSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE stream of summary tokens */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_streamDocumentAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentAskDto"];
+            };
+        };
+        responses: {
+            /** @description SSE stream of answer tokens */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_getQaHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of Q&A entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_saveQaEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved Q&A entry */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DocumentsController_clearQaHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Q&A history cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     EmbeddingsController_reindexEmbeddings: {
         parameters: {
             query?: never;
@@ -4294,6 +4474,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AnswerQueryResponse"];
                 };
+            };
+        };
+    };
+    SearchController_streamAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQueryDto"];
+            };
+        };
+        responses: {
+            /** @description SSE stream of answer tokens */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

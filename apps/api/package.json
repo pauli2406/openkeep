@@ -10,7 +10,7 @@
     "dev": "tsx watch --env-file ../../.env src/main.ts",
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "pnpm run test:unit",
-    "test:unit": "pnpm run build:deps && vitest run test/correspondent-resolution.service.spec.ts test/deterministic-metadata.extractor.spec.ts test/deterministic-chunker.spec.ts test/embedding-providers.spec.ts test/extractive-answer.provider.spec.ts test/local-ocr.provider.spec.ts test/normalization.util.spec.ts test/parse-providers.spec.ts test/semantic-ranking.util.spec.ts",
+    "test:unit": "pnpm run build:deps && vitest run test/correspondent-resolution.service.spec.ts test/deterministic-metadata.extractor.spec.ts test/deterministic-chunker.spec.ts test/embedding-providers.spec.ts test/extractive-answer.provider.spec.ts test/llm.service.spec.ts test/local-ocr.provider.spec.ts test/normalization.util.spec.ts test/parse-providers.spec.ts test/semantic-ranking.util.spec.ts",
     "test:integration": "pnpm run build:deps && RUN_TESTCONTAINERS=1 vitest run test/api.integration.spec.ts",
     "test:ocr": "pnpm run build:deps && RUN_OCR_ACCEPTANCE=1 vitest run test/local-ocr.acceptance.spec.ts",
     "test:e2e:google": "pnpm run build:deps && node ./scripts/run-cloud-e2e.mjs google-document-ai-enterprise-ocr",

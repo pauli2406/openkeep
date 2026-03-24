@@ -17,7 +17,7 @@ type ResolutionStrategy =
   | "blocked"
   | "none";
 
-type ResolutionProvider = "openai" | "gemini" | "deterministic";
+type ResolutionProvider = "openai" | "gemini" | "mistral" | "deterministic";
 
 interface CorrespondentCandidate {
   id: string;
@@ -568,12 +568,21 @@ export class CorrespondentResolutionService {
       };
     }
 
+    const mistralKey = this.configService.get("MISTRAL_API_KEY");
+    if (mistralKey) {
+      return {
+        provider: "mistral",
+        apiKey: mistralKey,
+        model: this.configService.get("MISTRAL_MODEL"),
+      };
+    }
+
     return null;
   }
 
   private async resolveWithLlm(
     provider: {
-      provider: "openai" | "gemini";
+      provider: "openai" | "gemini" | "mistral";
       apiKey: string;
       model: string;
     },
@@ -585,7 +594,9 @@ export class CorrespondentResolutionService {
     const rawResponse =
       provider.provider === "openai"
         ? await this.callOpenAi(provider.apiKey, provider.model, prompt)
-        : await this.callGemini(provider.apiKey, provider.model, prompt);
+        : provider.provider === "gemini"
+          ? await this.callGemini(provider.apiKey, provider.model, prompt)
+          : await this.callMistral(provider.apiKey, provider.model, prompt);
 
     if (!rawResponse) {
       return null;
@@ -751,6 +762,62 @@ export class CorrespondentResolutionService {
         .join(" ")
         .trim() ?? null
     );
+  }
+
+  private async callMistral(
+    apiKey: string,
+    model: string,
+    prompt: string,
+  ): Promise<string | null> {
+    const response = await fetch(
+      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          response_format: {
+            type: "json_object",
+          },
+          messages: [
+            {
+              role: "system",
+              content:
+                "You extract a document correspondent. Output valid JSON only. Be conservative and do not guess.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      this.logger.warn(`Mistral correspondent extraction failed with status ${response.status}`);
+      return null;
+    }
+
+    const body = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+    };
+    const content = body.choices?.[0]?.message?.content;
+    if (typeof content === "string") {
+      return content;
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .map((item) => (typeof item?.text === "string" ? item.text : ""))
+        .join(" ");
+    }
+
+    return null;
   }
 
   private parseLlmResponse(value: string): Record<string, unknown> | null {

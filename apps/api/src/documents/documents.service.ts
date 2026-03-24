@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import {
@@ -27,7 +28,9 @@ import type {
   BatchReprocessDocumentsResponse,
   DeleteDocumentResponse,
   Document,
+  DocumentAskResponse,
   DocumentMetadata,
+  DocumentSummaryResponse,
   DocumentTextBlock,
   DocumentHistoryResponse,
   EmbeddingProvider,
@@ -58,6 +61,8 @@ import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
 import { padEmbedding, serializeHalfVector } from "../processing/embedding.util";
+import { LlmAnswerProvider } from "../processing/llm-answer.provider";
+import { LlmService } from "../processing/llm.service";
 import { dateToIso, normalizeCurrencyCode, parseDateOnly } from "../processing/normalization.util";
 import { ProcessingService } from "../processing/processing.service";
 import { rankHybridResults } from "../search/semantic-ranking.util";
@@ -132,11 +137,15 @@ const MANUAL_OVERRIDE_FIELDS: ManualOverrideField[] = [
 
 @Injectable()
 export class DocumentsService {
+  private readonly logger = new Logger(DocumentsService.name);
+
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(ObjectStorageService) private readonly storageService: ObjectStorageService,
     @Inject(ProcessingService) private readonly processingService: ProcessingService,
     @Inject(MetricsService) private readonly metricsService: MetricsService,
+    @Inject(LlmService) private readonly llmService: LlmService,
+    @Inject(LlmAnswerProvider) private readonly llmAnswerProvider: LlmAnswerProvider,
   ) {}
 
   async uploadDocument(input: UploadDocumentInput): Promise<Document> {
@@ -206,15 +215,20 @@ export class DocumentsService {
     const page = request.page ?? 1;
     const pageSize = request.pageSize ?? 20;
     const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    const hasTextQuery = Boolean(request.query?.trim());
+
+    const langRegconfig = `CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END`;
 
     let snippetSql = "NULL::text AS snippet";
-    if (request.query?.trim()) {
-      params.push(request.query.trim());
+    let rankSql = "0::float AS rank";
+    if (hasTextQuery) {
+      params.push(request.query!.trim());
       const placeholder = `$${params.length}`;
-      snippetSql = `ts_headline('simple', coalesce(d.full_text, ''), websearch_to_tsquery('simple', ${placeholder}), 'MaxFragments=2, MaxWords=18, MinWords=5') AS snippet`;
+      snippetSql = `ts_headline(${langRegconfig}, coalesce(d.full_text, ''), websearch_to_tsquery('simple', ${placeholder}), 'MaxFragments=2, MaxWords=18, MinWords=5') AS snippet`;
+      rankSql = `ts_rank_cd(to_tsvector(${langRegconfig}, coalesce(d.full_text, '')), websearch_to_tsquery('simple', ${placeholder})) AS rank`;
     }
 
-    const baseWhere = request.query?.trim()
+    const baseWhere = hasTextQuery
       ? `${whereSql} AND to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', $${params.length})`
       : whereSql;
 
@@ -280,6 +294,12 @@ export class DocumentsService {
     } as const;
     const orderColumn = orderColumns[sort];
 
+    // Default to relevance sorting when a text query is present and no explicit sort was requested
+    const useRelevanceSort = hasTextQuery && !request.sort;
+    const orderBySql = useRelevanceSort
+      ? `rank DESC, d.id DESC`
+      : `${orderColumn} ${direction}, d.id DESC`;
+
     const totalResult = await this.databaseService.pool.query<{ total: string }>(
       `SELECT count(*)::int AS total FROM documents d WHERE ${baseWhere}`,
       params,
@@ -289,10 +309,10 @@ export class DocumentsService {
       id: string;
       snippet: string | null;
     }>(
-      `SELECT d.id, ${snippetSql}
+      `SELECT d.id, ${snippetSql}, ${rankSql}
        FROM documents d
        WHERE ${baseWhere}
-       ORDER BY ${orderColumn} ${direction}, d.id DESC
+       ORDER BY ${orderBySql}
        LIMIT $${params.length + 1}
        OFFSET $${params.length + 2}`,
       [...params, pageSize, (page - 1) * pageSize],
@@ -987,7 +1007,7 @@ export class DocumentsService {
       rank: string;
     }>(
       `SELECT d.id, ts_rank_cd(
-          to_tsvector('simple', coalesce(d.full_text, '')),
+          to_tsvector(CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END, coalesce(d.full_text, '')),
           websearch_to_tsquery('simple', $${params.length + 1})
        ) AS rank
        FROM documents d
@@ -1099,6 +1119,406 @@ export class DocumentsService {
       ...answered,
       results: results.items,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Streaming answer (for unified search)
+  // ---------------------------------------------------------------------------
+
+  async *streamAnswer(request: AnswerQueryRequest): AsyncGenerator<string> {
+    const results = await this.semanticSearch({
+      query: request.query,
+      filters: request.filters,
+      page: 1,
+      pageSize: request.maxDocuments,
+      maxChunkMatches: request.maxChunkMatches,
+    });
+
+    // Send search results first
+    yield `event: search-results\ndata: ${JSON.stringify({ results: results.items })}\n\n`;
+
+    // Stream the LLM answer
+    const stream = this.llmAnswerProvider.streamAnswer({
+      question: request.query,
+      results: results.items,
+      maxCitations: request.maxCitations,
+    });
+
+    let fullAnswer = "";
+    let citations: unknown[] = [];
+
+    for await (const chunk of stream) {
+      if (chunk.done) {
+        if (chunk.citations) {
+          citations = chunk.citations;
+        }
+
+        break;
+      }
+
+      fullAnswer += chunk.text;
+      yield `event: answer-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    yield `event: done\ndata: ${JSON.stringify({
+      status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      fullAnswer: fullAnswer || null,
+      citations,
+    })}\n\n`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Per-document AI: Summary
+  // ---------------------------------------------------------------------------
+
+  async *streamDocumentSummary(documentId: string, force = false): AsyncGenerator<string> {
+    const document = await this.getDocument(documentId);
+
+    // Check for cached summary (skip if force-regenerating)
+    if (!force) {
+      const metadata = document.metadata as Record<string, unknown>;
+      if (metadata.summary && typeof metadata.summary === "string") {
+        yield `event: cached\ndata: ${JSON.stringify({
+          summary: metadata.summary,
+          provider: metadata.summaryProvider ?? "unknown",
+          model: metadata.summaryModel ?? "unknown",
+          generatedAt: metadata.summaryGeneratedAt ?? new Date().toISOString(),
+        })}\n\n`;
+        return;
+      }
+    }
+
+    if (!this.llmService.isConfigured()) {
+      yield `event: error\ndata: ${JSON.stringify({ message: "No LLM provider configured" })}\n\n`;
+      return;
+    }
+
+    // Load document text
+    const fullText = await this.getDocumentFullText(documentId);
+    if (!fullText || fullText.trim().length < 20) {
+      yield `event: error\ndata: ${JSON.stringify({ message: "Document has insufficient text for summarization" })}\n\n`;
+      return;
+    }
+
+    // Truncate to fit context (approx 12k chars for safety)
+    const truncatedText = fullText.slice(0, 12_000);
+    const providerInfo = this.llmService.getProviderInfo()!;
+
+    const docContext = [
+      document.title ? `Title: ${document.title}` : null,
+      document.correspondent?.name ? `Correspondent: ${document.correspondent.name}` : null,
+      document.documentType?.name ? `Type: ${document.documentType.name}` : null,
+      document.issueDate ? `Issue Date: ${document.issueDate}` : null,
+      document.language ? `Language: ${document.language}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    const stream = this.llmService.stream({
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are a document summarization assistant. Produce a concise, high-level summary.",
+            "",
+            "Rules:",
+            "- Start with 1-2 sentences describing what the document is and its main purpose.",
+            "- Then use a short bullet list (5-10 bullets max) for the most important facts: key dates, monetary amounts, parties involved, obligations, and deadlines.",
+            "- Do NOT list every single field or data point from the document. Focus on what matters most.",
+            "- Use markdown formatting: **bold** for emphasis, `code` for reference numbers/IDs.",
+            "- Keep the total summary under 200 words.",
+            "- Answer in the same language as the document content.",
+            "- Do NOT invent information not present in the document.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: `${docContext ? `[${docContext}]\n\n` : ""}${truncatedText}`,
+        },
+      ],
+      temperature: 0.1,
+      maxTokens: 800,
+    });
+
+    let fullSummary = "";
+
+    for await (const chunk of stream) {
+      if (chunk.done) {
+        break;
+      }
+
+      fullSummary += chunk.text;
+      yield `event: summary-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    // If the LLM returned nothing (e.g. API error, empty response), surface it
+    if (fullSummary.trim().length === 0) {
+      yield `event: error\ndata: ${JSON.stringify({ message: "LLM returned an empty summary. Check your API key and provider configuration." })}\n\n`;
+      return;
+    }
+
+    // Persist summary to metadata
+    if (fullSummary.trim().length > 0) {
+      const now = new Date().toISOString();
+      await this.databaseService.pool.query(
+        `UPDATE documents SET metadata = jsonb_set(
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                coalesce(metadata, '{}'::jsonb),
+                '{summary}', $2::jsonb
+              ),
+              '{summaryProvider}', $3::jsonb
+            ),
+            '{summaryModel}', $4::jsonb
+          ),
+          '{summaryGeneratedAt}', $5::jsonb
+        ) WHERE id = $1`,
+        [
+          documentId,
+          JSON.stringify(fullSummary.trim()),
+          JSON.stringify(providerInfo.provider),
+          JSON.stringify(providerInfo.model),
+          JSON.stringify(now),
+        ],
+      );
+    }
+
+    yield `event: done\ndata: ${JSON.stringify({
+      summary: fullSummary.trim(),
+      provider: providerInfo.provider,
+      model: providerInfo.model,
+      generatedAt: new Date().toISOString(),
+    })}\n\n`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Per-document AI: Q&A
+  // ---------------------------------------------------------------------------
+
+  async *streamDocumentAnswer(documentId: string, question: string): AsyncGenerator<string> {
+    const document = await this.getDocument(documentId);
+
+    if (!this.llmService.isConfigured()) {
+      yield `event: error\ndata: ${JSON.stringify({ message: "No LLM provider configured" })}\n\n`;
+      return;
+    }
+
+    // Try vector-based chunk retrieval first
+    let contextChunks: Array<{ text: string; heading: string | null; pageFrom: number | null; pageTo: number | null; score: number }> = [];
+
+    if (
+      this.processingService.isSemanticIndexingConfigured() &&
+      document.embeddingStatus === "ready"
+    ) {
+      const { provider, model } = this.processingService.getActiveEmbeddingConfiguration();
+      if (provider && model) {
+        const queryEmbedding = await this.processingService.embedQuery(question);
+        const embeddingLiteral = serializeHalfVector(padEmbedding(queryEmbedding.embeddings[0]!));
+
+        const result = await this.databaseService.pool.query<{
+          chunk_index: number;
+          heading: string | null;
+          text: string;
+          page_from: number | null;
+          page_to: number | null;
+          distance: string;
+        }>(
+          `SELECT dc.chunk_index, dc.heading, dc.text, dc.page_from, dc.page_to,
+                  (e.embedding <=> $1::halfvec)::float8 AS distance
+           FROM document_chunks dc
+           INNER JOIN document_chunk_embeddings e
+             ON e.document_id = dc.document_id
+            AND e.chunk_index = dc.chunk_index
+            AND e.provider = $3::embedding_provider
+            AND e.model = $4
+           WHERE dc.document_id = $2
+           ORDER BY e.embedding <=> $1::halfvec ASC
+           LIMIT 6`,
+          [embeddingLiteral, documentId, provider, model],
+        );
+
+        contextChunks = result.rows.map((row) => ({
+          text: row.text,
+          heading: row.heading,
+          pageFrom: row.page_from,
+          pageTo: row.page_to,
+          score: 1 - Number(row.distance),
+        }));
+      }
+    }
+
+    // Fallback: load raw chunks by position
+    if (contextChunks.length === 0) {
+      const chunks = await this.databaseService.pool.query<{
+        chunk_index: number;
+        heading: string | null;
+        text: string;
+        page_from: number | null;
+        page_to: number | null;
+      }>(
+        `SELECT chunk_index, heading, text, page_from, page_to
+         FROM document_chunks
+         WHERE document_id = $1
+         ORDER BY chunk_index ASC
+         LIMIT 8`,
+        [documentId],
+      );
+
+      contextChunks = chunks.rows.map((row) => ({
+        text: row.text,
+        heading: row.heading,
+        pageFrom: row.page_from,
+        pageTo: row.page_to,
+        score: 0.5,
+      }));
+    }
+
+    if (contextChunks.length === 0) {
+      yield `event: error\ndata: ${JSON.stringify({ message: "Document has no text chunks for Q&A" })}\n\n`;
+      return;
+    }
+
+    // Build context prompt
+    const contextSections = contextChunks.map((chunk, i) => {
+      const pageLabel =
+        chunk.pageFrom && chunk.pageTo && chunk.pageFrom !== chunk.pageTo
+          ? `Pages ${chunk.pageFrom}-${chunk.pageTo}`
+          : chunk.pageFrom
+            ? `Page ${chunk.pageFrom}`
+            : "Unknown page";
+
+      return `[Excerpt ${i + 1}, ${pageLabel}${chunk.heading ? `, Section: ${chunk.heading}` : ""}]\n${chunk.text}`;
+    });
+
+    const stream = this.llmService.stream({
+      messages: [
+        {
+          role: "system",
+          content: [
+            `You are answering a question about the document "${document.title}".`,
+            "Base your answer ONLY on the provided excerpts.",
+            "If the excerpts don't contain enough information, say so clearly.",
+            "Cite specific pages when referencing information (e.g., 'On page 3...').",
+            "Be concise and direct. Answer in the same language as the question.",
+          ].join("\n"),
+        },
+        {
+          role: "user",
+          content: `## Document Excerpts\n\n${contextSections.join("\n\n---\n\n")}\n\n---\n\n## Question\n${question}`,
+        },
+      ],
+      temperature: 0.1,
+      maxTokens: 1024,
+    });
+
+    // Send citations first
+    const citations = contextChunks
+      .filter((c) => c.score >= 0.4)
+      .slice(0, 4)
+      .map((chunk, i) => ({
+        chunkIndex: i,
+        pageFrom: chunk.pageFrom,
+        pageTo: chunk.pageTo,
+        quote: chunk.text.replace(/\s+/g, " ").trim().slice(0, 280),
+        score: chunk.score,
+      }));
+
+    yield `event: citations\ndata: ${JSON.stringify({ citations })}\n\n`;
+
+    let fullAnswer = "";
+
+    for await (const chunk of stream) {
+      if (chunk.done) {
+        break;
+      }
+
+      fullAnswer += chunk.text;
+      yield `event: answer-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    yield `event: done\ndata: ${JSON.stringify({
+      status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      answer: fullAnswer || null,
+      citations,
+    })}\n\n`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Per-document AI: Q&A History
+  // ---------------------------------------------------------------------------
+
+  async getDocumentQaHistory(documentId: string, userId: string) {
+    const result = await this.databaseService.pool.query<{
+      id: string;
+      question: string;
+      answer: string;
+      citations: string;
+      created_at: string;
+    }>(
+      `SELECT id, question, answer, citations, created_at
+       FROM document_qa_history
+       WHERE document_id = $1 AND user_id = $2
+       ORDER BY created_at ASC`,
+      [documentId, userId],
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      question: row.question,
+      answer: row.answer,
+      citations: typeof row.citations === "string" ? JSON.parse(row.citations) : row.citations,
+      createdAt: row.created_at,
+    }));
+  }
+
+  async saveDocumentQaEntry(
+    documentId: string,
+    userId: string,
+    question: string,
+    answer: string,
+    citations: Array<{
+      chunkIndex: number;
+      pageFrom: number | null;
+      pageTo: number | null;
+      quote: string;
+      score: number;
+    }>,
+  ) {
+    const result = await this.databaseService.pool.query<{ id: string; created_at: string }>(
+      `INSERT INTO document_qa_history (document_id, user_id, question, answer, citations)
+       VALUES ($1, $2, $3, $4, $5::jsonb)
+       RETURNING id, created_at`,
+      [documentId, userId, question, answer, JSON.stringify(citations)],
+    );
+
+    return {
+      id: result.rows[0].id,
+      question,
+      answer,
+      citations,
+      createdAt: result.rows[0].created_at,
+    };
+  }
+
+  async deleteDocumentQaHistory(documentId: string, userId: string) {
+    await this.databaseService.pool.query(
+      `DELETE FROM document_qa_history WHERE document_id = $1 AND user_id = $2`,
+      [documentId, userId],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helper: get full text for a document
+  // ---------------------------------------------------------------------------
+
+  private async getDocumentFullText(documentId: string): Promise<string | null> {
+    const result = await this.databaseService.pool.query<{ full_text: string | null }>(
+      `SELECT full_text FROM documents WHERE id = $1`,
+      [documentId],
+    );
+
+    return result.rows[0]?.full_text ?? null;
   }
 
   async getDocumentHistory(documentId: string): Promise<DocumentHistoryResponse> {

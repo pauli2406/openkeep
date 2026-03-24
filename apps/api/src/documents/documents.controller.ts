@@ -30,6 +30,7 @@ import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
   BatchReprocessDocumentsDto,
   BatchReprocessDocumentsResponseDto,
+  DocumentAskDto,
   RequeueDocumentProcessingDto,
   RequeueDocumentProcessingResponseDto,
   ReprocessDocumentDto,
@@ -240,6 +241,105 @@ export class DocumentsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.reembedDocument(id, principal);
+  }
+
+  @Post(":id/summarize/stream")
+  @ApiOperation({ summary: "Stream an AI-generated summary for a document via SSE" })
+  @ApiCreatedResponse({ description: "SSE stream of summary tokens" })
+  async streamDocumentSummary(
+    @Param("id") id: string,
+    @Query("force") force: string | undefined,
+    @Res() reply: FastifyReply,
+  ) {
+    const forceRegenerate = force === "true" || force === "1";
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    try {
+      for await (const chunk of this.documentsService.streamDocumentSummary(id, forceRegenerate)) {
+        reply.raw.write(chunk);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Internal error";
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+    }
+
+    reply.raw.end();
+  }
+
+  @Post(":id/ask/stream")
+  @ApiOperation({ summary: "Stream an AI-generated answer to a question about a document via SSE" })
+  @ApiCreatedResponse({ description: "SSE stream of answer tokens" })
+  async streamDocumentAnswer(
+    @Param("id") id: string,
+    @Body() body: DocumentAskDto,
+    @Res() reply: FastifyReply,
+  ) {
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+
+    try {
+      for await (const chunk of this.documentsService.streamDocumentAnswer(id, body.question)) {
+        reply.raw.write(chunk);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Internal error";
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+    }
+
+    reply.raw.end();
+  }
+
+  @Get(":id/qa-history")
+  @ApiOperation({ summary: "Get Q&A history for a document" })
+  @ApiOkResponse({ description: "List of Q&A entries" })
+  async getQaHistory(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.getDocumentQaHistory(id, principal.userId);
+  }
+
+  @Post(":id/qa-history")
+  @ApiOperation({ summary: "Save a Q&A entry for a document" })
+  @ApiCreatedResponse({ description: "Saved Q&A entry" })
+  async saveQaEntry(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Body() body: { question: string; answer: string; citations: Array<{
+      chunkIndex: number;
+      pageFrom: number | null;
+      pageTo: number | null;
+      quote: string;
+      score: number;
+    }> },
+  ) {
+    return this.documentsService.saveDocumentQaEntry(
+      id,
+      principal.userId,
+      body.question,
+      body.answer,
+      body.citations,
+    );
+  }
+
+  @Delete(":id/qa-history")
+  @ApiOperation({ summary: "Clear Q&A history for a document" })
+  @ApiOkResponse({ description: "Q&A history cleared" })
+  async clearQaHistory(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    await this.documentsService.deleteDocumentQaHistory(id, principal.userId);
+    return { success: true };
   }
 
   private readMultipartField(

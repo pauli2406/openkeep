@@ -21,6 +21,8 @@ import {
   GoogleGeminiLayoutParseProvider,
 } from "./google-document-ai.providers";
 import { HybridMetadataExtractor } from "./hybrid-metadata.extractor";
+import { LlmAnswerProvider } from "./llm-answer.provider";
+import { LlmService } from "./llm.service";
 import { LocalDocumentParseProvider } from "./local-ocr.provider";
 import { MistralEmbeddingProvider } from "./mistral-embedding.provider";
 import { AzureDocumentIntelligenceParseProvider } from "./azure-document-intelligence.provider";
@@ -52,6 +54,8 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     HybridMetadataExtractor,
     DeterministicChunker,
     ExtractiveAnswerProvider,
+    LlmService,
+    LlmAnswerProvider,
     {
       provide: "LOCAL_PARSE_PROVIDER",
       useExisting: LocalDocumentParseProvider,
@@ -110,7 +114,14 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     },
     {
       provide: ANSWER_PROVIDER,
-      useExisting: ExtractiveAnswerProvider,
+      useFactory: (llmService: LlmService, extractive: ExtractiveAnswerProvider) => {
+        if (llmService.isConfigured()) {
+          return new LlmAnswerProvider(llmService, extractive);
+        }
+
+        return extractive;
+      },
+      inject: [LlmService, ExtractiveAnswerProvider],
     },
   ],
   exports: [
@@ -118,10 +129,14 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     ProcessingService,
     CorrespondentResolutionService,
     DocumentTypePolicyService,
+    LlmService,
+    LlmAnswerProvider,
+    ExtractiveAnswerProvider,
     DOCUMENT_PARSE_PROVIDER,
     METADATA_EXTRACTOR,
     CHUNKER,
     EMBEDDING_PROVIDER_REGISTRY,
+    ANSWER_PROVIDER,
   ],
 })
 export class ProcessingModule {}

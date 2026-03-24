@@ -107,7 +107,7 @@ describe("DeterministicChunker", () => {
       heading: "Invoice",
       pageFrom: 1,
       pageTo: 1,
-      strategyVersion: "normalized-parse-v1",
+      strategyVersion: "normalized-parse-v2",
       contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
     expect(chunks[0]?.text).toContain("Line one");

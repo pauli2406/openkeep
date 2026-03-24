@@ -232,7 +232,7 @@ export const CorrespondentExtractionSchema = z.object({
   evidenceLines: z.array(z.string()).optional(),
   candidateCorrespondents: z.array(CorrespondentExtractionCandidateSchema).optional(),
   blockedReason: z.string().nullable().optional(),
-  provider: z.enum(["openai", "gemini", "deterministic"]).optional(),
+  provider: z.enum(["openai", "gemini", "mistral", "deterministic"]).optional(),
 });
 
 export const ManualOverrideFieldSchema = z.enum([
@@ -689,12 +689,14 @@ export const ProviderConfigSchema = z.object({
   activeEmbeddingProvider: EmbeddingProviderSchema.nullable().optional(),
   openaiModel: z.string().optional(),
   geminiModel: z.string().optional(),
+  mistralModel: z.string().optional(),
   openaiEmbeddingModel: z.string().optional(),
   geminiEmbeddingModel: z.string().optional(),
   voyageEmbeddingModel: z.string().optional(),
   mistralEmbeddingModel: z.string().optional(),
   hasOpenAiKey: z.boolean().default(false),
   hasGeminiKey: z.boolean().default(false),
+  hasMistralKey: z.boolean().default(false),
   hasVoyageKey: z.boolean().default(false),
   hasGoogleCloudConfig: z.boolean().default(false),
   hasAwsTextractConfig: z.boolean().default(false),
@@ -862,9 +864,9 @@ export const AnswerCitationSchema = z.object({
 export const AnswerQueryRequestSchema = z.object({
   query: z.string().trim().min(1),
   filters: SearchDocumentsFiltersSchema.optional(),
-  maxDocuments: z.number().int().min(1).max(5).default(3),
-  maxCitations: z.number().int().min(1).max(8).default(4),
-  maxChunkMatches: z.number().int().min(1).max(6).default(4),
+  maxDocuments: z.number().int().min(1).max(10).default(5),
+  maxCitations: z.number().int().min(1).max(12).default(6),
+  maxChunkMatches: z.number().int().min(1).max(10).default(6),
 });
 
 export const AnswerQueryResponseSchema = z.object({
@@ -873,6 +875,31 @@ export const AnswerQueryResponseSchema = z.object({
   reasoning: z.string().nullable().optional(),
   citations: z.array(AnswerCitationSchema),
   results: z.array(SemanticSearchResultSchema),
+});
+
+export const DocumentAskRequestSchema = z.object({
+  question: z.string().trim().min(1).max(2000),
+});
+
+export const DocumentAskCitationSchema = z.object({
+  chunkIndex: z.number().int().nonnegative(),
+  pageFrom: z.number().int().positive().nullable(),
+  pageTo: z.number().int().positive().nullable(),
+  quote: z.string().min(1),
+  score: z.number().nonnegative(),
+});
+
+export const DocumentAskResponseSchema = z.object({
+  status: z.enum(["answered", "insufficient_evidence"]),
+  answer: z.string().nullable(),
+  citations: z.array(DocumentAskCitationSchema),
+});
+
+export const DocumentSummaryResponseSchema = z.object({
+  summary: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  generatedAt: z.string(),
 });
 
 const ArchiveTimestampSchema = z.string().datetime({ offset: true });
@@ -1203,6 +1230,10 @@ export type DeleteDocumentResponse = z.infer<typeof DeleteDocumentResponseSchema
 export type AnswerCitation = z.infer<typeof AnswerCitationSchema>;
 export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
+export type DocumentAskRequest = z.infer<typeof DocumentAskRequestSchema>;
+export type DocumentAskCitation = z.infer<typeof DocumentAskCitationSchema>;
+export type DocumentAskResponse = z.infer<typeof DocumentAskResponseSchema>;
+export type DocumentSummaryResponse = z.infer<typeof DocumentSummaryResponseSchema>;
 export type ArchiveTag = z.infer<typeof ArchiveTagSchema>;
 export type ArchiveCorrespondent = z.infer<typeof ArchiveCorrespondentSchema>;
 export type ArchiveDocumentType = z.infer<typeof ArchiveDocumentTypeSchema>;

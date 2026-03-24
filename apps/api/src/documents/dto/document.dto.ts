@@ -3,6 +3,7 @@ import {
   AnswerQueryResponseSchema,
   BatchReprocessDocumentsRequestSchema,
   BatchReprocessDocumentsResponseSchema,
+  DocumentAskRequestSchema,
   DocumentSchema,
   DocumentStatusSchema,
   DocumentHistoryResponseSchema,
@@ -106,3 +107,4 @@ export class AnswerQueryResponseDto extends createZodDto(AnswerQueryResponseSche
 export class SemanticSearchDto extends createZodDto(SemanticSearchRequestSchema) {}
 export class SemanticSearchResponseDto extends createZodDto(SemanticSearchResponseSchema) {}
 export class ReindexEmbeddingsDto extends createZodDto(ReindexEmbeddingsRequestSchema) {}
+export class DocumentAskDto extends createZodDto(DocumentAskRequestSchema) {}
