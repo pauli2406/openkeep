@@ -22,6 +22,10 @@ export const DEFAULT_DOCUMENT_TYPES = [
     requiredFields: ["correspondent", "issueDate", "referenceNumber"],
   },
   {
+    name: "Giftcard",
+    requiredFields: ["correspondent", "amount", "currency"],
+  },
+  {
     name: "Letter",
     requiredFields: ["correspondent", "issueDate"],
   },
@@ -38,8 +42,24 @@ export const DEFAULT_DOCUMENT_TYPES = [
     requiredFields: ["correspondent", "issueDate", "dueDate", "referenceNumber"],
   },
   {
+    name: "Tax Statement",
+    requiredFields: ["correspondent", "issueDate", "amount", "currency", "referenceNumber"],
+  },
+  {
     name: "Payslip",
     requiredFields: ["correspondent", "issueDate", "amount", "currency"],
+  },
+  {
+    name: "Portfolio Statement",
+    requiredFields: ["correspondent", "issueDate", "amount", "currency", "referenceNumber"],
+  },
+  {
+    name: "Trade Confirmation",
+    requiredFields: ["correspondent", "issueDate", "amount", "currency", "referenceNumber"],
+  },
+  {
+    name: "Financial Information",
+    requiredFields: ["correspondent", "issueDate"],
   },
   {
     name: "Utility Bill",

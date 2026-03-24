@@ -334,4 +334,291 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(result.issueDate?.toISOString().slice(0, 10)).toBe("2025-11-25");
     expect(intelligence?.validation?.normalizedFields?.amount).toBe(963.58);
   });
+
+  it("routes and extracts giftcard balances conservatively", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "giftcard",
+        subtype: "retail",
+        confidence: 0.94,
+        reasoningHints: ["gift card", "balance"],
+      }),
+      JSON.stringify({
+        title: "Gift Card Balance",
+        titleConfidence: 0.86,
+        summary: "Gift card with remaining available balance and expiry date.",
+        summaryConfidence: 0.84,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "12.03.2025",
+          expiryDate: "31.12.2026",
+          amount: 50,
+          currency: "EUR",
+          referenceNumber: "GC-4455",
+          correspondentName: "Example Store",
+        },
+        fieldConfidence: {
+          amount: 0.9,
+          currency: 0.95,
+        },
+      }),
+      JSON.stringify({
+        tags: ["giftcard"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Store" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Example Store Gift Card",
+          "Issue Date: 12.03.2025",
+          "Card Number: GC-4455",
+          "Available Balance: 75,00 EUR",
+          "Value: 50,00 EUR",
+          "Valid until 31.12.2026",
+        ].join("\n"),
+        "giftcard.pdf",
+      ),
+    );
+
+    expect(result.documentTypeName).toBe("Giftcard");
+    expect(result.amount).toBe(75);
+    expect(result.currency).toBe("EUR");
+  });
+
+  it("routes portfolio statements and prefers portfolio value totals", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "portfolio_statement",
+        subtype: "monthly",
+        confidence: 0.96,
+        reasoningHints: ["depotauszug", "depotwert"],
+      }),
+      JSON.stringify({
+        title: "Portfolio Statement March 2025",
+        titleConfidence: 0.88,
+        summary: "Portfolio statement with total asset valuation.",
+        summaryConfidence: 0.86,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "31.03.2025",
+          amount: null,
+          currency: null,
+          referenceNumber: "DEP-7788",
+          correspondentName: "Example Broker",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+        },
+      }),
+      JSON.stringify({
+        tags: ["portfolio"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Broker" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Depotauszug",
+          "Valuation Date: 31.03.2025",
+          "Depot Number: DEP-7788",
+          "Portfolio Value: 12.345,67 EUR",
+        ].join("\n"),
+        "portfolio.pdf",
+      ),
+    );
+
+    expect(result.documentTypeName).toBe("Portfolio Statement");
+    expect(result.amount).toBe(12345.67);
+    expect(result.currency).toBe("EUR");
+  });
+
+  it("routes trade confirmations and extracts the net settlement amount", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "trade_confirmation",
+        subtype: "buy",
+        confidence: 0.96,
+        reasoningHints: ["wertpapierabrechnung", "net amount"],
+      }),
+      JSON.stringify({
+        title: "Trade Confirmation Buy Order",
+        titleConfidence: 0.88,
+        summary: "Securities transaction confirmation with final settlement amount.",
+        summaryConfidence: 0.86,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "14.04.2025",
+          dueDate: "16.04.2025",
+          amount: null,
+          currency: null,
+          referenceNumber: "TR-9911",
+          correspondentName: "Example Broker",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+        },
+      }),
+      JSON.stringify({
+        tags: ["trade-confirmation"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Broker" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Wertpapierabrechnung Kauf",
+          "Trade Date: 14.04.2025",
+          "Settlement Date: 16.04.2025",
+          "Order Number: TR-9911",
+          "Net Amount: 1.234,56 EUR",
+        ].join("\n"),
+        "trade.pdf",
+      ),
+    );
+
+    expect(result.documentTypeName).toBe("Trade Confirmation");
+    expect(result.amount).toBe(1234.56);
+    expect(result.currency).toBe("EUR");
+  });
+
+  it("routes tax statements separately from tax office documents", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "tax_statement",
+        subtype: "capital-gains",
+        confidence: 0.95,
+        reasoningHints: ["jahressteuerbescheinigung", "kapitalertragsteuer"],
+      }),
+      JSON.stringify({
+        title: "Annual Tax Statement 2025",
+        titleConfidence: 0.88,
+        summary: "Annual tax statement with withheld capital gains tax.",
+        summaryConfidence: 0.86,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "15.01.2026",
+          amount: null,
+          currency: null,
+          referenceNumber: "DEP-7788",
+          correspondentName: "Example Broker",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+        },
+      }),
+      JSON.stringify({
+        tags: ["tax-statement"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "Example Broker" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Jahressteuerbescheinigung",
+          "Date: 15.01.2026",
+          "Depot Number: DEP-7788",
+          "Kapitalertragsteuer: 321,09 EUR",
+        ].join("\n"),
+        "tax-statement.pdf",
+      ),
+    );
+
+    expect(result.documentTypeName).toBe("Tax Statement");
+    expect(result.amount).toBe(321.09);
+    expect(result.currency).toBe("EUR");
+  });
+
+  it("routes legal documents and keeps legal references", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "legal_document",
+        subtype: "court-notice",
+        confidence: 0.93,
+        reasoningHints: ["aktenzeichen", "gericht"],
+      }),
+      JSON.stringify({
+        title: "Court Notice",
+        titleConfidence: 0.86,
+        summary: "Legal notice with case number and response deadline.",
+        summaryConfidence: 0.84,
+      }),
+      JSON.stringify({
+        fields: {
+          issueDate: "10.02.2025",
+          dueDate: "24.02.2025",
+          amount: null,
+          currency: null,
+          referenceNumber: "AZ-2025-99",
+          correspondentName: "District Court Example City",
+        },
+        fieldConfidence: {
+          issueDate: 0.95,
+          dueDate: 0.9,
+        },
+      }),
+      JSON.stringify({
+        tags: ["legal"],
+        confidence: 0.8,
+      }),
+    ];
+
+    const service = createService({ correspondentName: "District Court Example City" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        [
+          "Amtsgericht Beispielstadt",
+          "Datum: 10.02.2025",
+          "Aktenzeichen: AZ-2025-99",
+          "Frist: 24.02.2025",
+        ].join("\n"),
+        "legal.pdf",
+      ),
+    );
+
+    expect(result.documentTypeName).toBe("Legal");
+    expect(result.referenceNumber).toBe("AZ-2025-99");
+  });
 });

@@ -22,6 +22,7 @@ describe("normalization.util", () => {
     expect(normalizeAmountValue("1.234,56")).toBe(1234.56);
     expect(normalizeAmountValue("1,234.56")).toBe(1234.56);
     expect(normalizeAmountValue("42,50")).toBe(42.5);
+    expect(normalizeAmountValue("12.345,67")).toBe(12345.67);
   });
 
   it("normalizes currencies to ISO-like codes", () => {
