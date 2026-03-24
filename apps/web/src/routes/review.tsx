@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ReviewReason } from "@openkeep/types";
+import type { Document, ReviewReason } from "@openkeep/types";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,129 @@ function formatReviewReason(reason: string): string {
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function formatFieldLabel(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatFieldDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return format(new Date(value), "MMM d, yyyy");
+  } catch {
+    return value;
+  }
+}
+
+function getFieldValue(document: Document, field: string): string | null {
+  switch (field) {
+    case "correspondent":
+      return document.correspondent?.name ?? null;
+    case "issueDate":
+      return formatFieldDate(document.issueDate);
+    case "dueDate":
+      return formatFieldDate(document.dueDate);
+    case "expiryDate":
+      return formatFieldDate(document.expiryDate);
+    case "amount":
+      return document.amount !== null
+        ? `${document.amount.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} ${document.currency ?? ""}`.trim()
+        : null;
+    case "currency":
+      return document.currency ?? null;
+    case "referenceNumber":
+      return document.referenceNumber ?? null;
+    case "holderName":
+      return document.holderName ?? null;
+    case "issuingAuthority":
+      return document.issuingAuthority ?? null;
+    default:
+      return null;
+  }
+}
+
+function ReviewFieldPanel({ item }: { item: Document }) {
+  const requiredFields =
+    item.metadata?.reviewEvidence?.requiredFields ?? item.documentType?.requiredFields ?? [];
+
+  if (requiredFields.length === 0) {
+    return null;
+  }
+
+  const missingFields =
+    item.metadata?.reviewEvidence?.missingFields ??
+    requiredFields.filter((field) => !getFieldValue(item, field));
+  const missingFieldSet = new Set(missingFields);
+  const foundFields = requiredFields
+    .map((field) => ({ field, value: getFieldValue(item, field) }))
+    .filter((entry) => !missingFieldSet.has(entry.field) && entry.value !== null);
+
+  return (
+    <details
+      className="mt-4 rounded-2xl border border-border/70 bg-background/70"
+      open={item.reviewReasons.includes("missing_key_fields")}
+    >
+      <summary className="cursor-pointer list-none px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-medium text-foreground">Verify extracted fields</span>
+          <Badge variant={missingFields.length > 0 ? "warning" : "success"}>
+            {missingFields.length > 0
+              ? `${missingFields.length} missing`
+              : "All key fields found"}
+          </Badge>
+          {foundFields.length > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {foundFields.length} found
+            </span>
+          )}
+        </div>
+      </summary>
+      <div className="grid gap-3 border-t border-border/60 px-4 py-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Found values
+          </p>
+          {foundFields.length > 0 ? (
+            foundFields.map(({ field, value }) => (
+              <div key={field} className="rounded-xl border bg-muted/20 px-3 py-2">
+                <p className="text-xs text-muted-foreground">{formatFieldLabel(field)}</p>
+                <p className="text-sm font-medium text-foreground">{value}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No required values found yet.</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Missing key fields
+          </p>
+          {missingFields.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {missingFields.map((field) => (
+                <Badge key={field} variant="warning">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  {formatFieldLabel(field)}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">None missing.</p>
+          )}
+        </div>
+      </div>
+    </details>
+  );
 }
 
 export const Route = createFileRoute("/review")({
@@ -320,6 +443,7 @@ function ReviewPage() {
                   {item.metadata.intelligence.summary.value}
                 </p>
               )}
+              <ReviewFieldPanel item={item as Document} />
             </CardContent>
           </Card>
         ))}

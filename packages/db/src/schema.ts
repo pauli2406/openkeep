@@ -184,6 +184,7 @@ export const documents = pgTable(
     pageCount: integer("page_count").notNull().default(0),
     issueDate: date("issue_date", { mode: "date" }),
     dueDate: date("due_date", { mode: "date" }),
+    taskCompletedAt: timestamp("task_completed_at", { withTimezone: true }),
     expiryDate: date("expiry_date", { mode: "date" }),
     amount: numeric("amount", { precision: 12, scale: 2 }),
     currency: varchar("currency", { length: 3 }),

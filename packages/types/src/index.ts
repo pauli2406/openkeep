@@ -9,6 +9,7 @@ export const parseProviders = [
   "azure-ai-document-intelligence",
   "mistral-ocr",
 ] as const;
+export const chatProviders = ["openai", "gemini", "mistral"] as const;
 export const embeddingProviders = ["openai", "google-gemini", "voyage", "mistral"] as const;
 export const documentSources = ["upload", "watch-folder", "email", "api"] as const;
 export const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
@@ -35,6 +36,7 @@ export const processingJobStatuses = ["queued", "running", "completed", "failed"
 
 export const ProcessingModeSchema = z.enum(processingModes);
 export const ParseProviderSchema = z.enum(parseProviders);
+export const ChatProviderSchema = z.enum(chatProviders);
 export const EmbeddingProviderSchema = z.enum(embeddingProviders);
 export const DocumentSourceSchema = z.enum(documentSources);
 export const DocumentStatusSchema = z.enum(documentStatuses);
@@ -509,6 +511,7 @@ export const DocumentSchema = z.object({
   language: z.string().nullable(),
   issueDate: z.string().nullable(),
   dueDate: z.string().nullable(),
+  taskCompletedAt: z.string().datetime({ offset: true }).nullable(),
   expiryDate: z.string().nullable(),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),
@@ -632,12 +635,16 @@ export const DashboardTopCorrespondentSchema = z.object({
 export const DashboardDeadlineItemSchema = z.object({
   documentId: z.string().uuid(),
   title: z.string().min(1),
+  referenceNumber: z.string().nullable().optional(),
   dueDate: z.string(),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),
   correspondentName: z.string().nullable(),
+  documentTypeName: z.string().nullable().optional(),
+  taskLabel: z.string().min(1),
   daysUntilDue: z.number().int(),
   isOverdue: z.boolean(),
+  taskCompletedAt: z.string().datetime({ offset: true }).nullable(),
 });
 
 export const MonthlyActivityPointSchema = z.object({
@@ -741,6 +748,7 @@ export const UploadDocumentMetadataSchema = z.object({
 export const UpdateDocumentSchema = z.object({
   title: z.string().trim().min(1).optional(),
   dueDate: z.string().nullable().optional(),
+  taskCompletedAt: z.string().datetime({ offset: true }).nullable().optional(),
   issueDate: z.string().nullable().optional(),
   expiryDate: z.string().nullable().optional(),
   amount: z.number().nullable().optional(),
@@ -862,6 +870,7 @@ export const ProviderConfigSchema = z.object({
   mode: ProcessingModeSchema,
   activeParseProvider: ParseProviderSchema,
   fallbackParseProvider: ParseProviderSchema.nullable().optional(),
+  activeChatProvider: ChatProviderSchema.nullable().optional(),
   activeEmbeddingProvider: EmbeddingProviderSchema.nullable().optional(),
   openaiModel: z.string().optional(),
   geminiModel: z.string().optional(),
@@ -900,6 +909,7 @@ export const EmbeddingProviderAvailabilitySchema = z.object({
 export const HealthProvidersResponseSchema = z.object({
   activeParseProvider: ParseProviderSchema,
   fallbackParseProvider: ParseProviderSchema.nullable(),
+  activeChatProvider: ChatProviderSchema.nullable(),
   activeEmbeddingProvider: EmbeddingProviderSchema.nullable(),
   parseProviders: z.array(ParseProviderAvailabilitySchema),
   embeddingProviders: z.array(EmbeddingProviderAvailabilitySchema),
@@ -1122,6 +1132,7 @@ export const ArchiveDocumentSchema = z.object({
   pageCount: z.number().int().nonnegative(),
   issueDate: ArchiveDateSchema.nullable(),
   dueDate: ArchiveDateSchema.nullable(),
+  taskCompletedAt: ArchiveTimestampSchema.nullable(),
   expiryDate: ArchiveDateSchema.nullable(),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),

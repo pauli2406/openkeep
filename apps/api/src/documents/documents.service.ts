@@ -86,6 +86,7 @@ interface DocumentRow {
   language: string | null;
   issueDate: Date | null;
   dueDate: Date | null;
+  taskCompletedAt: Date | null;
   expiryDate: Date | null;
   amount: string | number | null;
   currency: string | null;
@@ -618,6 +619,12 @@ export class DocumentsService {
               : input.dueDate === null
                 ? null
                 : parseDateOnly(input.dueDate),
+          taskCompletedAt:
+            input.taskCompletedAt === undefined
+              ? undefined
+              : input.taskCompletedAt === null
+                ? null
+                : new Date(input.taskCompletedAt),
           expiryDate:
             input.expiryDate === undefined
               ? undefined
@@ -1743,6 +1750,7 @@ export class DocumentsService {
         language: documents.language,
         issueDate: documents.issueDate,
         dueDate: documents.dueDate,
+        taskCompletedAt: documents.taskCompletedAt,
         expiryDate: documents.expiryDate,
         amount: documents.amount,
         currency: documents.currency,
@@ -2104,6 +2112,7 @@ export class DocumentsService {
       language: row.language,
       issueDate: dateToIso(row.issueDate),
       dueDate: dateToIso(row.dueDate),
+      taskCompletedAt: row.taskCompletedAt?.toISOString() ?? null,
       expiryDate: dateToIso(row.expiryDate),
       amount: row.amount === null ? null : Number(row.amount),
       currency: row.currency,

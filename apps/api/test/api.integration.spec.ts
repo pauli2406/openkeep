@@ -276,6 +276,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(healthResponse.body.status).toBe("ok");
     expect(healthResponse.body.provider.activeParseProvider).toBe("local-ocr");
     expect(healthResponse.body.provider.fallbackParseProvider).toBeNull();
+    expect(healthResponse.body.provider.activeChatProvider).toBeNull();
 
     const readinessResponse = await request(app.getHttpServer()).get("/api/health/ready");
     expect(readinessResponse.status).toBe(200);

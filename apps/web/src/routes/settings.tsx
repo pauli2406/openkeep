@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ArchiveImportResult,
   ArchiveSnapshot,
   ArchiveSnapshot as ArchiveSnapshotType,
   Correspondent,
+  Document,
   DocumentType,
   HealthProvidersResponse,
   HealthResponse,
@@ -1022,6 +1023,33 @@ function ArchiveOperationsSection() {
     watchResult?.items.filter(
       (item) => item.action !== "imported" && item.action !== "duplicate",
     ) ?? [];
+  const watchReviewDocumentQueries = useQueries({
+    queries: (watchResult?.items ?? [])
+      .filter((item) => item.documentId)
+      .map((item) => ({
+        queryKey: ["watch-folder-scan-document", item.documentId],
+        queryFn: async () => {
+          const { data, error } = await api.GET("/api/documents/{id}", {
+            params: { path: { id: item.documentId! } },
+          });
+          if (error) {
+            throw new Error(getApiErrorMessage(error, "Failed to load scan result details"));
+          }
+          return data as Document;
+        },
+      })),
+  });
+  const watchReviewDocuments = new Map(
+    watchReviewDocumentQueries
+      .map((query) => query.data)
+      .filter((doc): doc is Document => Boolean(doc))
+      .map((doc) => [doc.id, doc]),
+  );
+  const watchReviewDocumentStates = new Map(
+    (watchResult?.items ?? [])
+      .filter((item) => item.documentId)
+      .map((item, index) => [item.documentId!, watchReviewDocumentQueries[index]]),
+  );
 
   return (
     <Card>
@@ -1161,6 +1189,73 @@ function ArchiveOperationsSection() {
                 active={(watchResult.dryRun ? watchPlannedCount : watchResult.summary.total) > 0}
               />
             </div>
+            {watchResult.items.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Current scan results
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {watchResult.items.length} {watchResult.items.length === 1 ? "item" : "items"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {watchResult.items.map((item) => (
+                    <div
+                      key={`${item.path}:${item.action}:${item.reason}`}
+                      className="rounded-md border bg-background/60 p-3"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={watchFolderActionVariant(item.action)}>
+                              {formatWatchFolderAction(item.action)}
+                            </Badge>
+                            <span className="break-all text-sm font-medium">{item.path}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                            <span>Reason: {formatWatchFolderReason(item.reason)}</span>
+                            {item.mimeType && <span>MIME: {item.mimeType}</span>}
+                            {item.destinationPath && (
+                              <span>Destination: {item.destinationPath}</span>
+                            )}
+                          </div>
+                          {item.detail && (
+                            <p className="text-xs text-muted-foreground">{item.detail}</p>
+                          )}
+                        </div>
+                        {item.documentId && (
+                          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                            <Button asChild size="sm" variant="outline">
+                              <Link
+                                to="/documents/$documentId"
+                                params={{ documentId: item.documentId }}
+                              >
+                                Open document
+                              </Link>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      {item.documentId && (
+                        <details className="mt-3 rounded-md border bg-muted/20 px-3 py-2">
+                          <summary className="cursor-pointer text-sm font-medium text-foreground">
+                            Inspect extracted fields
+                          </summary>
+                          <div className="mt-3">
+                            <WatchFolderFieldReview
+                              document={watchReviewDocuments.get(item.documentId) ?? null}
+                              isLoading={watchReviewDocumentStates.get(item.documentId)?.isLoading ?? false}
+                              isError={watchReviewDocumentStates.get(item.documentId)?.isError ?? false}
+                            />
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {watchProblemItems.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
@@ -1492,6 +1587,181 @@ function formatWatchFolderReason(reason: string): string {
     .join(" ");
 }
 
+function formatWatchFolderAction(
+  action: WatchFolderScanResponse["items"][number]["action"],
+): string {
+  return action.charAt(0).toUpperCase() + action.slice(1);
+}
+
+function formatWatchFolderFieldLabel(field: string): string {
+  return field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatWatchFolderDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    return format(new Date(value), "MMM d, yyyy");
+  } catch {
+    return value;
+  }
+}
+
+function getWatchFolderFieldValue(document: Document, field: string): string | null {
+  switch (field) {
+    case "correspondent":
+      return document.correspondent?.name ?? null;
+    case "issueDate":
+      return formatWatchFolderDate(document.issueDate);
+    case "dueDate":
+      return formatWatchFolderDate(document.dueDate);
+    case "expiryDate":
+      return formatWatchFolderDate(document.expiryDate);
+    case "amount":
+      return document.amount !== null
+        ? `${document.amount.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} ${document.currency ?? ""}`.trim()
+        : null;
+    case "currency":
+      return document.currency ?? null;
+    case "referenceNumber":
+      return document.referenceNumber ?? null;
+    case "holderName":
+      return document.holderName ?? null;
+    case "issuingAuthority":
+      return document.issuingAuthority ?? null;
+    default:
+      return null;
+  }
+}
+
+function watchFolderActionVariant(
+  action: WatchFolderScanResponse["items"][number]["action"],
+): "secondary" | "success" | "destructive" | "outline" {
+  switch (action) {
+    case "imported":
+      return "success";
+    case "duplicate":
+      return "secondary";
+    case "unsupported":
+    case "failed":
+      return "destructive";
+    case "planned":
+      return "outline";
+  }
+}
+
+function WatchFolderFieldReview({
+  document,
+  isLoading,
+  isError,
+}: {
+  document: Document | null;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading extracted fields...</p>;
+  }
+
+  if (isError) {
+    return <p className="text-sm text-destructive">Failed to load extracted fields.</p>;
+  }
+
+  if (!document) {
+    return <p className="text-sm text-muted-foreground">No extracted fields available yet.</p>;
+  }
+
+  const requiredFields =
+    document.metadata.reviewEvidence?.requiredFields ?? document.documentType?.requiredFields ?? [];
+
+  if (requiredFields.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Key field extraction is not available for this document yet.
+      </p>
+    );
+  }
+
+  const missingFields = new Set(
+    document.metadata.reviewEvidence?.missingFields ??
+      requiredFields.filter((field) => !getWatchFolderFieldValue(document, field)),
+  );
+  const foundFields = requiredFields
+    .map((field) => ({ field, value: getWatchFolderFieldValue(document, field) }))
+    .filter((entry) => !missingFields.has(entry.field) && entry.value !== null);
+
+  return (
+    <div className="space-y-3">
+      {document.metadata.reviewEvidence?.confidence != null && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>
+            Confidence:{" "}
+            <span className={confidenceTextClass(document.metadata.reviewEvidence.confidence)}>
+              {(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%
+            </span>
+          </span>
+          {document.metadata.reviewEvidence.confidenceThreshold != null && (
+            <span>
+              Threshold: {(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%
+            </span>
+          )}
+        </div>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border bg-background/70 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Found values
+          </p>
+          <div className="mt-2 space-y-2">
+            {foundFields.length > 0 ? (
+              foundFields.map(({ field, value }) => (
+                <div key={field} className="rounded-md border bg-muted/20 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    {formatWatchFolderFieldLabel(field)}
+                  </p>
+                  <p className="text-sm font-medium text-foreground">{value}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No key fields found yet.</p>
+            )}
+          </div>
+        </div>
+        <div className="rounded-md border bg-background/70 p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Missing key fields
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {missingFields.size > 0 ? (
+              Array.from(missingFields).map((field) => (
+                <Badge key={field} variant="warning">
+                  {formatWatchFolderFieldLabel(field)}
+                </Badge>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">None missing.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function confidenceTextClass(confidence: number): string {
+  if (confidence >= 0.8) return "font-medium text-emerald-600";
+  if (confidence >= 0.5) return "font-medium text-amber-600";
+  return "font-medium text-red-600";
+}
+
 function formatJobTime(dateStr: string): string {
   try {
     const date = new Date(dateStr);
@@ -1538,6 +1808,22 @@ function resolveChatProvider(cfg: ProviderConfig): {
   model: string | undefined;
   configured: boolean;
 } | null {
+  if (cfg.activeChatProvider) {
+    const providerConfig = {
+      openai: { hasKey: cfg.hasOpenAiKey, model: cfg.openaiModel },
+      gemini: { hasKey: cfg.hasGeminiKey, model: cfg.geminiModel },
+      mistral: { hasKey: cfg.hasMistralKey, model: cfg.mistralModel },
+    }[cfg.activeChatProvider];
+
+    if (providerConfig?.hasKey) {
+      return {
+        name: CHAT_PROVIDER_LABELS[cfg.activeChatProvider] ?? cfg.activeChatProvider,
+        model: providerConfig.model,
+        configured: true,
+      };
+    }
+  }
+
   if (cfg.hasOpenAiKey) {
     return { name: "OpenAI", model: cfg.openaiModel, configured: true };
   }
@@ -1632,7 +1918,7 @@ function AiProvidersSection() {
               ) : (
                 <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
                   <AlertCircle className="h-4 w-4" />
-                  No chat provider configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY.
+                  No chat provider configured. Set `ACTIVE_CHAT_PROVIDER` with matching provider credentials, or configure any supported chat provider key.
                 </div>
               )}
             </div>

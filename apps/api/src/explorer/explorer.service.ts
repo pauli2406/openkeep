@@ -78,9 +78,9 @@ export class ExplorerService {
              max(coalesce(d.issue_date, d.created_at::date))::text AS latest_doc_date
            FROM documents d
            INNER JOIN correspondents c ON c.id = d.correspondent_id
-           GROUP BY c.id, c.name, c.slug
-           ORDER BY count(*) DESC, max(coalesce(d.issue_date, d.created_at::date)) DESC, c.name ASC
-           LIMIT 8`,
+            GROUP BY c.id, c.name, c.slug
+            ORDER BY count(*) DESC, max(coalesce(d.issue_date, d.created_at::date)) DESC, c.name ASC
+            LIMIT 4`,
         ),
         this.loadDeadlineItems(false, undefined, 6),
         this.loadDeadlineItems(true, undefined, 6),
@@ -814,6 +814,7 @@ export class ExplorerService {
       "d.due_date IS NOT NULL",
       overdue ? "d.due_date < current_date" : "d.due_date >= current_date",
       "d.status <> 'failed'",
+      "d.task_completed_at IS NULL",
     ];
 
     if (correspondentId) {
@@ -826,41 +827,66 @@ export class ExplorerService {
     const result = await this.databaseService.pool.query<{
       document_id: string;
       title: string;
+      reference_number: string | null;
       due_date: string;
       amount: string | null;
       currency: string | null;
       correspondent_name: string | null;
+      document_type_name: string | null;
       days_until_due: string;
       is_overdue: boolean;
+      task_completed_at: Date | null;
     }>(
       `SELECT
          d.id AS document_id,
          d.title,
+         d.reference_number,
          d.due_date::text AS due_date,
          d.amount::text AS amount,
          d.currency,
          c.name AS correspondent_name,
+         dt.name AS document_type_name,
          (d.due_date - current_date)::int::text AS days_until_due,
-         (d.due_date < current_date) AS is_overdue
-       FROM documents d
-       LEFT JOIN correspondents c ON c.id = d.correspondent_id
-       WHERE ${clauses.join(" AND ")}
-       ORDER BY d.due_date ASC, d.id DESC
-       LIMIT $${params.length}`,
+         (d.due_date < current_date) AS is_overdue,
+         d.task_completed_at
+        FROM documents d
+        LEFT JOIN correspondents c ON c.id = d.correspondent_id
+        LEFT JOIN document_types dt ON dt.id = d.document_type_id
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY d.due_date ASC, d.id DESC
+        LIMIT $${params.length}`,
       params,
     );
 
     return result.rows.map((row) => ({
       documentId: row.document_id,
       title: row.title,
+      referenceNumber: row.reference_number,
       dueDate: row.due_date,
       amount: toNullableNumber(row.amount),
       currency: row.currency,
       correspondentName: row.correspondent_name,
+      documentTypeName: row.document_type_name,
+      taskLabel: buildTaskLabel(row.document_type_name, row.is_overdue),
       daysUntilDue: Number(row.days_until_due),
       isOverdue: row.is_overdue,
+      taskCompletedAt: row.task_completed_at?.toISOString() ?? null,
     }));
   }
+}
+
+function buildTaskLabel(documentTypeName: string | null, isOverdue: boolean): string {
+  const normalized = documentTypeName?.trim().toLowerCase() ?? "";
+  if (normalized.includes("invoice") || normalized.includes("bill")) {
+    return isOverdue ? "Pay immediately" : "Pay";
+  }
+  if (normalized.includes("contract") || normalized.includes("legal")) {
+    return isOverdue ? "Respond immediately" : "Respond";
+  }
+  if (normalized.includes("insurance")) {
+    return isOverdue ? "Review immediately" : "Review";
+  }
+  return isOverdue ? "Handle immediately" : "Handle";
 }
 
 function toNullableNumber(value: string | null): number | null {

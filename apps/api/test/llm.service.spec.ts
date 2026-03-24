@@ -33,6 +33,26 @@ describe("LlmService", () => {
     });
   });
 
+  it("uses ACTIVE_CHAT_PROVIDER when multiple providers are configured", () => {
+    const service = new LlmService(
+      createConfigService({
+        ACTIVE_CHAT_PROVIDER: "mistral",
+        OPENAI_API_KEY: "openai-key",
+        OPENAI_MODEL: "gpt-4.1-mini",
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    expect(service.getProviderInfo()).toEqual({
+      provider: "mistral",
+      model: "mistral-small-latest",
+    });
+  });
+
   it("uses Mistral when it is the only configured chat provider", async () => {
     const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
       new Response(

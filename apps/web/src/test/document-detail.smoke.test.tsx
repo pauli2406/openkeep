@@ -324,7 +324,7 @@ describe("document detail smoke", () => {
     });
   });
 
-  it("shows pending lock feedback and filtered tag editing while saving overrides", async () => {
+  it("shows pending lock feedback and search-first tag editing while saving overrides", async () => {
     const importantTag = makeTag({
       id: "aaa11111-1111-1111-1111-111111111111",
       name: "Important",
@@ -340,7 +340,13 @@ describe("document detail smoke", () => {
       name: "Travel",
       slug: "travel",
     });
+    const financeTag = makeTag({
+      id: "aaa44444-4444-4444-4444-444444444444",
+      name: "Finance",
+      slug: "finance",
+    });
     const patchCalls: unknown[] = [];
+    const createCalls: unknown[] = [];
     let currentDocument = makeDocument({
       id: documentId,
       tags: [importantTag],
@@ -379,6 +385,11 @@ describe("document detail smoke", () => {
       http.get(apiUrl("/api/health/providers"), () =>
         HttpResponse.json(makeHealthProvidersResponse()),
       ),
+      http.post(apiUrl("/api/taxonomies/tags"), async ({ request }) => {
+        const body = await request.json();
+        createCalls.push(body);
+        return HttpResponse.json(financeTag);
+      }),
       http.patch(apiUrl(`/api/documents/${documentId}`), async ({ request }) => {
         const body = await request.json();
         patchCalls.push(body);
@@ -420,15 +431,26 @@ describe("document detail smoke", () => {
       screen.getByText(/Only the fields you change will become sticky manual overrides/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Selected tags")).toBeInTheDocument();
-    expect(screen.getByText("Available tags")).toBeInTheDocument();
+    expect(
+      screen.getByText("Search to add an existing tag or create a new one."),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: /Urgent/i })).not.toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText("Filter tags..."), "urg");
     expect(screen.getByRole("button", { name: /Urgent/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Travel/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Urgent/i }));
+    await user.clear(screen.getByPlaceholderText("Filter tags..."));
+    await user.type(screen.getByPlaceholderText("Filter tags..."), "Finance");
+    await user.click(screen.getByRole("button", { name: /Create tag "Finance"/i }));
     await user.clear(screen.getByPlaceholderText("0.00"));
     await user.type(screen.getByPlaceholderText("0.00"), "88");
+
+    await waitFor(() => {
+      expect(createCalls).toEqual([{ name: "Finance" }]);
+    });
 
     expect(screen.getByText("Saving will lock Amount, Tags.")).toBeInTheDocument();
 
@@ -438,7 +460,7 @@ describe("document detail smoke", () => {
       expect(patchCalls).toEqual([
         {
           amount: 88,
-          tagIds: [importantTag.id, urgentTag.id],
+          tagIds: [importantTag.id, urgentTag.id, financeTag.id],
         },
       ]);
     });

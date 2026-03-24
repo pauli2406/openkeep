@@ -53,7 +53,7 @@ export class LlmService {
   }
 
   getAvailableProviderInfos(providerOrder?: LlmProviderId[]): Array<{ provider: string; model: string }> {
-    return this.getProviderConfigs(providerOrder ?? ["openai", "gemini", "mistral"]).map((config) => ({
+    return this.getProviderConfigs(providerOrder ?? this.getDefaultProviderOrder()).map((config) => ({
       provider: config.provider,
       model: config.model,
     }));
@@ -143,8 +143,13 @@ export class LlmService {
   // Provider config resolution
   // ---------------------------------------------------------------------------
 
-  private getProviderConfig(providerOrder: LlmProviderId[] = ["openai", "gemini", "mistral"]): LlmProviderConfig | null {
-    return this.getProviderConfigs(providerOrder)[0] ?? null;
+  private getProviderConfig(providerOrder?: LlmProviderId[]): LlmProviderConfig | null {
+    return this.getProviderConfigs(providerOrder ?? this.getDefaultProviderOrder())[0] ?? null;
+  }
+
+  private getDefaultProviderOrder(): LlmProviderId[] {
+    const activeProvider = this.configService.get("ACTIVE_CHAT_PROVIDER");
+    return activeProvider ? [activeProvider] : ["openai", "gemini", "mistral"];
   }
 
   private getProviderConfigs(providerOrder: LlmProviderId[]): LlmProviderConfig[] {

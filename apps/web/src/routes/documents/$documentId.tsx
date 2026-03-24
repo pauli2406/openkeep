@@ -65,6 +65,7 @@ import {
   Send,
   Trash2,
   Unlock,
+  Plus,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -688,6 +689,26 @@ function DocumentDetailPage() {
     },
   });
 
+  const createTagMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await api.POST("/api/taxonomies/tags", {
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to create tag"));
+      }
+      return data as unknown as TaxonomyTag;
+    },
+    onSuccess: async (tag) => {
+      await queryClient.invalidateQueries({ queryKey: ["taxonomies", "tags"] });
+      setEditForm((current) => ({
+        ...current,
+        tagIds: current.tagIds.includes(tag.id) ? current.tagIds : [...current.tagIds, tag.id],
+      }));
+      setTagQuery("");
+    },
+  });
+
   const resolveReviewMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/api/documents/{id}/review/resolve", {
@@ -1004,6 +1025,12 @@ function DocumentDetailPage() {
   );
   const selectedTags = (tagsQuery.data ?? []).filter((tag) => editForm.tagIds.includes(tag.id));
   const availableTags = filteredTags.filter((tag) => !editForm.tagIds.includes(tag.id));
+  const exactTagMatch = (tagsQuery.data ?? []).some((tag) => {
+    const normalizedName = tag.name.trim().toLowerCase();
+    const normalizedSlug = tag.slug.trim().toLowerCase();
+    return normalizedName === tagFilter || normalizedSlug === tagFilter;
+  });
+  const canCreateTag = tagFilter.length > 0 && !exactTagMatch;
   const intelligence = doc.metadata.intelligence;
   const extractionFields = intelligence?.extraction?.fields ?? {};
   const normalizedFields = intelligence?.validation?.normalizedFields ?? {};
@@ -2083,34 +2110,76 @@ function DocumentDetailPage() {
                           </div>
                         </div>
                       )}
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Available tags</p>
-                        <div className="flex flex-wrap gap-2">
-                          {availableTags.map((tag) => (
+                      {tagFilter.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Search to add an existing tag or create a new one.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {availableTags.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Matching tags</p>
+                              <div className="flex flex-wrap gap-2">
+                                {availableTags.map((tag) => (
+                                  <Button
+                                    key={tag.id}
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-auto rounded-full px-3 py-1 text-xs"
+                                    onClick={() => toggleEditTag(tag.id)}
+                                  >
+                                    {tag.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {canCreateTag && (
                             <Button
-                              key={tag.id}
                               type="button"
                               variant="outline"
                               size="sm"
                               className="h-auto rounded-full px-3 py-1 text-xs"
-                              onClick={() => toggleEditTag(tag.id)}
+                              onClick={() => createTagMutation.mutate(tagQuery.trim())}
+                              disabled={createTagMutation.isPending}
                             >
-                              {tag.name}
+                              {createTagMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Plus className="h-3 w-3" />
+                              )}
+                              Create tag "{tagQuery.trim()}"
                             </Button>
-                          ))}
+                          )}
                         </div>
-                      </div>
+                      )}
                       {pendingNewLocks.includes("tagIds") && (
                         <p className="text-xs text-amber-700">
                           Saving will lock the tag selection.
                         </p>
                       )}
-                      {tagsQuery.isSuccess && availableTags.length === 0 && selectedTags.length > 0 && (
+                      {createTagMutation.isError && (
+                        <p className="text-sm text-destructive">
+                          {createTagMutation.error instanceof Error
+                            ? createTagMutation.error.message
+                            : "Failed to create tag."}
+                        </p>
+                      )}
+                      {tagsQuery.isSuccess &&
+                        tagFilter.length > 0 &&
+                        availableTags.length === 0 &&
+                        selectedTags.length > 0 &&
+                        !canCreateTag && (
                         <p className="text-sm text-muted-foreground">
                           All matching tags are already selected.
                         </p>
                       )}
-                      {tagsQuery.isSuccess && availableTags.length === 0 && selectedTags.length === 0 && (
+                      {tagsQuery.isSuccess &&
+                        tagFilter.length > 0 &&
+                        availableTags.length === 0 &&
+                        selectedTags.length === 0 &&
+                        !canCreateTag && (
                         <p className="text-sm text-muted-foreground">
                           No tags match the current filter.
                         </p>

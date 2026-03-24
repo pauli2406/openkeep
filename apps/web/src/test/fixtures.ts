@@ -36,6 +36,7 @@ export function makeProviderConfig(
     mode: "local-only",
     activeParseProvider: "local-ocr",
     fallbackParseProvider: null,
+    activeChatProvider: "openai",
     activeEmbeddingProvider: "openai",
     openaiModel: "gpt-4.1-mini",
     geminiModel: undefined,
@@ -87,6 +88,7 @@ export function makeHealthProvidersResponse(
   return {
     activeParseProvider: "local-ocr",
     fallbackParseProvider: null,
+    activeChatProvider: "openai",
     activeEmbeddingProvider: "openai",
     parseProviders: [
       { id: "local-ocr", available: true },
@@ -145,6 +147,7 @@ export function makeDocument(overrides: Partial<Document> = {}): Document {
     language: "en",
     issueDate: "2026-03-01",
     dueDate: "2026-03-31",
+    taskCompletedAt: null,
     expiryDate: null,
     amount: 123.45,
     currency: "EUR",

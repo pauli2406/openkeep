@@ -71,6 +71,13 @@
       "when": 1774660800000,
       "tag": "0010_document_qa_history_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774380204927,
+      "tag": "0011_dashboard_task_completion",
+      "breakpoints": true
     }
   ]
 }

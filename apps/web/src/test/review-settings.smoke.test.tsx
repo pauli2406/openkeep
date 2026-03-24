@@ -49,6 +49,36 @@ describe("review smoke", () => {
               title: "Requeue Invoice",
               reviewStatus: "pending",
               reviewReasons: ["missing_key_fields"],
+              dueDate: null,
+              referenceNumber: null,
+              metadata: {
+                reviewEvidence: {
+                  documentClass: "invoice",
+                  requiredFields: [
+                    "correspondent",
+                    "issueDate",
+                    "dueDate",
+                    "amount",
+                    "currency",
+                    "referenceNumber",
+                  ],
+                  missingFields: ["dueDate", "referenceNumber"],
+                  extracted: {
+                    correspondent: true,
+                    issueDate: true,
+                    dueDate: false,
+                    amount: true,
+                    currency: true,
+                    referenceNumber: false,
+                    expiryDate: false,
+                    holderName: false,
+                    issuingAuthority: false,
+                  },
+                  activeReasons: ["missing_key_fields"],
+                  confidence: 0.66,
+                  confidenceThreshold: 0.8,
+                },
+              },
             }),
           ]),
         ),
@@ -92,6 +122,9 @@ describe("review smoke", () => {
     expect(screen.getByText("Requeue Invoice")).toBeInTheDocument();
     expect(screen.getByText("Classification Ambiguous")).toBeInTheDocument();
     expect(screen.getByText("invoice")).toBeInTheDocument();
+    expect(screen.getAllByText(/verify extracted fields/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Due Date").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Reference Number").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Supplier invoice with unclear classification confidence."),
     ).toBeInTheDocument();
@@ -120,6 +153,7 @@ function settingsHandlers(overrides?: {
   tags?: unknown[];
   correspondents?: unknown[];
   documentTypes?: unknown[];
+  document?: ReturnType<typeof makeDocument>;
 }) {
   return [
     http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
@@ -151,6 +185,52 @@ function settingsHandlers(overrides?: {
     ),
     http.get(apiUrl("/api/health/ready"), () =>
       HttpResponse.json(makeReadinessResponse()),
+    ),
+    http.get(apiUrl("/api/documents/:id"), ({ params }) =>
+      HttpResponse.json(
+        makeDocument({
+          id: params.id as string,
+          title: "Watch Folder Invoice",
+          issueDate: "2026-03-01",
+          dueDate: null,
+          amount: 123.45,
+          currency: "EUR",
+          referenceNumber: null,
+          metadata: {
+            detectedKeywords: ["invoice"],
+            reviewReasons: ["missing_key_fields"],
+            chunkCount: 2,
+            pageCount: 1,
+            reviewEvidence: {
+              documentClass: "invoice",
+              requiredFields: [
+                "correspondent",
+                "issueDate",
+                "dueDate",
+                "amount",
+                "currency",
+                "referenceNumber",
+              ],
+              missingFields: ["dueDate", "referenceNumber"],
+              extracted: {
+                correspondent: true,
+                issueDate: true,
+                dueDate: false,
+                amount: true,
+                currency: true,
+                referenceNumber: false,
+                expiryDate: false,
+                holderName: false,
+                issuingAuthority: false,
+              },
+              activeReasons: ["missing_key_fields"],
+              confidence: 0.62,
+              confidenceThreshold: 0.8,
+            },
+          },
+          ...overrides?.document,
+        }),
+      ),
     ),
   ];
 }
@@ -222,6 +302,22 @@ describe("settings smoke", () => {
 
     expect(await screen.findByText("Watch Folder Scan")).toBeInTheDocument();
     expect(screen.getByText("Path: /watch-folder")).toBeInTheDocument();
+    expect(screen.getByText("Current scan results")).toBeInTheDocument();
+    expect(screen.getByText("/watch-folder/invoice.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open document/i })).toHaveAttribute(
+      "href",
+      "/documents/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    );
+
+    await user.click(screen.getByText(/inspect extracted fields/i));
+
+    expect(await screen.findByText("Found values")).toBeInTheDocument();
+    expect(screen.getAllByText("Acme Corp").length).toBeGreaterThan(1);
+    expect(screen.getByText("123.45 EUR")).toBeInTheDocument();
+    expect(screen.getByText("Missing key fields")).toBeInTheDocument();
+    expect(screen.getByText("Due Date")).toBeInTheDocument();
+    expect(screen.getByText("Reference Number")).toBeInTheDocument();
+    expect(screen.queryByText("None missing.")).not.toBeInTheDocument();
   });
 
   it("creates a new tag via taxonomy management", async () => {

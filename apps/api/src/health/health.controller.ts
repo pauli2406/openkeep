@@ -65,6 +65,7 @@ export class HealthController {
     return {
       activeParseProvider: cfg.activeParseProvider,
       fallbackParseProvider: cfg.fallbackParseProvider,
+      activeChatProvider: cfg.activeChatProvider,
       activeEmbeddingProvider: cfg.activeEmbeddingProvider,
       parseProviders: parseProviders.map((id) => ({
         id,

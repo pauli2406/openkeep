@@ -832,6 +832,8 @@ export interface components {
         UpdateDocumentDto: {
             title?: string;
             dueDate?: string | null;
+            /** Format: date-time */
+            taskCompletedAt?: string | null;
             issueDate?: string | null;
             expiryDate?: string | null;
             amount?: number | null;
@@ -1150,23 +1152,33 @@ export interface components {
                 /** Format: uuid */
                 documentId: string;
                 title: string;
+                referenceNumber?: string | null;
                 dueDate: string;
                 amount: number | null;
                 currency: string | null;
                 correspondentName: string | null;
+                documentTypeName?: string | null;
+                taskLabel: string;
                 daysUntilDue: number;
                 isOverdue: boolean;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
             }[];
             overdueItems: {
                 /** Format: uuid */
                 documentId: string;
                 title: string;
+                referenceNumber?: string | null;
                 dueDate: string;
                 amount: number | null;
                 currency: string | null;
                 correspondentName: string | null;
+                documentTypeName?: string | null;
+                taskLabel: string;
                 daysUntilDue: number;
                 isOverdue: boolean;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
             }[];
             recentDocuments: {
                 /** Format: uuid */
@@ -1182,6 +1194,8 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
                 expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
@@ -1481,10 +1495,77 @@ export interface components {
                 slug: string;
                 summary?: string | null;
                 summaryGeneratedAt?: string | null;
+                intelligenceGeneratedAt?: string | null;
             };
             /** @enum {string} */
             summaryStatus: "ready" | "pending" | "unavailable";
             summary: string | null;
+            /** @enum {string} */
+            intelligenceStatus: "ready" | "pending" | "unavailable";
+            intelligence: {
+                overview: string | null;
+                profile?: {
+                    category: string | null;
+                    subcategory?: string | null;
+                    confidence?: number | null;
+                    narrative?: string | null;
+                    /** @default [] */
+                    keySignals: string[];
+                };
+                /** @default [] */
+                timeline: {
+                    date: string | null;
+                    title: string;
+                    description: string;
+                    /** Format: uuid */
+                    documentId?: string | null;
+                    documentTitle?: string | null;
+                }[];
+                /** @default [] */
+                changes: {
+                    category: string;
+                    title: string;
+                    description: string;
+                    effectiveDate: string | null;
+                    /** @enum {string} */
+                    direction: "increase" | "decrease" | "update" | "notice" | "unknown";
+                    valueBefore?: string | null;
+                    valueAfter?: string | null;
+                    currency?: string | null;
+                    /** Format: uuid */
+                    documentId?: string | null;
+                    documentTitle?: string | null;
+                }[];
+                /** @default [] */
+                currentState: {
+                    label: string;
+                    value: string;
+                    asOf?: string | null;
+                    /** Format: uuid */
+                    documentId?: string | null;
+                    documentTitle?: string | null;
+                }[];
+                /** @default {} */
+                domainInsights: {
+                    insurance?: {
+                        /** @default [] */
+                        policyReferences: string[];
+                        latestPremiumAmount?: number | null;
+                        latestPremiumCurrency?: string | null;
+                        premiumChangeSummary?: string | null;
+                        /** @default [] */
+                        coverageHighlights: string[];
+                        renewalDate?: string | null;
+                        cancellationWindow?: string | null;
+                    };
+                };
+                /** @default [] */
+                sourceDocumentIds: string[];
+                /** @enum {string|null} */
+                provider?: "openai" | "gemini" | "mistral" | "deterministic" | null;
+                model?: string | null;
+                generatedAt?: string | null;
+            } | null;
             stats: {
                 documentCount: number;
                 totalAmount: number | null;
@@ -1517,6 +1598,8 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
                 expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
@@ -1807,12 +1890,17 @@ export interface components {
                 /** Format: uuid */
                 documentId: string;
                 title: string;
+                referenceNumber?: string | null;
                 dueDate: string;
                 amount: number | null;
                 currency: string | null;
                 correspondentName: string | null;
+                documentTypeName?: string | null;
+                taskLabel: string;
                 daysUntilDue: number;
                 isOverdue: boolean;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
             }[];
         };
         SearchDocumentsResponse: {
@@ -1830,6 +1918,8 @@ export interface components {
                 language: string | null;
                 issueDate: string | null;
                 dueDate: string | null;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
                 expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
@@ -2187,6 +2277,8 @@ export interface components {
             language: string | null;
             issueDate: string | null;
             dueDate: string | null;
+            /** Format: date-time */
+            taskCompletedAt: string | null;
             expiryDate: string | null;
             amount: number | null;
             currency: string | null;
@@ -2570,6 +2662,8 @@ export interface components {
                     language: string | null;
                     issueDate: string | null;
                     dueDate: string | null;
+                    /** Format: date-time */
+                    taskCompletedAt: string | null;
                     expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
@@ -2921,6 +3015,8 @@ export interface components {
                     language: string | null;
                     issueDate: string | null;
                     dueDate: string | null;
+                    /** Format: date-time */
+                    taskCompletedAt: string | null;
                     expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
@@ -3291,6 +3387,72 @@ export interface components {
                 createdAt: string;
                 /** Format: date-time */
                 summaryGeneratedAt?: string | null;
+                intelligence?: {
+                    overview: string | null;
+                    profile?: {
+                        category: string | null;
+                        subcategory?: string | null;
+                        confidence?: number | null;
+                        narrative?: string | null;
+                        /** @default [] */
+                        keySignals: string[];
+                    };
+                    /** @default [] */
+                    timeline: {
+                        date: string | null;
+                        title: string;
+                        description: string;
+                        /** Format: uuid */
+                        documentId?: string | null;
+                        documentTitle?: string | null;
+                    }[];
+                    /** @default [] */
+                    changes: {
+                        category: string;
+                        title: string;
+                        description: string;
+                        effectiveDate: string | null;
+                        /** @enum {string} */
+                        direction: "increase" | "decrease" | "update" | "notice" | "unknown";
+                        valueBefore?: string | null;
+                        valueAfter?: string | null;
+                        currency?: string | null;
+                        /** Format: uuid */
+                        documentId?: string | null;
+                        documentTitle?: string | null;
+                    }[];
+                    /** @default [] */
+                    currentState: {
+                        label: string;
+                        value: string;
+                        asOf?: string | null;
+                        /** Format: uuid */
+                        documentId?: string | null;
+                        documentTitle?: string | null;
+                    }[];
+                    /** @default {} */
+                    domainInsights: {
+                        insurance?: {
+                            /** @default [] */
+                            policyReferences: string[];
+                            latestPremiumAmount?: number | null;
+                            latestPremiumCurrency?: string | null;
+                            premiumChangeSummary?: string | null;
+                            /** @default [] */
+                            coverageHighlights: string[];
+                            renewalDate?: string | null;
+                            cancellationWindow?: string | null;
+                        };
+                    };
+                    /** @default [] */
+                    sourceDocumentIds: string[];
+                    /** @enum {string|null} */
+                    provider?: "openai" | "gemini" | "mistral" | "deterministic" | null;
+                    model?: string | null;
+                    generatedAt?: string | null;
+                } | null;
+                /** Format: date-time */
+                intelligenceGeneratedAt?: string | null;
             }[];
             documentTypes: {
                 /** Format: uuid */
@@ -3333,6 +3495,8 @@ export interface components {
                 pageCount: number;
                 issueDate: string | null;
                 dueDate: string | null;
+                /** Format: date-time */
+                taskCompletedAt: string | null;
                 expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
@@ -3700,6 +3864,72 @@ export interface components {
                     createdAt: string;
                     /** Format: date-time */
                     summaryGeneratedAt?: string | null;
+                    intelligence?: {
+                        overview: string | null;
+                        profile?: {
+                            category: string | null;
+                            subcategory?: string | null;
+                            confidence?: number | null;
+                            narrative?: string | null;
+                            /** @default [] */
+                            keySignals: string[];
+                        };
+                        /** @default [] */
+                        timeline: {
+                            date: string | null;
+                            title: string;
+                            description: string;
+                            /** Format: uuid */
+                            documentId?: string | null;
+                            documentTitle?: string | null;
+                        }[];
+                        /** @default [] */
+                        changes: {
+                            category: string;
+                            title: string;
+                            description: string;
+                            effectiveDate: string | null;
+                            /** @enum {string} */
+                            direction: "increase" | "decrease" | "update" | "notice" | "unknown";
+                            valueBefore?: string | null;
+                            valueAfter?: string | null;
+                            currency?: string | null;
+                            /** Format: uuid */
+                            documentId?: string | null;
+                            documentTitle?: string | null;
+                        }[];
+                        /** @default [] */
+                        currentState: {
+                            label: string;
+                            value: string;
+                            asOf?: string | null;
+                            /** Format: uuid */
+                            documentId?: string | null;
+                            documentTitle?: string | null;
+                        }[];
+                        /** @default {} */
+                        domainInsights: {
+                            insurance?: {
+                                /** @default [] */
+                                policyReferences: string[];
+                                latestPremiumAmount?: number | null;
+                                latestPremiumCurrency?: string | null;
+                                premiumChangeSummary?: string | null;
+                                /** @default [] */
+                                coverageHighlights: string[];
+                                renewalDate?: string | null;
+                                cancellationWindow?: string | null;
+                            };
+                        };
+                        /** @default [] */
+                        sourceDocumentIds: string[];
+                        /** @enum {string|null} */
+                        provider?: "openai" | "gemini" | "mistral" | "deterministic" | null;
+                        model?: string | null;
+                        generatedAt?: string | null;
+                    } | null;
+                    /** Format: date-time */
+                    intelligenceGeneratedAt?: string | null;
                 }[];
                 documentTypes: {
                     /** Format: uuid */
@@ -3742,6 +3972,8 @@ export interface components {
                     pageCount: number;
                     issueDate: string | null;
                     dueDate: string | null;
+                    /** Format: date-time */
+                    taskCompletedAt: string | null;
                     expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
