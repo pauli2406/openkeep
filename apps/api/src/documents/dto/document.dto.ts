@@ -1,6 +1,7 @@
 import {
   AnswerQueryRequestSchema,
   AnswerQueryResponseSchema,
+  SearchDocumentsFiltersSchema,
   BatchReprocessDocumentsRequestSchema,
   BatchReprocessDocumentsResponseSchema,
   DocumentAskRequestSchema,
@@ -57,8 +58,8 @@ const CsvStatusArraySchema = z.preprocess((value) => {
 const SearchDocumentsQuerySchema = z.object({
   query: z.string().trim().optional(),
   year: z.coerce.number().int().min(1970).max(2100).optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: SearchDocumentsFiltersSchema.shape.dateFrom,
+  dateTo: SearchDocumentsFiltersSchema.shape.dateTo,
   correspondentId: z.string().uuid().optional(),
   correspondentIds: CsvUuidArraySchema,
   documentTypeId: z.string().uuid().optional(),

@@ -250,6 +250,15 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(Array.isArray(documentsResponse.body.items)).toBe(true);
   });
 
+  it("rejects invalid date filters before querying the database", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/api/documents?dateFrom=2026-03-01&dateTo=2026-04-31")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(response.body)).toContain("Invalid date");
+  });
+
   it("seeds default document types for a new instance", async () => {
     const response = await request(app.getHttpServer())
       .get("/api/taxonomies/document-types")

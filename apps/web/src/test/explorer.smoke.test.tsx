@@ -177,6 +177,67 @@ describe("explorer smoke", () => {
     expect(screen.getAllByText("1 docs")).toHaveLength(2);
   });
 
+  it("requests the correct month end when expanding a timeline bucket", async () => {
+    let requestedDateTo: string | null = null;
+
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [{ year: 2026, count: 1 }],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          amountRange: { min: null, max: null },
+          statuses: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents/timeline"), () =>
+        HttpResponse.json({
+          years: [
+            {
+              year: 2026,
+              count: 1,
+              months: [
+                {
+                  month: 4,
+                  count: 1,
+                  topCorrespondents: ["Adidas"],
+                  topTypes: ["Invoice"],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), ({ request }) => {
+        const url = new URL(request.url);
+        requestedDateTo = url.searchParams.get("dateTo");
+        if (url.searchParams.get("dateTo") === "2026-04-30") {
+          return HttpResponse.json({
+            items: [makeDocument({ issueDate: "2026-04-15", dueDate: "2026-04-30" })],
+            total: 1,
+            page: 1,
+            pageSize: 8,
+            appliedFilters: {},
+          });
+        }
+
+        return HttpResponse.json({ message: "unexpected params" }, { status: 500 });
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({ route: "/documents?view=timeline" });
+
+    expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
+    expect(await screen.findByText("April")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /april/i }));
+
+    await waitFor(() => {
+      expect(requestedDateTo).toBe("2026-04-30");
+    });
+  });
+
   it("supports selecting multiple documents and deleting them in batch", async () => {
     let documents = [
       makeDocument({ id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", title: "Adidas Invoice March" }),

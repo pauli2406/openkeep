@@ -43,6 +43,25 @@ export const EmbeddingStatusSchema = z.enum(embeddingStatuses);
 export const ReviewReasonSchema = z.enum(reviewReasons);
 export const ProcessingJobStatusSchema = z.enum(processingJobStatuses);
 
+const isValidDateOnly = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
+
+const DateOnlySchema = z.string().refine(isValidDateOnly, {
+  message: "Invalid date; expected YYYY-MM-DD",
+});
+
 export const BoundingBoxSchema = z.object({
   x: z.number().nonnegative(),
   y: z.number().nonnegative(),
@@ -523,8 +542,8 @@ export const DocumentSchema = z.object({
 
 export const SearchDocumentsFiltersSchema = z.object({
   year: z.number().int().min(1970).max(2100).optional(),
-  dateFrom: z.string().optional(),
-  dateTo: z.string().optional(),
+  dateFrom: DateOnlySchema.optional(),
+  dateTo: DateOnlySchema.optional(),
   correspondentId: z.string().uuid().optional(),
   correspondentIds: z.array(z.string().uuid()).optional(),
   documentTypeId: z.string().uuid().optional(),
@@ -1060,7 +1079,7 @@ export const DocumentSummaryResponseSchema = z.object({
 });
 
 const ArchiveTimestampSchema = z.string().datetime({ offset: true });
-const ArchiveDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const ArchiveDateSchema = DateOnlySchema;
 
 export const ArchiveTagSchema = TagSchema.extend({
   createdAt: ArchiveTimestampSchema,

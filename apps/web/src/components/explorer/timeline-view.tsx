@@ -46,7 +46,7 @@ function monthBounds(year: number, month: number) {
   const endDate = new Date(Date.UTC(nextYear, nextMonth - 1, 0));
   return {
     start,
-    end: `${nextYear}-${String(nextMonth).padStart(2, "0")}-${String(endDate.getUTCDate()).padStart(2, "0")}`,
+    end: `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, "0")}-${String(endDate.getUTCDate()).padStart(2, "0")}`,
   };
 }
 
