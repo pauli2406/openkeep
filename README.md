@@ -8,7 +8,10 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 - Technical documentation: `docs/technical/README.md`
 - Operational documentation: `docs/operations/README.md`
 - Documentation hub: `docs/README.md`
+- Docusaurus site app: `apps/docs`
 - Current backend notes: `docs/backend.md`
+
+The canonical markdown source remains in the root `docs/` directory. `apps/docs` is the site renderer layer.
 
 ## Workspace Layout
 
@@ -57,12 +60,21 @@ OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript mo
 5. Run the API with `pnpm --filter @openkeep/api dev`.
 6. Run the worker with `pnpm --filter @openkeep/worker dev`.
 7. Run the web app with `pnpm --filter @openkeep/web dev`.
-8. Wait for `GET /api/health/ready` to report all checks green before using the stack.
+8. Run the docs site with `pnpm docs:dev` if you want the Docusaurus experience locally.
+9. Wait for `GET /api/health/ready` to report all checks green before using the stack.
+
+If you want the full containerized stack, `docker compose up` now also starts the docs site on `http://localhost:3001`.
+
+Optional docs-site search:
+
+- set `ALGOLIA_APP_ID`, `ALGOLIA_API_KEY`, and `ALGOLIA_INDEX_NAME` to enable DocSearch v4 in `apps/docs`
+- if those variables are absent, the docs site still works and simply hides search
 
 For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`. To enable semantic indexing, also set `ACTIVE_EMBEDDING_PROVIDER` and the matching embedding model/key values.
 
 ## Verification Commands
 
+- `pnpm docs:build`
 - `pnpm typecheck`
 - `pnpm test:api:unit`
 - `pnpm test:api:integration`
@@ -91,8 +103,9 @@ The provider-specific `test:e2e:*` commands perform live cloud parse or embeddin
 - One-shot migration service
 - OpenKeep API
 - OpenKeep worker
+- OpenKeep docs site
 
-The worker image includes OCR dependencies for `ocrmypdf`, `tesseract`, the required language data, Poppler, and ImageMagick so scanned PDFs and phone-native raster formats can be processed without extra host setup. The compose boot path is `postgres -> migrate -> api/worker`.
+The worker image includes OCR dependencies for `ocrmypdf`, `tesseract`, the required language data, Poppler, and ImageMagick so scanned PDFs and phone-native raster formats can be processed without extra host setup. The docs service builds `apps/docs`, serves the generated Docusaurus site on port `3001`, and exposes a container healthcheck. The compose boot path is `postgres -> migrate -> api/worker`, while docs can start independently.
 
 ## Parse Provider IDs
 

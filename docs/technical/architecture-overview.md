@@ -1,3 +1,8 @@
+---
+title: Architecture Overview
+description: High-level system architecture, runtime components, and processing model.
+---
+
 # Architecture Overview
 
 This document explains the current high-level architecture of OpenKeep.
@@ -139,8 +144,8 @@ The web app is built around a small set of user surfaces:
 
 ## Related Documents
 
-- `docs/technical/api-and-data-flows.md`
-- `docs/technical/agentic-document-intelligence.md`
-- `docs/technical/web-application.md`
-- `docs/operations/deployment-guide.md`
-- `docs/backend.md`
+- [API and Data Flows](./api-and-data-flows.md)
+- [Agentic Document Intelligence](./agentic-document-intelligence.md)
+- [Web Application](./web-application.md)
+- [Deployment Guide](../operations/deployment-guide.md)
+- [Backend Notes](../backend.md)

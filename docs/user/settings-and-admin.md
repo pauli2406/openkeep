@@ -1,10 +1,15 @@
+---
+title: Settings and Admin
+description: Manage tokens, taxonomies, portability, provider visibility, and system health.
+---
+
 # Settings and Admin
 
 The `Settings` page is the administrative control area for OpenKeep.
 
 It is where you manage access, taxonomy curation, archive portability, provider visibility, and system health.
 
-For operator-focused guidance outside the UI, see `docs/operations/README.md`.
+For operator-focused guidance outside the UI, see [Operations Overview](../operations/README.md).
 
 ## User Profile
 
@@ -138,6 +143,6 @@ Common admin scenarios include:
 
 ## Final User Guide Step
 
-Continue with `docs/user/faq.md` for quick answers to common questions and edge cases.
+Continue with [FAQ](./faq.md) for quick answers to common questions and edge cases.
 
-If you are administering a real deployment, continue into `docs/operations/deployment-guide.md` and `docs/operations/runbooks.md`.
+If you are administering a real deployment, continue into [Deployment Guide](../operations/deployment-guide.md) and [Runbooks](../operations/runbooks.md).

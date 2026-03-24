@@ -1,3 +1,8 @@
+---
+title: Runbooks
+description: Common operational procedures for readiness, stuck jobs, watch-folder scans, and provider issues.
+---
+
 # Runbooks
 
 This document collects common operational procedures.
@@ -165,6 +170,6 @@ When a final failure occurs:
 
 ## Related Documents
 
-- `docs/operations/monitoring-and-health.md`
-- `docs/operations/backup-restore-and-portability.md`
-- `docs/phase-3-smoke.md`
+- [Monitoring and Health](./monitoring-and-health.md)
+- [Backup, Restore, and Portability](./backup-restore-and-portability.md)
+- [Manual Smoke Checklist](../phase-3-smoke.md)

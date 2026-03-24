@@ -1,3 +1,8 @@
+---
+title: Backend Notes
+description: Supporting backend deep-dive and implementation notes.
+---
+
 # Backend Notes
 
 ## Architecture Diagram

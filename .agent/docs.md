@@ -12,7 +12,12 @@ If a change modifies behavior, architecture, operator workflow, setup, verificat
 - `docs/user/`: user-facing workflows and product guidance
 - `docs/technical/`: contributor-facing architecture and implementation guidance
 - `docs/operations/`: deployment, configuration, monitoring, and runbooks
+- `apps/docs`: Docusaurus site that renders the root `docs/` content
 - `README.md`: repo entry point, setup, and verification overview
+
+The canonical markdown stays in the root `docs/` directory. Do not move source docs into `apps/docs` unless the project explicitly changes that rule.
+
+If you change Docusaurus navigation, branding, homepage structure, search integration, or docs-site behavior, update both `apps/docs` and any affected root docs or repo guidance together.
 
 ## Update Triggers
 

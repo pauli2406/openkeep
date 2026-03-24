@@ -1,3 +1,8 @@
+---
+title: Search and AI
+description: Use hybrid search, archive-wide AI answers, and document-level summaries and Q&A.
+---
+
 # Search and AI
 
 OpenKeep includes two related capabilities:
@@ -7,7 +12,7 @@ OpenKeep includes two related capabilities:
 
 They work together, but they are not the same thing.
 
-For the broader archive workflow, see `docs/user/core-workflows.md`.
+For the broader archive workflow, see [Core Workflows](./core-workflows.md).
 
 ## Search Basics
 
@@ -131,6 +136,6 @@ You may see limited or missing AI output when:
 
 ## Next Step
 
-Continue with `docs/user/review-and-corrections.md` to handle uncertain extraction results and fix metadata safely.
+Continue with [Review and Corrections](./review-and-corrections.md) to handle uncertain extraction results and fix metadata safely.
 
-For admin and provider setup topics, continue with `docs/user/settings-and-admin.md` after that.
+For admin and provider setup topics, continue with [Settings and Admin](./settings-and-admin.md) after that.

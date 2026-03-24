@@ -1,3 +1,8 @@
+---
+title: FAQ
+description: Quick answers to common OpenKeep user questions and edge cases.
+---
+
 # FAQ
 
 ## Why is my document still processing?
@@ -83,4 +88,4 @@ They now live under:
 - `docs/technical/`
 - `docs/operations/`
 
-Use `docs/README.md` as the central index.
+Use [the documentation hub](../README.md) as the central index.

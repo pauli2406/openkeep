@@ -1,3 +1,8 @@
+---
+title: Agentic Document Intelligence
+description: LangGraph-based metadata extraction, routing, validation, and frontend exposure.
+---
+
 # Agentic Document Intelligence
 
 This document describes the current agentic metadata extraction pipeline.
@@ -171,6 +176,6 @@ Current design constraints intentionally keep the system predictable:
 
 ## Related Documents
 
-- `docs/technical/architecture-overview.md`
-- `docs/technical/api-and-data-flows.md`
-- `docs/backend.md`
+- [Architecture Overview](./architecture-overview.md)
+- [API and Data Flows](./api-and-data-flows.md)
+- [Backend Notes](../backend.md)

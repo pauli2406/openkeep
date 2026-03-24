@@ -1,0 +1,318 @@
+.page {
+  position: relative;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 5rem 0 3.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(34, 136, 116, 0.16), transparent 28%),
+    radial-gradient(circle at 80% 10%, rgba(17, 76, 61, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 253, 247, 0.96));
+}
+
+.heroBackdrop {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(17, 76, 61, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 76, 61, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.15));
+  pointer-events: none;
+}
+
+.heroInner,
+.gridSection,
+.band {
+  width: min(1160px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+.heroInner {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+.heroCopy {
+  position: relative;
+  z-index: 1;
+}
+
+.eyebrow,
+.sectionEyebrow {
+  margin: 0 0 0.8rem;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #196959;
+}
+
+.title {
+  max-width: 14ch;
+  margin: 0;
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 0.95;
+}
+
+.subtitle {
+  max-width: 42rem;
+  margin: 1.3rem 0 0;
+  font-size: 1.16rem;
+  line-height: 1.7;
+  color: rgba(22, 54, 47, 0.86);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 2rem;
+}
+
+.primary,
+.secondary {
+  border-radius: 999px;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-weight: 700;
+}
+
+.secondary {
+  border-color: rgba(17, 76, 61, 0.18);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.heroPanel {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(17, 76, 61, 0.1);
+  border-radius: 28px;
+  background: rgba(255, 253, 247, 0.92);
+  box-shadow: 0 30px 70px rgba(17, 52, 44, 0.12);
+  overflow: hidden;
+}
+
+.browserChrome {
+  display: flex;
+  gap: 0.55rem;
+  padding: 1rem 1.2rem;
+  background: linear-gradient(180deg, rgba(21, 91, 74, 0.1), rgba(21, 91, 74, 0.04));
+}
+
+.browserChrome span {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  background: #c8d7d2;
+}
+
+.browserChrome span:first-child {
+  background: #f28d6e;
+}
+
+.browserChrome span:nth-child(2) {
+  background: #efc56b;
+}
+
+.browserChrome span:nth-child(3) {
+  background: #69be8e;
+}
+
+.panelContent {
+  padding: 1.6rem 1.6rem 1.9rem;
+}
+
+.panelBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.38rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(17, 76, 61, 0.09);
+  color: #114c3d;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.panelContent h2 {
+  margin: 1rem 0 0.8rem;
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.highlightList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.highlightList li::marker {
+  color: #228874;
+}
+
+.panelNote {
+  margin: 1.2rem 0 0;
+  font-size: 0.96rem;
+  color: rgba(22, 54, 47, 0.78);
+}
+
+.gridSection {
+  padding: 1rem 0 3rem;
+}
+
+.sectionHeader {
+  margin-bottom: 1.6rem;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  position: relative;
+  display: block;
+  min-height: 280px;
+  padding: 1.45rem;
+  border: 1px solid rgba(17, 76, 61, 0.12);
+  border-radius: 26px;
+  color: inherit;
+  text-decoration: none !important;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 45px rgba(16, 52, 44, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 28px 60px rgba(16, 52, 44, 0.12);
+  border-color: rgba(17, 76, 61, 0.24);
+}
+
+.cardMarker {
+  display: block;
+  width: 3.5rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  margin-bottom: 2rem;
+  background: #196959;
+}
+
+.technical .cardMarker {
+  background: #0d6a78;
+}
+
+.operations .cardMarker {
+  background: #8c5b1b;
+}
+
+.card h3 {
+  margin-bottom: 0.7rem;
+  font-size: 1.55rem;
+}
+
+.card p {
+  color: rgba(22, 54, 47, 0.82);
+}
+
+.cardCta {
+  position: absolute;
+  left: 1.45rem;
+  bottom: 1.35rem;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #114c3d;
+}
+
+.band {
+  display: grid;
+  grid-template-columns: 1fr 0.95fr;
+  gap: 1rem;
+  padding: 0 0 4rem;
+  align-items: stretch;
+}
+
+.bandCopy,
+.codeBlock {
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.bandCopy {
+  padding: 1.8rem;
+  background: linear-gradient(160deg, #10342c, #155b4a 58%, #1b725f);
+  color: #eef6f3;
+  box-shadow: 0 24px 60px rgba(16, 52, 44, 0.18);
+}
+
+.bandCopy h2 {
+  margin: 0;
+  color: inherit;
+  font-size: 2.1rem;
+}
+
+.bandCopy p {
+  margin: 1rem 0 0;
+  color: rgba(238, 246, 243, 0.88);
+  font-size: 1.04rem;
+}
+
+.bandCopy .sectionEyebrow {
+  color: rgba(212, 241, 234, 0.78);
+}
+
+.codeBlock {
+  border: 1px solid rgba(17, 76, 61, 0.1);
+  background: #13211d;
+  color: #d9efe9;
+  box-shadow: 0 24px 60px rgba(16, 52, 44, 0.12);
+}
+
+.codeBlock pre {
+  height: 100%;
+  margin: 0;
+  padding: 1.6rem;
+  background: transparent;
+}
+
+@media (max-width: 996px) {
+  .heroInner,
+  .cardGrid,
+  .band {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    padding-top: 4rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .title {
+    max-width: 100%;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primary,
+  .secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}

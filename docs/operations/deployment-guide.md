@@ -1,3 +1,8 @@
+---
+title: Deployment Guide
+description: Current single-host deployment model, service layout, and startup expectations.
+---
+
 # Deployment Guide
 
 This guide describes the current practical deployment model for OpenKeep.
@@ -134,7 +139,7 @@ Also review:
 
 ## Related Documents
 
-- `docs/operations/configuration-reference.md`
-- `docs/operations/monitoring-and-health.md`
-- `docs/operations/backup-restore-and-portability.md`
-- `docs/technical/web-application.md`
+- [Configuration Reference](./configuration-reference.md)
+- [Monitoring and Health](./monitoring-and-health.md)
+- [Backup, Restore, and Portability](./backup-restore-and-portability.md)
+- [Web Application](../technical/web-application.md)

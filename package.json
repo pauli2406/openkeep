@@ -8,6 +8,8 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "docs:dev": "pnpm --filter @openkeep/docs dev",
+    "docs:build": "pnpm --filter @openkeep/docs build",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:api:unit": "pnpm --filter @openkeep/api test:unit",

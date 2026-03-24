@@ -1,3 +1,8 @@
+---
+title: Monitoring and Health
+description: Health endpoints, metrics, structured logging, and practical monitoring priorities.
+---
+
 # Monitoring and Health
 
 This document explains the current observability and health surface in OpenKeep.
@@ -127,6 +132,6 @@ This is helpful for quick inspection, but API-level monitoring is still the bett
 
 ## Related Documents
 
-- `docs/operations/runbooks.md`
-- `docs/operations/deployment-guide.md`
-- `docs/user/settings-and-admin.md`
+- [Runbooks](./runbooks.md)
+- [Deployment Guide](./deployment-guide.md)
+- [Settings and Admin](../user/settings-and-admin.md)

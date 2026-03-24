@@ -1,0 +1,28 @@
+{
+  "id": "operations/README",
+  "title": "Operational Documentation",
+  "description": "Operator-facing deployment, monitoring, configuration, and maintenance guidance.",
+  "source": "@site/../../docs/operations/README.md",
+  "sourceDirName": "operations",
+  "slug": "/operations",
+  "permalink": "/docs/operations",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/operations/README.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Operational Documentation",
+    "description": "Operator-facing deployment, monitoring, configuration, and maintenance guidance.",
+    "slug": "/operations"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Testing and Validation",
+    "permalink": "/docs/technical/testing-and-validation"
+  },
+  "next": {
+    "title": "Operational Documentation",
+    "permalink": "/docs/operations"
+  }
+}

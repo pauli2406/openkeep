@@ -1,0 +1,27 @@
+{
+  "id": "operations/runbooks",
+  "title": "Runbooks",
+  "description": "Common operational procedures for readiness, stuck jobs, watch-folder scans, and provider issues.",
+  "source": "@site/../../docs/operations/runbooks.md",
+  "sourceDirName": "operations",
+  "slug": "/operations/runbooks",
+  "permalink": "/docs/operations/runbooks",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/operations/runbooks.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Runbooks",
+    "description": "Common operational procedures for readiness, stuck jobs, watch-folder scans, and provider issues."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Configuration Reference",
+    "permalink": "/docs/operations/configuration-reference"
+  },
+  "next": {
+    "title": "Backup, Restore, and Portability",
+    "permalink": "/docs/operations/backup-restore-and-portability"
+  }
+}

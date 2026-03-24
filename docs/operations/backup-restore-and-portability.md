@@ -1,3 +1,8 @@
+---
+title: Backup, Restore, and Portability
+description: Archive export and import guidance plus broader backup and migration posture.
+---
+
 # Backup, Restore, and Portability
 
 This document describes the current archive portability model.
@@ -97,6 +102,6 @@ Before moving an environment:
 
 ## Related Documents
 
-- `docs/operations/deployment-guide.md`
-- `docs/operations/runbooks.md`
-- `docs/user/settings-and-admin.md`
+- [Deployment Guide](./deployment-guide.md)
+- [Runbooks](./runbooks.md)
+- [Settings and Admin](../user/settings-and-admin.md)

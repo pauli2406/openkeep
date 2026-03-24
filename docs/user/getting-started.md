@@ -1,3 +1,8 @@
+---
+title: Getting Started
+description: Set up OpenKeep, sign in, and understand the main areas of the app.
+---
+
 # Getting Started
 
 This guide helps you start using OpenKeep as a document archive for personal or small-team use.
@@ -78,10 +83,10 @@ Settings covers administrative functions such as API tokens, taxonomies, archive
 
 ## Guide Map
 
-- Learn the day-to-day archive tasks in `docs/user/core-workflows.md`
-- Learn search, summaries, and Q&A in `docs/user/search-and-ai.md`
-- Learn review and manual correction workflows in `docs/user/review-and-corrections.md`
-- Learn admin tools in `docs/user/settings-and-admin.md`
+- Learn the day-to-day archive tasks in [Core Workflows](./core-workflows.md)
+- Learn search, summaries, and Q&A in [Search and AI](./search-and-ai.md)
+- Learn review and manual correction workflows in [Review and Corrections](./review-and-corrections.md)
+- Learn admin tools in [Settings and Admin](./settings-and-admin.md)
 
 ## Supported Upload Types
 
@@ -132,4 +137,4 @@ Use the Review queue when OpenKeep is uncertain about important fields, for exam
 
 ## Next Step
 
-Continue with `docs/user/core-workflows.md` for the day-to-day tasks most users perform.
+Continue with [Core Workflows](./core-workflows.md) for the day-to-day tasks most users perform.

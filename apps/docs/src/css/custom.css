@@ -1,0 +1,151 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap");
+
+:root {
+  --ifm-color-primary: #155b4a;
+  --ifm-color-primary-dark: #114c3d;
+  --ifm-color-primary-darker: #0f4437;
+  --ifm-color-primary-darkest: #0c382d;
+  --ifm-color-primary-light: #196959;
+  --ifm-color-primary-lighter: #1b725f;
+  --ifm-color-primary-lightest: #228874;
+  --ifm-background-color: #f7f4ea;
+  --ifm-background-surface-color: #fffdf7;
+  --ifm-navbar-background-color: rgba(255, 253, 247, 0.9);
+  --ifm-footer-background-color: #10342c;
+  --ifm-link-color: #0f604c;
+  --ifm-heading-color: #16362f;
+  --ifm-font-family-base: "Source Serif 4", Georgia, serif;
+  --ifm-font-family-monospace: "IBM Plex Mono", "SFMono-Regular", monospace;
+  --ifm-code-font-size: 0.92rem;
+  --ifm-heading-font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --ifm-heading-font-weight: 700;
+  --ifm-navbar-shadow: 0 1px 0 rgba(16, 52, 44, 0.08);
+  --ifm-toc-border-color: rgba(21, 91, 74, 0.14);
+  --ifm-menu-color-active: #114c3d;
+  --ifm-breadcrumb-color-active: #114c3d;
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: #7fd1be;
+  --ifm-color-primary-dark: #62c5af;
+  --ifm-color-primary-darker: #54bda6;
+  --ifm-color-primary-darkest: #319783;
+  --ifm-color-primary-light: #9cddcd;
+  --ifm-color-primary-lighter: #aae3d5;
+  --ifm-color-primary-lightest: #d4f1ea;
+  --ifm-background-color: #101b18;
+  --ifm-background-surface-color: #152320;
+  --ifm-navbar-background-color: rgba(16, 27, 24, 0.9);
+  --ifm-footer-background-color: #0a1311;
+  --ifm-link-color: #9cddcd;
+  --ifm-heading-color: #eef6f3;
+  --ifm-menu-color-active: #9cddcd;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-image: radial-gradient(circle at top left, rgba(34, 136, 116, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+}
+
+.navbar {
+  backdrop-filter: blur(14px);
+}
+
+.navbar__brand {
+  gap: 0.7rem;
+}
+
+.navbar__logo {
+  height: 1.95rem;
+}
+
+.navbar__title {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.hero {
+  background: linear-gradient(135deg, rgba(21, 91, 74, 0.08), rgba(34, 136, 116, 0.03));
+}
+
+.theme-doc-markdown header h1:first-child,
+.markdown h1:first-child {
+  letter-spacing: -0.03em;
+}
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid rgba(21, 91, 74, 0.09);
+}
+
+.theme-doc-sidebar-menu {
+  padding-top: 1rem;
+}
+
+.menu__link,
+.navbar__link,
+.pagination-nav__label {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+.menu__link {
+  border-radius: 0.75rem;
+}
+
+.menu__link--active {
+  background: rgba(21, 91, 74, 0.08);
+}
+
+.theme-doc-markdown blockquote {
+  border-left-color: var(--ifm-color-primary);
+  background: rgba(21, 91, 74, 0.04);
+}
+
+.theme-doc-markdown {
+  font-size: 1.05rem;
+}
+
+.theme-doc-markdown h2,
+.theme-doc-markdown h3 {
+  scroll-margin-top: 5rem;
+}
+
+.theme-doc-markdown ul li,
+.theme-doc-markdown ol li {
+  margin: 0.35rem 0;
+}
+
+.theme-doc-markdown table {
+  display: table;
+  width: 100%;
+}
+
+.theme-doc-breadcrumbs {
+  margin-bottom: 1.1rem;
+}
+
+.DocSearch-Button {
+  border-radius: 999px !important;
+  border: 1px solid rgba(17, 76, 61, 0.12);
+  background: rgba(255, 255, 255, 0.76) !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .DocSearch-Button {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(156, 221, 205, 0.12);
+}
+
+.theme-doc-markdown a {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.14em;
+}
+
+.footer {
+  border-top: 1px solid rgba(127, 209, 190, 0.08);
+}

@@ -1,3 +1,8 @@
+---
+title: Manual Smoke Checklist
+description: Manual smoke verification checklist for major OpenKeep flows.
+---
+
 # Phase 3 Smoke Checklist
 
 Use this checklist after backend or frontend changes that could affect the web app or its supporting API flows.

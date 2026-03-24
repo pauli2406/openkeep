@@ -1,0 +1,27 @@
+{
+  "id": "user/getting-started",
+  "title": "Getting Started",
+  "description": "Set up OpenKeep, sign in, and understand the main areas of the app.",
+  "source": "@site/../../docs/user/getting-started.md",
+  "sourceDirName": "user",
+  "slug": "/user/getting-started",
+  "permalink": "/docs/user/getting-started",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/user/getting-started.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Getting Started",
+    "description": "Set up OpenKeep, sign in, and understand the main areas of the app."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "OpenKeep Documentation",
+    "permalink": "/docs/"
+  },
+  "next": {
+    "title": "Getting Started",
+    "permalink": "/docs/user/getting-started"
+  }
+}

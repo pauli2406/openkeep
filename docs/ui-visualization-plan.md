@@ -1,3 +1,8 @@
+---
+title: UI Visualization Plan
+description: Historical planning and visualization notes for the OpenKeep interface.
+---
+
 # UI Visualization Plan: Intelligent Document Dashboard + Explorer
 
 ## Current State

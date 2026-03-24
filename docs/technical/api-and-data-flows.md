@@ -1,3 +1,8 @@
+---
+title: API and Data Flows
+description: Backend surface area, major endpoints, and ingestion, search, and archive flows.
+---
+
 # API and Data Flows
 
 This document summarizes the current backend surface and the most important runtime flows.
@@ -155,6 +160,6 @@ At a conceptual level, the most important document-related persisted data includ
 
 ## Related Documents
 
-- `docs/technical/architecture-overview.md`
-- `docs/technical/agentic-document-intelligence.md`
-- `docs/backend.md`
+- [Architecture Overview](./architecture-overview.md)
+- [Agentic Document Intelligence](./agentic-document-intelligence.md)
+- [Backend Notes](../backend.md)

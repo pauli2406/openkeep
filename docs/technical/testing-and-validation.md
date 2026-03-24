@@ -1,3 +1,8 @@
+---
+title: Testing and Validation
+description: Current automated and manual verification strategy across API, web, and operations.
+---
+
 # Testing and Validation
 
 This document summarizes the current verification strategy.
@@ -120,7 +125,7 @@ For most product changes, the practical validation path is:
 
 ## Related Documents
 
-- `README.md`
-- `docs/backend.md`
-- `docs/phase-3-smoke.md`
-- `docs/operations/runbooks.md`
+- [Repo README](../README.md)
+- [Backend Notes](../backend.md)
+- [Manual Smoke Checklist](../phase-3-smoke.md)
+- [Runbooks](../operations/runbooks.md)

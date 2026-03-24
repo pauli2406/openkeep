@@ -1,10 +1,15 @@
+---
+title: Review and Corrections
+description: Resolve review items, apply manual overrides, and safely correct extracted metadata.
+---
+
 # Review and Corrections
 
 OpenKeep tries to extract metadata automatically, but some documents still need manual review.
 
 This guide explains how to work with those cases.
 
-For search and AI behavior before a document reaches review, see `docs/user/search-and-ai.md`.
+For search and AI behavior before a document reaches review, see [Search and AI](./search-and-ai.md).
 
 ## Why Documents Enter Review
 
@@ -131,6 +136,6 @@ A good review routine is:
 
 ## Next Step
 
-Continue with `docs/user/settings-and-admin.md` for system administration features and archive maintenance tools.
+Continue with [Settings and Admin](./settings-and-admin.md) for system administration features and archive maintenance tools.
 
-For quick answers to common edge cases, see `docs/user/faq.md`.
+For quick answers to common edge cases, see [FAQ](./faq.md).

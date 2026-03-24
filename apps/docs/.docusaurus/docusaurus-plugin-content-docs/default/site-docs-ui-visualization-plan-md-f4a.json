@@ -1,0 +1,27 @@
+{
+  "id": "ui-visualization-plan",
+  "title": "UI Visualization Plan",
+  "description": "Historical planning and visualization notes for the OpenKeep interface.",
+  "source": "@site/../../docs/ui-visualization-plan.md",
+  "sourceDirName": ".",
+  "slug": "/ui-visualization-plan",
+  "permalink": "/docs/ui-visualization-plan",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/ui-visualization-plan.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "UI Visualization Plan",
+    "description": "Historical planning and visualization notes for the OpenKeep interface."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Backend Notes",
+    "permalink": "/docs/backend"
+  },
+  "next": {
+    "title": "Manual Smoke Checklist",
+    "permalink": "/docs/phase-3-smoke"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "user/faq",
+  "title": "FAQ",
+  "description": "Quick answers to common OpenKeep user questions and edge cases.",
+  "source": "@site/../../docs/user/faq.md",
+  "sourceDirName": "user",
+  "slug": "/user/faq",
+  "permalink": "/docs/user/faq",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/user/faq.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "FAQ",
+    "description": "Quick answers to common OpenKeep user questions and edge cases."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Settings and Admin",
+    "permalink": "/docs/user/settings-and-admin"
+  },
+  "next": {
+    "title": "Technical Documentation",
+    "permalink": "/docs/technical"
+  }
+}

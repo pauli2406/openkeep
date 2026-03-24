@@ -1,3 +1,8 @@
+---
+title: Configuration Reference
+description: Key runtime configuration values, provider settings, and operational profiles.
+---
+
 # Configuration Reference
 
 This document summarizes the most important runtime configuration knobs in OpenKeep.
@@ -201,6 +206,6 @@ This enables semantic search plus the full agentic extraction and AI assistance 
 
 ## Related Documents
 
-- `docs/operations/deployment-guide.md`
-- `docs/operations/runbooks.md`
-- `docs/technical/agentic-document-intelligence.md`
+- [Deployment Guide](./deployment-guide.md)
+- [Runbooks](./runbooks.md)
+- [Agentic Document Intelligence](../technical/agentic-document-intelligence.md)

@@ -1,14 +1,20 @@
+---
+title: Operational Documentation
+description: Operator-facing deployment, monitoring, configuration, and maintenance guidance.
+slug: /operations
+---
+
 # Operational Documentation
 
 This section documents how to deploy, configure, monitor, and maintain OpenKeep.
 
 ## Recommended Reading Order
 
-1. `docs/operations/deployment-guide.md`
-2. `docs/operations/configuration-reference.md`
-3. `docs/operations/runbooks.md`
-4. `docs/operations/backup-restore-and-portability.md`
-5. `docs/operations/monitoring-and-health.md`
+1. [Deployment Guide](./deployment-guide.md)
+2. [Configuration Reference](./configuration-reference.md)
+3. [Runbooks](./runbooks.md)
+4. [Backup, Restore, and Portability](./backup-restore-and-portability.md)
+5. [Monitoring and Health](./monitoring-and-health.md)
 
 ## Scope
 

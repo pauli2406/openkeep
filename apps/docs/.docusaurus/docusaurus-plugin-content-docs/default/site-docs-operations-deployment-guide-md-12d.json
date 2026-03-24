@@ -1,0 +1,27 @@
+{
+  "id": "operations/deployment-guide",
+  "title": "Deployment Guide",
+  "description": "Current single-host deployment model, service layout, and startup expectations.",
+  "source": "@site/../../docs/operations/deployment-guide.md",
+  "sourceDirName": "operations",
+  "slug": "/operations/deployment-guide",
+  "permalink": "/docs/operations/deployment-guide",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/operations/deployment-guide.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Deployment Guide",
+    "description": "Current single-host deployment model, service layout, and startup expectations."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Operational Documentation",
+    "permalink": "/docs/operations"
+  },
+  "next": {
+    "title": "Configuration Reference",
+    "permalink": "/docs/operations/configuration-reference"
+  }
+}

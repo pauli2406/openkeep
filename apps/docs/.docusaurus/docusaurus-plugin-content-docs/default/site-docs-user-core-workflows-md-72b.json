@@ -1,0 +1,27 @@
+{
+  "id": "user/core-workflows",
+  "title": "Core Workflows",
+  "description": "Learn the main archive tasks, from upload and browsing to reprocessing and download.",
+  "source": "@site/../../docs/user/core-workflows.md",
+  "sourceDirName": "user",
+  "slug": "/user/core-workflows",
+  "permalink": "/docs/user/core-workflows",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/user/core-workflows.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Core Workflows",
+    "description": "Learn the main archive tasks, from upload and browsing to reprocessing and download."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/docs/user/getting-started"
+  },
+  "next": {
+    "title": "Search and AI",
+    "permalink": "/docs/user/search-and-ai"
+  }
+}

@@ -1,3 +1,8 @@
+---
+title: Web Application
+description: Web client structure, route model, auth flow, and testing approach.
+---
+
 # Web Application
 
 This document describes the current structure of the web client.
@@ -182,6 +187,6 @@ MSW is used for most HTTP mocking, with targeted `globalThis.fetch` mocking for 
 
 ## Related Documents
 
-- `docs/technical/testing-and-validation.md`
-- `docs/technical/api-and-data-flows.md`
-- `docs/operations/deployment-guide.md`
+- [Testing and Validation](./testing-and-validation.md)
+- [API and Data Flows](./api-and-data-flows.md)
+- [Deployment Guide](../operations/deployment-guide.md)

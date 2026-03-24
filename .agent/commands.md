@@ -8,14 +8,17 @@
 
 - `pnpm db:migrate`
 - `docker compose up postgres minio`
+- `docker compose up`
 - `pnpm --filter @openkeep/api dev`
 - `pnpm --filter @openkeep/worker dev`
 - `pnpm --filter @openkeep/web dev`
+- `pnpm docs:dev`
 
 ## Verification
 
 - `pnpm typecheck`
 - `pnpm build`
+- `pnpm docs:build`
 - `pnpm test:api:unit`
 - `pnpm test:api:integration`
 - `pnpm test:api:ocr`

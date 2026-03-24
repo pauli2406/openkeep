@@ -1,0 +1,27 @@
+{
+  "id": "backend",
+  "title": "Backend Notes",
+  "description": "Supporting backend deep-dive and implementation notes.",
+  "source": "@site/../../docs/backend.md",
+  "sourceDirName": ".",
+  "slug": "/backend",
+  "permalink": "/docs/backend",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/openkeep/openkeep/tree/main/../../docs/backend.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {
+    "title": "Backend Notes",
+    "description": "Supporting backend deep-dive and implementation notes."
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Monitoring and Health",
+    "permalink": "/docs/operations/monitoring-and-health"
+  },
+  "next": {
+    "title": "UI Visualization Plan",
+    "permalink": "/docs/ui-visualization-plan"
+  }
+}

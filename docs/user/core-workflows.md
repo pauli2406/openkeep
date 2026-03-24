@@ -1,3 +1,8 @@
+---
+title: Core Workflows
+description: Learn the main archive tasks, from upload and browsing to reprocessing and download.
+---
+
 # Core Workflows
 
 This guide covers the most common tasks in OpenKeep.
@@ -144,6 +149,6 @@ Manual overrides remain locked during reprocessing unless you explicitly clear t
 
 ## Next Step
 
-Continue with `docs/user/search-and-ai.md` for search, summaries, and AI-assisted answers.
+Continue with [Search and AI](./search-and-ai.md) for search, summaries, and AI-assisted answers.
 
-You can also jump back to `docs/user/getting-started.md` if you want the broader product orientation.
+You can also jump back to [Getting Started](./getting-started.md) if you want the broader product orientation.
