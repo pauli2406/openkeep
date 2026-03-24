@@ -39,8 +39,6 @@ import {
 import {
   ArrowLeft,
   BrainCircuit,
-  ChevronDown,
-  ChevronRight,
   Download,
   FileText,
   Eye,
@@ -64,7 +62,6 @@ import {
   History,
   Lock,
   Quote,
-  RefreshCw,
   Send,
   Trash2,
   Unlock,
@@ -1542,8 +1539,7 @@ function DocumentDetailPage() {
 
           </Tabs>
 
-          {/* AI Section — Summary + Q&A, always visible below tabs */}
-          <DocumentAiSection documentId={doc.id} documentTitle={doc.title} />
+          <DocumentQaSection documentId={doc.id} />
         </div>
 
         {/* Right Column - Metadata & Actions */}
@@ -2612,18 +2608,8 @@ function DocumentDetailPage() {
 }
 
 // ---------------------------------------------------------------------------
-// AI Section component — Summary + Q&A with SSE streaming
+// AI Section component — Q&A with SSE streaming
 // ---------------------------------------------------------------------------
-
-type SummaryStreamState = {
-  status: "idle" | "loading" | "streaming" | "done" | "error";
-  text: string;
-  cached: boolean;
-  provider: string | null;
-  model: string | null;
-  generatedAt: string | null;
-  errorMessage: string | null;
-};
 
 type QaStreamState = {
   status: "idle" | "loading" | "streaming" | "done" | "error";
@@ -2638,27 +2624,11 @@ type QaStreamState = {
   errorMessage: string | null;
 };
 
-function DocumentAiSection({
+function DocumentQaSection({
   documentId,
-  documentTitle,
 }: {
   documentId: string;
-  documentTitle: string;
 }) {
-  // ─── Summary collapsed state ───
-  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
-  // ─── Summary state ───
-  const [summary, setSummary] = useState<SummaryStreamState>({
-    status: "idle",
-    text: "",
-    cached: false,
-    provider: null,
-    model: null,
-    generatedAt: null,
-    errorMessage: null,
-  });
-  const summaryAbortRef = useRef<AbortController | null>(null);
-
   // ─── Q&A state ───
   const [qa, setQa] = useState<QaStreamState>({
     status: "idle",
@@ -2693,112 +2663,9 @@ function DocumentAiSection({
         // Non-critical — history simply starts empty
       }
     })();
-  }, [documentId]);
-
-  // ─── Auto-trigger summary on mount ───
-  useEffect(() => {
-    streamSummary();
     return () => {
-      summaryAbortRef.current?.abort();
       qaAbortRef.current?.abort();
     };
-  }, []);
-
-  // ─── Stream summary ───
-  const streamSummary = useCallback(async (force = false) => {
-    summaryAbortRef.current?.abort();
-    const controller = new AbortController();
-    summaryAbortRef.current = controller;
-
-    setSummary({
-      status: "loading",
-      text: "",
-      cached: false,
-      provider: null,
-      model: null,
-      generatedAt: null,
-      errorMessage: null,
-    });
-
-    try {
-      const url = force
-        ? `/api/documents/${documentId}/summarize/stream?force=true`
-        : `/api/documents/${documentId}/summarize/stream`;
-      const response = await authFetch(url, {
-        method: "POST",
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let currentEvent = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-
-              if (currentEvent === "cached") {
-                setSummary({
-                  status: "done",
-                  text: parsed.summary,
-                  cached: true,
-                  provider: parsed.provider,
-                  model: parsed.model,
-                  generatedAt: parsed.generatedAt,
-                  errorMessage: null,
-                });
-              } else if (currentEvent === "summary-token") {
-                setSummary((s) => ({
-                  ...s,
-                  status: "streaming",
-                  text: s.text + (parsed.text ?? ""),
-                }));
-              } else if (currentEvent === "done") {
-                setSummary((s) => ({
-                  ...s,
-                  status: "done",
-                  text: parsed.summary ?? s.text,
-                  provider: parsed.provider,
-                  model: parsed.model,
-                  generatedAt: parsed.generatedAt,
-                }));
-              } else if (currentEvent === "error") {
-                setSummary((s) => ({
-                  ...s,
-                  status: "error",
-                  errorMessage: parsed.message,
-                }));
-              }
-            } catch {
-              // skip malformed
-            }
-            currentEvent = "";
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setSummary((s) => ({
-        ...s,
-        status: "error",
-        errorMessage: err instanceof Error ? err.message : "Failed to load summary",
-      }));
-    }
   }, [documentId]);
 
   // ─── Stream Q&A ───
@@ -2928,111 +2795,10 @@ function DocumentAiSection({
     streamQa(q);
   }
 
-  const isSummaryStreaming = summary.status === "loading" || summary.status === "streaming";
   const isQaStreaming = qa.status === "loading" || qa.status === "streaming";
 
   return (
     <div className="space-y-4">
-      {/* ─── Summary Section (collapsible) ─── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              className="flex items-center gap-2 text-base font-semibold tracking-tight hover:text-foreground/80 transition-colors"
-              onClick={() => setSummaryCollapsed((c) => !c)}
-            >
-              {summaryCollapsed ? (
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-              <BrainCircuit className="h-4 w-4 text-[var(--explorer-cobalt)]" />
-              Summary
-              {summaryCollapsed && summary.status === "done" && (
-                <span className="ml-1 text-xs font-normal text-muted-foreground">
-                  (click to expand)
-                </span>
-              )}
-            </button>
-            <div className="flex items-center gap-2">
-              {summary.cached && (
-                <span className="text-[10px] font-medium text-muted-foreground/60">
-                  Cached
-                </span>
-              )}
-              {summary.status === "done" && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 px-2 text-xs"
-                  onClick={() => streamSummary(true)}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Regenerate
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        {!summaryCollapsed && (
-          <CardContent>
-            {/* Loading */}
-            {summary.status === "loading" && (
-              <div className="flex items-center gap-2.5 py-4 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin text-[var(--explorer-cobalt)]" />
-                <span className="text-sm">Generating summary...</span>
-              </div>
-            )}
-
-            {/* Error */}
-            {summary.status === "error" && (
-              <div className="flex items-start gap-3 rounded-lg border border-[var(--explorer-rust-soft)] bg-[var(--explorer-rust-soft)] px-3.5 py-2.5">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--explorer-rust)]" />
-                <div className="flex-1 text-sm text-[var(--explorer-rust)]">
-                  {summary.errorMessage ?? "Failed to generate summary"}
-                </div>
-                <Button variant="outline" size="sm" onClick={() => streamSummary()} className="shrink-0">
-                  Retry
-                </Button>
-              </div>
-            )}
-
-            {/* Streaming / done */}
-            {(summary.status === "streaming" || summary.status === "done") && (
-              <div>
-                <div className="prose prose-sm max-w-none text-foreground prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
-                  <Markdown>{summary.text}</Markdown>
-                  {summary.status === "streaming" && (
-                    <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
-                  )}
-                </div>
-                {summary.provider && summary.status === "done" && (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--explorer-border)] pt-2">
-                    <span className="text-[10px] text-muted-foreground/60">
-                      {summary.provider} / {summary.model}
-                    </span>
-                    {summary.generatedAt && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        {format(new Date(summary.generatedAt), "MMM d, yyyy HH:mm")}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Idle — shouldn't show since we auto-trigger */}
-            {summary.status === "idle" && (
-              <Button variant="outline" size="sm" onClick={() => streamSummary()} className="gap-1.5">
-                <BrainCircuit className="h-3.5 w-3.5" />
-                Generate Summary
-              </Button>
-            )}
-          </CardContent>
-        )}
-      </Card>
-
       {/* ─── Q&A Section ─── */}
       <Card>
         <CardHeader className="pb-2">
