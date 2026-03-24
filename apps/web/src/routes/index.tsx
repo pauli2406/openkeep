@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Sparkles } from "lucide-react";
@@ -35,28 +36,41 @@ function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
 
   return (
     <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
-      {data.map((point) => {
+      {data.map((point, i) => {
         const pct = (point.count / max) * 100;
+        const prevYear = i > 0 ? data[i - 1].month.split("-")[0] : null;
+        const curYear = point.month.split("-")[0];
+        const isYearBoundary = prevYear !== null && prevYear !== curYear;
+
         return (
-          <Link
-            key={point.month}
-            to="/documents"
-            search={{ view: "timeline" }}
-            className="group flex min-w-[3.5rem] flex-1 flex-col items-center gap-1.5"
-          >
-            <span className="text-[0.65rem] font-semibold tabular-nums text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover:opacity-100">
-              {point.count}
-            </span>
-            <div className="relative flex w-full justify-center">
-              <div
-                className="w-full max-w-[2.4rem] rounded-t-[0.6rem] bg-[color:var(--explorer-cobalt)]/25 transition-colors group-hover:bg-[color:var(--explorer-cobalt)]/55"
-                style={{ height: `${Math.max(pct, 6)}%`, minHeight: "4px", maxHeight: "5rem" }}
-              />
-            </div>
-            <span className="text-[0.62rem] uppercase tracking-[0.14em] text-[color:var(--explorer-muted)]">
-              {formatMonthLabel(point.month)}
-            </span>
-          </Link>
+          <Fragment key={point.month}>
+            {isYearBoundary && (
+              <div className="flex flex-col items-center justify-end gap-1.5 px-1 self-stretch">
+                <span className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
+                  {curYear}
+                </span>
+                <div className="w-px flex-1 bg-[color:var(--explorer-border)]" />
+              </div>
+            )}
+            <Link
+              to="/documents"
+              search={{ view: "timeline" }}
+              className="group flex min-w-[3.5rem] flex-1 flex-col items-center gap-1.5"
+            >
+              <span className="text-[0.65rem] font-semibold tabular-nums text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover:opacity-100">
+                {point.count}
+              </span>
+              <div className="relative flex w-full justify-center">
+                <div
+                  className="w-full max-w-[2.4rem] rounded-t-[0.6rem] bg-[color:var(--explorer-cobalt)]/25 transition-colors group-hover:bg-[color:var(--explorer-cobalt)]/55"
+                  style={{ height: `${Math.max(pct, 6)}%`, minHeight: "4px", maxHeight: "5rem" }}
+                />
+              </div>
+              <span className="text-[0.62rem] uppercase tracking-[0.14em] text-[color:var(--explorer-muted)]">
+                {formatMonthLabel(point.month)}
+              </span>
+            </Link>
+          </Fragment>
         );
       })}
     </div>
