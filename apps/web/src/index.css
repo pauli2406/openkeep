@@ -97,4 +97,45 @@
     background: rgba(56, 84, 165, 0.18);
     color: var(--explorer-ink);
   }
+
+  /* ─── Omnibar Animations ─── */
+
+  .omnibar-backdrop {
+    animation: omnibar-backdrop-in 200ms ease-out both;
+  }
+
+  .omnibar-panel {
+    animation: omnibar-panel-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .omnibar-rest {
+    animation: omnibar-rest-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes omnibar-backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes omnibar-panel-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes omnibar-rest-in {
+    from {
+      opacity: 0;
+      transform: translateY(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }

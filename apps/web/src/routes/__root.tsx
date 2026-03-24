@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, type RouterContext } from "@/hooks/use-auth";
+import { Omnibar } from "@/components/omnibar/omnibar";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -185,6 +186,9 @@ function RootComponent() {
             <Outlet />
           </main>
         </div>
+
+        {/* Global omnibar (Cmd+K) */}
+        <Omnibar />
       </div>
     </TooltipProvider>
   );
