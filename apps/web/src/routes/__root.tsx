@@ -73,7 +73,7 @@ function RootComponent() {
     <>
       {/* Brand */}
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="h-7 w-auto" />
+        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="text-2xl" />
       </div>
 
       <Separator />
@@ -176,7 +176,7 @@ function RootComponent() {
               <span className="sr-only">Open menu</span>
             </Button>
             <div className="flex items-center gap-2">
-              <OpenKeepLogo markClassName="h-7 w-7" wordmarkClassName="h-6 w-auto" />
+              <OpenKeepLogo markClassName="h-7 w-7" wordmarkClassName="text-xl" />
             </div>
           </header>
 

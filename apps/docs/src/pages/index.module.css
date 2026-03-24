@@ -53,11 +53,24 @@
   color: #196959;
 }
 
-.heroLogo {
-  display: block;
-  width: min(100%, 20rem);
-  height: auto;
+.heroBrand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
   margin-bottom: 1.3rem;
+}
+
+.heroBrandMark {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.heroBrandName {
+  color: #184c43;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .title {

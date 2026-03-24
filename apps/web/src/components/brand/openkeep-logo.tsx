@@ -27,11 +27,14 @@ export function OpenKeepLogo({
         aria-hidden="true"
         className={cn("h-8 w-8 shrink-0", markClassName)}
       />
-      <img
-        src="/brand/logo-wordmark.svg"
-        alt="OpenKeep"
-        className={cn("h-7 w-auto", wordmarkClassName)}
-      />
+      <span
+        className={cn(
+          "font-[var(--font-display)] text-2xl tracking-tight text-[color:var(--explorer-ink)]",
+          wordmarkClassName,
+        )}
+      >
+        OpenKeep
+      </span>
     </span>
   );
 }

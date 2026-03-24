@@ -48,10 +48,10 @@ const config = {
   themeConfig: {
     image: "img/openkeep-docs-social-card.svg",
     navbar: {
-      title: "",
+      title: "OpenKeep",
       logo: {
         alt: "OpenKeep Docs",
-        src: "img/logo-wordmark.svg",
+        src: "img/logo-mark.svg",
       },
       items: [
         {
