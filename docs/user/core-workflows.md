@@ -27,7 +27,7 @@ Use `View documents` when the upload is complete.
 
 Open `Documents` to browse your archive.
 
-If you want a dedicated semantic exploration screen, open `Explore`.
+If you want semantic exploration, switch the `Documents` page to galaxy view.
 
 ### List View
 

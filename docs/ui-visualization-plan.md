@@ -277,13 +277,13 @@ AI summary from cached `correspondents.summary`. Falls back to loading indicator
 
 ---
 
-## Phase 4: Semantic Galaxy View (`/explore`)
+## Phase 4: Semantic Galaxy View (`/documents?view=galaxy`)
 
 Full-page scatter plot visualization:
 
 ```
 +-----------------------------------------------------+
-|  Explore                              Color by: [v]  |
+|  Documents                            Color by: [v]  |
 |  [Correspondent] [Type] [Tags] [Year]                |
 |                                                      |
 |         * *              * *                         |

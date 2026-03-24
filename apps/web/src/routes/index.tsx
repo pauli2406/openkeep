@@ -89,9 +89,9 @@ function DashboardPage() {
               </h2>
             </div>
             <Button asChild variant="ghost" className="rounded-full">
-              <Link to="/explore">
+              <Link to="/documents" search={{ view: "galaxy" }}>
                 <Sparkles className="h-4 w-4" />
-                Explore galaxy
+                Open galaxy view
               </Link>
             </Button>
           </div>

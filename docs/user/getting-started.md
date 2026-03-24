@@ -61,10 +61,6 @@ The Documents area is the main archive browser. It supports three views:
 - timeline view for chronological browsing
 - galaxy view for semantic exploration
 
-### Explore
-
-The Explore page opens a dedicated full-screen semantic galaxy view for visual archive exploration.
-
 ### Search
 
 Search combines keyword matching and semantic search. You can also expand the AI Answer panel to ask archive-wide questions.

@@ -19,7 +19,6 @@ import {
   X,
   FileText,
   LayoutDashboard,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -29,7 +28,6 @@ import { useAuth, type RouterContext } from "@/hooks/use-auth";
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/documents", label: "Documents", icon: FileText },
-  { to: "/explore", label: "Explore", icon: Sparkles },
   { to: "/review", label: "Review", icon: ClipboardCheck },
   { to: "/search", label: "Search", icon: Search },
   { to: "/upload", label: "Upload", icon: Upload },
