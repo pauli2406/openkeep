@@ -11,3 +11,5 @@ node_modules
 tmp
 data
 openapi.json
+apps/docs/.docusaurus
+apps/docs/build
