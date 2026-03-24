@@ -2,20 +2,18 @@
 
 ## Current State
 
-- Backend hardening is complete.
-- Provider platform and chunk persistence are implemented.
-- Docker-backed integration tests and OCR acceptance tests pass locally.
-- Backend is the current system of record.
+- API, worker, and web app are implemented and connected.
+- Agentic document intelligence, semantic search, review workflows, and settings/admin tooling are in place.
+- User, technical, and operational documentation now exist under `docs/`.
+- The product should be treated as a documented full-stack system, not a backend-only prototype.
 
 ## Next Priority
 
-1. Build the web app on top of the current backend APIs.
-2. Expand review evidence and operational visibility only where the web client exposes real gaps.
-3. Add embeddings and LLM retrieval only after the web archive baseline is solid.
+1. Keep product behavior, implementation, and operator workflows aligned with the docs as the system evolves.
+2. Continue improving archive quality, review ergonomics, and intelligence behavior without letting docs drift.
+3. Expand capabilities only with matching updates to user, technical, and operational guidance.
 
 ## Deferred
 
-- Real OpenAI or Gemini integrations
-- Embeddings and semantic retrieval
 - Mobile app
 - Desktop app
