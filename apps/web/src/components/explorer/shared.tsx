@@ -217,16 +217,12 @@ export function DocumentRows({
   selectedIds = [],
   selectionMode = false,
   onToggleSelect,
-  onSelectAll,
-  onClearSelection,
 }: {
   documents: Document[];
   emptyLabel?: string;
   selectedIds?: string[];
   selectionMode?: boolean;
   onToggleSelect?: (documentId: string) => void;
-  onSelectAll?: () => void;
-  onClearSelection?: () => void;
 }) {
   if (documents.length === 0) {
     return (
@@ -236,44 +232,8 @@ export function DocumentRows({
     );
   }
 
-  const selectedCount = documents.filter((document) => selectedIds.includes(document.id)).length;
-  const allSelected = selectedCount === documents.length;
-
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.45rem] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.7),rgba(255,248,236,0.94))] px-4 py-3 shadow-[0_16px_40px_rgba(142,119,78,0.08)]">
-        <div className="space-y-1">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
-            List Curation
-          </p>
-          <p className="text-sm text-[color:var(--explorer-ink)]">
-            {selectionMode
-              ? `${selectedCount} of ${documents.length} visible documents selected`
-              : "Enable selection mode to curate or delete multiple documents at once."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {selectionMode ? (
-            <>
-              <button
-                type="button"
-                onClick={() => (allSelected ? onClearSelection?.() : onSelectAll?.())}
-                className="rounded-full border border-[color:var(--explorer-border)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
-              >
-                {allSelected ? "Clear visible" : "Select visible"}
-              </button>
-              <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-cobalt)]">
-                Selection mode
-              </span>
-            </>
-          ) : (
-            <span className="rounded-full border border-dashed border-[color:var(--explorer-border)] px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
-              Open cards normally
-            </span>
-          )}
-        </div>
-      </div>
-
       {documents.map((document) => (
         (() => {
           const isSelected = selectedIds.includes(document.id);

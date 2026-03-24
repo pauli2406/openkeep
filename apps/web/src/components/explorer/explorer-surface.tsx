@@ -379,8 +379,6 @@ export function ExplorerSurface({
                 selectedIds={selectedIds}
                 selectionMode={selectionMode}
                 onToggleSelect={toggleSelect}
-                onSelectAll={selectVisible}
-                onClearSelection={clearVisible}
               />
             )
           ) : null}
