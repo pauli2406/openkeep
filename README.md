@@ -2,6 +2,14 @@
 
 OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation includes a NestJS API, async processing worker, PostgreSQL plus pgvector, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, chunk-level embeddings, grounded document Q&A, archive governance flows, and a connected web client on top of the backend APIs.
 
+## Documentation
+
+- User documentation: `docs/user/getting-started.md`
+- Technical documentation: `docs/technical/README.md`
+- Operational documentation: `docs/operations/README.md`
+- Documentation hub: `docs/README.md`
+- Current backend notes: `docs/backend.md`
+
 ## Workspace Layout
 
 - `apps/api`: NestJS REST API with auth, document upload, search, and archive metadata APIs.
