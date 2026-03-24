@@ -22,6 +22,23 @@ The starter environment file is:
 - `API_BASE_URL`: base URL used by web and client integrations
 - `LOG_LEVEL`: application logger level
 
+## Docs Site and Typesense DocSearch
+
+- `DOCS_SITE_URL`: canonical docs URL used when building the Docusaurus site
+- `TYPESENSE_COLLECTION_NAME`: collection alias used by the docs UI and scraper
+- `TYPESENSE_ADMIN_API_KEY`: admin key used by the self-hosted Typesense node and scraper
+- `TYPESENSE_PUBLIC_HOST`: browser-reachable Typesense hostname for the docs UI
+- `TYPESENSE_PUBLIC_PORT`: browser-reachable Typesense port for the docs UI
+- `TYPESENSE_PUBLIC_PROTOCOL`: browser-reachable Typesense protocol for the docs UI
+- `DOCSEARCH_START_URL`: scraper start URL, defaults to the compose-hosted docs service
+- `DOCSEARCH_SITEMAP_URL`: scraper sitemap URL, defaults to the compose-hosted docs sitemap
+- `DOCSEARCH_STOP_URL`: optional URL pattern to exclude from scraping
+
+Operational notes:
+
+- the docs container uses a search-only key generated at runtime by `typesense-bootstrap`; that key is not stored in `.env`
+- `TYPESENSE_PUBLIC_*` values must point to an address the browser can reach, not the internal Docker service name
+
 ## Database and Queue
 
 - `DATABASE_URL`: PostgreSQL connection string
@@ -121,6 +138,7 @@ These control upload size and search pagination limits.
 
 ## Embedding and LLM Providers
 
+- `ACTIVE_CHAT_PROVIDER`
 - `ACTIVE_EMBEDDING_PROVIDER`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -139,6 +157,7 @@ These control upload size and search pagination limits.
 
 Operational notes:
 
+- chat uses the configured `ACTIVE_CHAT_PROVIDER` when set; otherwise it falls back in this order: `openai` -> `gemini` -> `mistral`
 - semantic indexing is effectively off until `ACTIVE_EMBEDDING_PROVIDER` and the matching provider config are set
 - agentic document intelligence becomes available when at least one supported LLM provider is configured
 

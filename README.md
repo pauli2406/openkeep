@@ -75,18 +75,26 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 8. Run the docs site with `pnpm docs:dev` if you want the Docusaurus experience locally.
 9. Wait for `GET /api/health/ready` to report all checks green before using the stack.
 
-If you want the full containerized stack, `docker compose up` now also starts the docs site on `http://localhost:3001`.
+If you want the full containerized stack, `docker compose up` now also starts the docs site on `http://localhost:3001` and a self-hosted Typesense node on `http://localhost:8108`.
 
 Optional docs-site search:
 
-- set `ALGOLIA_APP_ID`, `ALGOLIA_API_KEY`, and `ALGOLIA_INDEX_NAME` to enable DocSearch v4 in `apps/docs`
-- if those variables are absent, the docs site still works and simply hides search
+- set `TYPESENSE_COLLECTION_NAME` and `TYPESENSE_ADMIN_API_KEY` in `.env`
+- replace the default `TYPESENSE_ADMIN_API_KEY` before exposing the stack beyond local development
+- set `TYPESENSE_PUBLIC_HOST`, `TYPESENSE_PUBLIC_PORT`, and `TYPESENSE_PUBLIC_PROTOCOL` to the browser-reachable Typesense address that the docs UI should query
+- start the docs search stack with `pnpm docs:search:up`
+- index the docs content with `pnpm docs:search:index`
+- repeated `pnpm docs:search:index` runs automatically clear the current alias first to avoid a known synonym-transfer bug in `typesense/docsearch-scraper`
+- the bootstrap step creates a search-only API key automatically and injects it into the docs container before Docusaurus builds
+- override `DOCSEARCH_START_URL`, `DOCSEARCH_SITEMAP_URL`, and `DOCSEARCH_STOP_URL` if you want the scraper to target a different docs URL than the compose-hosted site
 
-For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`. To enable semantic indexing, also set `ACTIVE_EMBEDDING_PROVIDER` and the matching embedding model/key values.
+For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`. To pin chat to a specific LLM, set `ACTIVE_CHAT_PROVIDER`. To enable semantic indexing, also set `ACTIVE_EMBEDDING_PROVIDER` and the matching embedding model/key values.
 
 ## Verification Commands
 
 - `pnpm docs:build`
+- `pnpm docs:search:up`
+- `pnpm docs:search:index`
 - `pnpm typecheck`
 - `pnpm test:api:unit`
 - `pnpm test:api:integration`

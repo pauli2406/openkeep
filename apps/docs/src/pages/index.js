@@ -81,7 +81,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <p className={styles.panelNote}>
-                  If Algolia DocSearch is configured, search appears automatically. Without it, the site stays safe-by-default.
+                  If Typesense DocSearch is configured, the navbar search opens a full docs search modal. Without it, the site stays safe-by-default.
                 </p>
               </div>
             </div>

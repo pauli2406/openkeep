@@ -10,8 +10,8 @@ WORKDIR /app
 COPY . .
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @openkeep/docs build
+RUN chmod +x apps/docs/start.sh
 
 EXPOSE 3001
 
-CMD ["pnpm", "--filter", "@openkeep/docs", "serve", "--host", "0.0.0.0", "--port", "3001"]
+CMD ["./apps/docs/start.sh"]

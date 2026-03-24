@@ -1,7 +1,41 @@
-const hasAlgoliaDocSearch = Boolean(
-  process.env.ALGOLIA_APP_ID &&
-    process.env.ALGOLIA_API_KEY &&
-    process.env.ALGOLIA_INDEX_NAME,
+const parseTypesenseServerConfig = () => {
+  if (process.env.TYPESENSE_SERVER_CONFIG) {
+    try {
+      const parsedConfig = JSON.parse(process.env.TYPESENSE_SERVER_CONFIG);
+
+      return {
+        ...parsedConfig,
+        apiKey:
+          process.env.TYPESENSE_SEARCH_API_KEY || parsedConfig.apiKey || undefined,
+      };
+    } catch (error) {
+      throw new Error(
+        `Invalid TYPESENSE_SERVER_CONFIG JSON: ${error.message}`,
+      );
+    }
+  }
+
+  if (!process.env.TYPESENSE_HOST || !process.env.TYPESENSE_SEARCH_API_KEY) {
+    return null;
+  }
+
+  return {
+    nodes: [
+      {
+        host: process.env.TYPESENSE_HOST,
+        port: Number(process.env.TYPESENSE_PORT || 443),
+        protocol: process.env.TYPESENSE_PROTOCOL || "https",
+      },
+    ],
+    apiKey: process.env.TYPESENSE_SEARCH_API_KEY,
+  };
+};
+
+const typesenseServerConfig = parseTypesenseServerConfig();
+const hasTypesenseDocSearch = Boolean(
+  process.env.TYPESENSE_COLLECTION_NAME &&
+    typesenseServerConfig?.apiKey &&
+    typesenseServerConfig,
 );
 
 const config = {
@@ -45,6 +79,8 @@ const config = {
     ],
   ],
 
+  themes: hasTypesenseDocSearch ? ["docusaurus-theme-search-typesense"] : [],
+
   themeConfig: {
     image: "img/openkeep-docs-social-card.svg",
     navbar: {
@@ -83,6 +119,14 @@ const config = {
           position: "left",
           label: "Operations",
         },
+        ...(hasTypesenseDocSearch
+          ? [
+              {
+                type: "search",
+                position: "right",
+              },
+            ]
+          : []),
         {
           href: "https://github.com/openkeep/openkeep",
           label: "GitHub",
@@ -122,12 +166,11 @@ const config = {
         autoCollapseCategories: false,
       },
     },
-    ...(hasAlgoliaDocSearch
+    ...(hasTypesenseDocSearch
       ? {
-          algolia: {
-            appId: process.env.ALGOLIA_APP_ID,
-            apiKey: process.env.ALGOLIA_API_KEY,
-            indexName: process.env.ALGOLIA_INDEX_NAME,
+          typesense: {
+            typesenseCollectionName: process.env.TYPESENSE_COLLECTION_NAME,
+            typesenseServerConfig,
             contextualSearch: true,
           },
         }

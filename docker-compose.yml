@@ -35,6 +35,41 @@ services:
       timeout: 5s
       retries: 5
 
+  typesense:
+    image: typesense/typesense:30.0
+    restart: unless-stopped
+    command:
+      [
+        "--data-dir",
+        "/data",
+        "--api-key=${TYPESENSE_ADMIN_API_KEY:-change-me-typesense-admin-key}",
+        "--enable-cors",
+      ]
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense_data:/data
+
+  typesense-bootstrap:
+    image: node:22-bookworm-slim
+    restart: "no"
+    depends_on:
+      - typesense
+    working_dir: /workspace
+    env_file:
+      - .env
+    environment:
+      TYPESENSE_ADMIN_API_KEY: ${TYPESENSE_ADMIN_API_KEY:-change-me-typesense-admin-key}
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_COLLECTION_NAME: ${TYPESENSE_COLLECTION_NAME:-openkeep-docs}
+      TYPESENSE_SEARCH_API_KEY_FILE: /run/typesense/docs-search-api-key
+    volumes:
+      - .:/workspace:ro
+      - typesense_runtime:/run/typesense
+    command: ["node", "scripts/docs/bootstrap-typesense-search-key.mjs"]
+
   migrate:
     build:
       context: .
@@ -105,13 +140,23 @@ services:
       context: .
       dockerfile: apps/docs/Dockerfile
     restart: unless-stopped
+    depends_on:
+      typesense-bootstrap:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      DOCS_SITE_URL: http://localhost:3001
+      DOCS_SITE_URL: ${DOCS_SITE_URL:-http://localhost:3001}
+      TYPESENSE_COLLECTION_NAME: ${TYPESENSE_COLLECTION_NAME:-openkeep-docs}
+      TYPESENSE_HOST: ${TYPESENSE_PUBLIC_HOST:-localhost}
+      TYPESENSE_PORT: ${TYPESENSE_PUBLIC_PORT:-8108}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PUBLIC_PROTOCOL:-http}
+      TYPESENSE_SEARCH_API_KEY_FILE: /run/typesense/docs-search-api-key
     ports:
       - "3001:3001"
+    volumes:
+      - typesense_runtime:/run/typesense:ro
     healthcheck:
       test:
         [
@@ -122,6 +167,27 @@ services:
       timeout: 5s
       retries: 5
 
+  docs-search-indexer:
+    image: typesense/docsearch-scraper:0.11.0
+    profiles: ["docs-search"]
+    restart: "no"
+    depends_on:
+      docs:
+        condition: service_healthy
+      typesense-bootstrap:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      TYPESENSE_API_KEY: ${TYPESENSE_ADMIN_API_KEY:-change-me-typesense-admin-key}
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      CONFIG: >-
+        {"index_name":"${TYPESENSE_COLLECTION_NAME:-openkeep-docs}","start_urls":[{"url":"${DOCSEARCH_START_URL:-http://docs:3001}"}],"allowed_domains":["docs"],"sitemap_urls":["${DOCSEARCH_SITEMAP_URL:-http://docs:3001/sitemap.xml}"],"stop_urls":["${DOCSEARCH_STOP_URL:-http://docs:3001/search}"],"selectors":{"default":{"lvl0":"header h1","lvl1":"article h1, header h1","lvl2":"article h2","lvl3":"article h3","lvl4":"article h4","lvl5":"article h5","lvl6":"article h6","text":"article p, article li, article td, article th, article code"}},"strip_chars":" .,;:#","scrape_start_urls":false}
+
 volumes:
   postgres_data:
   minio_data:
+  typesense_data:
+  typesense_runtime:
