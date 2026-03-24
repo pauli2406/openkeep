@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import Link from "@docusaurus/Link";
 import Layout from "@theme/Layout";
+import useBaseUrl from "@docusaurus/useBaseUrl";
 
 import styles from "./index.module.css";
 
@@ -33,6 +34,8 @@ const highlights = [
 ];
 
 export default function Home() {
+  const logoWordmark = useBaseUrl("/img/logo-wordmark.svg");
+
   return (
     <Layout
       title="OpenKeep Docs"
@@ -44,6 +47,7 @@ export default function Home() {
           <div className={styles.heroInner}>
             <div className={styles.heroCopy}>
               <p className={styles.eyebrow}>Self-hosted archive intelligence</p>
+              <img className={styles.heroLogo} src={logoWordmark} alt="OpenKeep Docs" />
               <h1 className={styles.title}>Documentation that matches the product you actually run.</h1>
               <p className={styles.subtitle}>
                 OpenKeep docs are organized for the three real audiences of the system: end users,

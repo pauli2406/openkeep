@@ -1,0 +1,15 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#F7F0DE"/>
+  <rect x="40" y="40" width="1120" height="550" rx="32" fill="#F1E6CF"/>
+  <rect x="40" y="230" width="1120" height="170" fill="#1C4C47"/>
+  <g>
+    <rect x="112" y="154" width="168" height="168" rx="40" fill="#244F49"/>
+    <path d="M156 128H248L270 152V252L202 292L158 270L156 128Z" fill="#F7EFD9"/>
+    <path d="M174 164H250" stroke="#244F49" stroke-width="10" stroke-linecap="round"/>
+    <path d="M178 172H248V236L202 264L178 248V172Z" fill="#244F49" stroke="#F7EFD9" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M270 176H288V214H270" fill="#9C5A33"/>
+    <path d="M226 128L248 152H232L214 128H226Z" fill="#F7EFD9"/>
+  </g>
+  <text x="355" y="351" fill="#F7F0DE" font-family="Georgia, 'Times New Roman', serif" font-size="86" font-weight="700">OpenKeep</text>
+  <text x="112" y="472" fill="#1C4C47" font-family="Georgia, serif" font-size="34">Structured archives, ready to keep.</text>
+</svg>

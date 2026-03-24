@@ -60,7 +60,8 @@ body {
 }
 
 .navbar__logo {
-  height: 1.95rem;
+  height: 2.35rem;
+  width: auto;
 }
 
 .navbar__title {

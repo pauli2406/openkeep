@@ -1,28 +1,16 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#F7F4EA"/>
-  <rect x="40" y="40" width="1120" height="550" rx="32" fill="url(#paint0_linear_4_2)"/>
-  <rect x="78" y="92" width="174" height="174" rx="36" fill="#FFFDF7" fill-opacity="0.14"/>
-  <rect x="108" y="122" width="114" height="114" rx="28" fill="url(#paint1_linear_4_2)"/>
-  <path d="M130 154H166C174.837 154 182 161.163 182 170V205C182 213.837 174.837 221 166 221H138C129.163 221 122 213.837 122 205V162C122 157.582 125.582 154 130 154Z" fill="#FFFDF7" fill-opacity="0.95"/>
-  <path d="M136 167C136 164.791 137.791 163 140 163H172C174.209 163 176 164.791 176 167V173H136V167Z" fill="#196959"/>
-  <path d="M136 184H168" stroke="#155B4A" stroke-width="6" stroke-linecap="round"/>
-  <path d="M136 196H162" stroke="#2F7A68" stroke-width="6" stroke-linecap="round"/>
-  <path d="M136 208H154" stroke="#8C5B1B" stroke-width="6" stroke-linecap="round"/>
-  <text x="300" y="186" fill="#FFFDF7" font-family="Arial, sans-serif" font-size="76" font-weight="700">OpenKeep Docs</text>
-  <text x="300" y="254" fill="#D6EFE7" font-family="Arial, sans-serif" font-size="32">User, technical, and operational guidance for the self-hosted document archive.</text>
-  <rect x="300" y="312" width="760" height="180" rx="28" fill="#FFFDF7" fill-opacity="0.11"/>
-  <text x="340" y="372" fill="#DFF6EF" font-family="Arial, sans-serif" font-size="28" font-weight="700">Three paths, one source of truth</text>
-  <text x="340" y="422" fill="#F4FBF8" font-family="Arial, sans-serif" font-size="26">- User guides for daily archive workflows</text>
-  <text x="340" y="462" fill="#F4FBF8" font-family="Arial, sans-serif" font-size="26">- Technical docs for architecture, APIs, and LangGraph intelligence</text>
-  <text x="340" y="502" fill="#F4FBF8" font-family="Arial, sans-serif" font-size="26">- Operational docs for deployment, monitoring, and runbooks</text>
-  <defs>
-    <linearGradient id="paint0_linear_4_2" x1="40" y1="40" x2="1160" y2="590" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#10342C"/>
-      <stop offset="1" stop-color="#1B725F"/>
-    </linearGradient>
-    <linearGradient id="paint1_linear_4_2" x1="108" y1="122" x2="222" y2="236" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#155B4A"/>
-      <stop offset="1" stop-color="#228874"/>
-    </linearGradient>
-  </defs>
+  <rect width="1200" height="630" fill="#F7F0DE"/>
+  <rect x="40" y="40" width="1120" height="550" rx="32" fill="#F1E6CF"/>
+  <rect x="40" y="214" width="1120" height="198" fill="#1C4C47"/>
+  <g>
+    <path d="M128 118H212L234 142V238L178 272L130 244L128 118Z" fill="#F7EFD9"/>
+    <path d="M146 154H214" stroke="#1C4C47" stroke-width="10" stroke-linecap="round"/>
+    <path d="M148 160H212V222L178 244L148 226V160Z" fill="#1C4C47" stroke="#F7EFD9" stroke-width="8" stroke-linejoin="round"/>
+    <path d="M234 162H250V198H234" fill="#9C5A33"/>
+    <path d="M204 118L228 142H214L190 118H204Z" fill="#F7EFD9"/>
+  </g>
+  <text x="300" y="202" fill="#1C4C47" font-family="Georgia, serif" font-size="82" font-weight="700">OpenKeep Docs</text>
+  <text x="300" y="252" fill="#5C594C" font-family="IBM Plex Sans, Arial, sans-serif" font-size="30">User, technical, and operational guidance for the self-hosted archive.</text>
+  <text x="112" y="348" fill="#F7F0DE" font-family="Georgia, serif" font-size="58" font-weight="700">Calm, structured guidance for every archive workflow.</text>
+  <text x="112" y="458" fill="#F7F0DE" font-family="IBM Plex Sans, Arial, sans-serif" font-size="28">User guides, technical references, and operational runbooks - all under one brand system.</text>
 </svg>

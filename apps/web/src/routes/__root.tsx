@@ -9,7 +9,6 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import {
-  Archive,
   Search,
   Upload,
   ClipboardCheck,
@@ -20,6 +19,7 @@ import {
   FileText,
   LayoutDashboard,
 } from "lucide-react";
+import { OpenKeepLogo } from "@/components/brand/openkeep-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -73,10 +73,7 @@ function RootComponent() {
     <>
       {/* Brand */}
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Archive className="h-5 w-5 text-[color:var(--explorer-rust)]" />
-        <span className="font-[var(--font-display)] text-2xl tracking-tight text-[color:var(--explorer-ink)]">
-          OpenKeep
-        </span>
+        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="h-7 w-auto" />
       </div>
 
       <Separator />
@@ -179,8 +176,7 @@ function RootComponent() {
               <span className="sr-only">Open menu</span>
             </Button>
             <div className="flex items-center gap-2">
-              <Archive className="h-4 w-4 text-[color:var(--explorer-rust)]" />
-              <span className="font-[var(--font-display)] text-xl text-[color:var(--explorer-ink)]">OpenKeep</span>
+              <OpenKeepLogo markClassName="h-7 w-7" wordmarkClassName="h-6 w-auto" />
             </div>
           </header>
 

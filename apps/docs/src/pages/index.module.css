@@ -53,6 +53,13 @@
   color: #196959;
 }
 
+.heroLogo {
+  display: block;
+  width: min(100%, 20rem);
+  height: auto;
+  margin-bottom: 1.3rem;
+}
+
 .title {
   max-width: 14ch;
   margin: 0;
