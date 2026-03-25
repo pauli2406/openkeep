@@ -18,6 +18,8 @@ import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { ScanScreen } from "./src/screens/ScanScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
+import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { colors, shadow } from "./src/theme";
 
@@ -26,6 +28,8 @@ export type AppStackParamList = {
   DocumentDetail: { documentId: string; title?: string };
   Review: undefined;
   Scan: undefined;
+  Correspondents: undefined;
+  CorrespondentDossier: { slug: string; name: string };
 };
 
 export type HomeTabParamList = {
@@ -152,6 +156,18 @@ function AppNavigator() {
         name="Scan"
         component={ScanScreen}
         options={{ title: "Scan & upload" }}
+      />
+      <Stack.Screen
+        name="Correspondents"
+        component={CorrespondentsScreen}
+        options={{ title: "Correspondents" }}
+      />
+      <Stack.Screen
+        name="CorrespondentDossier"
+        component={CorrespondentDossierScreen}
+        options={({ route }) => ({
+          title: route.params.name,
+        })}
       />
     </Stack.Navigator>
   );

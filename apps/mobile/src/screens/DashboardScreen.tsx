@@ -156,7 +156,7 @@ type Correspondent = DashboardInsights["topCorrespondents"][number];
 
 const DOT_COLORS = ["#b04030", "#af6d11", "#17624f", "#5c6bc0"];
 
-function ClusterStrip({ data }: { data: Correspondent[] }) {
+function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item: Correspondent) => void }) {
   if (data.length === 0) {
     return null;
   }
@@ -174,7 +174,11 @@ function ClusterStrip({ data }: { data: Correspondent[] }) {
         contentContainerStyle={clusterStyles.scroll}
       >
         {data.slice(0, 4).map((item, index) => (
-          <View key={item.id} style={clusterStyles.card}>
+          <Pressable
+            key={item.id}
+            onPress={() => onPress(item)}
+            style={({ pressed }) => [clusterStyles.card, pressed ? clusterStyles.cardPressed : null]}
+          >
             <View style={clusterStyles.cardTopRow}>
               <Text style={clusterStyles.docCount}>
                 {item.documentCount} {item.documentCount === 1 ? "doc" : "docs"}
@@ -205,7 +209,7 @@ function ClusterStrip({ data }: { data: Correspondent[] }) {
                 {formatCurrency(item.totalAmount, item.currency ?? "EUR")}
               </Text>
             </View>
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -245,6 +249,10 @@ const clusterStyles = StyleSheet.create({
     padding: 16,
     gap: 10,
     ...shadow,
+  },
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.97 }],
   },
   cardTopRow: {
     flexDirection: "row",
@@ -658,7 +666,11 @@ export function DashboardScreen() {
           </View>
           <View style={styles.metricGrid}>
             <Metric label="Document types" value={data.stats.documentTypesCount} />
-            <Metric label="Correspondents" value={data.stats.correspondentsCount} />
+            <Metric
+              label="Correspondents"
+              value={data.stats.correspondentsCount}
+              onPress={() => navigation.navigate("Correspondents")}
+            />
           </View>
 
           {/* ── Intake trend ── */}
@@ -668,7 +680,15 @@ export function DashboardScreen() {
 
           {/* ── Correspondent clusters ── */}
           {data.topCorrespondents.length > 0 ? (
-            <ClusterStrip data={data.topCorrespondents} />
+            <ClusterStrip
+              data={data.topCorrespondents}
+              onPress={(item) =>
+                navigation.navigate("CorrespondentDossier", {
+                  slug: item.slug,
+                  name: item.name,
+                })
+              }
+            />
           ) : null}
 
           {/* ── Deadline / task list ── */}

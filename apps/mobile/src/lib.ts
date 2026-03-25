@@ -148,6 +148,125 @@ export type FacetsResponse = {
   years: Array<{ year: number; count: number }>;
 };
 
+// ---------------------------------------------------------------------------
+// Correspondent Dossier types
+// ---------------------------------------------------------------------------
+
+export type CorrespondentSummaryStatus = "ready" | "pending" | "unavailable";
+
+export type CorrespondentIntelligenceProfile = {
+  category: string | null;
+  subcategory?: string | null;
+  confidence?: number | null;
+  narrative?: string | null;
+  keySignals: string[];
+};
+
+export type CorrespondentIntelligenceTimelineEvent = {
+  date: string | null;
+  title: string;
+  description: string;
+  documentId?: string | null;
+  documentTitle?: string | null;
+};
+
+export type CorrespondentIntelligenceChange = {
+  category: string;
+  title: string;
+  description: string;
+  effectiveDate: string | null;
+  direction: "increase" | "decrease" | "update" | "notice" | "unknown";
+  valueBefore?: string | null;
+  valueAfter?: string | null;
+  currency?: string | null;
+  documentId?: string | null;
+  documentTitle?: string | null;
+};
+
+export type CorrespondentIntelligenceFact = {
+  label: string;
+  value: string;
+  asOf?: string | null;
+  documentId?: string | null;
+  documentTitle?: string | null;
+};
+
+export type CorrespondentInsuranceInsight = {
+  policyReferences: string[];
+  latestPremiumAmount?: number | null;
+  latestPremiumCurrency?: string | null;
+  premiumChangeSummary?: string | null;
+  coverageHighlights: string[];
+  renewalDate?: string | null;
+  cancellationWindow?: string | null;
+};
+
+export type CorrespondentIntelligence = {
+  overview: string | null;
+  profile?: CorrespondentIntelligenceProfile;
+  timeline: CorrespondentIntelligenceTimelineEvent[];
+  changes: CorrespondentIntelligenceChange[];
+  currentState: CorrespondentIntelligenceFact[];
+  domainInsights: {
+    insurance?: CorrespondentInsuranceInsight;
+  };
+  sourceDocumentIds: string[];
+  provider?: string | null;
+  model?: string | null;
+  generatedAt?: string | null;
+};
+
+export type CorrespondentTypeCount = {
+  name: string;
+  count: number;
+};
+
+export type CorrespondentTimelinePoint = {
+  month: string;
+  count: number;
+};
+
+export type CorrespondentInsightsResponse = {
+  correspondent: {
+    id: string;
+    name: string;
+    slug: string;
+    summary?: string | null;
+    summaryGeneratedAt?: string | null;
+    intelligenceGeneratedAt?: string | null;
+  };
+  summaryStatus: CorrespondentSummaryStatus;
+  summary: string | null;
+  intelligenceStatus: CorrespondentSummaryStatus;
+  intelligence: CorrespondentIntelligence | null;
+  stats: {
+    documentCount: number;
+    totalAmount: number | null;
+    currency: string | null;
+    dateRange: {
+      from: string | null;
+      to: string | null;
+    };
+    avgConfidence: number | null;
+  };
+  documentTypeBreakdown: CorrespondentTypeCount[];
+  timeline: CorrespondentTimelinePoint[];
+  recentDocuments: ArchiveDocument[];
+  upcomingDeadlines: Array<{
+    documentId: string;
+    title: string;
+    referenceNumber?: string | null;
+    dueDate: string;
+    amount: number | null;
+    currency: string | null;
+    correspondentName: string | null;
+    documentTypeName?: string | null;
+    taskLabel: string;
+    daysUntilDue: number;
+    isOverdue: boolean;
+  }>;
+};
+
 export function formatDate(value: string | null | undefined) {
   if (!value) {
     return "-";
