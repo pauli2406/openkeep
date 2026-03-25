@@ -239,4 +239,61 @@ describe("CorrespondentResolutionService", () => {
     expect(result.correspondentName).toBeNull();
     expect(result.metadata.matchStrategy).toBe("review");
   });
+
+  it("prefers the invoice issuer over the recipient", async () => {
+    const service = createService();
+    (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([]);
+    (service as any).resolveWithLlm = vi.fn().mockResolvedValue({
+      rawName: "Marcel Pochert",
+      cleanDisplayName: "Marcel Pochert",
+      confidence: 0.91,
+      evidenceLines: ["Marcel Pochert", "Zahlungsempfaenger", "MVZ Medizinisches Labor Nord MLN GmbH"],
+      isLikelyOrganizationOrPerson: true,
+      shouldCreateNew: true,
+      selectedCandidateId: null,
+    });
+    (service as any).getProvider = vi.fn(() => ({
+      provider: "openai",
+      apiKey: "test",
+      model: "gpt-test",
+    }));
+
+    const result = await service.resolve(
+      buildInput([
+        "MEDIZINISCHES LABOR NORD",
+        "Rechnung",
+        "Herr",
+        "Marcel Pochert",
+        "Zahlungsempfaenger:",
+        "MVZ Medizinisches Labor Nord MLN GmbH",
+      ]),
+      {
+        ...buildDeterministicResult("Marcel Pochert"),
+        documentTypeName: "Invoice",
+        metadata: {
+          reviewEvidence: {
+            documentClass: "invoice",
+            requiredFields: ["correspondent"],
+            missingFields: [],
+            extracted: {
+              correspondent: true,
+              issueDate: false,
+              dueDate: false,
+              amount: false,
+              currency: false,
+              referenceNumber: false,
+              expiryDate: false,
+              holderName: false,
+              issuingAuthority: false,
+            },
+            activeReasons: [],
+            confidence: 0.9,
+          },
+        },
+      },
+    );
+
+    expect(result.correspondentName).toBe("MVZ Medizinisches Labor Nord MLN GmbH");
+    expect(result.metadata.matchStrategy).toBe("new");
+  });
 });

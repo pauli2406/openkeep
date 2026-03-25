@@ -1,7 +1,12 @@
 node_modules
+**/node_modules
 dist
+**/dist
 .git
 .turbo
+**/.turbo
 coverage
 data
-
+tmp
+apps/mobile/ios
+apps/mobile/.expo

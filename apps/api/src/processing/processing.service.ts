@@ -1196,7 +1196,9 @@ export class ProcessingService {
   }
 
   private async ensureCorrespondent(name: string): Promise<string> {
-    const normalizedName = normalizeCorrespondentName(name) ?? name.trim().toLowerCase().replace(/\s+/g, " ");
+    const trimmedName = name.trim();
+    const normalizedName =
+      normalizeCorrespondentName(trimmedName) ?? trimmedName.toLowerCase().replace(/\s+/g, " ");
     const [existing] = await this.databaseService.db
       .select({ id: correspondents.id })
       .from(correspondents)
@@ -1207,16 +1209,36 @@ export class ProcessingService {
       return existing.id;
     }
 
-    const [created] = await this.databaseService.db
-      .insert(correspondents)
-      .values({
-        name: name.trim(),
-        slug: this.createSlug(name),
-        normalizedName,
-      })
-      .returning({ id: correspondents.id });
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      try {
+        const [created] = await this.databaseService.db
+          .insert(correspondents)
+          .values({
+            name: trimmedName,
+            slug: this.buildUniqueSlugCandidate(trimmedName, attempt),
+            normalizedName,
+          })
+          .returning({ id: correspondents.id });
 
-    return created.id;
+        return created.id;
+      } catch (error) {
+        const [concurrent] = await this.databaseService.db
+          .select({ id: correspondents.id })
+          .from(correspondents)
+          .where(eq(correspondents.normalizedName, normalizedName))
+          .limit(1);
+
+        if (concurrent) {
+          return concurrent.id;
+        }
+
+        if (!this.isUniqueViolation(error)) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error(`Failed to create correspondent for ${trimmedName}`);
   }
 
   async persistManualCorrespondentAlias(input: {
@@ -1349,7 +1371,7 @@ export class ProcessingService {
         ? manualOverrides.values.issuingAuthority ?? null
         : extracted.issuingAuthority,
       correspondentId: this.isFieldLocked(manualOverrides, "correspondentId")
-        ? manualOverrides.values.correspondentId ?? null
+        ? (manualOverrides.values.correspondentId ?? extracted.correspondentId)
         : extracted.correspondentId,
       documentTypeId: this.isFieldLocked(manualOverrides, "documentTypeId")
         ? manualOverrides.values.documentTypeId ?? null
@@ -1441,6 +1463,25 @@ export class ProcessingService {
       strict: true,
       trim: true,
     }).slice(0, 255);
+  }
+
+  private buildUniqueSlugCandidate(input: string, attempt: number): string {
+    const baseSlug = this.createSlug(input) || "correspondent";
+    if (attempt === 0) {
+      return baseSlug;
+    }
+
+    const suffix = `-${attempt + 1}`;
+    return `${baseSlug.slice(0, Math.max(1, 255 - suffix.length))}${suffix}`;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    );
   }
 
   private logStructured(

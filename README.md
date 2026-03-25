@@ -75,7 +75,7 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 8. Run the docs site with `pnpm docs:dev` if you want the Docusaurus experience locally.
 9. Wait for `GET /api/health/ready` to report all checks green before using the stack.
 
-If you want the full containerized stack, `docker compose up` now also starts the docs site on `http://localhost:3001` and a self-hosted Typesense node on `http://localhost:8108`.
+If you want the full containerized stack, use `pnpm docker:up` or `pnpm docker:up:build`. Those wrappers auto-build the shared `worker-base` OCR image if it is missing locally, then start the usual compose stack on `http://localhost:3000`, docs on `http://localhost:3001`, and Typesense on `http://localhost:8108`.
 
 Optional docs-site search:
 
@@ -93,6 +93,8 @@ For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a c
 ## Verification Commands
 
 - `pnpm docs:build`
+- `pnpm docker:up`
+- `pnpm docker:up:build`
 - `pnpm docs:search:up`
 - `pnpm docs:search:index`
 - `pnpm typecheck`

@@ -59,6 +59,11 @@ interface LlmResolution {
   selectedCandidateId: string | null;
 }
 
+interface BillingEntityCandidate {
+  name: string;
+  source: "explicit" | "header";
+}
+
 interface PersistAliasInput {
   correspondentId: string;
   alias: string;
@@ -81,7 +86,15 @@ export class CorrespondentResolutionService {
     deterministicResult: MetadataExtractionResult,
   ): Promise<ResolveCorrespondentResult> {
     const evidenceLines = this.collectEvidenceLines(input);
+    const isBillingDocument = this.isBillingDocument(deterministicResult);
+    const billingEntityCandidate = isBillingDocument
+      ? this.extractBillingEntityCandidate(input)
+      : null;
+    const recipientCandidates = isBillingDocument
+      ? this.extractRecipientCandidates(input)
+      : new Set<string>();
     const deterministicRaw =
+      this.cleanDisplayName(billingEntityCandidate?.name) ??
       this.cleanDisplayName(deterministicResult.correspondentName) ??
       this.pickDeterministicRawCandidate(evidenceLines);
     const initialBlockedReason = deterministicRaw
@@ -99,13 +112,24 @@ export class CorrespondentResolutionService {
         ? await this.resolveWithLlm(provider, input, evidenceLines, lexicalCandidates)
         : null;
 
-    const rawName =
+    let rawName =
       this.cleanDisplayName(llmDecision?.rawName) ??
       deterministicRaw ??
       this.pickDeterministicRawCandidate(evidenceLines);
-    const cleanedDisplayName =
+    let cleanedDisplayName =
       this.cleanDisplayName(llmDecision?.cleanDisplayName) ??
       rawName;
+
+    if (
+      isBillingDocument &&
+      billingEntityCandidate &&
+      rawName &&
+      recipientCandidates.has(normalizeCorrespondentName(rawName) ?? "")
+    ) {
+      rawName = this.cleanDisplayName(billingEntityCandidate.name);
+      cleanedDisplayName = rawName;
+    }
+
     const rawNameNormalized = normalizeCorrespondentName(rawName);
     const blockedReason =
       rawName && !rawNameNormalized
@@ -190,6 +214,26 @@ export class CorrespondentResolutionService {
         resolvedName: aliasCandidate.name,
         matchStrategy: "alias",
         confidence: Math.max(0.92, aliasCandidate.score),
+        evidenceLines: llmDecision?.evidenceLines?.length
+          ? llmDecision.evidenceLines
+          : evidenceLines.slice(0, 5),
+        candidateCorrespondents,
+        provider: provider?.provider ?? "deterministic",
+      });
+    }
+
+    if (
+      billingEntityCandidate?.source === "explicit" &&
+      cleanedDisplayName &&
+      rawNameNormalized === normalizeCorrespondentName(billingEntityCandidate.name) &&
+      candidateCorrespondents.length === 0
+    ) {
+      return this.buildResolvedResult({
+        rawName,
+        rawNameNormalized,
+        resolvedName: cleanedDisplayName,
+        matchStrategy: "new",
+        confidence: Math.max(llmDecision?.confidence ?? 0, 0.88),
         evidenceLines: llmDecision?.evidenceLines?.length
           ? llmDecision.evidenceLines
           : evidenceLines.slice(0, 5),
@@ -651,6 +695,9 @@ export class CorrespondentResolutionService {
       "Return exactly one JSON object and nothing else.",
       "Task: identify the sender/correspondent for a personal document.",
       "The correspondent must be a short business or person name only.",
+      this.looksLikeBillingDocumentTitle(input.title)
+        ? "For invoices, bills, and receipts, choose the issuer, payee, lab, merchant, or service provider - never the customer, patient, insured person, or recipient."
+        : "Choose the real sender/issuing party, not the addressee, customer, or recipient.",
       "Never return addresses, postal codes, country names, phone numbers, email addresses, websites, invoice labels, or long document headlines.",
       "If a slogan/tagline is attached, strip it and keep only the entity name.",
       "If one of the candidate correspondents matches, set selectedCandidateId to that id and shouldCreateNew=false.",
@@ -663,6 +710,99 @@ export class CorrespondentResolutionService {
       "Candidate correspondents:",
       candidateLines,
     ].join("\n");
+  }
+
+  private isBillingDocument(result: MetadataExtractionResult): boolean {
+    const documentClass =
+      result.metadata?.reviewEvidence && typeof result.metadata.reviewEvidence === "object"
+        ? (result.metadata.reviewEvidence as { documentClass?: string }).documentClass
+        : null;
+
+    return documentClass === "invoice" || this.looksLikeBillingDocumentTitle(result.documentTypeName);
+  }
+
+  private looksLikeBillingDocumentTitle(value: string | null | undefined): boolean {
+    return /invoice|rechnung|bill|receipt|quittung/i.test(value ?? "");
+  }
+
+  private extractBillingEntityCandidate(input: MetadataExtractionInput): BillingEntityCandidate | null {
+    const lines = input.parsed.pages
+      .slice(0, 1)
+      .flatMap((page) => page.lines)
+      .map((line) => this.normalizeLine(line.text))
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 20);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]!;
+      const explicitMatch = line.match(
+        /^(?:zahlungsempf(?:a|ä|ae)nger|payment recipient|payee|issuer|aussteller|rechnungssteller|rechnung von|from|von)\b\s*:?[\s-]*(.+)?$/i,
+      );
+      if (explicitMatch) {
+        const inlineValue = this.cleanDisplayName(explicitMatch[1]);
+        if (inlineValue && !this.blockedReasonForCandidate(inlineValue)) {
+            return { name: inlineValue, source: "explicit" };
+        }
+
+        for (let lookahead = index + 1; lookahead < Math.min(lines.length, index + 4); lookahead += 1) {
+          const candidate = this.cleanDisplayName(lines[lookahead]);
+          if (candidate && !this.blockedReasonForCandidate(candidate) && !this.looksLikeRecipientMarker(candidate)) {
+            return { name: candidate, source: "explicit" };
+          }
+        }
+      }
+    }
+
+    for (const line of lines) {
+      if (this.looksLikeRecipientMarker(line)) {
+        break;
+      }
+
+      const candidate = this.cleanDisplayName(line);
+      if (candidate && !this.blockedReasonForCandidate(candidate)) {
+        return { name: candidate, source: "header" };
+      }
+    }
+
+    return null;
+  }
+
+  private extractRecipientCandidates(input: MetadataExtractionInput): Set<string> {
+    const lines = input.parsed.pages
+      .slice(0, 1)
+      .flatMap((page) => page.lines)
+      .map((line) => this.normalizeLine(line.text))
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 20);
+    const recipients = new Set<string>();
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index]!;
+      const inlineMatch = line.match(
+        /^(?:herr|frau|mr\.?|mrs\.?|ms\.?|patient|kunde|customer|bill to|recipient|to)\s*:?[\s-]+(.+)$/i,
+      );
+      if (inlineMatch) {
+        const normalized = normalizeCorrespondentName(inlineMatch[1]);
+        if (normalized) {
+          recipients.add(normalized);
+        }
+      }
+
+      if (this.looksLikeRecipientMarker(line)) {
+        const nextLine = lines[index + 1];
+        const normalized = normalizeCorrespondentName(nextLine);
+        if (normalized) {
+          recipients.add(normalized);
+        }
+      }
+    }
+
+    return recipients;
+  }
+
+  private looksLikeRecipientMarker(value: string): boolean {
+    return /^(?:herr|frau|mr\.?|mrs\.?|ms\.?|bill to|recipient|to|kunde|customer)$/i.test(value) ||
+      /f(?:ü|ue)r die patientin|f(?:ü|ue)r den patienten|patient(?:in)?\s*\/|patient(?:in)?$/i.test(value);
   }
 
   private async callOpenAi(

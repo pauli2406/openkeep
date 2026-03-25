@@ -672,7 +672,7 @@ function ResultsPane({
             <div className="prose prose-sm max-w-none text-[color:var(--explorer-ink)] prose-headings:font-semibold prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-[color:var(--explorer-ink)]">
               <Markdown
                 components={{
-                  a: ({ href, children, ...props }) => {
+                  a: ({ href, children, title, ...externalProps }) => {
                     if (href?.startsWith("/documents/")) {
                       const documentId = href.replace("/documents/", "");
                       return (
@@ -680,7 +680,7 @@ function ResultsPane({
                           to="/documents/$documentId"
                           params={{ documentId }}
                           className="no-underline"
-                          {...props}
+                          title={title}
                         >
                           <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-white">
                             {children}
@@ -693,7 +693,7 @@ function ResultsPane({
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        {...props}
+                          {...externalProps}
                       >
                         {children}
                       </a>
@@ -959,7 +959,7 @@ function CitationPreviewPane({
             <div className="prose prose-sm max-w-none text-[color:var(--explorer-ink)] prose-p:text-[13px] prose-p:leading-relaxed">
               <Markdown
                 components={{
-                  a: ({ href, children, ...props }) => {
+                  a: ({ href, children, title, ...externalProps }) => {
                     if (href?.startsWith("/documents/")) {
                       const documentId = href.replace("/documents/", "");
                       return (
@@ -967,7 +967,7 @@ function CitationPreviewPane({
                           to="/documents/$documentId"
                           params={{ documentId }}
                           className="no-underline"
-                          {...props}
+                          title={title}
                         >
                           <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1 py-0.5 text-[10px] font-bold text-[color:var(--explorer-rust)]">
                             {children}
@@ -976,7 +976,7 @@ function CitationPreviewPane({
                       );
                     }
                     return (
-                      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                      <a href={href} target="_blank" rel="noopener noreferrer" {...externalProps}>
                         {children}
                       </a>
                     );

@@ -139,10 +139,51 @@ export class TaxonomiesService {
     input: CreateCorrespondentInput,
     principal: AuthenticatedPrincipal,
   ): Promise<Correspondent> {
-    const [created] = await this.databaseService.db
-      .insert(correspondents)
-      .values(this.toCorrespondentInsert(input.name))
-      .returning();
+    const trimmedName = input.name.trim();
+    const normalizedName =
+      normalizeCorrespondentName(trimmedName) ?? trimmedName.toLowerCase().replace(/\s+/g, " ");
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(correspondents)
+      .where(eq(correspondents.normalizedName, normalizedName))
+      .limit(1);
+
+    if (existing) {
+      return existing;
+    }
+
+    let created: Correspondent | undefined;
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      try {
+        [created] = await this.databaseService.db
+          .insert(correspondents)
+          .values({
+            name: trimmedName,
+            slug: this.buildUniqueSlugCandidate(trimmedName, attempt),
+            normalizedName,
+          })
+          .returning();
+        break;
+      } catch (error) {
+        const [concurrent] = await this.databaseService.db
+          .select()
+          .from(correspondents)
+          .where(eq(correspondents.normalizedName, normalizedName))
+          .limit(1);
+
+        if (concurrent) {
+          return concurrent;
+        }
+
+        if (!this.isUniqueViolation(error)) {
+          throw error;
+        }
+      }
+    }
+
+    if (!created) {
+      throw new BadRequestException("Failed to create correspondent");
+    }
 
     await this.recordAudit(principal.userId, "taxonomy.correspondent_created", {
       correspondentId: created.id,
@@ -360,6 +401,25 @@ export class TaxonomiesService {
       strict: true,
       trim: true,
     }).slice(0, 255);
+  }
+
+  private buildUniqueSlugCandidate(input: string, attempt: number): string {
+    const baseSlug = this.createSlug(input) || "correspondent";
+    if (attempt === 0) {
+      return baseSlug;
+    }
+
+    const suffix = `-${attempt + 1}`;
+    return `${baseSlug.slice(0, Math.max(1, 255 - suffix.length))}${suffix}`;
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    );
   }
 
   private async recordAudit(

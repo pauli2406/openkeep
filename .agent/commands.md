@@ -8,7 +8,8 @@
 
 - `pnpm db:migrate`
 - `docker compose up postgres minio`
-- `docker compose up`
+- `pnpm docker:up`
+- `pnpm docker:up:build`
 - `pnpm --filter @openkeep/api dev`
 - `pnpm --filter @openkeep/worker dev`
 - `pnpm --filter @openkeep/web dev`

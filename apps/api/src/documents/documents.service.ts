@@ -2213,7 +2213,15 @@ export class DocumentsService {
     assignIfPresent("referenceNumber", input.referenceNumber ?? null);
     assignIfPresent("holderName", input.holderName ?? null);
     assignIfPresent("issuingAuthority", input.issuingAuthority ?? null);
-    assignIfPresent("correspondentId", input.correspondentId ?? null);
+    if (Object.prototype.hasOwnProperty.call(input, "correspondentId")) {
+      if (input.correspondentId) {
+        nextLockedFields.add("correspondentId");
+        nextValues.correspondentId = input.correspondentId;
+      } else {
+        nextLockedFields.delete("correspondentId");
+        delete nextValues.correspondentId;
+      }
+    }
     assignIfPresent("documentTypeId", input.documentTypeId ?? null);
     assignIfPresent("tagIds", input.tagIds);
 

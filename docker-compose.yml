@@ -74,6 +74,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: migrate
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,9 +86,11 @@ services:
     command: ["pnpm", "db:migrate"]
 
   api:
+    image: openkeep-api:latest
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: runtime
     restart: unless-stopped
     depends_on:
       postgres:
@@ -112,9 +115,12 @@ services:
       - "3000:3000"
 
   worker:
+    image: openkeep-worker:latest
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
+      args:
+        WORKER_BASE_IMAGE: openkeep-worker-base:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -135,7 +141,19 @@ services:
       MINIO_SECRET_KEY: openkeep123
       MINIO_BUCKET: documents
 
+  worker-base:
+    profiles: ["build"]
+    image: openkeep-worker-base:latest
+    build:
+      context: .
+      dockerfile: docker/worker-base.Dockerfile
+      args:
+        WORKER_BASE_FINGERPRINT: ${WORKER_BASE_FINGERPRINT:-unknown}
+    command: ["true"]
+    restart: "no"
+
   docs:
+    image: openkeep-docs:latest
     build:
       context: .
       dockerfile: apps/docs/Dockerfile

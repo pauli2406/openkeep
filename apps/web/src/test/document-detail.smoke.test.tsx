@@ -597,4 +597,53 @@ describe("document detail smoke", () => {
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
   });
 
+  it("creates a new correspondent from the document edit form", async () => {
+    const existingCorrespondent = makeCorrespondent();
+    const newCorrespondent = makeCorrespondent({
+      id: "33333333-3333-3333-3333-333333333333",
+      name: "New Utility Co",
+      slug: "new-utility-co",
+    });
+    const createCalls: unknown[] = [];
+    let correspondents = [existingCorrespondent];
+
+    server.use(
+      http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([makeTag()])),
+      http.get(apiUrl("/api/taxonomies/correspondents"), () => HttpResponse.json(correspondents)),
+      http.get(apiUrl("/api/taxonomies/document-types"), () => HttpResponse.json([makeDocumentType()])),
+      http.get(apiUrl(`/api/documents/${documentId}`), () => HttpResponse.json(makeDocument({ id: documentId }))),
+      http.get(apiUrl(`/api/documents/${documentId}/text`), () =>
+        HttpResponse.json({ documentId, blocks: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/history`), () =>
+        HttpResponse.json({ documentId, items: [] }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/download`), () =>
+        new HttpResponse(new Uint8Array([1, 2, 3]), {
+          headers: { "Content-Type": "application/pdf" },
+        }),
+      ),
+      http.get(apiUrl("/api/health/providers"), () =>
+        HttpResponse.json(makeHealthProvidersResponse()),
+      ),
+      http.post(apiUrl("/api/taxonomies/correspondents"), async ({ request }) => {
+        const body = await request.json();
+        createCalls.push(body);
+        correspondents = [...correspondents, newCorrespondent];
+        return HttpResponse.json(newCorrespondent);
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({ route: `/documents/${documentId}` });
+
+    expect(await screen.findByRole("heading", { name: "March Invoice" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+    await user.type(screen.getByPlaceholderText("Add a new correspondent"), "New Utility Co");
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(createCalls).toEqual([{ name: "New Utility Co" }]);
+    });
+  });
 });

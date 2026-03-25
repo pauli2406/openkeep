@@ -530,6 +530,7 @@ function DocumentDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
   const [tagQuery, setTagQuery] = useState("");
+  const [newCorrespondentName, setNewCorrespondentName] = useState("");
   const [editForm, setEditForm] = useState({
     title: "",
     issueDate: "",
@@ -711,6 +712,33 @@ function DocumentDetailPage() {
         tagIds: current.tagIds.includes(tag.id) ? current.tagIds : [...current.tagIds, tag.id],
       }));
       setTagQuery("");
+    },
+  });
+
+  const createCorrespondentMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { data, error } = await api.POST("/api/taxonomies/correspondents", {
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, "Failed to create correspondent"));
+      }
+      return data as unknown as TaxonomyCorrespondent;
+    },
+    onSuccess: async (correspondent) => {
+      queryClient.setQueryData(
+        ["taxonomies", "correspondents"],
+        (current: TaxonomyCorrespondent[] | undefined) => {
+          const next = [...(current ?? []).filter((item) => item.id !== correspondent.id), correspondent];
+          return next.sort((left, right) => left.name.localeCompare(right.name));
+        },
+      );
+      await queryClient.invalidateQueries({ queryKey: ["taxonomies", "correspondents"] });
+      setEditForm((current) => ({
+        ...current,
+        correspondentId: correspondent.id,
+      }));
+      setNewCorrespondentName("");
     },
   });
 
@@ -1680,6 +1708,48 @@ function DocumentDetailPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          value={newCorrespondentName}
+                          onChange={(e) => setNewCorrespondentName(e.target.value)}
+                          placeholder="Add a new correspondent"
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "Enter" &&
+                              newCorrespondentName.trim().length > 0 &&
+                              !createCorrespondentMutation.isPending
+                            ) {
+                              event.preventDefault();
+                              createCorrespondentMutation.mutate(newCorrespondentName.trim());
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => createCorrespondentMutation.mutate(newCorrespondentName.trim())}
+                          disabled={
+                            createCorrespondentMutation.isPending || newCorrespondentName.trim().length === 0
+                          }
+                        >
+                          {createCorrespondentMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Plus className="h-4 w-4" />
+                          )}
+                          Add
+                        </Button>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Create a new correspondent here if it is not in the list.
+                      </p>
+                      {createCorrespondentMutation.isError && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {createCorrespondentMutation.error instanceof Error
+                            ? createCorrespondentMutation.error.message
+                            : "Failed to create correspondent."}
+                        </p>
+                      )}
                       {pendingNewLocks.includes("correspondentId") && (
                         <p className="mt-1 text-xs text-amber-700">
                           Saving will lock this field.

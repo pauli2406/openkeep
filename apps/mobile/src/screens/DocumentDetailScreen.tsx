@@ -395,6 +395,7 @@ function OverviewTab({
   useEffect(() => setForm(initialForm), [initialForm]);
 
   const [reprocessProvider, setReprocessProvider] = useState<ParseProvider | "default">("default");
+  const [newCorrespondentName, setNewCorrespondentName] = useState("");
 
   const invalidateAll = async () => {
     await Promise.all([
@@ -454,6 +455,23 @@ function OverviewTab({
       if (!response.ok) throw new Error(await responseToMessage(response));
     },
     onSuccess: invalidateAll,
+  });
+
+  const createCorrespondentMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const response = await authFetch("/api/taxonomies/correspondents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) throw new Error(await responseToMessage(response));
+      return (await response.json()) as { id: string; name: string; slug: string };
+    },
+    onSuccess: async (correspondent) => {
+      await queryClient.invalidateQueries({ queryKey: ["document-facets"] });
+      setForm((current) => ({ ...current, correspondentId: correspondent.id }));
+      setNewCorrespondentName("");
+    },
   });
 
   async function handleDownload(searchable: boolean) {
@@ -624,6 +642,17 @@ function OverviewTab({
             options={facets.correspondents.map((c) => ({ id: c.id, label: c.name }))}
             onSelect={(id) => setForm((s) => ({ ...s, correspondentId: id }))}
             placeholder="Select correspondent"
+            createValue={newCorrespondentName}
+            onCreateValueChange={setNewCorrespondentName}
+            onCreateOption={() => createCorrespondentMutation.mutate(newCorrespondentName.trim())}
+            createPending={createCorrespondentMutation.isPending}
+            createError={
+              createCorrespondentMutation.isError
+                ? createCorrespondentMutation.error instanceof Error
+                  ? createCorrespondentMutation.error.message
+                  : "Failed to create correspondent."
+                : null
+            }
           />
         )}
 
@@ -1146,12 +1175,22 @@ function PickerField({
   options,
   onSelect,
   placeholder,
+  createValue,
+  onCreateValueChange,
+  onCreateOption,
+  createPending = false,
+  createError = null,
 }: {
   label: string;
   selectedId: string;
   options: Array<{ id: string; label: string }>;
   onSelect: (id: string) => void;
   placeholder: string;
+  createValue?: string;
+  onCreateValueChange?: (value: string) => void;
+  onCreateOption?: () => void;
+  createPending?: boolean;
+  createError?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1178,6 +1217,28 @@ function PickerField({
             placeholder="Filter..."
             placeholderTextColor={colors.muted}
           />
+          {onCreateValueChange && onCreateOption && (
+            <View style={styles.pickerCreateWrap}>
+              <TextInput
+                style={styles.pickerCreateInput}
+                value={createValue ?? ""}
+                onChangeText={onCreateValueChange}
+                placeholder="Add new"
+                placeholderTextColor={colors.muted}
+              />
+              <Pressable
+                onPress={onCreateOption}
+                disabled={createPending || !(createValue ?? "").trim()}
+                style={[
+                  styles.pickerCreateButton,
+                  (createPending || !(createValue ?? "").trim()) && styles.pickerCreateButtonDisabled,
+                ]}
+              >
+                <Text style={styles.pickerCreateButtonText}>{createPending ? "Adding..." : "Add"}</Text>
+              </Pressable>
+            </View>
+          )}
+          {createError ? <Text style={styles.pickerCreateError}>{createError}</Text> : null}
           {/* Clear option */}
           <Pressable
             onPress={() => {
@@ -1579,6 +1640,48 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     fontSize: 15,
     color: colors.text,
+  },
+  pickerCreateWrap: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerCreateInput: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingHorizontal: 12,
+    color: colors.text,
+    fontSize: 15,
+  },
+  pickerCreateButton: {
+    minWidth: 72,
+    minHeight: 42,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  pickerCreateButtonDisabled: {
+    opacity: 0.5,
+  },
+  pickerCreateButtonText: {
+    color: colors.surface,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  pickerCreateError: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    color: colors.danger,
+    fontSize: 13,
   },
   pickerList: {
     maxHeight: 200,

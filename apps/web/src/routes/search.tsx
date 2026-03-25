@@ -233,7 +233,7 @@ function SearchPage() {
                     <Markdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        a: ({ href, children, ...props }) => {
+                        a: ({ href, children, title, ...props }) => {
                           // Internal document links produced by linkifyCitations
                           if (href?.startsWith("/documents/")) {
                             const documentId = href.replace(
@@ -245,7 +245,7 @@ function SearchPage() {
                                 to="/documents/$documentId"
                                 params={{ documentId }}
                                 className="no-underline"
-                                {...props}
+                                title={title}
                               >
                                 <span className="inline-flex items-center rounded bg-[var(--explorer-cobalt-soft)] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-[var(--explorer-cobalt)] transition-colors hover:bg-[var(--explorer-cobalt)] hover:text-white">
                                   {children}

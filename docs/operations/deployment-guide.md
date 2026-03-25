@@ -127,7 +127,7 @@ For local non-container development, the worker also needs OCR tools installed o
 1. copy `.env.example` to `.env`
 2. replace default auth secrets and passwords
 3. configure the provider settings you actually plan to use
-4. start the stack with `docker compose up --build`
+4. start the stack with `pnpm docker:up:build`
 5. wait until readiness checks pass
 6. open the web app and complete owner setup if this is a fresh system
 7. run `pnpm docs:search:index` after the docs service is healthy to populate or refresh the docs index
@@ -148,11 +148,13 @@ Current images are defined by:
 - `apps/api/Dockerfile`
 - `apps/docs/Dockerfile`
 - `apps/worker/Dockerfile`
+- `docker/worker-base.Dockerfile`
 
 Notable details:
 
 - the API image builds shared packages and the API bundle
-- the worker image includes OCR dependencies such as `ocrmypdf`, `tesseract`, `poppler-utils`, `imagemagick`, and language data for German and English
+- the worker runtime builds on a shared local `worker-base` image that carries `ocrmypdf`, `tesseract`, `poppler-utils`, `imagemagick`, and German/English language data
+- `pnpm docker:up` and `pnpm docker:up:build` auto-bootstrap that shared OCR base image before running the normal compose command
 
 ## Readiness Expectations
 

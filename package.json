@@ -8,6 +8,9 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
+    "docker:build": "sh ./scripts/docker/compose-with-worker-base.sh build",
+    "docker:up": "sh ./scripts/docker/compose-with-worker-base.sh up",
+    "docker:up:build": "sh ./scripts/docker/compose-with-worker-base.sh up --build",
     "docs:dev": "pnpm --filter @openkeep/docs dev",
     "docs:build": "pnpm --filter @openkeep/docs build",
     "docs:search:up": "docker compose up -d typesense typesense-bootstrap docs",
