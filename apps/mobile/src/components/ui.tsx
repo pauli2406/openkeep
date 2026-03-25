@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useRef } from "react";
+import { useScrollToTop } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Pressable,
@@ -32,6 +34,10 @@ export function Screen({
   headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
 }) {
+  const scrollRef = useRef<ScrollView>(null);
+
+  useScrollToTop(scrollRef);
+
   const compact = headerVariant === "compact";
   const body = (
     <View style={[styles.content, contentContainerStyle]}>
@@ -53,6 +59,7 @@ export function Screen({
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
       {scroll ? (
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

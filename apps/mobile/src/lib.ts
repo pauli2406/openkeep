@@ -7,6 +7,224 @@ globalThis.Buffer = globalThis.Buffer ?? Buffer;
 
 export type DocumentStatus = "pending" | "processing" | "ready" | "failed";
 export type ReviewStatus = "not_required" | "pending" | "resolved";
+export type EmbeddingStatus =
+  | "not_configured"
+  | "queued"
+  | "indexing"
+  | "ready"
+  | "stale"
+  | "failed";
+export type ParseProvider =
+  | "local-ocr"
+  | "google-document-ai-enterprise-ocr"
+  | "google-document-ai-gemini-layout-parser"
+  | "amazon-textract"
+  | "azure-ai-document-intelligence"
+  | "mistral-ocr";
+export type ReviewReason =
+  | "low_confidence"
+  | "processing_failed"
+  | "ocr_empty"
+  | "missing_key_fields"
+  | "unsupported_format"
+  | "classification_ambiguous"
+  | "correspondent_unresolved"
+  | "validation_failed";
+export type ManualOverrideField =
+  | "issueDate"
+  | "dueDate"
+  | "expiryDate"
+  | "amount"
+  | "currency"
+  | "referenceNumber"
+  | "holderName"
+  | "issuingAuthority"
+  | "correspondentId"
+  | "documentTypeId"
+  | "tagIds";
+export type ProcessingJobStatus = "queued" | "running" | "completed" | "failed";
+export type LlmProvider = "openai" | "gemini" | "mistral" | "deterministic";
+
+// ---------------------------------------------------------------------------
+// Sub-types for rich metadata
+// ---------------------------------------------------------------------------
+
+export type ProcessingJobSummary = {
+  id: string;
+  status: ProcessingJobStatus;
+  attempts: number;
+  lastError: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ManualOverrides = {
+  lockedFields: ManualOverrideField[];
+  values: {
+    issueDate?: string | null;
+    dueDate?: string | null;
+    expiryDate?: string | null;
+    amount?: number | null;
+    currency?: string | null;
+    referenceNumber?: string | null;
+    holderName?: string | null;
+    issuingAuthority?: string | null;
+    correspondentId?: string | null;
+    documentTypeId?: string | null;
+    tagIds?: string[];
+  };
+  updatedAt?: string | null;
+  updatedByUserId?: string | null;
+};
+
+export type ReviewEvidence = {
+  documentClass: "invoice" | "generic";
+  requiredFields: string[];
+  missingFields: string[];
+  extracted: Record<string, boolean>;
+  activeReasons: ReviewReason[];
+  confidence?: number | null;
+  confidenceThreshold?: number;
+  ocrTextLength?: number;
+  ocrEmptyThreshold?: number;
+};
+
+export type CorrespondentExtraction = {
+  rawName?: string | null;
+  rawNameNormalized?: string | null;
+  resolvedName?: string | null;
+  matchStrategy?: string;
+  confidence?: number | null;
+  evidenceLines?: string[];
+  candidateCorrespondents?: Array<{
+    id?: string;
+    name: string;
+    reason?: string;
+    score?: number;
+  }>;
+  blockedReason?: string | null;
+  provider?: LlmProvider;
+};
+
+export type IntelligenceRouting = {
+  documentType: string | null;
+  subtype?: string | null;
+  confidence?: number | null;
+  reasoningHints?: string[];
+  agentVersion?: string;
+  provider?: LlmProvider;
+  model?: string;
+};
+
+export type IntelligenceField = {
+  value: string | null;
+  confidence?: number | null;
+  provider?: LlmProvider;
+  model?: string;
+};
+
+export type IntelligenceExtraction = {
+  documentType?: string | null;
+  fields: Record<string, unknown>;
+  fieldConfidence: Record<string, number>;
+  fieldProvenance: Record<
+    string,
+    {
+      source: string;
+      provider?: string;
+      page?: number | null;
+      lineIndex?: number | null;
+      snippet?: string | null;
+    }
+  >;
+  provider?: LlmProvider;
+  model?: string;
+};
+
+export type IntelligenceTagging = {
+  tags: string[];
+  confidence?: number | null;
+  provider?: LlmProvider;
+  model?: string;
+};
+
+export type IntelligenceValidation = {
+  normalizedFields: Record<string, unknown>;
+  errors: string[];
+  warnings: string[];
+  duplicateSignals: Record<string, unknown>;
+};
+
+export type IntelligencePipeline = {
+  framework?: string;
+  runId?: string;
+  status?: string;
+  providerOrder?: string[];
+  durationsMs: Record<string, number>;
+  agentVersions: Record<string, string>;
+};
+
+export type DocumentIntelligence = {
+  routing?: IntelligenceRouting;
+  title?: IntelligenceField;
+  summary?: IntelligenceField;
+  extraction?: IntelligenceExtraction;
+  tagging?: IntelligenceTagging;
+  correspondentResolution?: {
+    resolvedName: string | null;
+    confidence?: number | null;
+    strategy?: string;
+    provider?: LlmProvider;
+    model?: string;
+  };
+  validation?: IntelligenceValidation;
+  pipeline?: IntelligencePipeline;
+};
+
+export type DocumentMetadata = {
+  extractionStrategy?: string;
+  normalizationStrategy?: string;
+  parseProvider?: ParseProvider;
+  parseStrategy?: string;
+  documentTypeName?: string | null;
+  detectedKeywords?: string[];
+  pageCount?: number;
+  chunkCount?: number;
+  searchablePdfGenerated?: boolean;
+  reviewReasons?: ReviewReason[];
+  parse?: {
+    provider: ParseProvider;
+    strategy: string;
+    fallbackUsed?: boolean;
+    warnings?: string[];
+    keyValueCount?: number;
+    tableCount?: number;
+    providerMetadata?: Record<string, unknown>;
+  };
+  chunking?: {
+    strategy: string;
+    chunkCount: number;
+    usedProviderHints?: boolean;
+  };
+  embedding?: {
+    provider?: string;
+    model?: string;
+    configured?: boolean;
+    chunkCount?: number;
+  };
+  correspondentExtraction?: CorrespondentExtraction;
+  reviewEvidence?: ReviewEvidence;
+  manual?: ManualOverrides;
+  intelligence?: DocumentIntelligence;
+  // Legacy/simple fields (kept for backward compatibility)
+  summary?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Main document type — matches the backend DocumentSchema shape
+// ---------------------------------------------------------------------------
 
 export type ArchiveDocument = {
   id: string;
@@ -16,19 +234,38 @@ export type ArchiveDocument = {
   createdAt: string;
   issueDate: string | null;
   dueDate: string | null;
+  taskCompletedAt: string | null;
+  expiryDate: string | null;
   amount: number | null;
   currency: string | null;
   referenceNumber: string | null;
+  holderName: string | null;
+  issuingAuthority: string | null;
   correspondent: { id: string; name: string; slug: string } | null;
-  documentType: { id: string; name: string; slug: string } | null;
+  documentType: {
+    id: string;
+    name: string;
+    slug: string;
+    description?: string | null;
+    requiredFields?: string[];
+  } | null;
   tags: Array<{ id: string; name: string; slug: string }>;
+  confidence: number | null;
   reviewStatus: ReviewStatus;
-  reviewReasons: string[];
+  reviewReasons: ReviewReason[];
+  reviewedAt: string | null;
+  reviewNote: string | null;
   searchablePdfAvailable: boolean;
-  metadata: {
-    pageCount?: number;
-    summary?: string;
-  };
+  parseProvider: ParseProvider | null;
+  chunkCount: number;
+  embeddingStatus: EmbeddingStatus;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
+  embeddingsStale: boolean;
+  lastProcessingError: string | null;
+  latestProcessingJob: ProcessingJobSummary | null;
+  metadata: DocumentMetadata;
+  processedAt: string | null;
   snippets?: string[];
 };
 
@@ -95,18 +332,63 @@ export type DocumentTextResponse = {
     page: number;
     lineIndex: number;
     text: string;
+    boundingBox?: { x: number; y: number; width: number; height: number };
   }>;
+};
+
+export type AuditEvent = {
+  id: string;
+  actorUserId: string | null;
+  actorDisplayName?: string | null;
+  actorEmail?: string | null;
+  documentId: string | null;
+  eventType: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type DocumentHistoryResponse = {
   documentId: string;
-  items: Array<{
-    id: string;
-    eventType: string;
-    createdAt: string;
-    actorDisplayName?: string | null;
-    actorEmail?: string | null;
-  }>;
+  items: AuditEvent[];
+};
+
+// ---------------------------------------------------------------------------
+// Document Q&A types
+// ---------------------------------------------------------------------------
+
+export type DocumentAskCitation = {
+  chunkIndex: number;
+  pageFrom: number | null;
+  pageTo: number | null;
+  quote: string;
+  score: number;
+};
+
+export type QaHistoryEntry = {
+  id: string;
+  question: string;
+  answer: string | null;
+  status: "answered" | "insufficient_evidence";
+  citations: DocumentAskCitation[];
+  createdAt: string;
+};
+
+// ---------------------------------------------------------------------------
+// Provider health types (for reprocess picker)
+// ---------------------------------------------------------------------------
+
+export type ParseProviderAvailability = {
+  id: ParseProvider;
+  available: boolean;
+};
+
+export type HealthProvidersResponse = {
+  activeParseProvider: ParseProvider;
+  fallbackParseProvider: ParseProvider | null;
+  activeChatProvider: string | null;
+  activeEmbeddingProvider: string | null;
+  parseProviders: ParseProviderAvailability[];
+  embeddingProviders: Array<{ id: string; available: boolean; model: string | null }>;
 };
 
 export type SemanticSearchResponse = {
@@ -123,17 +405,19 @@ export type SemanticSearchResponse = {
   total: number;
 };
 
+export type AnswerCitation = {
+  documentId: string;
+  documentTitle: string;
+  chunkIndex: number;
+  quote: string;
+  pageFrom: number | null;
+  pageTo: number | null;
+};
+
 export type AnswerQueryResponse = {
   status: "answered" | "insufficient_evidence";
   answer: string | null;
-  citations: Array<{
-    documentId: string;
-    documentTitle: string;
-    chunkIndex: number;
-    quote: string;
-    pageFrom: number | null;
-    pageTo: number | null;
-  }>;
+  citations: AnswerCitation[];
   results: Array<{
     document: ArchiveDocument;
     score: number;
@@ -404,4 +688,118 @@ export async function saveDownloadToFile(response: Response, filename: string) {
     encoding: FileSystem.EncodingType.Base64,
   });
   return uri;
+}
+
+// ---------------------------------------------------------------------------
+// Inline citation linking
+// ---------------------------------------------------------------------------
+
+/**
+ * Matches LLM-generated inline citations like:
+ *   [Document: "Title", Page: 2]
+ *   [Document: "Title", Page: 2; Document: "Title2", Page: 3]
+ *
+ * Replaces them with compact numbered superscript-style markdown links
+ * pointing to /documents/{id}. Uses fuzzy title matching so minor LLM
+ * paraphrasing or truncation still resolves to the correct document.
+ */
+export function linkifyCitations(
+  text: string,
+  citations: AnswerCitation[],
+  searchResults: Array<{ document: { id: string; title: string } }>,
+): string {
+  if (citations.length === 0 && searchResults.length === 0) return text;
+
+  type DocRef = { documentId: string; title: string };
+  const allDocs: DocRef[] = [];
+
+  for (const cit of citations) {
+    allDocs.push({ documentId: cit.documentId, title: cit.documentTitle });
+  }
+  for (const sr of searchResults) {
+    if (!allDocs.some((d) => d.documentId === sr.document.id)) {
+      allDocs.push({ documentId: sr.document.id, title: sr.document.title });
+    }
+  }
+
+  function findDoc(title: string): DocRef | undefined {
+    const lower = title.toLowerCase();
+
+    const exact = allDocs.find((d) => d.title.toLowerCase() === lower);
+    if (exact) return exact;
+
+    const substring = allDocs.find((d) => {
+      const dt = d.title.toLowerCase();
+      return dt.includes(lower) || lower.includes(dt);
+    });
+    if (substring) return substring;
+
+    const titleTokens = new Set(
+      lower
+        .replace(/[^a-z0-9äöüß]+/gi, " ")
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (titleTokens.size === 0) return undefined;
+
+    let best: DocRef | undefined;
+    let bestScore = 0;
+    for (const doc of allDocs) {
+      const docTokens = new Set(
+        doc.title
+          .toLowerCase()
+          .replace(/[^a-z0-9äöüß]+/gi, " ")
+          .split(/\s+/)
+          .filter(Boolean),
+      );
+      let overlap = 0;
+      for (const t of titleTokens) {
+        if (docTokens.has(t)) overlap++;
+      }
+      const score = overlap / Math.max(titleTokens.size, docTokens.size);
+      if (score > bestScore) {
+        bestScore = score;
+        best = doc;
+      }
+    }
+
+    return bestScore >= 0.5 ? best : undefined;
+  }
+
+  const docNumbers = new Map<string, number>();
+  let nextNumber = 1;
+
+  const getNumber = (docId: string): number => {
+    const existing = docNumbers.get(docId);
+    if (existing !== undefined) return existing;
+    const n = nextNumber++;
+    docNumbers.set(docId, n);
+    return n;
+  };
+
+  const citationBlockRe =
+    /\[(?:Document:\s*"[^"]*"(?:,\s*Page:\s*\d+)?(?:;\s*)?)+\]/g;
+  const singleRefRe = /Document:\s*"([^"]*)"(?:,\s*Page:\s*(\d+))?/g;
+
+  return text.replace(citationBlockRe, (block) => {
+    const parts: string[] = [];
+
+    let m: RegExpExecArray | null;
+    singleRefRe.lastIndex = 0;
+    while ((m = singleRefRe.exec(block)) !== null) {
+      const title = m[1]!;
+      const page = m[2] ? parseInt(m[2], 10) : null;
+      const doc = findDoc(title);
+
+      if (doc) {
+        const num = getNumber(doc.documentId);
+        const pageLabel = page ? `, p.${page}` : "";
+        parts.push(`[\\[${num}${pageLabel}\\]](/documents/${doc.documentId})`);
+      } else {
+        parts.push(`[Document: "${title}"${page ? `, Page: ${page}` : ""}]`);
+      }
+    }
+
+    return parts.length > 0 ? parts.join(" ") : block;
+  });
 }

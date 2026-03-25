@@ -28,7 +28,8 @@
       "bundleIdentifier": "com.openkeep.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "OpenKeep uses the camera to scan paper documents into your archive."
-      }
+      },
+      "appleTeamId": "6DTWU4679K"
     },
     "android": {
       "package": "com.openkeep.mobile",

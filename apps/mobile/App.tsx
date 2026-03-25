@@ -127,7 +127,22 @@ function AppNavigator() {
   }
 
   if (!auth.isAuthenticated) {
-    return <AuthScreen />;
+    return (
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen
+          name="Home"
+          component={AuthScreen}
+          options={{ headerShown: false }}
+        />
+      </Stack.Navigator>
+    );
   }
 
   return (

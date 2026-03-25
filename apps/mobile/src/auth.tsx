@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetch as expoFetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
 import {
   createContext,
@@ -38,6 +39,7 @@ type AuthContextValue = {
   }) => Promise<void>;
   logout: () => Promise<void>;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+  streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -201,6 +203,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [apiUrl, clearTokens, refreshAccessToken],
   );
 
+  /**
+   * Like authFetch but uses Expo's native fetch which supports
+   * ReadableStream on response.body — required for SSE streaming.
+   */
+  const streamFetch = useCallback(
+    async (path: string, init?: RequestInit) => {
+      const currentApiUrl = apiUrlRef.current;
+      if (!currentApiUrl) {
+        throw new Error("Set your OpenKeep server URL first.");
+      }
+
+      const headers: Record<string, string> = {};
+      if (init?.headers) {
+        const h = init.headers;
+        if (h instanceof Headers) {
+          h.forEach((v, k) => {
+            headers[k] = v;
+          });
+        } else if (Array.isArray(h)) {
+          for (const [k, v] of h) {
+            headers[k] = v;
+          }
+        } else {
+          Object.assign(headers, h);
+        }
+      }
+
+      if (tokensRef.current.accessToken) {
+        headers["Authorization"] = `Bearer ${tokensRef.current.accessToken}`;
+      }
+
+      return expoFetch(resolveUrl(currentApiUrl, path), {
+        ...init,
+        headers,
+      });
+    },
+    [apiUrl],
+  );
+
   const loadCurrentUser = useCallback(async () => {
     const response = await authFetch("/api/auth/me");
     if (!response.ok) {
@@ -343,8 +384,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setup,
       logout,
       authFetch,
+      streamFetch,
     }),
-    [apiUrl, authFetch, isLoading, login, logout, probeServer, setApiUrl, setup, user],
+    [apiUrl, authFetch, isLoading, login, logout, probeServer, setApiUrl, setup, streamFetch, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

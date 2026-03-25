@@ -193,15 +193,13 @@ export function useAnswerStream() {
       const decoder = new TextDecoder();
       let buffer = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // Persistent across processLines calls — event: and data: may arrive
+      // in different network chunks, so we need to carry the current event
+      // type between calls.
+      let currentEvent = "";
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        let currentEvent = "";
+      // Helper: process a batch of SSE lines
+      const processLines = (lines: string[]) => {
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();
@@ -242,7 +240,31 @@ export function useAnswerStream() {
             currentEvent = "";
           }
         }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        processLines(lines);
       }
+
+      // Process any remaining data left in the buffer after the stream ends
+      if (buffer.trim().length > 0) {
+        const remainingLines = buffer.split("\n");
+        processLines(remainingLines);
+      }
+
+      // Safety: if the stream ended but we never received a `done` event,
+      // force the status to "done" so the UI stops showing the loading state
+      setState((s) =>
+        s.status === "streaming" || s.status === "searching"
+          ? { ...s, status: "done" }
+          : s,
+      );
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setState((s) => ({
