@@ -20,6 +20,7 @@ import {
   fetchFilteredDocuments,
   nextExplorerSearch,
 } from "@/lib/explorer";
+import { processingRefetchInterval } from "@/lib/document-processing";
 import { authFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,6 +100,7 @@ export function ExplorerSurface({
     queryKey: ["documents", "explorer", search],
     queryFn: () => fetchFilteredDocuments(search),
     enabled: activeView === "list",
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
   const timelineQuery = useQuery({
     queryKey: ["documents", "timeline", search],

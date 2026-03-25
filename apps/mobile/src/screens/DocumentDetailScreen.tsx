@@ -26,6 +26,8 @@ import {
   Pill,
   SectionTitle,
 } from "../components/ui";
+import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
+import { processingRefetchInterval } from "../document-processing";
 import { DocumentViewer } from "../components/DocumentViewer";
 import { useDocumentQa } from "../hooks/useDocumentQa";
 import { useDocumentSummary } from "../hooks/useDocumentSummary";
@@ -80,6 +82,7 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error("Failed to load document detail.");
       return (await response.json()) as ArchiveDocument;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data),
   });
 
   const textQuery = useQuery({
@@ -90,6 +93,7 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error("Failed to load OCR text.");
       return (await response.json()) as DocumentTextResponse;
     },
+    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const historyQuery = useQuery({
@@ -100,6 +104,7 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error("Failed to load document history.");
       return (await response.json()) as DocumentHistoryResponse;
     },
+    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const facetsQuery = useQuery({
@@ -174,6 +179,7 @@ export function DocumentDetailScreen() {
           />
         )}
       </View>
+      <DocumentProcessingIndicator document={document} />
 
       {/* Tab bar */}
       <SegmentedTabs activeTab={activeTab} onTabChange={setActiveTab} />

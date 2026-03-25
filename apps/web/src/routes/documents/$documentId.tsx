@@ -11,7 +11,9 @@ import type {
   ParseProvider,
   Tag as TaxonomyTag,
 } from "@openkeep/types";
+import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
+import { processingRefetchInterval } from "@/lib/document-processing";
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -554,6 +556,7 @@ function DocumentDetailPage() {
       if (error) throw new Error("Failed to load document");
       return data as unknown as Document;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data),
   });
 
   const textQuery = useQuery({
@@ -566,6 +569,7 @@ function DocumentDetailPage() {
       return data as unknown as { documentId: string; blocks: TextBlock[] };
     },
     enabled: documentQuery.isSuccess,
+    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const historyQuery = useQuery({
@@ -578,6 +582,7 @@ function DocumentDetailPage() {
       return data as unknown as DocumentHistoryResponse;
     },
     enabled: documentQuery.isSuccess,
+    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const tagsQuery = useQuery({
@@ -1091,6 +1096,7 @@ function DocumentDetailPage() {
           )}
         </div>
       </div>
+      <DocumentProcessingIndicator document={doc} />
 
       {/* Two-Column Layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">

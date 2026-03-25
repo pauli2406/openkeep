@@ -20,6 +20,7 @@ import {
   fetchFilteredDocuments,
   formatCurrency,
 } from "@/lib/explorer";
+import { processingRefetchInterval } from "@/lib/document-processing";
 
 export const Route = createFileRoute("/correspondents/$slug")({
   component: CorrespondentDetailPage,
@@ -53,6 +54,7 @@ function CorrespondentDetailPage() {
         direction: "desc",
       }),
     enabled: Boolean(insightsQuery.data?.correspondent.id),
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   if (insightsQuery.isLoading) {

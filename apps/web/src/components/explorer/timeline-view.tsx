@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FolderClock } from "lucide-react";
+import { processingRefetchInterval } from "@/lib/document-processing";
 import type { ExplorerSearch } from "@/lib/explorer";
 import { fetchFilteredDocuments } from "@/lib/explorer";
 import type { DocumentsTimelineResponse } from "@openkeep/types";
@@ -73,6 +74,7 @@ function MonthDocuments({
             pageSize: 8,
           })
         : Promise.reject(new Error("Invalid timeline month")),
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   if (!bounds) {

@@ -138,6 +138,50 @@ describe("explorer smoke", () => {
     ).toBeInTheDocument();
   });
 
+  it("polls the explorer while visible documents are still processing", async () => {
+    let hits = 0;
+
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [{ year: 2026, count: 1 }],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          amountRange: { min: null, max: null },
+          statuses: [{ status: "processing", count: 1 }],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), () => {
+        hits += 1;
+        return HttpResponse.json({
+          items: [
+            makeDocument({
+              title: hits > 1 ? "Processed Invoice" : "Processing Invoice",
+              status: hits > 1 ? "ready" : "processing",
+              latestProcessingJob: {
+                ...makeDocument().latestProcessingJob!,
+                status: hits > 1 ? "completed" : "running",
+              },
+            }),
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+          appliedFilters: {},
+        });
+      }),
+    );
+
+    renderAuthenticatedApp({ route: "/documents" });
+
+    expect(await screen.findByText("Processing Invoice")).toBeInTheDocument();
+    expect(screen.getByText("Processing")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByText("Processed Invoice")).toBeInTheDocument());
+    expect(hits).toBeGreaterThan(1);
+  });
+
   it("renders timeline buckets even when the API returns an invalid month", async () => {
     server.use(
       http.get(apiUrl("/api/documents/facets"), () =>

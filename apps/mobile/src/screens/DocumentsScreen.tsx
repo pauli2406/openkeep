@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
+import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Field, Pill, Screen, SectionTitle } from "../components/ui";
+import { processingRefetchInterval } from "../document-processing";
 import type { AppStackParamList } from "../../App";
 import { colors } from "../theme";
 import { formatCurrency, formatDate, titleForDocument, type SearchDocumentsResponse } from "../lib";
@@ -38,6 +40,7 @@ export function DocumentsScreen() {
       }
       return (await response.json()) as SearchDocumentsResponse;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   return (
@@ -74,6 +77,7 @@ export function DocumentsScreen() {
                     <Text style={styles.title}>{titleForDocument(document)}</Text>
                     <Pill label={document.status} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
                   </View>
+                  <DocumentProcessingIndicator document={document} />
                   <Text style={styles.helper}>{document.correspondent?.name ?? "Unfiled"} • {document.documentType?.name ?? "Document"}</Text>
                   <Text style={styles.detailLine}>Created {formatDate(document.createdAt)}</Text>
                   <Text style={styles.detailLine}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>

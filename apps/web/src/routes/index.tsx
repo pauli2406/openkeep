@@ -10,6 +10,7 @@ import {
   MetricRibbon,
 } from "@/components/explorer/shared";
 import { api, getApiErrorMessage } from "@/lib/api";
+import { processingRefetchInterval } from "@/lib/document-processing";
 import { fetchDashboardInsights, formatCurrency } from "@/lib/explorer";
 import { cn } from "@/lib/utils";
 import type { DashboardDeadlineItem, MonthlyActivityPoint } from "@openkeep/types";
@@ -254,6 +255,7 @@ function DashboardPage() {
   const insightsQuery = useQuery({
     queryKey: ["dashboard", "insights"],
     queryFn: fetchDashboardInsights,
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
   });
 
   const completeTaskMutation = useMutation({

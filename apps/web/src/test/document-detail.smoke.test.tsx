@@ -29,6 +29,65 @@ function taxonomyHandlers() {
 }
 
 describe("document detail smoke", () => {
+  it("polls document detail until processing completes", async () => {
+    let documentHits = 0;
+    let textHits = 0;
+
+    server.use(
+      ...taxonomyHandlers(),
+      http.get(apiUrl(`/api/documents/${documentId}`), () => {
+        documentHits += 1;
+        return HttpResponse.json(
+          makeDocument({
+            id: documentId,
+            title: documentHits > 1 ? "Processed March Invoice" : "Processing March Invoice",
+            status: documentHits > 1 ? "ready" : "processing",
+            processedAt: documentHits > 1 ? "2026-03-20T10:01:00.000Z" : null,
+            latestProcessingJob: {
+              ...makeDocument().latestProcessingJob!,
+              status: documentHits > 1 ? "completed" : "running",
+              finishedAt: documentHits > 1 ? "2026-03-20T10:01:00.000Z" : null,
+            },
+          }),
+        );
+      }),
+      http.get(apiUrl(`/api/documents/${documentId}/text`), () => {
+        textHits += 1;
+        return HttpResponse.json({
+          documentId,
+          blocks:
+            textHits > 1
+              ? [
+                  {
+                    documentId,
+                    page: 1,
+                    lineIndex: 0,
+                    boundingBox: { x: 0, y: 0, width: 100, height: 10 },
+                    text: "Processed OCR line",
+                  },
+                ]
+              : [],
+        });
+      }),
+      http.get(apiUrl(`/api/documents/${documentId}/history`), () =>
+        HttpResponse.json({
+          documentId,
+          items: [],
+        }),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}/download`), () =>
+        new HttpResponse(new Blob(["pdf"], { type: "application/pdf" })),
+      ),
+      http.get(apiUrl("/api/health/providers"), () => HttpResponse.json(makeHealthProvidersResponse())),
+    );
+
+    renderAuthenticatedApp({ route: `/documents/${documentId}` });
+
+    await waitFor(() => expect(screen.getAllByText("Processed March Invoice").length).toBeGreaterThan(0));
+    expect(documentHits).toBeGreaterThan(1);
+    await waitFor(() => expect(textHits).toBeGreaterThan(1));
+  });
+
   it("loads the detail page and reprocesses with the selected OCR provider", async () => {
     let reprocessBody: unknown = null;
 
@@ -537,4 +596,5 @@ describe("document detail smoke", () => {
     });
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
   });
+
 });

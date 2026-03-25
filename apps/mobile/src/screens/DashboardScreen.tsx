@@ -5,7 +5,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
+import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Metric, Pill, Screen, SectionTitle } from "../components/ui";
+import { processingRefetchInterval } from "../document-processing";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
@@ -517,6 +519,7 @@ function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen:
           <Pill label={document.status} tone={toneForStatus(document.status)} />
         </View>
         <Text numberOfLines={2} style={docStyles.title}>{titleForDocument(document)}</Text>
+        <DocumentProcessingIndicator document={document} />
         <Text style={docStyles.helper}>{document.correspondent?.name ?? "Unfiled"}</Text>
         <View style={docStyles.footerRow}>
           <Text style={docStyles.detail}>
@@ -596,6 +599,7 @@ export function DashboardScreen() {
       }
       return (await response.json()) as DashboardInsights;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
   });
 
   const completeMutation = useMutation({

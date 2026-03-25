@@ -14,6 +14,7 @@ import type {
   Document,
   MonthlyActivityPoint,
 } from "@openkeep/types";
+import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { cn } from "@/lib/utils";
 import { colorForValue, formatCurrency } from "@/lib/explorer";
 
@@ -281,13 +282,14 @@ export function DocumentRows({
               />
               {document.documentType?.name ?? "Document"}
             </div>
-            <div className="space-y-1">
-              <p className="text-base font-semibold text-[color:var(--explorer-ink)]">
-                {document.title}
-              </p>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-[color:var(--explorer-muted)]">
-                <span className="inline-flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" />
+              <div className="space-y-1">
+                <p className="text-base font-semibold text-[color:var(--explorer-ink)]">
+                  {document.title}
+                </p>
+                <DocumentProcessingIndicator document={document} />
+                <div className="flex flex-wrap items-center gap-4 text-sm text-[color:var(--explorer-muted)]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5" />
                   {document.correspondent?.name ?? "Unfiled"}
                 </span>
                 <span className="inline-flex items-center gap-1.5">

@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
+import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Button, Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { processingRefetchInterval } from "../document-processing";
 import type { AppStackParamList } from "../../App";
 import { colors } from "../theme";
 import { responseToMessage, titleForDocument, type ReviewQueueResponse } from "../lib";
@@ -24,6 +26,7 @@ export function ReviewScreen() {
       }
       return (await response.json()) as ReviewQueueResponse;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   const mutation = useMutation({
@@ -62,6 +65,7 @@ export function ReviewScreen() {
                 <Text style={styles.title}>{titleForDocument(document)}</Text>
                 <Text style={styles.helper}>{document.correspondent?.name ?? "Unfiled"}</Text>
               </Pressable>
+              <DocumentProcessingIndicator document={document} />
               <View style={styles.reasonWrap}>
                 {document.reviewReasons.map((reason) => (
                   <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warning" />

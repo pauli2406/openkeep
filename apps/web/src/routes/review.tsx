@@ -3,8 +3,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Document, ReviewReason } from "@openkeep/types";
 import { api, getApiErrorMessage } from "@/lib/api";
+import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { processingRefetchInterval } from "@/lib/document-processing";
 import {
   Card,
   CardHeader,
@@ -186,6 +188,7 @@ function ReviewPage() {
       }
       return data;
     },
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   const resolveMutation = useMutation({
@@ -411,6 +414,7 @@ function ReviewPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex flex-wrap items-center gap-2">
+                <DocumentProcessingIndicator document={item} className="w-full" />
                 {item.reviewReasons.map((reason) => (
                   <Badge key={reason} variant="warning">
                     <AlertTriangle className="mr-1 h-3 w-3" />

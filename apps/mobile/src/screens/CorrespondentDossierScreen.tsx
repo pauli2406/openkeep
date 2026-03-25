@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
+import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { processingRefetchInterval } from "../document-processing";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
@@ -804,6 +806,7 @@ function DocumentCard({
         <Text numberOfLines={2} style={docStyles.title}>
           {titleForDocument(document)}
         </Text>
+        <DocumentProcessingIndicator document={document} />
         <View style={docStyles.footerRow}>
           <Text style={docStyles.detail}>
             {formatDate(document.issueDate)} {"\u00b7"}{" "}
@@ -959,6 +962,7 @@ export function CorrespondentDossierScreen() {
       return (await response.json()) as SearchDocumentsResponse;
     },
     enabled: Boolean(correspondentId),
+    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   // ── Loading state ──
