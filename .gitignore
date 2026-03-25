@@ -13,3 +13,4 @@ data
 openapi.json
 apps/docs/.docusaurus
 apps/docs/build
+.expo/
