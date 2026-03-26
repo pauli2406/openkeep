@@ -416,6 +416,7 @@ export class AgenticDocumentIntelligenceService {
               'Schema: {"documentType":string,"subtype":string|null,"confidence":number,"reasoningHints":string[]}',
               `Allowed documentType values: ${Object.keys(DOCUMENT_TYPE_DEFINITIONS).join(", ")}`,
               "Be conservative. If uncertain, use generic_letter.",
+              this.buildGeneratedTextInstruction(input, "Write reasoning hints"),
             ].join("\n"),
           },
           {
@@ -463,6 +464,7 @@ export class AgenticDocumentIntelligenceService {
               "The title must be concise, neutral, and useful in a document list.",
               "The summary must be 1-2 sentences, factual, and under 240 characters.",
               "Do not invent missing facts.",
+              this.buildGeneratedTextInstruction(input, "Write title and summary"),
             ].join("\n"),
           },
           {
@@ -610,6 +612,7 @@ export class AgenticDocumentIntelligenceService {
               'Schema: {"tags":string[],"confidence":number}',
               "Use 2-6 tags.",
               "Prefer specific, reusable tags over generic adjectives.",
+              this.buildGeneratedTextInstruction(input, "Write tags"),
             ].join("\n"),
           },
           {
@@ -933,6 +936,15 @@ export class AgenticDocumentIntelligenceService {
     ]
       .filter(Boolean)
       .join("\n\n");
+  }
+
+  private buildGeneratedTextInstruction(
+    input: MetadataExtractionInput,
+    prefix: string,
+  ): string {
+    return input.preferredLanguage === "de"
+      ? `${prefix} in German unless a document value should remain verbatim.`
+      : `${prefix} in English unless a document value should remain verbatim.`;
   }
 
   private parseJsonObject(raw: string | null): Record<string, unknown> | null {

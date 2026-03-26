@@ -1,4 +1,5 @@
 import type {
+  AppLanguage,
   AnswerCitation,
   AnswerQueryResponse,
   DocumentChunk,
@@ -35,6 +36,7 @@ export interface MetadataExtractionInput {
   title: string;
   mimeType: string;
   parsed: ParsedDocument;
+  preferredLanguage?: AppLanguage | null;
 }
 
 export interface MetadataExtractionResult {
@@ -94,6 +96,7 @@ export interface AnswerProvider {
     question: string;
     results: SemanticSearchResult[];
     maxCitations: number;
+    responseLanguage?: AppLanguage | null;
   }): Promise<{
     status: AnswerQueryResponse["status"];
     answer: string | null;

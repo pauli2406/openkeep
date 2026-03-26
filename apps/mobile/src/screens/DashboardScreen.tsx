@@ -8,6 +8,8 @@ import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Metric, Pill, Screen, SectionTitle } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
@@ -28,6 +30,8 @@ import {
 // ---------------------------------------------------------------------------
 
 function IntakeTrend({ data }: { data: Array<{ month: string; count: number }> }) {
+  const { t } = useI18n();
+
   if (data.length === 0) {
     return null;
   }
@@ -40,8 +44,8 @@ function IntakeTrend({ data }: { data: Array<{ month: string; count: number }> }
   return (
     <View style={trendStyles.wrap}>
       <View style={trendStyles.header}>
-        <Text style={trendStyles.eyebrow}>Intake trend</Text>
-        <Text style={trendStyles.title}>12-month rhythm</Text>
+        <Text style={trendStyles.eyebrow}>{t("dashboard.intakeTrendEyebrow")}</Text>
+        <Text style={trendStyles.title}>{t("dashboard.intakeTrendTitle")}</Text>
       </View>
 
       <ScrollView
@@ -159,6 +163,8 @@ type Correspondent = DashboardInsights["topCorrespondents"][number];
 const DOT_COLORS = ["#b04030", "#af6d11", "#17624f", "#5c6bc0"];
 
 function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item: Correspondent) => void }) {
+  const { t } = useI18n();
+
   if (data.length === 0) {
     return null;
   }
@@ -166,8 +172,8 @@ function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item
   return (
     <View style={clusterStyles.wrap}>
       <View style={clusterStyles.header}>
-        <Text style={clusterStyles.eyebrow}>Correspondents</Text>
-        <Text style={clusterStyles.title}>Largest clusters</Text>
+        <Text style={clusterStyles.eyebrow}>{t("dashboard.clusterEyebrow")}</Text>
+        <Text style={clusterStyles.title}>{t("dashboard.clusterTitle")}</Text>
       </View>
 
       <ScrollView
@@ -183,7 +189,7 @@ function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item
           >
             <View style={clusterStyles.cardTopRow}>
               <Text style={clusterStyles.docCount}>
-                {item.documentCount} {item.documentCount === 1 ? "doc" : "docs"}
+                {item.documentCount} {item.documentCount === 1 ? t("dashboard.clusterDoc") : t("dashboard.clusterDocs")}
               </Text>
               <MaterialCommunityIcons name="arrow-right" size={16} color={colors.muted} />
             </View>
@@ -329,21 +335,22 @@ function TaskList({
   busyId,
 }: {
   items: DeadlineItem[];
-  onComplete: (documentId: string) => void;
+  onComplete?: (documentId: string) => void;
   busyId: string | null;
 }) {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { t } = useI18n();
 
   if (items.length === 0) {
-    return <EmptyState title="No tasks in view" body="You do not have any extracted deadline items yet." />;
+    return <EmptyState title={t("dashboard.tasks.emptyTitle")} body={t("dashboard.tasks.emptyBody")} />;
   }
 
   return (
     <>
       {items.map((item) => {
         const deadlineLabel = item.isOverdue
-          ? `${Math.abs(item.daysUntilDue)}d overdue`
-          : `${item.daysUntilDue}d left`;
+          ? `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`
+          : `${item.daysUntilDue}${t("dashboard.tasks.dueIn")}`;
 
         return (
           <Pressable
@@ -357,15 +364,15 @@ function TaskList({
             <Card style={item.isOverdue ? taskStyles.overdueCard : undefined}>
               <View style={taskStyles.topRow}>
                 <View style={taskStyles.correspondentWrap}>
-                  <Text numberOfLines={1} style={taskStyles.correspondent}>
-                    {item.correspondentName ?? "Unfiled"}
+                    <Text numberOfLines={1} style={taskStyles.correspondent}>
+                    {item.correspondentName ?? t("dashboard.tasks.unfiled")}
                   </Text>
                   {item.documentTypeName ? (
                     <Text style={taskStyles.docType}>{item.documentTypeName}</Text>
                   ) : null}
                 </View>
                 <Pill
-                  label={item.isOverdue ? "Overdue" : deadlineLabel}
+                  label={item.isOverdue ? t("dashboard.tasks.overdue") : deadlineLabel}
                   tone={item.isOverdue ? "danger" : "warning"}
                 />
               </View>
@@ -374,11 +381,11 @@ function TaskList({
 
               <View style={taskStyles.metaRow}>
                 <View style={taskStyles.metaChip}>
-                  <Text style={taskStyles.metaLabel}>What to do</Text>
+                  <Text style={taskStyles.metaLabel}>{t("dashboard.tasks.whatToDo")}</Text>
                   <Text style={taskStyles.metaValue}>{item.taskLabel}</Text>
                 </View>
                 <View style={taskStyles.metaChip}>
-                  <Text style={taskStyles.metaLabel}>Amount</Text>
+                  <Text style={taskStyles.metaLabel}>{t("dashboard.tasks.amount")}</Text>
                   <Text style={taskStyles.metaValue}>
                     {formatCurrency(item.amount, item.currency ?? "EUR")}
                   </Text>
@@ -392,17 +399,17 @@ function TaskList({
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    onComplete(item.documentId);
+                    onComplete?.(item.documentId);
                   }}
-                  disabled={busyId === item.documentId}
+                  disabled={!onComplete || busyId === item.documentId}
                   style={({ pressed }) => [
                     taskStyles.doneButton,
                     pressed ? taskStyles.doneButtonPressed : null,
-                    busyId === item.documentId ? taskStyles.doneButtonDisabled : null,
+                    !onComplete || busyId === item.documentId ? taskStyles.doneButtonDisabled : null,
                   ]}
                 >
                   <MaterialCommunityIcons name="check" size={14} color={colors.primary} />
-                  <Text style={taskStyles.doneText}>Done</Text>
+                  <Text style={taskStyles.doneText}>{t("dashboard.tasks.done")}</Text>
                 </Pressable>
               </View>
             </Card>
@@ -511,27 +518,46 @@ const taskStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen: () => void }) {
+  const { t } = useI18n();
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [pressed ? docStyles.pressed : null]}>
       <Card style={docStyles.card}>
         <View style={docStyles.topRow}>
-          <Text style={docStyles.meta}>{document.documentType?.name ?? "Document"}</Text>
-          <Pill label={document.status} tone={toneForStatus(document.status)} />
+          <Text style={docStyles.meta}>{document.documentType?.name ?? t("dashboard.documentCard.document")}</Text>
+          <Pill label={formatDashboardDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
         </View>
         <Text numberOfLines={2} style={docStyles.title}>{titleForDocument(document)}</Text>
         <DocumentProcessingIndicator document={document} />
-        <Text style={docStyles.helper}>{document.correspondent?.name ?? "Unfiled"}</Text>
+        <Text style={docStyles.helper}>{document.correspondent?.name ?? t("dashboard.documentCard.unfiled")}</Text>
         <View style={docStyles.footerRow}>
           <Text style={docStyles.detail}>
             {formatDate(document.issueDate)} {"\u00b7"} {formatCurrency(document.amount, document.currency ?? "EUR")}
           </Text>
           {document.reviewStatus === "pending" ? (
-            <Pill label="Review" tone="warning" />
+            <Pill label={t("dashboard.documentCard.review")} tone="warning" />
           ) : null}
         </View>
       </Card>
     </Pressable>
   );
+}
+
+function formatDashboardDocumentStatus(
+  t: ReturnType<typeof useI18n>["t"],
+  status: string,
+) {
+  switch (status) {
+    case "pending":
+      return t("documentDetail.status.pending");
+    case "processing":
+      return t("documentDetail.status.processing");
+    case "ready":
+      return t("documentDetail.status.ready");
+    case "failed":
+      return t("documentDetail.status.failed");
+    default:
+      return status;
+  }
 }
 
 const docStyles = StyleSheet.create({
@@ -586,20 +612,32 @@ const docStyles = StyleSheet.create({
 
 export function DashboardScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
 
   const insightsQuery = useQuery({
-    queryKey: ["dashboard", auth.apiUrl],
+    queryKey: ["dashboard", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        const cached = await offline.loadDashboard();
+        if (!cached) {
+          throw new Error(t("dashboard.screen.noSnapshot"));
+        }
+        return cached;
+      }
+
       const response = await auth.authFetch("/api/dashboard/insights");
       if (!response.ok) {
-        throw new Error("Failed to load dashboard insights.");
+        throw new Error(t("dashboard.screen.loadInsights"));
       }
       return (await response.json()) as DashboardInsights;
     },
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
   });
 
   const completeMutation = useMutation({
@@ -640,19 +678,19 @@ export function DashboardScreen() {
 
   return (
     <Screen
-      title="Dashboard"
-      subtitle="A high-level reading room for your archive: who sends documents, what is due next, and how the archive has shifted over the last year."
+      title={t("dashboard.screen.title")}
+      subtitle={t("dashboard.screen.subtitle")}
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (
         <Card>
-          <Text style={styles.loadingText}>Loading your archive snapshot...</Text>
+          <Text style={styles.loadingText}>{t("dashboard.screen.loading")}</Text>
         </Card>
       ) : null}
 
       {insightsQuery.isError ? (
         <ErrorCard
-          message="The dashboard could not be loaded right now."
+          message={t("dashboard.screen.loadError")}
           onRetry={() => insightsQuery.refetch()}
         />
       ) : null}
@@ -661,17 +699,17 @@ export function DashboardScreen() {
         <>
           {/* ── Metric ribbon ── */}
           <View style={styles.metricGrid}>
-            <Metric label="Total documents" value={data.stats.totalDocuments} />
+            <Metric label={t("dashboard.screen.totalDocuments")} value={data.stats.totalDocuments} />
             <Metric
-              label="Pending review"
+              label={t("dashboard.screen.pendingReview")}
               value={data.stats.pendingReview}
               onPress={() => navigation.navigate("Review")}
             />
           </View>
           <View style={styles.metricGrid}>
-            <Metric label="Document types" value={data.stats.documentTypesCount} />
+            <Metric label={t("dashboard.screen.documentTypes")} value={data.stats.documentTypesCount} />
             <Metric
-              label="Correspondents"
+              label={t("dashboard.screen.correspondents")}
               value={data.stats.correspondentsCount}
               onPress={() => navigation.navigate("Correspondents")}
             />
@@ -698,20 +736,25 @@ export function DashboardScreen() {
           {/* ── Deadline / task list ── */}
           <View style={styles.sectionWrap}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionEyebrow}>Deadlines</Text>
-              <Text style={styles.sectionTitle}>Upcoming tasks</Text>
+                <Text style={styles.sectionEyebrow}>{t("dashboard.screen.deadlines")}</Text>
+                <Text style={styles.sectionTitle}>{t("dashboard.screen.upcomingTasks")}</Text>
             </View>
             <TaskList
               items={taskItems}
-              onComplete={(id) => completeMutation.mutate(id)}
+              onComplete={offline.shouldUseOffline ? undefined : (id) => completeMutation.mutate(id)}
               busyId={busyTaskId}
             />
+            {offline.shouldUseOffline ? (
+              <Card>
+                <Text style={styles.offlineText}>{t("dashboard.screen.offlineTaskDisabled")}</Text>
+              </Card>
+            ) : null}
             {completeMutation.isError ? (
               <ErrorCard
                 message={
                   completeMutation.error instanceof Error
                     ? completeMutation.error.message
-                    : "Could not complete the task."
+                    : t("dashboard.screen.completeFailed")
                 }
               />
             ) : null}
@@ -720,13 +763,13 @@ export function DashboardScreen() {
           {/* ── Recent documents ── */}
           <View style={styles.sectionWrap}>
             <SectionTitle
-              title="Recent documents"
-              hint="Fresh arrivals and the latest processed files."
-            />
+                title={t("dashboard.screen.recentDocuments")}
+                hint={t("dashboard.screen.recentHint")}
+              />
             {data.recentDocuments.length === 0 ? (
               <EmptyState
-                title="No documents yet"
-                body="Use the scan button on the Documents screen to add your first document."
+                title={t("dashboard.screen.noDocumentsTitle")}
+                body={t("dashboard.screen.noDocumentsBody")}
               />
             ) : (
               data.recentDocuments.slice(0, 5).map((document) => (
@@ -754,6 +797,10 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
+    color: colors.muted,
+    lineHeight: 20,
+  },
+  offlineText: {
     color: colors.muted,
     lineHeight: 20,
   },

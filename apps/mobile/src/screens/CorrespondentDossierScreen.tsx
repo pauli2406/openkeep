@@ -7,6 +7,8 @@ import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
@@ -48,11 +50,12 @@ function findCurrentStateFact(
 function buildSmartHighlight(
   data: CorrespondentInsightsResponse,
   intelligence: CorrespondentIntelligence | null,
+  t: ReturnType<typeof useI18n>["t"],
 ): { label: string; value: string } {
   const insurance = intelligence?.domainInsights.insurance;
   if (insurance?.latestPremiumAmount != null && insurance.latestPremiumCurrency) {
     return {
-      label: "Latest Premium",
+      label: t("correspondent.smartHighlight.latestPremium"),
       value:
         formatCurrency(insurance.latestPremiumAmount, insurance.latestPremiumCurrency),
     };
@@ -60,17 +63,17 @@ function buildSmartHighlight(
 
   const latestAmount = findCurrentStateFact(intelligence, "Latest amount");
   if (latestAmount) {
-    return { label: "Latest Amount", value: latestAmount };
+    return { label: t("correspondent.smartHighlight.latestAmount"), value: latestAmount };
   }
 
   const latestDocumentType = findCurrentStateFact(intelligence, "Latest document type");
   if (latestDocumentType) {
-    return { label: "Latest Type", value: latestDocumentType };
+    return { label: t("correspondent.smartHighlight.latestType"), value: latestDocumentType };
   }
 
   return {
-    label: "Top Type",
-    value: data.documentTypeBreakdown[0]?.name ?? "n/a",
+    label: t("correspondent.smartHighlight.topType"),
+    value: data.documentTypeBreakdown[0]?.name ?? t("correspondent.smartHighlight.na"),
   };
 }
 
@@ -138,9 +141,11 @@ function RelationshipOverview({
   intelligence: CorrespondentIntelligence | null;
   intelligenceStatus: string;
 }) {
+  const { t } = useI18n();
+
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Relationship Overview</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.relationship.title")}</Text>
       <View style={overviewStyles.body}>
         {intelligenceStatus === "ready" && intelligence?.overview ? (
           <>
@@ -151,7 +156,7 @@ function RelationshipOverview({
               <View style={overviewStyles.chipRow}>
                 <View style={overviewStyles.chip}>
                   <Text style={overviewStyles.chipText}>
-                    {intelligence.profile.category ?? "Unknown category"}
+                    {intelligence.profile.category ?? t("correspondent.relationship.unknownCategory")}
                   </Text>
                 </View>
                 {intelligence.profile.subcategory ? (
@@ -170,14 +175,9 @@ function RelationshipOverview({
             ) : null}
           </>
         ) : intelligenceStatus === "pending" ? (
-          <Text style={overviewStyles.pendingText}>
-            Intelligence generation is in progress. This page will refresh
-            automatically when the dossier is ready.
-          </Text>
+          <Text style={overviewStyles.pendingText}>{t("correspondent.relationship.pending")}</Text>
         ) : (
-          <Text style={overviewStyles.pendingText}>
-            No LLM provider is configured for correspondent intelligence yet.
-          </Text>
+          <Text style={overviewStyles.pendingText}>{t("correspondent.relationship.unavailable")}</Text>
         )}
       </View>
     </Card>
@@ -234,9 +234,11 @@ function KeyChanges({
 }: {
   changes: CorrespondentIntelligence["changes"];
 }) {
+  const { t } = useI18n();
+
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Key Changes</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.keyChanges.title")}</Text>
       {changes.length > 0 ? (
         <View style={changeStyles.list}>
           {changes.map((change, index) => (
@@ -246,21 +248,21 @@ function KeyChanges({
                   {change.title}
                 </Text>
                 <Text style={changeStyles.date}>
-                  {change.effectiveDate ?? "Undated"}
+                  {change.effectiveDate ?? t("correspondent.keyChanges.undated")}
                 </Text>
               </View>
               <Text style={changeStyles.description}>{change.description}</Text>
               {change.valueBefore || change.valueAfter ? (
                 <Text style={changeStyles.transition}>
-                  {change.valueBefore ?? "n/a"} {"\u2192"}{" "}
-                  {change.valueAfter ?? "n/a"}
+                  {change.valueBefore ?? t("correspondent.keyChanges.na")} {"\u2192"}{" "}
+                  {change.valueAfter ?? t("correspondent.keyChanges.na")}
                 </Text>
               ) : null}
             </View>
           ))}
         </View>
       ) : (
-        <EmptyCard label="No major changes detected yet." />
+        <EmptyCard label={t("correspondent.keyChanges.empty")} />
       )}
     </Card>
   );
@@ -319,6 +321,8 @@ function MonthlyActivity({
 }: {
   data: Array<{ month: string; count: number }>;
 }) {
+  const { t } = useI18n();
+
   if (data.length === 0) {
     return null;
   }
@@ -329,8 +333,8 @@ function MonthlyActivity({
 
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Monthly Activity</Text>
-      <Text style={activityStyles.title}>Rhythm</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.monthlyActivity.title")}</Text>
+      <Text style={activityStyles.title}>{t("correspondent.monthlyActivity.rhythm")}</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -430,9 +434,11 @@ function CurrentState({
 }: {
   facts: CorrespondentIntelligence["currentState"];
 }) {
+  const { t } = useI18n();
+
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Current State</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.currentState.title")}</Text>
       {facts.length > 0 ? (
         <View style={factStyles.list}>
           {facts.map((fact) => (
@@ -448,7 +454,7 @@ function CurrentState({
           ))}
         </View>
       ) : (
-        <EmptyCard label="No current-state facts available yet." />
+        <EmptyCard label={t("correspondent.currentState.empty")} />
       )}
     </Card>
   );
@@ -501,13 +507,15 @@ function TimelineHighlights({
 }: {
   events: CorrespondentIntelligence["timeline"];
 }) {
+  const { t } = useI18n();
+
   const sorted = [...events].sort((a, b) =>
     compareIsoDates(b.date, a.date),
   );
 
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Timeline Highlights</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.timeline.title")}</Text>
       {sorted.length > 0 ? (
         <View style={timelineStyles.list}>
           {sorted.map((event, index) => (
@@ -517,7 +525,7 @@ function TimelineHighlights({
                   {event.title}
                 </Text>
                 <Text style={timelineStyles.date}>
-                  {event.date ?? "Undated"}
+                  {event.date ?? t("correspondent.timeline.undated")}
                 </Text>
               </View>
               <Text style={timelineStyles.description}>
@@ -527,7 +535,7 @@ function TimelineHighlights({
           ))}
         </View>
       ) : (
-        <EmptyCard label="No timeline highlights available yet." />
+        <EmptyCard label={t("correspondent.timeline.empty")} />
       )}
     </Card>
   );
@@ -581,17 +589,19 @@ function InsuranceLens({
 }: {
   insurance: NonNullable<CorrespondentIntelligence["domainInsights"]["insurance"]>;
 }) {
+  const { t } = useI18n();
+
   return (
     <View style={insuranceStyles.wrap}>
-      <Text style={sectionStyles.eyebrow}>Insurance Lens</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.insurance.title")}</Text>
 
       <View style={insuranceStyles.grid}>
         <FactPanel
-          label="Policy References"
-          value={insurance.policyReferences.join(", ") || "n/a"}
+          label={t("correspondent.insurance.policyReferences")}
+          value={insurance.policyReferences.join(", ") || t("correspondent.insurance.na")}
         />
         <FactPanel
-          label="Latest Premium"
+          label={t("correspondent.insurance.latestPremium")}
           value={
             insurance.latestPremiumAmount != null &&
             insurance.latestPremiumCurrency
@@ -599,16 +609,16 @@ function InsuranceLens({
                   insurance.latestPremiumAmount,
                   insurance.latestPremiumCurrency,
                 )
-              : "n/a"
+              : t("correspondent.insurance.na")
           }
         />
         <FactPanel
-          label="Renewal"
-          value={insurance.renewalDate ?? "n/a"}
+          label={t("correspondent.insurance.renewal")}
+          value={insurance.renewalDate ?? t("correspondent.insurance.na")}
         />
         <FactPanel
-          label="Cancellation"
-          value={insurance.cancellationWindow ?? "n/a"}
+          label={t("correspondent.insurance.cancellation")}
+          value={insurance.cancellationWindow ?? t("correspondent.insurance.na")}
         />
       </View>
 
@@ -703,9 +713,11 @@ function TypeBreakdown({
 }: {
   items: Array<{ name: string; count: number }>;
 }) {
+  const { t } = useI18n();
+
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Type Breakdown</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.typeBreakdown.title")}</Text>
       {items.length > 0 ? (
         <View style={typeStyles.list}>
           {items.map((item) => (
@@ -716,7 +728,7 @@ function TypeBreakdown({
           ))}
         </View>
       ) : (
-        <EmptyCard label="No document types found." />
+        <EmptyCard label={t("correspondent.typeBreakdown.empty")} />
       )}
     </Card>
   );
@@ -754,9 +766,10 @@ const typeStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 function LegacySummary({ text }: { text: string }) {
+  const { t } = useI18n();
   return (
     <Card>
-      <Text style={sectionStyles.eyebrow}>Legacy Summary</Text>
+      <Text style={sectionStyles.eyebrow}>{t("correspondent.legacySummary.title")}</Text>
       <View style={summaryStyles.body}>
         <Text style={summaryStyles.text}>{text}</Text>
       </View>
@@ -791,6 +804,7 @@ function DocumentCard({
   document: ArchiveDocument;
   onOpen: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Pressable
       onPress={onOpen}
@@ -799,9 +813,9 @@ function DocumentCard({
       <Card style={docStyles.card}>
         <View style={docStyles.topRow}>
           <Text style={docStyles.meta}>
-            {document.documentType?.name ?? "Document"}
+            {document.documentType?.name ?? t("correspondent.documentCard.document")}
           </Text>
-          <Pill label={document.status} tone={toneForStatus(document.status)} />
+          <Pill label={formatCorrespondentDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
         </View>
         <Text numberOfLines={2} style={docStyles.title}>
           {titleForDocument(document)}
@@ -871,6 +885,24 @@ function EmptyCard({ label }: { label: string }) {
   );
 }
 
+function formatCorrespondentDocumentStatus(
+  t: ReturnType<typeof useI18n>["t"],
+  status: string,
+) {
+  switch (status) {
+    case "pending":
+      return t("documentDetail.status.pending");
+    case "processing":
+      return t("documentDetail.status.processing");
+    case "ready":
+      return t("documentDetail.status.ready");
+    case "failed":
+      return t("documentDetail.status.failed");
+    default:
+      return status;
+  }
+}
+
 const emptyCardStyles = StyleSheet.create({
   wrap: {
     minHeight: 80,
@@ -911,8 +943,26 @@ export function CorrespondentDossierScreen() {
   const route = useRoute<Props["route"]>();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
 
   const { slug, name } = route.params;
+  if (offline.shouldUseOffline) {
+    return (
+      <Screen
+        title={name}
+        headerVariant="compact"
+        includeTopSafeArea={false}
+        contentContainerStyle={styles.content}
+      >
+        <Card>
+          <Text style={styles.loadingText}>
+            {t("correspondent.screen.offlineOnly")}
+          </Text>
+        </Card>
+      </Screen>
+    );
+  }
 
   // ── Primary query: insights (polls every 4s while pending) ──
   const insightsQuery = useQuery({
@@ -922,7 +972,7 @@ export function CorrespondentDossierScreen() {
         `/api/correspondents/${encodeURIComponent(slug)}/insights`,
       );
       if (!response.ok) {
-        throw new Error("Failed to load correspondent insights.");
+          throw new Error(t("correspondent.screen.loadInsights"));
       }
       return (await response.json()) as CorrespondentInsightsResponse;
     },
@@ -957,7 +1007,7 @@ export function CorrespondentDossierScreen() {
         `/api/documents?${params.toString()}`,
       );
       if (!response.ok) {
-        throw new Error("Failed to load correspondent documents.");
+        throw new Error(t("correspondent.screen.loadDocumentsFailed"));
       }
       return (await response.json()) as SearchDocumentsResponse;
     },
@@ -976,7 +1026,7 @@ export function CorrespondentDossierScreen() {
       >
         <Card>
           <Text style={styles.loadingText}>
-            Loading correspondent dossier...
+            {t("correspondent.screen.loadDossier")}
           </Text>
         </Card>
       </Screen>
@@ -993,7 +1043,7 @@ export function CorrespondentDossierScreen() {
         contentContainerStyle={styles.content}
       >
         <ErrorCard
-          message="Failed to load correspondent insights."
+          message={t("correspondent.screen.loadInsights")}
           onRetry={() => insightsQuery.refetch()}
         />
       </Screen>
@@ -1004,7 +1054,7 @@ export function CorrespondentDossierScreen() {
   const data = insightsQuery.data;
   const intelligence = data.intelligence;
   const intelligenceStatus = data.intelligenceStatus;
-  const smartHighlight = buildSmartHighlight(data, intelligence);
+  const smartHighlight = buildSmartHighlight(data, intelligence, t);
 
   const orderedDocuments = [
     ...(documentsQuery.data?.items ?? []),
@@ -1013,12 +1063,12 @@ export function CorrespondentDossierScreen() {
   const summaryText =
     data.summary ??
     intelligence?.profile?.narrative ??
-    "No summary available yet.";
+    t("correspondent.screen.noSummary");
 
   return (
     <Screen
       title={name}
-      subtitle="A living dossier for one relationship: overview, detected changes, milestones, domain-specific signals, and the underlying document trail."
+      subtitle={t("correspondent.screen.subtitle")}
       headerVariant="compact"
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
@@ -1027,18 +1077,18 @@ export function CorrespondentDossierScreen() {
       <MetricRibbon
         items={[
           {
-            label: "Documents",
+              label: t("correspondent.screen.metricDocuments"),
             value: data.stats.documentCount.toLocaleString(),
           },
           smartHighlight,
           {
-            label: "Last Document",
-            value: data.stats.dateRange.to ?? "Undated",
-          },
-          {
-            label: "Detected Changes",
-            value: String(intelligence?.changes.length ?? 0),
-          },
+              label: t("correspondent.screen.metricLastDocument"),
+              value: data.stats.dateRange.to ?? t("correspondent.screen.undated"),
+            },
+            {
+              label: t("correspondent.screen.metricChanges"),
+              value: String(intelligence?.changes.length ?? 0),
+            },
         ]}
       />
 
@@ -1076,27 +1126,27 @@ export function CorrespondentDossierScreen() {
       {/* ── Documents ── */}
       <View style={styles.documentsSection}>
         <View style={styles.documentsSectionHeader}>
-          <Text style={sectionStyles.eyebrow}>Documents</Text>
+          <Text style={sectionStyles.eyebrow}>{t("correspondent.screen.documents")}</Text>
           <Text style={styles.documentsTitle}>
-            Documents from {data.correspondent.name}
+            {`${t("correspondent.screen.documentsFrom")} ${data.correspondent.name}`}
           </Text>
         </View>
 
         {documentsQuery.isLoading ? (
           <Card>
             <Text style={styles.loadingText}>
-              Loading correspondent documents...
+              {t("correspondent.screen.loadingDocuments")}
             </Text>
           </Card>
         ) : documentsQuery.isError ? (
           <ErrorCard
-            message="Failed to load the document list for this correspondent."
+            message={t("correspondent.screen.loadDocumentsFailed")}
             onRetry={() => documentsQuery.refetch()}
           />
         ) : orderedDocuments.length === 0 ? (
           <EmptyState
-            title="No documents"
-            body="No documents found for this correspondent."
+            title={t("correspondent.screen.noDocumentsTitle")}
+            body={t("correspondent.screen.noDocumentsBody")}
           />
         ) : (
           orderedDocuments.map((document) => (

@@ -18,6 +18,8 @@ import {
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
 import { Button, Card, EmptyState, ErrorCard, Field, Screen, SectionTitle } from "../components/ui";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors } from "../theme";
 import { createPdfFromImages, responseToMessage } from "../lib";
@@ -54,6 +56,8 @@ type DraftAsset = {
 
 export function ScanScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
@@ -62,6 +66,16 @@ export function ScanScreen() {
   const [error, setError] = useState("");
 
   const pageUris = useMemo(() => pages.map((page) => page.uri), [pages]);
+
+  if (offline.shouldUseOffline) {
+    return (
+      <Screen title={t("scan.title")} subtitle={t("scan.offlineSubtitle")}>
+        <Card>
+          <Text style={styles.offlineText}>{t("scan.offlineBody")}</Text>
+        </Card>
+      </Screen>
+    );
+  }
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
@@ -76,7 +90,7 @@ export function ScanScreen() {
       }
 
       if (!fileUri) {
-        throw new Error("Add a scan, image, or PDF before uploading.");
+        throw new Error(t("scan.addBeforeUpload"));
       }
 
       const formData = new FormData();
@@ -124,15 +138,13 @@ export function ScanScreen() {
   async function handleScan() {
     setError("");
     if (!(await ensureAndroidCameraPermission())) {
-      setError("Camera permission is required to scan documents.");
+      setError(t("scan.cameraPermission"));
       return;
     }
 
     const scanner = getScannerModule();
     if (!scanner) {
-      setError(
-        "The native scanner module is not available in this build yet. Reinstall the dev client after the native rebuild.",
-      );
+      setError(t("scan.scannerUnavailable"));
       return;
     }
 
@@ -193,53 +205,57 @@ export function ScanScreen() {
   }
 
   return (
-    <Screen includeTopSafeArea={false} title="Scan and upload" subtitle="Capture multi-page paper documents, or import an existing PDF from your device.">
+    <Screen includeTopSafeArea={false} title={t("scan.title")} subtitle={t("scan.subtitle")}>
       <Card>
-        <Field label="Title override" value={title} onChangeText={setTitle} placeholder="Optional document title" />
+        <Field label={t("scan.titleOverride")} value={title} onChangeText={setTitle} placeholder={t("scan.optionalTitle")} />
         <View style={styles.buttonStack}>
-          <Button label="Scan with camera" onPress={() => void handleScan()} />
-          <Button label="Import images" variant="secondary" onPress={() => void handlePickImages()} />
-          <Button label="Import PDF" variant="secondary" onPress={() => void handlePickFile()} />
+          <Button label={t("scan.scanWithCamera")} onPress={() => void handleScan()} />
+          <Button label={t("scan.importImages")} variant="secondary" onPress={() => void handlePickImages()} />
+          <Button label={t("scan.importPdf")} variant="secondary" onPress={() => void handlePickFile()} />
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
       {pdfUri ? (
         <Card>
-          <SectionTitle title="Imported PDF" hint="This file will upload exactly as selected." />
+          <SectionTitle title={t("scan.importedPdf")} hint={t("scan.importedHint")} />
           <Text style={styles.fileText}>{pdfUri.split("/").pop() ?? pdfUri}</Text>
           <View style={styles.buttonStack}>
-            <Button label="Share copy" variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
-            <Button label="Upload PDF" onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
+            <Button label={t("scan.shareCopy")} variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
+            <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
           </View>
         </Card>
       ) : null}
 
       {pages.length > 0 ? (
         <>
-          <SectionTitle title={`Captured pages (${pages.length})`} hint="Each scan becomes a page in one uploaded PDF." />
+          <SectionTitle title={`${t("scan.capturedPages")} (${pages.length})`} hint={t("scan.capturedHint")} />
           {pages.map((page, index) => (
             <Card key={page.id}>
               <Image source={{ uri: page.uri }} style={styles.previewImage} resizeMode="cover" />
               <View style={styles.pageRow}>
-                <Text style={styles.pageTitle}>Page {index + 1}</Text>
-                <Button label="Remove" variant="danger" onPress={() => removePage(page.id)} />
+                <Text style={styles.pageTitle}>{`${t("scan.page")} ${index + 1}`}</Text>
+                <Button label={t("scan.remove")} variant="danger" onPress={() => removePage(page.id)} />
               </View>
             </Card>
           ))}
-          {uploadMutation.isError ? <ErrorCard message={uploadMutation.error instanceof Error ? uploadMutation.error.message : "Upload failed."} /> : null}
-          <Button label="Create PDF and upload" onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
+          {uploadMutation.isError ? <ErrorCard message={uploadMutation.error instanceof Error ? uploadMutation.error.message : t("scan.uploadFailed")} /> : null}
+          <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
         </>
       ) : null}
 
       {!pdfUri && pages.length === 0 ? (
-        <EmptyState title="Nothing queued yet" body="Use the camera for paper capture, or import an existing PDF from your device." />
+        <EmptyState title={t("scan.emptyTitle")} body={t("scan.emptyBody")} />
       ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  offlineText: {
+    color: colors.muted,
+    lineHeight: 20,
+  },
   buttonStack: {
     gap: 10,
   },

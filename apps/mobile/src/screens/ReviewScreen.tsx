@@ -7,26 +7,36 @@ import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Button, Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors } from "../theme";
 import { responseToMessage, titleForDocument, type ReviewQueueResponse } from "../lib";
 
 export function ReviewScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const reviewQuery = useQuery({
-    queryKey: ["review", auth.apiUrl],
+    queryKey: ["review", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        return offline.loadDocuments({ reviewOnly: true });
+      }
+
       const response = await auth.authFetch("/api/documents/review?page=1&pageSize=25");
       if (!response.ok) {
-        throw new Error("Failed to load the review queue.");
+        throw new Error(t("review.loadError"));
       }
       return (await response.json()) as ReviewQueueResponse;
     },
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   const mutation = useMutation({
@@ -51,19 +61,19 @@ export function ReviewScreen() {
   });
 
   return (
-    <Screen includeTopSafeArea={false} title="Review" subtitle="Clear extraction uncertainty, then send documents back through processing when needed.">
-      {reviewQuery.isLoading ? <Card><Text style={styles.helper}>Loading the review queue...</Text></Card> : null}
-      {reviewQuery.isError ? <ErrorCard message="The review queue could not be loaded." onRetry={() => reviewQuery.refetch()} /> : null}
+    <Screen includeTopSafeArea={false} title={t("review.title")} subtitle={t("review.subtitle")}>
+      {reviewQuery.isLoading ? <Card><Text style={styles.helper}>{t("review.loading")}</Text></Card> : null}
+      {reviewQuery.isError ? <ErrorCard message={t("review.loadError")} onRetry={() => reviewQuery.refetch()} /> : null}
 
       {reviewQuery.data ? (
         reviewQuery.data.items.length === 0 ? (
-          <EmptyState title="Queue is clear" body="No documents currently need manual review." />
+          <EmptyState title={t("review.emptyTitle")} body={t("review.emptyBody")} />
         ) : (
           reviewQuery.data.items.map((document) => (
             <Card key={document.id}>
               <Pressable onPress={() => navigation.navigate("DocumentDetail", { documentId: document.id, title: titleForDocument(document) })}>
                 <Text style={styles.title}>{titleForDocument(document)}</Text>
-                <Text style={styles.helper}>{document.correspondent?.name ?? "Unfiled"}</Text>
+                <Text style={styles.helper}>{document.correspondent?.name ?? t("review.unfiled")}</Text>
               </Pressable>
               <DocumentProcessingIndicator document={document} />
               <View style={styles.reasonWrap}>
@@ -73,17 +83,19 @@ export function ReviewScreen() {
               </View>
               <View style={styles.actionRow}>
                 <Button
-                  label="Resolve"
+                  label={t("review.resolve")}
                   variant="secondary"
                   loading={busyId === `${document.id}:resolve`}
+                  disabled={offline.shouldUseOffline}
                   onPress={() => {
                     setBusyId(`${document.id}:resolve`);
                     mutation.mutate({ id: document.id, action: "resolve" });
                   }}
                 />
                 <Button
-                  label="Requeue"
+                  label={t("review.requeue")}
                   loading={busyId === `${document.id}:requeue`}
+                  disabled={offline.shouldUseOffline}
                   onPress={() => {
                     setBusyId(`${document.id}:requeue`);
                     mutation.mutate({ id: document.id, action: "requeue" });
@@ -93,6 +105,10 @@ export function ReviewScreen() {
             </Card>
           ))
         )
+      ) : null}
+
+      {offline.shouldUseOffline ? (
+        <Card><Text style={styles.helper}>{t("review.offlineDisabled")}</Text></Card>
       ) : null}
     </Screen>
   );

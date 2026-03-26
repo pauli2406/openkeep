@@ -23,6 +23,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useI18n } from "@/lib/i18n";
 import {
   Dialog,
   DialogContent,
@@ -360,30 +361,33 @@ function formatDateTime(dateStr: string | null | undefined): string {
   }
 }
 
-function formatManualOverrideField(field: ManualOverrideField): string {
+function formatManualOverrideField(
+  field: ManualOverrideField,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
   switch (field) {
     case "issueDate":
-      return "Issue Date";
+      return t("documentDetail.issueDate");
     case "dueDate":
-      return "Due Date";
+      return t("documentDetail.dueDate");
     case "expiryDate":
-      return "Expiry Date";
+      return t("documentDetail.expiryDate");
     case "amount":
-      return "Amount";
+      return t("documentDetail.amount");
     case "currency":
-      return "Currency";
+      return t("documentDetail.currency");
     case "referenceNumber":
-      return "Reference Number";
+      return t("documentDetail.referenceNumber");
     case "holderName":
-      return "Holder Name";
+      return t("documentDetail.holderName");
     case "issuingAuthority":
-      return "Issuing Authority";
+      return t("documentDetail.issuingAuthority");
     case "correspondentId":
-      return "Correspondent";
+      return t("documentDetail.correspondent");
     case "documentTypeId":
-      return "Document Type";
+      return t("documentDetail.documentType");
     case "tagIds":
-      return "Tags";
+      return t("documentDetail.tags");
     default:
       return field;
   }
@@ -474,6 +478,7 @@ function embeddingProviderLabel(id: string | null | undefined): string {
 function renderManualOverrideValue(
   doc: Document,
   field: ManualOverrideField,
+  t: ReturnType<typeof useI18n>["t"],
 ): string {
   switch (field) {
     case "issueDate":
@@ -498,13 +503,13 @@ function renderManualOverrideValue(
     case "issuingAuthority":
       return doc.issuingAuthority ?? "-";
     case "correspondentId":
-      return doc.correspondent?.name ?? "Removed";
+      return doc.correspondent?.name ?? t("documentDetail.removed");
     case "documentTypeId":
-      return doc.documentType?.name ?? "Removed";
+      return doc.documentType?.name ?? t("documentDetail.removed");
     case "tagIds":
       return doc.tags.length > 0
         ? doc.tags.map((tag) => tag.name).join(", ")
-        : "No tags";
+        : t("documentDetail.noTags");
     default:
       return "-";
   }
@@ -520,8 +525,33 @@ const EMPTY_SELECT_VALUE = "__none__";
 
 function DocumentDetailPage() {
   const { documentId } = Route.useParams();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const copy = {
+    loadDoc: t("documentDetail.loadDoc"),
+    loadText: t("documentDetail.loadText"),
+    loadHistory: t("documentDetail.loadHistory"),
+    backToDocuments: t("documentDetail.backToDocuments"),
+    notFound: t("documentDetail.notFound"),
+    returnToDocuments: t("documentDetail.returnToDocuments"),
+    documents: t("documentDetail.documents"),
+    pendingReview: t("documentDetail.pendingReview"),
+    reviewResolved: t("documentDetail.reviewResolved"),
+    preview: t("documentDetail.preview"),
+    ocrText: t("documentDetail.ocrText"),
+    intelligence: t("documentDetail.intelligence"),
+    details: t("documentDetail.details"),
+    history: t("documentDetail.history"),
+    previewUnavailable: t("documentDetail.previewUnavailable"),
+    downloadFile: t("documentDetail.downloadFile"),
+    downloadOriginal: t("documentDetail.downloadOriginal"),
+    downloadSearchable: t("documentDetail.downloadSearchable"),
+    loadPreviewFailed: t("documentDetail.loadPreviewFailed"),
+    loadDocumentTextFailed: t("documentDetail.loadDocumentTextFailed"),
+    noOcr: t("documentDetail.noOcr"),
+    page: (n: number) => `${t("documentDetail.pageWord")} ${n}`,
+  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -554,7 +584,7 @@ function DocumentDetailPage() {
       const { data, error } = await api.GET("/api/documents/{id}", {
         params: { path: { id: documentId } },
       });
-      if (error) throw new Error("Failed to load document");
+      if (error) throw new Error(copy.loadDoc);
       return data as unknown as Document;
     },
     refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data),
@@ -566,7 +596,7 @@ function DocumentDetailPage() {
       const { data, error } = await api.GET("/api/documents/{id}/text", {
         params: { path: { id: documentId } },
       });
-      if (error) throw new Error("Failed to load document text");
+      if (error) throw new Error(copy.loadText);
       return data as unknown as { documentId: string; blocks: TextBlock[] };
     },
     enabled: documentQuery.isSuccess,
@@ -579,7 +609,7 @@ function DocumentDetailPage() {
       const { data, error } = await api.GET("/api/documents/{id}/history", {
         params: { path: { id: documentId } },
       });
-      if (error) throw new Error("Failed to load document history");
+      if (error) throw new Error(copy.loadHistory);
       return data as unknown as DocumentHistoryResponse;
     },
     enabled: documentQuery.isSuccess,
@@ -591,7 +621,7 @@ function DocumentDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/taxonomies/tags", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load tags"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadTags")));
       }
       return (data ?? []) as TaxonomyTag[];
     },
@@ -602,7 +632,7 @@ function DocumentDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load correspondents"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadCorrespondents")));
       }
       return (data ?? []) as TaxonomyCorrespondent[];
     },
@@ -613,7 +643,7 @@ function DocumentDetailPage() {
     queryFn: async () => {
       const { data, error } = await api.GET("/api/taxonomies/document-types", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load document types"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadDocumentTypes")));
       }
       return (data ?? []) as TaxonomyDocumentType[];
     },
@@ -624,7 +654,7 @@ function DocumentDetailPage() {
     queryFn: async () => {
       const response = await authFetch(`/api/documents/${documentId}/download`);
       if (!response.ok) {
-        throw new Error("Failed to load document preview");
+        throw new Error(t("documentDetail.failedToLoadDocumentPreview"));
       }
 
       return response.blob();
@@ -636,7 +666,7 @@ function DocumentDetailPage() {
     queryKey: ["health", "providers"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/health/providers");
-      if (error) throw new Error("Failed to fetch providers");
+      if (error) throw new Error(t("documentDetail.failedToFetchProviders"));
       return data as HealthProvidersResponse;
     },
     staleTime: 60_000,
@@ -685,7 +715,7 @@ function DocumentDetailPage() {
         params: { path: { id: documentId } },
         body: body as any,
       });
-      if (error) throw new Error("Failed to update document");
+      if (error) throw new Error(t("documentDetail.failedToUpdateDocument"));
       return data as unknown as Document;
     },
     onSuccess: () => {
@@ -701,7 +731,7 @@ function DocumentDetailPage() {
         body: { name },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to create tag"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateTag")));
       }
       return data as unknown as TaxonomyTag;
     },
@@ -721,7 +751,7 @@ function DocumentDetailPage() {
         body: { name },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to create correspondent"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateCorrespondent")));
       }
       return data as unknown as TaxonomyCorrespondent;
     },
@@ -749,7 +779,7 @@ function DocumentDetailPage() {
         body: {},
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to resolve review"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToResolveReview")));
       }
       return data;
     },
@@ -765,7 +795,7 @@ function DocumentDetailPage() {
         body: { force: true },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to requeue document"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToRequeue")));
       }
       return data;
     },
@@ -781,7 +811,7 @@ function DocumentDetailPage() {
         body: parseProvider ? { parseProvider } : {},
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to reprocess document"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToReprocessDocument")));
       }
       return data;
     },
@@ -798,7 +828,7 @@ function DocumentDetailPage() {
         body: { clearLockedFields: [field] },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to clear manual override"));
+        throw new Error(getApiErrorMessage(error, t("documentDetail.failedToClearOverride")));
       }
       return data as unknown as Document;
     },
@@ -814,7 +844,7 @@ function DocumentDetailPage() {
         method: "DELETE",
       });
       if (!response.ok) {
-        let message = "Failed to delete document";
+        let message = t("documentDetail.failedToDeleteDocument");
         try {
           const body = (await response.json()) as { message?: unknown };
           message = getApiErrorMessage(body, message);
@@ -978,15 +1008,15 @@ function DocumentDetailPage() {
       <div className="p-6">
         <Link to="/documents" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
-          Back to Documents
+          {copy.backToDocuments}
         </Link>
         <div className="mt-8 text-center">
           <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
           <p className="mt-2 text-sm text-muted-foreground">
-            {documentQuery.error instanceof Error ? documentQuery.error.message : "Document not found"}
+            {documentQuery.error instanceof Error ? documentQuery.error.message : copy.notFound}
           </p>
           <Button variant="outline" className="mt-4" onClick={() => navigate({ to: "/documents" })}>
-            Return to Documents
+            {copy.returnToDocuments}
           </Button>
         </div>
       </div>
@@ -1102,7 +1132,7 @@ function DocumentDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Documents
+          {copy.documents}
         </Link>
         <span className="text-sm text-muted-foreground">/</span>
         <span className="text-sm font-medium truncate max-w-xs">{doc.title}</span>
@@ -1117,10 +1147,10 @@ function DocumentDetailPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={statusVariant(doc.status)}>{doc.status}</Badge>
           {doc.reviewStatus === "pending" && (
-            <Badge variant="warning">Pending Review</Badge>
+            <Badge variant="warning">{copy.pendingReview}</Badge>
           )}
           {doc.reviewStatus === "resolved" && (
-            <Badge variant="success">Review Resolved</Badge>
+            <Badge variant="success">{copy.reviewResolved}</Badge>
           )}
         </div>
       </div>
@@ -1134,23 +1164,23 @@ function DocumentDetailPage() {
             <TabsList>
               <TabsTrigger value="preview" className="gap-1.5">
                 <Eye className="h-3.5 w-3.5" />
-                Preview
+                {copy.preview}
               </TabsTrigger>
               <TabsTrigger value="text" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" />
-                OCR Text
+                {copy.ocrText}
               </TabsTrigger>
               <TabsTrigger value="intelligence" className="gap-1.5">
                 <BrainCircuit className="h-3.5 w-3.5" />
-                Intelligence
+                {copy.intelligence}
               </TabsTrigger>
               <TabsTrigger value="details" className="gap-1.5">
                 <Hash className="h-3.5 w-3.5" />
-                Details
+                {copy.details}
               </TabsTrigger>
               <TabsTrigger value="history" className="gap-1.5">
                 <History className="h-3.5 w-3.5" />
-                History
+                {copy.history}
               </TabsTrigger>
             </TabsList>
 
@@ -1169,7 +1199,7 @@ function DocumentDetailPage() {
                     )}
                     {previewQuery.isError && (
                       <div className="flex h-full items-center justify-center p-6 text-sm text-destructive">
-                        Failed to load document preview.
+                        {copy.loadPreviewFailed}
                       </div>
                     )}
                     {previewUrl &&
@@ -1181,7 +1211,7 @@ function DocumentDetailPage() {
                             <iframe
                               src={previewUrl}
                               className="h-full w-full"
-                              title="Document Preview"
+                              title={t("documentDetail.documentPreviewTitle")}
                             />
                           )}
 
@@ -1200,7 +1230,7 @@ function DocumentDetailPage() {
                           {previewCategory === "text" && (
                             <div className="h-full overflow-auto p-4">
                               <pre className="text-sm leading-relaxed font-mono whitespace-pre-wrap break-words text-foreground">
-                                {textPreviewContent ?? "Loading content..."}
+                                {textPreviewContent ?? t("documentDetail.loadingContent")}
                               </pre>
                             </div>
                           )}
@@ -1213,7 +1243,7 @@ function DocumentDetailPage() {
                                 controls
                                 className="max-h-full max-w-full rounded"
                               >
-                                Your browser does not support video playback.
+                                {t("documentDetail.browserNoVideo")}
                               </video>
                             </div>
                           )}
@@ -1229,7 +1259,7 @@ function DocumentDetailPage() {
                                 controls
                                 className="w-full max-w-md"
                               >
-                                Your browser does not support audio playback.
+                                {t("documentDetail.browserNoAudio")}
                               </audio>
                             </div>
                           )}
@@ -1242,13 +1272,11 @@ function DocumentDetailPage() {
                               </div>
                               <div className="space-y-1.5">
                                 <p className="text-sm font-medium text-foreground">
-                                  Preview not available
+                                 {copy.previewUnavailable}
                                 </p>
                                 <p className="text-xs text-muted-foreground max-w-xs">
-                                  This file type (
-                                  {friendlyMimeLabel(doc.mimeType)}) can't be
-                                  previewed in the browser. Download the file to
-                                  view it.
+                                  {t("documentDetail.unsupportedPreviewPrefix")} (
+                                  {friendlyMimeLabel(doc.mimeType)}) {t("documentDetail.unsupportedPreviewSuffix")}
                                 </p>
                               </div>
                               <Button
@@ -1258,7 +1286,7 @@ function DocumentDetailPage() {
                                 onClick={() => handleDownload("original")}
                               >
                                 <Download className="h-3.5 w-3.5" />
-                                Download File
+                                 {copy.downloadFile}
                               </Button>
                             </div>
                           )}
@@ -1273,7 +1301,7 @@ function DocumentDetailPage() {
                       onClick={() => handleDownload("original")}
                     >
                       <Download className="h-3.5 w-3.5" />
-                      Download Original
+                       {copy.downloadOriginal}
                     </Button>
                     {doc.searchablePdfAvailable && (
                       <Button
@@ -1283,7 +1311,7 @@ function DocumentDetailPage() {
                         onClick={() => handleDownload("searchable")}
                       >
                         <Download className="h-3.5 w-3.5" />
-                        Download Searchable PDF
+                         {copy.downloadSearchable}
                       </Button>
                     )}
                   </div>
@@ -1301,11 +1329,11 @@ function DocumentDetailPage() {
                     </div>
                   )}
                   {textQuery.isError && (
-                    <p className="text-sm text-destructive">Failed to load document text.</p>
+                     <p className="text-sm text-destructive">{copy.loadDocumentTextFailed}</p>
                   )}
                   {textQuery.isSuccess && pageNumbers.length === 0 && (
                     <p className="text-sm text-muted-foreground py-8 text-center">
-                      No OCR text available for this document.
+                       {copy.noOcr}
                     </p>
                   )}
                   {textQuery.isSuccess && pageNumbers.length > 0 && (
@@ -1313,7 +1341,7 @@ function DocumentDetailPage() {
                       {pageNumbers.map((pageNum) => (
                         <div key={pageNum}>
                           <h3 className="text-sm font-semibold text-muted-foreground mb-2">
-                            Page {pageNum}
+                             {copy.page(pageNum)}
                           </h3>
                           <div className="rounded-md border bg-muted/50 p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono">
                             {textBlocksByPage[pageNum]
@@ -1331,19 +1359,19 @@ function DocumentDetailPage() {
             <TabsContent value="intelligence">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Document Intelligence</CardTitle>
+                  <CardTitle className="text-base">{t("documentDetail.documentIntelligence")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {!intelligence ? (
                     <p className="text-sm text-muted-foreground">
-                      No agent intelligence available for this document yet.
+                      {t("documentDetail.noAgentIntelligence")}
                     </p>
                   ) : (
                     <>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="rounded-md border p-3 space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium">Routing</p>
+                            <p className="text-sm font-medium">{t("documentDetail.routing")}</p>
                             {intelligence.routing?.confidence != null && (
                               <span className={`text-xs font-medium ${confidenceColor(intelligence.routing.confidence)}`}>
                                 {(intelligence.routing.confidence * 100).toFixed(0)}%
@@ -1352,18 +1380,18 @@ function DocumentDetailPage() {
                           </div>
                           <div className="text-sm space-y-1">
                             <p>
-                              <span className="text-muted-foreground">Type:</span>{" "}
+                              <span className="text-muted-foreground">{t("documentDetail.type")}</span>{" "}
                               {intelligence.routing?.documentType ?? "-"}
                             </p>
                             {intelligence.routing?.subtype && (
                               <p>
-                                <span className="text-muted-foreground">Subtype:</span>{" "}
+                                <span className="text-muted-foreground">{t("documentDetail.subtype")}</span>{" "}
                                 {intelligence.routing.subtype}
                               </p>
                             )}
                             {intelligence.routing?.provider && (
                               <p>
-                                <span className="text-muted-foreground">Model:</span>{" "}
+                                <span className="text-muted-foreground">{t("documentDetail.model")}</span>{" "}
                                 {intelligence.routing.provider}
                                 {intelligence.routing.model ? ` / ${intelligence.routing.model}` : ""}
                               </p>
@@ -1380,14 +1408,14 @@ function DocumentDetailPage() {
                           ) : null}
                         </div>
 
-                        <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">Generated Summary</p>
+                      <div className="rounded-md border p-3 space-y-2">
+                          <p className="text-sm font-medium">{t("documentDetail.generatedSummary")}</p>
                           <p className="text-sm">{intelligence.summary?.value ?? doc.metadata.summary ?? "-"}</p>
                           <div className="text-xs text-muted-foreground space-y-1">
-                            {intelligence.title?.value && <p>Title candidate: {intelligence.title.value}</p>}
+                            {intelligence.title?.value && <p>{t("documentDetail.titleCandidate")}: {intelligence.title.value}</p>}
                             {intelligence.summary?.provider && (
                               <p>
-                                Provider: {intelligence.summary.provider}
+                                {t("documentDetail.provider")}: {intelligence.summary.provider}
                                 {intelligence.summary.model ? ` / ${intelligence.summary.model}` : ""}
                               </p>
                             )}
@@ -1397,7 +1425,7 @@ function DocumentDetailPage() {
 
                       <div className="rounded-md border p-3 space-y-3">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium">Type-specific Fields</p>
+                          <p className="text-sm font-medium">{t("documentDetail.typeSpecificFields")}</p>
                           {intelligence.extraction?.provider && (
                             <span className="text-xs text-muted-foreground">
                               {intelligence.extraction.provider}
@@ -1406,7 +1434,7 @@ function DocumentDetailPage() {
                           )}
                         </div>
                         {visibleIntelligenceFields.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No extracted fields available.</p>
+                          <p className="text-sm text-muted-foreground">{t("documentDetail.noExtractedFields")}</p>
                         ) : (
                           <div className="space-y-2">
                             {visibleIntelligenceFields.map(([field, value]) => {
@@ -1430,15 +1458,15 @@ function DocumentDetailPage() {
                                   {provenance && (
                                     <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
                                       <p>
-                                        <span className="text-muted-foreground">Source:</span>{" "}
+                                        <span className="text-muted-foreground">{t("documentDetail.source")}</span>{" "}
                                         {provenance.source ?? "-"}
                                         {provenance.provider ? ` / ${provenance.provider}` : ""}
                                       </p>
                                       {(provenance.page != null || provenance.lineIndex != null) && (
                                         <p>
-                                          <span className="text-muted-foreground">Location:</span>{" "}
-                                          {provenance.page != null ? `Page ${provenance.page}` : ""}
-                                          {provenance.lineIndex != null ? `, line ${provenance.lineIndex}` : ""}
+                                          <span className="text-muted-foreground">{t("documentDetail.location")}</span>{" "}
+                                          {provenance.page != null ? `${t("documentDetail.pageWord")} ${provenance.page}` : ""}
+                                          {provenance.lineIndex != null ? `, ${t("documentDetail.lineWord")} ${provenance.lineIndex}` : ""}
                                         </p>
                                       )}
                                       {provenance.snippet && (
@@ -1457,7 +1485,7 @@ function DocumentDetailPage() {
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">Tagging & Correspondent</p>
+                          <p className="text-sm font-medium">{t("documentDetail.taggingCorrespondent")}</p>
                           <div className="flex flex-wrap gap-1">
                             {(intelligence.tagging?.tags ?? []).map((tagValue) => (
                               <Badge key={tagValue} variant="secondary" className="text-xs">
@@ -1467,19 +1495,19 @@ function DocumentDetailPage() {
                           </div>
                           <div className="text-xs text-muted-foreground space-y-1">
                             <p>
-                              Correspondent: {intelligence.correspondentResolution?.resolvedName ?? "-"}
+                              {t("documentDetail.correspondent")}: {intelligence.correspondentResolution?.resolvedName ?? "-"}
                             </p>
                             <p>
-                              Strategy: {intelligence.correspondentResolution?.strategy ?? "-"}
+                              {t("documentDetail.strategy")}: {intelligence.correspondentResolution?.strategy ?? "-"}
                             </p>
                           </div>
                         </div>
 
                         <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">Validation</p>
+                          <p className="text-sm font-medium">{t("documentDetail.validation")}</p>
                           {(intelligence.validation?.warnings?.length ?? 0) > 0 && (
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Warnings</p>
+                              <p className="text-xs text-muted-foreground mb-1">{t("documentDetail.warnings")}</p>
                               <div className="flex flex-wrap gap-1">
                                 {intelligence.validation?.warnings?.map((warning) => (
                                   <Badge key={warning} variant="warning" className="text-xs">
@@ -1491,7 +1519,7 @@ function DocumentDetailPage() {
                           )}
                           {(intelligence.validation?.errors?.length ?? 0) > 0 && (
                             <div>
-                              <p className="text-xs text-muted-foreground mb-1">Errors</p>
+                              <p className="text-xs text-muted-foreground mb-1">{t("documentDetail.errors")}</p>
                               <div className="flex flex-wrap gap-1">
                                 {intelligence.validation?.errors?.map((error) => (
                                   <Badge key={error} variant="destructive" className="text-xs">
@@ -1510,13 +1538,13 @@ function DocumentDetailPage() {
                       </div>
 
                       <div className="rounded-md border p-3 space-y-2">
-                        <p className="text-sm font-medium">Pipeline</p>
+                          <p className="text-sm font-medium">{t("documentDetail.pipeline")}</p>
                         <div className="grid gap-2 md:grid-cols-2 text-xs text-muted-foreground">
-                          <p>Framework: {intelligence.pipeline?.framework ?? "-"}</p>
-                          <p>Status: {intelligence.pipeline?.status ?? "-"}</p>
-                          <p>Run ID: {intelligence.pipeline?.runId ?? "-"}</p>
+                          <p>{t("documentDetail.framework")}: {intelligence.pipeline?.framework ?? "-"}</p>
+                          <p>{t("documentDetail.status")}: {intelligence.pipeline?.status ?? "-"}</p>
+                          <p>{t("documentDetail.runId")}: {intelligence.pipeline?.runId ?? "-"}</p>
                           <p>
-                            Provider order: {(intelligence.pipeline?.providerOrder ?? []).join(" -> ") || "-"}
+                            {t("documentDetail.providerOrder")}: {(intelligence.pipeline?.providerOrder ?? []).join(" -> ") || "-"}
                           </p>
                         </div>
                         {Object.entries(intelligence.pipeline?.durationsMs ?? {}).length > 0 && (
@@ -1549,7 +1577,7 @@ function DocumentDetailPage() {
             <TabsContent value="history">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Document History</CardTitle>
+                  <CardTitle className="text-base">{t("documentDetail.documentHistory")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {historyQuery.isLoading && (
@@ -1559,12 +1587,12 @@ function DocumentDetailPage() {
                   )}
                   {historyQuery.isError && (
                     <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                      Failed to load document history.
+                      {copy.loadHistory}
                     </div>
                   )}
                   {historyQuery.isSuccess && historyQuery.data.items.length === 0 && (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      No audit events recorded for this document yet.
+                      {t("documentDetail.noAuditEvents")}
                     </p>
                   )}
                   {historyQuery.data?.items.map((event) => (
@@ -1580,7 +1608,7 @@ function DocumentDetailPage() {
                           <p className="text-xs text-muted-foreground">
                             {event.actorDisplayName ||
                               event.actorEmail ||
-                              "System"}
+                              t("documentDetail.system")}
                           </p>
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -1609,11 +1637,11 @@ function DocumentDetailPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Metadata</CardTitle>
+                 <CardTitle className="text-base">{t("documentDetail.metadata")}</CardTitle>
                 {!isEditing ? (
                   <Button variant="ghost" size="sm" className="gap-1.5" onClick={startEditing}>
                     <Edit2 className="h-3.5 w-3.5" />
-                    Edit
+                    {t("documentDetail.edit")}
                   </Button>
                 ) : (
                   <div className="flex gap-1">
@@ -1629,7 +1657,7 @@ function DocumentDetailPage() {
                       ) : (
                         <Save className="h-3.5 w-3.5" />
                       )}
-                      Save
+                       {t("documentDetail.save")}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={cancelEditing}>
                       <X className="h-3.5 w-3.5" />
@@ -1638,24 +1666,24 @@ function DocumentDetailPage() {
                 )}
               </div>
               {updateMutation.isError && (
-                <p className="text-xs text-destructive mt-1">Failed to save changes.</p>
+                <p className="text-xs text-destructive mt-1">{t("documentDetail.failedToSaveChanges")}</p>
               )}
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing && (
                 <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
                   {pendingNewLocks.length > 0
-                    ? `Saving will lock ${pendingNewLocks.map((field) => formatManualOverrideField(field)).join(", ")}.`
+                    ? `${t("documentDetail.savingWillLock")} ${pendingNewLocks.map((field) => formatManualOverrideField(field, t)).join(", ")}.`
                     : lockedFields.length > 0
-                      ? "Already locked fields stay overridden until you clear them."
-                      : "Only the fields you change will become sticky manual overrides."}
+                      ? t("documentDetail.lockedFieldsSticky")
+                      : t("documentDetail.changedFieldsSticky")}
                 </div>
               )}
 
               {/* Title */}
               {isEditing && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Title</Label>
+                  <Label className="text-xs text-muted-foreground">{t("documentDetail.title")}</Label>
                   <Input
                     value={editForm.title}
                     onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
@@ -1668,7 +1696,7 @@ function DocumentDetailPage() {
                 <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Correspondent</p>
+                    <p className="text-xs text-muted-foreground">{t("documentDetail.correspondent")}</p>
                     {lockedFields.includes("correspondentId") && (
                       <>
                         <Lock className="h-3 w-3 text-amber-500" />
@@ -1680,7 +1708,7 @@ function DocumentDetailPage() {
                           disabled={clearOverrideMutation.isPending}
                         >
                           <Unlock className="h-3 w-3" />
-                          Unlock
+                          {t("documentDetail.unlock")}
                         </Button>
                       </>
                     )}
@@ -1697,10 +1725,10 @@ function DocumentDetailPage() {
                         }
                       >
                         <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select correspondent" />
+                          <SelectValue placeholder={t("documentDetail.selectCorrespondent")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>No correspondent</SelectItem>
+                          <SelectItem value={EMPTY_SELECT_VALUE}>{t("documentDetail.noCorrespondent")}</SelectItem>
                           {(correspondentsQuery.data ?? []).map((correspondent) => (
                             <SelectItem key={correspondent.id} value={correspondent.id}>
                               {correspondent.name}
@@ -1712,7 +1740,7 @@ function DocumentDetailPage() {
                         <Input
                           value={newCorrespondentName}
                           onChange={(e) => setNewCorrespondentName(e.target.value)}
-                          placeholder="Add a new correspondent"
+                          placeholder={t("documentDetail.addNewCorrespondent")}
                           onKeyDown={(event) => {
                             if (
                               event.key === "Enter" &&
@@ -1737,28 +1765,28 @@ function DocumentDetailPage() {
                           ) : (
                             <Plus className="h-4 w-4" />
                           )}
-                          Add
+                          {t("documentDetail.add")}
                         </Button>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Create a new correspondent here if it is not in the list.
+                        {t("documentDetail.createCorrespondentHelp")}
                       </p>
                       {createCorrespondentMutation.isError && (
                         <p className="mt-1 text-sm text-destructive">
                           {createCorrespondentMutation.error instanceof Error
                             ? createCorrespondentMutation.error.message
-                            : "Failed to create correspondent."}
+                            : t("documentDetail.failedToCreateCorrespondent")}
                         </p>
                       )}
                       {pendingNewLocks.includes("correspondentId") && (
                         <p className="mt-1 text-xs text-amber-700">
-                          Saving will lock this field.
+                          {t("documentDetail.savingWillLockField")}
                         </p>
                       )}
                     </>
                   ) : (
                     <p className="text-sm font-medium">
-                      {doc.correspondent?.name ?? "Unknown"}
+                      {doc.correspondent?.name ?? t("documentDetail.unknown")}
                     </p>
                   )}
                 </div>
@@ -1769,7 +1797,7 @@ function DocumentDetailPage() {
                 <FileText className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Document Type</p>
+                    <p className="text-xs text-muted-foreground">{t("documentDetail.documentType")}</p>
                     {lockedFields.includes("documentTypeId") && (
                       <>
                         <Lock className="h-3 w-3 text-amber-500" />
@@ -1781,7 +1809,7 @@ function DocumentDetailPage() {
                           disabled={clearOverrideMutation.isPending}
                         >
                           <Unlock className="h-3 w-3" />
-                          Unlock
+                          {t("documentDetail.unlock")}
                         </Button>
                       </>
                     )}
@@ -1798,10 +1826,10 @@ function DocumentDetailPage() {
                         }
                       >
                         <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Select document type" />
+                          <SelectValue placeholder={t("documentDetail.selectDocumentType")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>No document type</SelectItem>
+                          <SelectItem value={EMPTY_SELECT_VALUE}>{t("documentDetail.noDocumentType")}</SelectItem>
                           {(documentTypesQuery.data ?? []).map((documentType) => (
                             <SelectItem key={documentType.id} value={documentType.id}>
                               {documentType.name}
@@ -1817,7 +1845,7 @@ function DocumentDetailPage() {
                     </>
                   ) : (
                     <p className="text-sm font-medium">
-                      {doc.documentType?.name ?? "Unclassified"}
+                      {doc.documentType?.name ?? t("documentDetail.unclassified")}
                     </p>
                   )}
                 </div>
@@ -1828,7 +1856,7 @@ function DocumentDetailPage() {
                 <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Issue Date</p>
+                    <p className="text-xs text-muted-foreground">{t("documentDetail.issueDate")}</p>
                     {lockedFields.includes("issueDate") && (
                       <>
                         <Lock className="h-3 w-3 text-amber-500" />
@@ -1840,7 +1868,7 @@ function DocumentDetailPage() {
                           disabled={clearOverrideMutation.isPending}
                         >
                           <Unlock className="h-3 w-3" />
-                          Unlock
+                          {t("documentDetail.unlock")}
                         </Button>
                       </>
                     )}
@@ -2273,7 +2301,7 @@ function DocumentDetailPage() {
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-sm text-muted-foreground">No tags</span>
+                        <span className="text-sm text-muted-foreground">{t("documentDetail.noTags")}</span>
                       )}
                     </div>
                   )}
@@ -2285,7 +2313,7 @@ function DocumentDetailPage() {
                   correspondentsQuery.isError ||
                   documentTypesQuery.isError) && (
                   <p className="text-xs text-destructive">
-                    Failed to load taxonomy options for manual overrides.
+                    {t("documentDetail.taxonomyOptionsLoadFailed")}
                   </p>
                 )}
 
@@ -2294,11 +2322,11 @@ function DocumentDetailPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs text-muted-foreground">Manual Overrides</p>
+                    <p className="text-xs text-muted-foreground">{t("documentDetail.manualOverrides")}</p>
                     <p className="text-sm font-medium">
                       {lockedFields.length > 0
-                        ? `${lockedFields.length} field${lockedFields.length === 1 ? "" : "s"} locked`
-                        : "None"}
+                        ? `${lockedFields.length} ${t(lockedFields.length === 1 ? "documentDetail.lockedField" : "documentDetail.lockedFields")}`
+                        : t("documentDetail.none")}
                     </p>
                   </div>
                   {manualOverrides?.updatedAt && (
@@ -2310,7 +2338,7 @@ function DocumentDetailPage() {
 
                 {lockedFields.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    Edits to supported fields create sticky manual overrides that survive reprocessing.
+                    {t("documentDetail.stickyOverrideHint")}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -2321,10 +2349,10 @@ function DocumentDetailPage() {
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-medium">
-                            {formatManualOverrideField(field)}
+                            {formatManualOverrideField(field, t)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {renderManualOverrideValue(doc, field)}
+                            {renderManualOverrideValue(doc, field, t)}
                           </p>
                         </div>
                         <Button
@@ -2334,7 +2362,7 @@ function DocumentDetailPage() {
                           onClick={() => clearOverrideMutation.mutate(field)}
                           disabled={clearOverrideMutation.isPending}
                         >
-                          Clear
+                          {t("documentDetail.clear")}
                         </Button>
                       </div>
                     ))}
@@ -2342,7 +2370,7 @@ function DocumentDetailPage() {
                       <p className="text-xs text-destructive">
                         {clearOverrideMutation.error instanceof Error
                           ? clearOverrideMutation.error.message
-                          : "Failed to clear manual override."}
+                           : t("documentDetail.failedToClearOverride")}
                       </p>
                     )}
                   </div>
@@ -2354,7 +2382,7 @@ function DocumentDetailPage() {
               {/* Confidence */}
               {doc.confidence !== null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Confidence</span>
+                  <span className="text-xs text-muted-foreground">{t("documentDetail.confidence")}</span>
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${confidenceBg(doc.confidence)} ${confidenceColor(doc.confidence)}`}
                   >
@@ -2365,13 +2393,13 @@ function DocumentDetailPage() {
 
               {/* Processing Status */}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Processing Status</span>
+                  <span className="text-xs text-muted-foreground">{t("documentDetail.processingStatus")}</span>
                 <Badge variant={statusVariant(doc.status)}>{doc.status}</Badge>
               </div>
 
               {/* Embedding Status */}
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Embedding Status</span>
+                  <span className="text-xs text-muted-foreground">{t("documentDetail.embeddingStatus")}</span>
                 <Badge variant="outline">{doc.embeddingStatus}</Badge>
               </div>
 
@@ -2379,7 +2407,7 @@ function DocumentDetailPage() {
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                   <ScanText className="h-3 w-3" />
-                  OCR Provider
+                    {t("documentDetail.ocrProvider")}
                 </span>
                 <span className="text-xs font-medium text-right truncate">
                   {parseProviderLabel(doc.parseProvider)}
@@ -2391,7 +2419,7 @@ function DocumentDetailPage() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                     <Braces className="h-3 w-3" />
-                    Embedding Model
+                    {t("documentDetail.embeddingModel")}
                   </span>
                   <div className="text-right min-w-0">
                     <p className="text-xs font-medium truncate">
@@ -2410,12 +2438,12 @@ function DocumentDetailPage() {
               <Separator />
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div className="flex justify-between">
-                  <span>Created</span>
+                  <span>{t("documentDetail.created")}</span>
                   <span>{formatDateTime(doc.createdAt)}</span>
                 </div>
                 {doc.processedAt && (
                   <div className="flex justify-between">
-                    <span>Processed</span>
+                    <span>{t("documentDetail.processed")}</span>
                     <span>{formatDateTime(doc.processedAt)}</span>
                   </div>
                 )}
@@ -2429,7 +2457,7 @@ function DocumentDetailPage() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  Pending Review
+                  {t("documentDetail.pendingReview")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -2446,14 +2474,14 @@ function DocumentDetailPage() {
                 {doc.metadata.reviewEvidence && (
                   <div className="rounded-md border bg-muted/50 p-3 space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Document Class</span>
+                      <span className="text-muted-foreground">{t("documentDetail.documentClass")}</span>
                       <span className="font-medium capitalize">
                         {doc.metadata.reviewEvidence.documentClass}
                       </span>
                     </div>
                     {doc.metadata.reviewEvidence.requiredFields.length > 0 && (
                       <div>
-                        <span className="text-muted-foreground">Required Fields:</span>
+                        <span className="text-muted-foreground">{t("documentDetail.requiredFields")}</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {doc.metadata.reviewEvidence.requiredFields.map((f) => (
                             <Badge key={f} variant="outline" className="text-xs">
@@ -2465,7 +2493,7 @@ function DocumentDetailPage() {
                     )}
                     {doc.metadata.reviewEvidence.missingFields.length > 0 && (
                       <div>
-                        <span className="text-muted-foreground">Missing Fields:</span>
+                        <span className="text-muted-foreground">{t("documentDetail.missingFields")}</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {doc.metadata.reviewEvidence.missingFields.map((f) => (
                             <Badge key={f} variant="destructive" className="text-xs">
@@ -2477,12 +2505,12 @@ function DocumentDetailPage() {
                     )}
                     {doc.metadata.reviewEvidence.confidence != null && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Confidence</span>
+                        <span className="text-muted-foreground">{t("documentDetail.confidence")}</span>
                         <span className={`font-medium ${confidenceColor(doc.metadata.reviewEvidence.confidence)}`}>
                           {(doc.metadata.reviewEvidence.confidence * 100).toFixed(0)}%
                           {doc.metadata.reviewEvidence.confidenceThreshold != null && (
                             <span className="text-muted-foreground font-normal">
-                              {" "}(threshold: {(doc.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%)
+                              {` (${t("documentDetail.threshold")}: `}{(doc.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%)
                             </span>
                           )}
                         </span>
@@ -2504,7 +2532,7 @@ function DocumentDetailPage() {
                     ) : (
                       <CheckCircle className="h-3.5 w-3.5" />
                     )}
-                    Resolve Review
+                    {t("documentDetail.resolveReview")}
                   </Button>
                   <Button
                     variant="outline"
@@ -2518,21 +2546,21 @@ function DocumentDetailPage() {
                     ) : (
                       <RotateCcw className="h-3.5 w-3.5" />
                     )}
-                    Requeue
+                    {t("documentDetail.requeue")}
                   </Button>
                 </div>
                 {resolveReviewMutation.isError && (
                   <p className="text-xs text-destructive">
                     {resolveReviewMutation.error instanceof Error
                       ? resolveReviewMutation.error.message
-                      : "Failed to resolve review."}
+                       : t("documentDetail.failedToResolveReview")}
                   </p>
                 )}
                 {requeueMutation.isError && (
                   <p className="text-xs text-destructive">
                     {requeueMutation.error instanceof Error
                       ? requeueMutation.error.message
-                      : "Failed to requeue document."}
+                       : t("documentDetail.failedToRequeue")}
                   </p>
                 )}
               </CardContent>
@@ -2542,7 +2570,7 @@ function DocumentDetailPage() {
           {/* Actions Card */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Actions</CardTitle>
+               <CardTitle className="text-base">{t("documentDetail.actions")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {/* Reprocess — opens dialog when multiple providers available */}
@@ -2568,13 +2596,13 @@ function DocumentDetailPage() {
                 ) : (
                   <RotateCcw className="h-4 w-4" />
                 )}
-                Reprocess Document
+                 {t("documentDetail.reprocessDocument")}
               </Button>
               {reprocessMutation.isError && (
                 <p className="text-xs text-destructive">
                   {reprocessMutation.error instanceof Error
                     ? reprocessMutation.error.message
-                    : "Failed to reprocess document."}
+                     : t("documentDetail.failedToReprocessDocument")}
                 </p>
               )}
 
@@ -2585,7 +2613,7 @@ function DocumentDetailPage() {
                 onClick={() => handleDownload("original")}
               >
                 <Download className="h-4 w-4" />
-                Download Original
+                {t("documentDetail.downloadOriginal")}
               </Button>
 
               {doc.searchablePdfAvailable && (
@@ -2596,7 +2624,7 @@ function DocumentDetailPage() {
                   onClick={() => handleDownload("searchable")}
                 >
                   <Download className="h-4 w-4" />
-                  Download Searchable PDF
+                  {t("documentDetail.downloadSearchable")}
                 </Button>
               )}
 
@@ -2614,18 +2642,18 @@ function DocumentDetailPage() {
                 ) : (
                   <Trash2 className="h-4 w-4" />
                 )}
-                Delete Document
+                {t("documentDetail.deleteDocument")}
               </Button>
               {doc.status === "processing" && (
                 <p className="text-xs text-muted-foreground">
-                  Documents cannot be deleted while processing is in progress.
+                  {t("documentDetail.cannotDeleteWhileProcessing")}
                 </p>
               )}
               {deleteDocumentMutation.isError && (
                 <p className="text-xs text-destructive">
                   {deleteDocumentMutation.error instanceof Error
                     ? deleteDocumentMutation.error.message
-                    : "Failed to delete document."}
+                     : t("documentDetail.failedToDeleteDocument")}
                 </p>
               )}
 
@@ -2634,7 +2662,7 @@ function DocumentDetailPage() {
                 <>
                   <Separator />
                   <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3">
-                    <p className="text-xs font-medium text-destructive mb-1">Last Processing Error</p>
+                    <p className="text-xs font-medium text-destructive mb-1">{t("documentDetail.lastProcessingError")}</p>
                     <p className="text-xs text-muted-foreground">{doc.lastProcessingError}</p>
                   </div>
                 </>
@@ -2646,19 +2674,19 @@ function DocumentDetailPage() {
           <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Reprocess Document</DialogTitle>
+                <DialogTitle>{t("documentDetail.reprocessDialogTitle")}</DialogTitle>
                 <DialogDescription>
-                  Choose the OCR provider to use for reprocessing.
+                  {t("documentDetail.reprocessDialogDescription")}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
-                <Label htmlFor="parse-provider-select">OCR Provider</Label>
+                <Label htmlFor="parse-provider-select">{t("documentDetail.ocrProvider")}</Label>
                 <Select
                   value={selectedParseProvider}
                   onValueChange={(value) => setSelectedParseProvider(value as ParseProvider)}
                 >
                   <SelectTrigger id="parse-provider-select">
-                    <SelectValue placeholder="Select provider" />
+                    <SelectValue placeholder={t("documentDetail.selectProvider")} />
                   </SelectTrigger>
                   <SelectContent>
                     {(providersQuery.data?.parseProviders ?? [])
@@ -2668,10 +2696,10 @@ function DocumentDetailPage() {
                           <span className="flex items-center gap-2">
                             {parseProviderLabel(p.id)}
                             {p.id === providersQuery.data?.activeParseProvider && (
-                              <span className="text-xs text-muted-foreground">(active)</span>
+                              <span className="text-xs text-muted-foreground">({t("documentDetail.active")})</span>
                             )}
                             {p.id === providersQuery.data?.fallbackParseProvider && (
-                              <span className="text-xs text-muted-foreground">(fallback)</span>
+                              <span className="text-xs text-muted-foreground">({t("documentDetail.fallback")})</span>
                             )}
                           </span>
                         </SelectItem>
@@ -2680,7 +2708,7 @@ function DocumentDetailPage() {
                 </Select>
                 {doc.parseProvider && (
                   <p className="text-xs text-muted-foreground">
-                    Last processed with: <span className="font-medium">{parseProviderLabel(doc.parseProvider)}</span>
+                    {t("documentDetail.lastProcessedWith")} <span className="font-medium">{parseProviderLabel(doc.parseProvider)}</span>
                   </p>
                 )}
               </div>
@@ -2690,7 +2718,7 @@ function DocumentDetailPage() {
                   onClick={() => setReprocessDialogOpen(false)}
                   disabled={reprocessMutation.isPending}
                 >
-                  Cancel
+                  {t("documentDetail.cancel")}
                 </Button>
                 <Button
                   onClick={() => reprocessMutation.mutate(selectedParseProvider || undefined)}
@@ -2699,10 +2727,10 @@ function DocumentDetailPage() {
                   {reprocessMutation.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Reprocessing...
+                      {t("documentDetail.reprocessing")}
                     </>
                   ) : (
-                    "Reprocess"
+                    t("documentDetail.reprocess")
                   )}
                 </Button>
               </DialogFooter>
@@ -2712,10 +2740,9 @@ function DocumentDetailPage() {
           <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Delete Document</DialogTitle>
+                <DialogTitle>{t("documentDetail.deleteDialogTitle")}</DialogTitle>
                 <DialogDescription>
-                  This permanently deletes the document, its OCR output, embeddings, and
-                  generated files. This action cannot be undone.
+                  {t("documentDetail.deleteDialogDescription")}
                 </DialogDescription>
               </DialogHeader>
               <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
@@ -2727,7 +2754,7 @@ function DocumentDetailPage() {
                   onClick={() => setDeleteDialogOpen(false)}
                   disabled={deleteDocumentMutation.isPending}
                 >
-                  Cancel
+                  {t("documentDetail.cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -2737,10 +2764,10 @@ function DocumentDetailPage() {
                   {deleteDocumentMutation.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Deleting...
+                      {t("documentDetail.deleting")}
                     </>
                   ) : (
-                    "Delete Permanently"
+                    t("documentDetail.deletePermanently")
                   )}
                 </Button>
               </DialogFooter>
@@ -2774,6 +2801,7 @@ function DocumentQaSection({
 }: {
   documentId: string;
 }) {
+  const { t } = useI18n();
   // ─── Q&A state ───
   const [qa, setQa] = useState<QaStreamState>({
     status: "idle",
@@ -2925,11 +2953,11 @@ function DocumentQaSection({
         setQa((s) => ({
           ...s,
           status: "error",
-          errorMessage: err instanceof Error ? err.message : "Failed to get answer",
+          errorMessage: err instanceof Error ? err.message : t("documentDetail.failedToAnswer"),
         }));
       }
     },
-    [documentId],
+    [documentId, t],
   );
 
   function handleAskSubmit(e: React.FormEvent) {
@@ -2950,7 +2978,7 @@ function DocumentQaSection({
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <Quote className="h-4 w-4 text-[var(--explorer-cobalt)]" />
-              Ask about this document
+              {t("documentDetail.askAboutDocument")}
             </CardTitle>
             {qaHistory.length > 0 && (
               <Button
@@ -2965,7 +2993,7 @@ function DocumentQaSection({
                 }}
               >
                 <Trash2 className="h-3 w-3" />
-                Clear history
+                {t("documentDetail.clearHistory")}
               </Button>
             )}
           </div>
@@ -2986,7 +3014,7 @@ function DocumentQaSection({
                   {entry.citations.length > 0 && (
                     <div className="mt-3 space-y-1.5 border-t border-[var(--explorer-border)] pt-2">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Referenced excerpts
+                        {t("documentDetail.referencedExcerpts")}
                       </p>
                       {entry.citations.map((cit, ci) => (
                         <div
@@ -2998,7 +3026,7 @@ function DocumentQaSection({
                           </p>
                           {(cit.pageFrom || cit.pageTo) && (
                             <span className="mt-0.5 inline-block text-[10px] text-muted-foreground/60">
-                              Page {cit.pageFrom ?? cit.pageTo}
+                              {t("documentDetail.pageWord")} {cit.pageFrom ?? cit.pageTo}
                               {cit.pageTo && cit.pageTo !== cit.pageFrom
                                 ? `\u2013${cit.pageTo}`
                                 : ""}
@@ -3019,7 +3047,7 @@ function DocumentQaSection({
                 {qa.status === "loading" && (
                   <div className="flex items-center gap-2.5 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin text-[var(--explorer-cobalt)]" />
-                    <span className="text-sm">Searching document chunks...</span>
+                    <span className="text-sm">{t("documentDetail.searchingChunks")}</span>
                   </div>
                 )}
 
@@ -3027,7 +3055,7 @@ function DocumentQaSection({
                   <div className="flex items-start gap-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--explorer-rust)]" />
                     <p className="text-sm text-[var(--explorer-rust)]">
-                      {qa.errorMessage ?? "Failed to answer"}
+                      {qa.errorMessage ?? t("documentDetail.failedToAnswer")}
                     </p>
                   </div>
                 )}
@@ -3048,7 +3076,7 @@ function DocumentQaSection({
             <Input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question about this document..."
+              placeholder={t("documentDetail.askQuestionPlaceholder")}
               disabled={isQaStreaming}
               className="h-10 flex-1 rounded-lg border-[var(--explorer-border-strong)] bg-card text-sm"
             />
@@ -3063,7 +3091,7 @@ function DocumentQaSection({
               ) : (
                 <Send className="h-3.5 w-3.5" />
               )}
-              Ask
+              {t("documentDetail.ask")}
             </Button>
           </form>
         </CardContent>

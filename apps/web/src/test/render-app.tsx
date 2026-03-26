@@ -103,12 +103,18 @@ export function renderAuthenticatedApp(
       email: "owner@example.com",
       displayName: "Owner",
       isOwner: true,
+      preferences: {
+        uiLanguage: "en",
+        aiProcessingLanguage: "en",
+        aiChatLanguage: "en",
+      },
     },
     isAuthenticated: true,
     isLoading: false,
     needsSetup: false,
     login: async () => {},
     setup: async () => {},
+    updatePreferences: async () => {},
     logout: () => {},
     ...authState,
   };

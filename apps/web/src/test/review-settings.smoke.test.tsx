@@ -1,10 +1,11 @@
 import { screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
 import {
   makeDocument,
+  makeUser,
     makeHealthResponse,
     makeProcessingStatusResponse,
     makeReadinessResponse,
@@ -318,6 +319,52 @@ describe("settings smoke", () => {
     expect(screen.getByText("Due Date")).toBeInTheDocument();
     expect(screen.getByText("Reference Number")).toBeInTheDocument();
     expect(screen.queryByText("None missing.")).not.toBeInTheDocument();
+  });
+
+  it("saves language preference changes from settings", async () => {
+    server.use(...settingsHandlers());
+    const updatePreferences = vi.fn().mockResolvedValue(undefined);
+
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+      authState: { updatePreferences },
+    });
+
+    const comboboxes = await screen.findAllByRole("combobox");
+    await user.click(comboboxes[0]!);
+    await user.click(await screen.findByRole("option", { name: "German" }));
+    await user.click(await screen.findByRole("button", { name: /save preferences/i }));
+
+    await waitFor(() => {
+      expect(updatePreferences).toHaveBeenCalledWith({
+        uiLanguage: "de",
+        aiProcessingLanguage: "en",
+        aiChatLanguage: "en",
+      });
+    });
+
+    expect(screen.getByText("Preferences saved.")).toBeInTheDocument();
+  });
+
+  it("renders the settings screen in German when the UI preference is German", async () => {
+    server.use(...settingsHandlers());
+
+    renderAuthenticatedApp({
+      route: "/settings",
+      authState: {
+        user: makeUser({
+          preferences: {
+            uiLanguage: "de" as const,
+            aiProcessingLanguage: "en" as const,
+            aiChatLanguage: "en" as const,
+          },
+        }) as never,
+      },
+    });
+
+    expect(await screen.findByRole("heading", { name: "Einstellungen" })).toBeInTheDocument();
+    expect(screen.getByText("Spracheinstellungen")).toBeInTheDocument();
+    expect(screen.getByText("Benutzerprofil")).toBeInTheDocument();
   });
 
   it("creates a new tag via taxonomy management", async () => {

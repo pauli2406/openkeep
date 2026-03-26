@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const processingModes = ["local-only", "hybrid", "cloud-assisted"] as const;
+export const appLanguages = ["en", "de"] as const;
 export const parseProviders = [
   "local-ocr",
   "google-document-ai-enterprise-ocr",
@@ -35,6 +36,7 @@ export const reviewReasons = [
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
 export const ProcessingModeSchema = z.enum(processingModes);
+export const AppLanguageSchema = z.enum(appLanguages);
 export const ParseProviderSchema = z.enum(parseProviders);
 export const ChatProviderSchema = z.enum(chatProviders);
 export const EmbeddingProviderSchema = z.enum(embeddingProviders);
@@ -62,6 +64,12 @@ const isValidDateOnly = (value: string) => {
 
 const DateOnlySchema = z.string().refine(isValidDateOnly, {
   message: "Invalid date; expected YYYY-MM-DD",
+});
+
+export const UserLanguagePreferencesSchema = z.object({
+  uiLanguage: AppLanguageSchema,
+  aiProcessingLanguage: AppLanguageSchema,
+  aiChatLanguage: AppLanguageSchema,
 });
 
 export const BoundingBoxSchema = z.object({
@@ -838,8 +846,11 @@ export const CurrentUserSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1),
   isOwner: z.boolean(),
+  preferences: UserLanguagePreferencesSchema,
   createdAt: z.string().min(1),
 });
+
+export const UpdateUserLanguagePreferencesSchema = UserLanguagePreferencesSchema;
 
 export const ApiTokenSchema = z.object({
   id: z.string().uuid(),
@@ -1382,8 +1393,11 @@ export type BatchReprocessDocumentsResponse = z.infer<
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type SetupOwnerInput = z.infer<typeof SetupOwnerSchema>;
 export type RefreshInput = z.infer<typeof RefreshSchema>;
+export type AppLanguage = z.infer<typeof AppLanguageSchema>;
 export type CreateApiTokenInput = z.infer<typeof CreateApiTokenSchema>;
 export type CurrentUser = z.infer<typeof CurrentUserSchema>;
+export type UserLanguagePreferences = z.infer<typeof UserLanguagePreferencesSchema>;
+export type UpdateUserLanguagePreferences = z.infer<typeof UpdateUserLanguagePreferencesSchema>;
 export type ApiToken = z.infer<typeof ApiTokenSchema>;
 export type CreateApiTokenResponse = z.infer<typeof CreateApiTokenResponseSchema>;
 export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;

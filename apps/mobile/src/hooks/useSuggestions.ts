@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useI18n } from "../i18n";
 import type { DashboardInsights, FacetsResponse } from "../lib";
 
 export function useSuggestions(
   authFetch: (path: string, init?: RequestInit) => Promise<Response>,
   enabled: boolean,
 ) {
+  const { t } = useI18n();
+
   const facetsQuery = useQuery({
     queryKey: ["search", "facets"],
     queryFn: async () => {
@@ -36,35 +39,35 @@ export function useSuggestions(
     const items: string[] = [];
 
     if (insights?.overdueItems && insights.overdueItems.length > 0) {
-      items.push("What documents are overdue and need attention?");
+      items.push(t("suggestions.overdue"));
     }
 
     if (insights?.upcomingDeadlines && insights.upcomingDeadlines.length > 0) {
-      items.push("What are my upcoming deadlines this month?");
+      items.push(t("suggestions.upcomingDeadlines"));
     }
 
     const topCorrespondent = facets?.correspondents[0];
     if (topCorrespondent) {
-      items.push(`Summarize my documents from ${topCorrespondent.name}`);
+      items.push(`${t("suggestions.summarizeFrom")} ${topCorrespondent.name}`);
     }
 
     const secondCorrespondent = facets?.correspondents[1];
     if (secondCorrespondent) {
-      items.push(`What are the key topics in ${secondCorrespondent.name} documents?`);
+      items.push(`${t("suggestions.keyTopics")} ${secondCorrespondent.name} ${t("suggestions.documentsSuffix")}`);
     }
 
     const topDocType = facets?.documentTypes[0];
     if (topDocType) {
-      items.push(`Show me all ${topDocType.name.toLowerCase()} documents`);
+      items.push(`${t("suggestions.showAll")} ${topDocType.name.toLowerCase()} ${t("correspondents.documents")}`);
     }
 
     const topTag = facets?.tags[0];
     if (topTag) {
-      items.push(`What documents are tagged "${topTag.name}"?`);
+      items.push(`${t("suggestions.tagged")} "${topTag.name}"?`);
     }
 
     return items.slice(0, 5);
-  }, [facetsQuery.data, insightsQuery.data]);
+  }, [facetsQuery.data, insightsQuery.data, t]);
 
   const isLoading = facetsQuery.isLoading || insightsQuery.isLoading;
 

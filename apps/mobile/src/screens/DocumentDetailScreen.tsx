@@ -31,6 +31,8 @@ import { processingRefetchInterval } from "../document-processing";
 import { DocumentViewer } from "../components/DocumentViewer";
 import { useDocumentQa } from "../hooks/useDocumentQa";
 import { useDocumentSummary } from "../hooks/useDocumentSummary";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
@@ -54,19 +56,14 @@ import {
 
 type TabKey = "preview" | "overview" | "insights" | "activity";
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "preview", label: "Preview" },
-  { key: "overview", label: "Overview" },
-  { key: "insights", label: "Insights" },
-  { key: "activity", label: "Activity" },
-];
-
 // ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
 export function DocumentDetailScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const queryClient = useQueryClient();
   const route = useRoute<RouteProp<AppStackParamList, "DocumentDetail">>();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -74,45 +71,79 @@ export function DocumentDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
+  const offlineRecordQuery = useQuery({
+    queryKey: ["offline-document-record", documentId, offline.summary?.lastSyncedAt],
+    enabled: offline.shouldUseOffline,
+    queryFn: async () => {
+      const record = await offline.loadDocumentRecord(documentId);
+      if (!record) {
+        throw new Error(t("documentDetail.offlineNotCached"));
+      }
+      return record;
+    },
+  });
+
   // ---- Core queries ----
   const documentQuery = useQuery({
-    queryKey: ["document", documentId],
+    queryKey: ["document", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        const record = await offline.loadDocumentRecord(documentId);
+        if (!record) throw new Error(t("documentDetail.loadOfflineFailed"));
+        return record.document;
+      }
+
       const response = await auth.authFetch(`/api/documents/${documentId}`);
-      if (!response.ok) throw new Error("Failed to load document detail.");
+      if (!response.ok) throw new Error(t("documentDetail.loadDetailFailed"));
       return (await response.json()) as ArchiveDocument;
     },
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data),
   });
 
   const textQuery = useQuery({
-    queryKey: ["document-text", documentId],
+    queryKey: ["document-text", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        const record = offlineRecordQuery.data ?? (await offline.loadDocumentRecord(documentId));
+        return record?.text ?? { documentId, blocks: [] };
+      }
+
       const response = await auth.authFetch(`/api/documents/${documentId}/text`);
-      if (!response.ok) throw new Error("Failed to load OCR text.");
+      if (!response.ok) throw new Error(t("documentDetail.loadOcrFailed"));
       return (await response.json()) as DocumentTextResponse;
     },
-    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const historyQuery = useQuery({
-    queryKey: ["document-history", documentId],
+    queryKey: ["document-history", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        const record = offlineRecordQuery.data ?? (await offline.loadDocumentRecord(documentId));
+        return record?.history ?? { documentId, items: [] };
+      }
+
       const response = await auth.authFetch(`/api/documents/${documentId}/history`);
-      if (!response.ok) throw new Error("Failed to load document history.");
+      if (!response.ok) throw new Error(t("documentDetail.loadHistoryFailed"));
       return (await response.json()) as DocumentHistoryResponse;
     },
-    refetchInterval: () => processingRefetchInterval(documentQuery.data, (data) => data),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl],
-    enabled: documentQuery.isSuccess,
+    queryKey: ["document-facets", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    enabled: documentQuery.isSuccess && !offline.shouldUseOffline,
     queryFn: async () => {
       const response = await auth.authFetch("/api/documents/facets");
-      if (!response.ok) throw new Error("Failed to load archive facets.");
+      if (!response.ok) throw new Error(t("documentDetail.loadFacetsFailed"));
       return (await response.json()) as {
         correspondents: Array<{ id: string; name: string; slug: string }>;
         documentTypes: Array<{ id: string; name: string; slug: string }>;
@@ -123,20 +154,20 @@ export function DocumentDetailScreen() {
 
   const providersQuery = useQuery({
     queryKey: ["health-providers", auth.apiUrl],
-    enabled: documentQuery.isSuccess,
+    enabled: documentQuery.isSuccess && !offline.shouldUseOffline,
     queryFn: async () => {
       const response = await auth.authFetch("/api/health/providers");
-      if (!response.ok) throw new Error("Failed to load providers.");
+      if (!response.ok) throw new Error(t("documentDetail.loadProvidersFailed"));
       return (await response.json()) as HealthProvidersResponse;
     },
   });
 
   const qaHistoryQuery = useQuery({
-    queryKey: ["document-qa-history", documentId],
-    enabled: documentQuery.isSuccess && activeTab === "insights",
+    queryKey: ["document-qa-history", documentId, offline.shouldUseOffline],
+    enabled: documentQuery.isSuccess && activeTab === "insights" && !offline.shouldUseOffline,
     queryFn: async () => {
       const response = await auth.authFetch(`/api/documents/${documentId}/qa-history`);
-      if (!response.ok) throw new Error("Failed to load Q&A history.");
+      if (!response.ok) throw new Error(t("documentDetail.loadQaHistoryFailed"));
       return (await response.json()) as QaHistoryEntry[];
     },
   });
@@ -144,10 +175,10 @@ export function DocumentDetailScreen() {
   // ---- Loading / error ----
   if (documentQuery.isLoading) {
     return (
-      <ScreenShell title="Document" subtitle="Loading...">
+      <ScreenShell title={t("documentDetail.doc")} subtitle={t("documentDetail.loading")}>
         <Card>
           <ActivityIndicator color={colors.primary} />
-          <Text style={styles.helper}>Loading document detail...</Text>
+          <Text style={styles.helper}>{t("documentDetail.loadingDetail")}</Text>
         </Card>
       </ScreenShell>
     );
@@ -155,8 +186,8 @@ export function DocumentDetailScreen() {
 
   if (documentQuery.isError || !documentQuery.data) {
     return (
-      <ScreenShell title="Document" subtitle="Unavailable">
-        <ErrorCard message="The document could not be loaded." onRetry={() => documentQuery.refetch()} />
+      <ScreenShell title={t("documentDetail.doc")} subtitle={t("documentDetail.unavailable")}>
+        <ErrorCard message={t("documentDetail.loadError")} onRetry={() => documentQuery.refetch()} />
       </ScreenShell>
     );
   }
@@ -166,15 +197,15 @@ export function DocumentDetailScreen() {
   return (
     <ScreenShell
       title={titleForDocument(document)}
-      subtitle={`${document.correspondent?.name ?? "Unfiled"} \u00B7 ${document.documentType?.name ?? "Document"}`}
+      subtitle={`${document.correspondent?.name ?? t("documentDetail.unfiled")} \u00B7 ${document.documentType?.name ?? t("documentDetail.doc")}`}
     >
       {/* Status row */}
       <View style={styles.statusRow}>
-        <Pill label={document.status} tone={toneForStatus(document.status)} />
-        <Pill label={document.reviewStatus} tone={toneForStatus(document.reviewStatus)} />
+        <Pill label={formatDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
+        <Pill label={formatReviewStatus(t, document.reviewStatus)} tone={toneForStatus(document.reviewStatus)} />
         {document.confidence !== null && document.confidence !== undefined && (
           <Pill
-            label={`${Math.round(document.confidence * 100)}% conf`}
+            label={`${Math.round(document.confidence * 100)}% ${t("documentDetail.confidenceShort")}`}
             tone={document.confidence >= 0.8 ? "success" : document.confidence >= 0.5 ? "warning" : "danger"}
           />
         )}
@@ -189,6 +220,8 @@ export function DocumentDetailScreen() {
         <PreviewTab
           document={document}
           authFetch={auth.authFetch}
+          localFileUri={offlineRecordQuery.data?.fileUri ?? null}
+          offlineMode={offline.shouldUseOffline}
           textBlocks={textQuery.data?.blocks}
         />
       )}
@@ -201,6 +234,7 @@ export function DocumentDetailScreen() {
           facets={facetsQuery.data ?? null}
           providers={providersQuery.data ?? null}
           navigation={navigation}
+          offlineReadOnly={offline.shouldUseOffline}
         />
       )}
       {activeTab === "insights" && (
@@ -211,6 +245,7 @@ export function DocumentDetailScreen() {
           authFetch={auth.authFetch}
           qaHistory={qaHistoryQuery.data ?? []}
           refetchQaHistory={() => qaHistoryQuery.refetch()}
+          offlineMode={offline.shouldUseOffline}
         />
       )}
       {activeTab === "activity" && (
@@ -238,6 +273,8 @@ function ScreenShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
+  const { t } = useI18n();
+
   return (
     <View style={styles.root}>
       <ScrollView
@@ -248,7 +285,7 @@ function ScreenShell({
         <View style={styles.content}>
           <View style={styles.headerRow}>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.eyebrow}>OpenKeep mobile</Text>
+              <Text style={styles.eyebrow}>{t("app.brandMobile")}</Text>
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
               {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             </View>
@@ -271,9 +308,16 @@ function SegmentedTabs({
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
 }) {
+  const { t } = useI18n();
+  const tabs = [
+    { key: "preview" as const, label: t("documentDetail.tab.preview") },
+    { key: "overview" as const, label: t("documentDetail.tab.overview") },
+    { key: "insights" as const, label: t("documentDetail.tab.insights") },
+    { key: "activity" as const, label: t("documentDetail.tab.activity") },
+  ];
   return (
     <View style={styles.tabBar}>
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const isActive = tab.key === activeTab;
         return (
           <Pressable
@@ -298,12 +342,18 @@ function SegmentedTabs({
 function PreviewTab({
   document,
   authFetch,
+  localFileUri,
+  offlineMode,
   textBlocks,
 }: {
   document: ArchiveDocument;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+  localFileUri?: string | null;
+  offlineMode: boolean;
   textBlocks?: Array<{ page: number; text: string }>;
 }) {
+  const { t } = useI18n();
+
   return (
     <>
       <Card>
@@ -312,34 +362,36 @@ function PreviewTab({
           documentId={document.id}
           mimeType={document.mimeType}
           searchablePdfAvailable={document.searchablePdfAvailable}
+          localFileUri={localFileUri}
+          offlineMode={offlineMode}
           textBlocks={textBlocks}
         />
       </Card>
       {/* Quick metadata summary below preview */}
       <Card>
         <Text style={styles.metaText}>
-          <Text style={styles.metaLabel}>Type: </Text>
+          <Text style={styles.metaLabel}>{t("documentDetail.preview.type")}</Text>
           {document.mimeType}
         </Text>
         {document.metadata?.pageCount != null && (
           <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Pages: </Text>
+            <Text style={styles.metaLabel}>{t("documentDetail.preview.pages")}</Text>
             {document.metadata.pageCount}
           </Text>
         )}
         <Text style={styles.metaText}>
-          <Text style={styles.metaLabel}>Created: </Text>
+          <Text style={styles.metaLabel}>{t("documentDetail.preview.created")}</Text>
           {formatDate(document.createdAt)}
         </Text>
         {document.processedAt && (
           <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Processed: </Text>
+            <Text style={styles.metaLabel}>{t("documentDetail.preview.processed")}</Text>
             {formatDate(document.processedAt)}
           </Text>
         )}
         {document.parseProvider && (
           <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Parse provider: </Text>
+            <Text style={styles.metaLabel}>{t("documentDetail.preview.parseProvider")}</Text>
             {document.parseProvider}
           </Text>
         )}
@@ -360,6 +412,7 @@ function OverviewTab({
   facets,
   providers,
   navigation,
+  offlineReadOnly,
 }: {
   document: ArchiveDocument;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
@@ -372,7 +425,10 @@ function OverviewTab({
   } | null;
   providers: HealthProvidersResponse | null;
   navigation: NativeStackNavigationProp<AppStackParamList>;
+  offlineReadOnly: boolean;
 }) {
+  const { t } = useI18n();
+
   // ---- Form state ----
   const initialForm = useMemo(
     () => ({
@@ -475,6 +531,10 @@ function OverviewTab({
   });
 
   async function handleDownload(searchable: boolean) {
+    if (offlineReadOnly) {
+      throw new Error("Sharing requires a cached file from the Preview tab while offline mode is active.");
+    }
+
     const endpoint = searchable
       ? `/api/documents/${documentId}/download/searchable`
       : `/api/documents/${documentId}/download`;
@@ -489,12 +549,12 @@ function OverviewTab({
 
   function confirmDelete() {
     Alert.alert(
-      "Delete document",
-      "This will permanently remove this document and all associated data. This cannot be undone.",
+      t("documentDetail.overview.deleteTitle"),
+      t("documentDetail.overview.deleteBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("settings.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("documentDetail.overview.deleteDocument"),
           style: "destructive",
           onPress: () => deleteMutation.mutate(),
         },
@@ -518,7 +578,7 @@ function OverviewTab({
       {/* Review banner */}
       {document.reviewStatus === "pending" && (
         <Card style={styles.reviewBanner}>
-          <Text style={styles.reviewBannerTitle}>Needs review</Text>
+          <Text style={styles.reviewBannerTitle}>{t("documentDetail.overview.needsReview")}</Text>
           {document.reviewReasons.length > 0 && (
             <View style={styles.tagRow}>
               {document.reviewReasons.map((reason) => (
@@ -528,8 +588,9 @@ function OverviewTab({
           )}
           <View style={styles.reviewActions}>
             <Button
-              label="Resolve"
+                label={t("documentDetail.overview.resolve")}
               variant="primary"
+              disabled={offlineReadOnly}
               onPress={() =>
                 actionMutation.mutate({
                   path: `/api/documents/${documentId}/review/resolve`,
@@ -538,8 +599,9 @@ function OverviewTab({
               loading={actionMutation.isPending}
             />
             <Button
-              label="Requeue"
+                label={t("documentDetail.overview.requeue")}
               variant="secondary"
+              disabled={offlineReadOnly}
               onPress={() =>
                 actionMutation.mutate({
                   path: `/api/documents/${documentId}/review/requeue`,
@@ -555,21 +617,21 @@ function OverviewTab({
       {/* Processing error banner */}
       {document.lastProcessingError && (
         <Card style={styles.errorBanner}>
-          <Text style={styles.errorBannerTitle}>Processing error</Text>
+          <Text style={styles.errorBannerTitle}>{t("documentDetail.overview.processingError")}</Text>
           <Text style={styles.errorBannerBody}>{document.lastProcessingError}</Text>
         </Card>
       )}
 
       {/* Quick info */}
-      <SectionTitle title="Details" />
+      <SectionTitle title={t("documentDetail.overview.details")} />
       <Card>
-        <MetaRow label="Issue date" value={formatDate(document.issueDate)} />
-        <MetaRow label="Due date" value={formatDate(document.dueDate)} />
-        {document.expiryDate && <MetaRow label="Expiry date" value={formatDate(document.expiryDate)} />}
-        <MetaRow label="Amount" value={formatCurrency(document.amount, document.currency ?? "EUR")} />
-        {document.referenceNumber && <MetaRow label="Reference" value={document.referenceNumber} />}
-        {document.holderName && <MetaRow label="Holder" value={document.holderName} />}
-        {document.issuingAuthority && <MetaRow label="Authority" value={document.issuingAuthority} />}
+        <MetaRow label={t("documentDetail.overview.issueDate")} value={formatDate(document.issueDate)} />
+        <MetaRow label={t("documentDetail.overview.dueDate")} value={formatDate(document.dueDate)} />
+        {document.expiryDate && <MetaRow label={t("documentDetail.overview.expiryDate")} value={formatDate(document.expiryDate)} />}
+        <MetaRow label={t("documentDetail.overview.amount")} value={formatCurrency(document.amount, document.currency ?? "EUR")} />
+        {document.referenceNumber && <MetaRow label={t("documentDetail.overview.reference")} value={document.referenceNumber} />}
+        {document.holderName && <MetaRow label={t("documentDetail.overview.holder")} value={document.holderName} />}
+        {document.issuingAuthority && <MetaRow label={t("documentDetail.overview.authority")} value={document.issuingAuthority} />}
         {document.tags.length > 0 && (
           <View style={styles.tagRow}>
             {document.tags.map((tag) => (
@@ -580,56 +642,59 @@ function OverviewTab({
       </Card>
 
       {/* Metadata editing */}
-      <SectionTitle title="Edit metadata" hint="Fields with a lock icon have manual overrides that persist through reprocessing." />
+      <SectionTitle title={t("documentDetail.overview.editMetadata")} hint={t("documentDetail.overview.editHint")} />
       <Card>
+        {offlineReadOnly ? (
+          <Text style={styles.hintText}>{t("documentDetail.overview.offlineReadOnly")}</Text>
+        ) : null}
         <Field
-          label={`Title${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.title")}${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
           value={form.title}
           onChangeText={(v) => setForm((s) => ({ ...s, title: v }))}
         />
         <Field
-          label={`Issue date${lockedFields.includes("issueDate") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.issueDate")}${lockedFields.includes("issueDate") ? " \uD83D\uDD12" : ""}`}
           value={form.issueDate}
           onChangeText={(v) => setForm((s) => ({ ...s, issueDate: v }))}
-          placeholder="YYYY-MM-DD"
+          placeholder={t("documentDetail.overview.datePlaceholder")}
         />
         <Field
-          label={`Due date${lockedFields.includes("dueDate") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.dueDate")}${lockedFields.includes("dueDate") ? " \uD83D\uDD12" : ""}`}
           value={form.dueDate}
           onChangeText={(v) => setForm((s) => ({ ...s, dueDate: v }))}
-          placeholder="YYYY-MM-DD"
+          placeholder={t("documentDetail.overview.datePlaceholder")}
         />
         <Field
-          label={`Expiry date${lockedFields.includes("expiryDate") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.expiryDate")}${lockedFields.includes("expiryDate") ? " \uD83D\uDD12" : ""}`}
           value={form.expiryDate}
           onChangeText={(v) => setForm((s) => ({ ...s, expiryDate: v }))}
-          placeholder="YYYY-MM-DD"
+          placeholder={t("documentDetail.overview.datePlaceholder")}
         />
         <Field
-          label={`Amount${lockedFields.includes("amount") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.amountField")}${lockedFields.includes("amount") ? " \uD83D\uDD12" : ""}`}
           value={form.amount}
           onChangeText={(v) => setForm((s) => ({ ...s, amount: v }))}
           keyboardType="numeric"
         />
         <Field
-          label={`Currency${lockedFields.includes("currency") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.currencyField")}${lockedFields.includes("currency") ? " \uD83D\uDD12" : ""}`}
           value={form.currency}
           onChangeText={(v) => setForm((s) => ({ ...s, currency: v }))}
           autoCapitalize="characters"
-          placeholder="EUR"
+          placeholder={t("documentDetail.overview.currencyPlaceholder")}
         />
         <Field
-          label={`Reference number${lockedFields.includes("referenceNumber") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.referenceNumber")}${lockedFields.includes("referenceNumber") ? " \uD83D\uDD12" : ""}`}
           value={form.referenceNumber}
           onChangeText={(v) => setForm((s) => ({ ...s, referenceNumber: v }))}
         />
         <Field
-          label={`Holder name${lockedFields.includes("holderName") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.holderName")}${lockedFields.includes("holderName") ? " \uD83D\uDD12" : ""}`}
           value={form.holderName}
           onChangeText={(v) => setForm((s) => ({ ...s, holderName: v }))}
         />
         <Field
-          label={`Issuing authority${lockedFields.includes("issuingAuthority") ? " \uD83D\uDD12" : ""}`}
+          label={`${t("documentDetail.overview.issuingAuthority")}${lockedFields.includes("issuingAuthority") ? " \uD83D\uDD12" : ""}`}
           value={form.issuingAuthority}
           onChangeText={(v) => setForm((s) => ({ ...s, issuingAuthority: v }))}
         />
@@ -637,11 +702,11 @@ function OverviewTab({
         {/* Correspondent picker */}
         {facets && (
           <PickerField
-            label={`Correspondent${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
+            label={`${t("documentDetail.overview.correspondent")}${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
             selectedId={form.correspondentId}
             options={facets.correspondents.map((c) => ({ id: c.id, label: c.name }))}
             onSelect={(id) => setForm((s) => ({ ...s, correspondentId: id }))}
-            placeholder="Select correspondent"
+            placeholder={t("documentDetail.overview.selectCorrespondent")}
             createValue={newCorrespondentName}
             onCreateValueChange={setNewCorrespondentName}
             onCreateOption={() => createCorrespondentMutation.mutate(newCorrespondentName.trim())}
@@ -650,7 +715,7 @@ function OverviewTab({
               createCorrespondentMutation.isError
                 ? createCorrespondentMutation.error instanceof Error
                   ? createCorrespondentMutation.error.message
-                  : "Failed to create correspondent."
+                  : t("documentDetail.overview.createCorrespondentFailed")
                 : null
             }
           />
@@ -659,18 +724,18 @@ function OverviewTab({
         {/* Document type picker */}
         {facets && (
           <PickerField
-            label={`Document type${lockedFields.includes("documentTypeId") ? " \uD83D\uDD12" : ""}`}
+            label={`${t("documentDetail.overview.documentType")}${lockedFields.includes("documentTypeId") ? " \uD83D\uDD12" : ""}`}
             selectedId={form.documentTypeId}
             options={facets.documentTypes.map((d) => ({ id: d.id, label: d.name }))}
             onSelect={(id) => setForm((s) => ({ ...s, documentTypeId: id }))}
-            placeholder="Select document type"
+            placeholder={t("documentDetail.overview.selectDocumentType")}
           />
         )}
 
         {/* Tags picker */}
         {facets && (
           <TagsPicker
-            label="Tags"
+            label={t("documentDetail.overview.tags")}
             selectedIds={form.tagIds}
             options={facets.tags.map((t) => ({ id: t.id, label: t.name }))}
             onToggle={(id) =>
@@ -682,40 +747,42 @@ function OverviewTab({
           />
         )}
 
-        <Button label="Save changes" onPress={() => updateMutation.mutate()} loading={updateMutation.isPending} />
+        <Button label={t("documentDetail.overview.saveChanges")} onPress={() => updateMutation.mutate()} loading={updateMutation.isPending} disabled={offlineReadOnly} />
         {updateMutation.isError && (
           <Text style={styles.error}>
-            {updateMutation.error instanceof Error ? updateMutation.error.message : "Failed to save."}
+            {updateMutation.error instanceof Error ? updateMutation.error.message : t("documentDetail.overview.saveFailed")}
           </Text>
         )}
 
         {/* Clear overrides hint */}
         {lockedFields.length > 0 && (
           <Text style={styles.hintText}>
-            {lockedFields.length} field{lockedFields.length > 1 ? "s" : ""} locked by manual overrides. These persist through reprocessing.
+            {lockedFields.length === 1
+              ? `1 ${t("documentDetail.overview.lockedFields.one")}`
+              : `${lockedFields.length} ${t("documentDetail.overview.lockedFields.other")}`}
           </Text>
         )}
       </Card>
 
       {/* Actions */}
-      <SectionTitle title="Actions" />
+      <SectionTitle title={t("documentDetail.overview.actions")} />
       <Card>
-        <Button label="Share original file" variant="secondary" onPress={() => void handleDownload(false)} />
+        <Button label={t("documentDetail.overview.shareOriginal")} variant="secondary" onPress={() => void handleDownload(false)} disabled={offlineReadOnly} />
         {document.searchablePdfAvailable && (
-          <Button label="Share searchable PDF" variant="secondary" onPress={() => void handleDownload(true)} />
+          <Button label={t("documentDetail.overview.shareSearchable")} variant="secondary" onPress={() => void handleDownload(true)} disabled={offlineReadOnly} />
         )}
 
         {/* Reprocess with provider picker */}
         {availableProviders.length > 1 && (
           <View style={styles.reprocessRow}>
-            <Text style={styles.fieldLabelSmall}>Reprocess with:</Text>
+            <Text style={styles.fieldLabelSmall}>{t("documentDetail.overview.reprocessWith")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.providerScroll}>
               <Pressable
                 onPress={() => setReprocessProvider("default")}
                 style={[styles.providerChip, reprocessProvider === "default" && styles.providerChipActive]}
               >
                 <Text style={[styles.providerChipText, reprocessProvider === "default" && styles.providerChipTextActive]}>
-                  Default
+                  {t("documentDetail.overview.defaultProvider")}
                 </Text>
               </Pressable>
               {availableProviders.map((p) => (
@@ -733,7 +800,7 @@ function OverviewTab({
           </View>
         )}
         <Button
-          label="Reprocess document"
+          label={t("documentDetail.overview.reprocessDocument")}
           onPress={() =>
             actionMutation.mutate({
               path: `/api/documents/${documentId}/reprocess`,
@@ -744,13 +811,14 @@ function OverviewTab({
             })
           }
           loading={actionMutation.isPending}
+          disabled={offlineReadOnly}
         />
 
         {/* Processing job status */}
         {document.latestProcessingJob && (
           <View style={styles.jobStatus}>
-            <Text style={styles.jobStatusLabel}>Latest job:</Text>
-            <Pill label={document.latestProcessingJob.status} tone={toneForStatus(document.latestProcessingJob.status)} />
+            <Text style={styles.jobStatusLabel}>{t("documentDetail.overview.latestJob")}</Text>
+            <Pill label={formatDocumentStatus(t, document.latestProcessingJob.status)} tone={toneForStatus(document.latestProcessingJob.status)} />
             {document.latestProcessingJob.lastError && (
               <Text style={styles.jobError} numberOfLines={3}>{document.latestProcessingJob.lastError}</Text>
             )}
@@ -759,7 +827,7 @@ function OverviewTab({
 
         {/* Danger zone */}
         <View style={styles.dangerZone}>
-          <Button label="Delete document" variant="danger" onPress={confirmDelete} loading={deleteMutation.isPending} />
+          <Button label={t("documentDetail.overview.deleteDocument")} variant="danger" onPress={confirmDelete} loading={deleteMutation.isPending} disabled={offlineReadOnly} />
         </View>
       </Card>
     </>
@@ -777,6 +845,7 @@ function InsightsTab({
   authFetch,
   qaHistory,
   refetchQaHistory,
+  offlineMode,
 }: {
   document: ArchiveDocument;
   documentId: string;
@@ -784,7 +853,9 @@ function InsightsTab({
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   qaHistory: QaHistoryEntry[];
   refetchQaHistory: () => void;
+  offlineMode: boolean;
 }) {
+  const { t } = useI18n();
   const summary = useDocumentSummary(streamFetch, documentId);
   const qa = useDocumentQa(streamFetch, documentId);
   const [qaQuestion, setQaQuestion] = useState("");
@@ -792,10 +863,11 @@ function InsightsTab({
   const intelligence = document.metadata?.intelligence;
 
   const handleAsk = useCallback(() => {
+    if (offlineMode) return;
     const q = qaQuestion.trim();
     if (!q) return;
     qa.ask(q);
-  }, [qaQuestion, qa]);
+  }, [offlineMode, qaQuestion, qa]);
 
   const saveQaEntry = useCallback(async () => {
     if (qa.status !== "done" || !qa.answerText) return;
@@ -818,33 +890,36 @@ function InsightsTab({
   return (
     <>
       {/* Summary section */}
-      <SectionTitle title="Summary" hint="AI-generated document summary." />
+      <SectionTitle title={t("documentDetail.insights.summary")} hint={t("documentDetail.insights.summaryHint")} />
       <Card>
-        {summary.status === "idle" && (
-          <Button label="Generate summary" variant="secondary" onPress={() => summary.generate()} />
+        {offlineMode ? (
+          <Text style={styles.hintText}>{t("documentDetail.insights.aiDisabled")}</Text>
+        ) : null}
+        {!offlineMode && summary.status === "idle" && (
+          <Button label={t("documentDetail.insights.generateSummary")} variant="secondary" onPress={() => summary.generate()} />
         )}
-        {summary.status === "streaming" && (
+        {!offlineMode && summary.status === "streaming" && (
           <>
-            <Markdown style={markdownStyles}>{summary.summaryText || "Generating..."}</Markdown>
+            <Markdown style={markdownStyles}>{summary.summaryText || t("documentDetail.insights.generating")}</Markdown>
             <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
           </>
         )}
-        {summary.status === "done" && summary.summaryText && (
+        {!offlineMode && summary.status === "done" && summary.summaryText && (
           <>
             <Markdown style={markdownStyles}>{summary.summaryText}</Markdown>
-            {summary.isCached && <Text style={styles.hintText}>Cached summary</Text>}
+            {summary.isCached && <Text style={styles.hintText}>{t("documentDetail.insights.cachedSummary")}</Text>}
             {summary.provider && (
               <Text style={styles.hintText}>
                 {summary.provider}{summary.model ? ` / ${summary.model}` : ""}
               </Text>
             )}
-            <Button label="Regenerate" variant="secondary" onPress={() => summary.generate(true)} />
+            <Button label={t("documentDetail.insights.regenerate")} variant="secondary" onPress={() => summary.generate(true)} />
           </>
         )}
-        {summary.status === "error" && (
+        {!offlineMode && summary.status === "error" && (
           <>
             <Text style={styles.error}>{summary.errorMessage}</Text>
-            <Button label="Retry" variant="secondary" onPress={() => summary.generate()} />
+            <Button label={t("documentDetail.insights.retry")} variant="secondary" onPress={() => summary.generate()} />
           </>
         )}
       </Card>
@@ -852,23 +927,23 @@ function InsightsTab({
       {/* Intelligence metadata */}
       {intelligence && (
         <>
-          <SectionTitle title="Intelligence" hint="Extraction pipeline metadata." />
+          <SectionTitle title={t("documentDetail.insights.intelligence")} hint={t("documentDetail.insights.intelligenceHint")} />
           <Card>
             {intelligence.routing && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Routing</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.routing")}</Text>
                 <Text style={styles.metaText}>
-                  Type: {intelligence.routing.documentType ?? "Unknown"}
+                  {t("documentDetail.insights.type")}: {intelligence.routing.documentType ?? t("documentDetail.insights.unknown")}
                   {intelligence.routing.subtype ? ` / ${intelligence.routing.subtype}` : ""}
                 </Text>
                 {intelligence.routing.confidence != null && (
                   <Text style={styles.metaText}>
-                    Confidence: {Math.round(intelligence.routing.confidence * 100)}%
+                    {t("documentDetail.insights.confidence")}: {Math.round(intelligence.routing.confidence * 100)}%
                   </Text>
                 )}
                 {intelligence.routing.reasoningHints && intelligence.routing.reasoningHints.length > 0 && (
                   <Text style={styles.hintText}>
-                    Hints: {intelligence.routing.reasoningHints.join(", ")}
+                    {t("documentDetail.insights.hints")}: {intelligence.routing.reasoningHints.join(", ")}
                   </Text>
                 )}
               </View>
@@ -876,17 +951,17 @@ function InsightsTab({
 
             {intelligence.title && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Title extraction</Text>
-                <Text style={styles.metaText}>{intelligence.title.value ?? "None"}</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.titleExtraction")}</Text>
+                <Text style={styles.metaText}>{intelligence.title.value ?? t("documentDetail.insights.none")}</Text>
                 {intelligence.title.confidence != null && (
-                  <Text style={styles.hintText}>{Math.round(intelligence.title.confidence * 100)}% confidence</Text>
+                  <Text style={styles.hintText}>{Math.round(intelligence.title.confidence * 100)}% {t("documentDetail.insights.confidence")}</Text>
                 )}
               </View>
             )}
 
             {intelligence.extraction && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Field extraction</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.fieldExtraction")}</Text>
                 {Object.entries(intelligence.extraction.fields).map(([key, value]) => (
                   <Text key={key} style={styles.metaText}>
                     <Text style={styles.metaLabel}>{key}: </Text>
@@ -901,7 +976,7 @@ function InsightsTab({
 
             {intelligence.tagging && intelligence.tagging.tags.length > 0 && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Suggested tags</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.suggestedTags")}</Text>
                 <View style={styles.tagRow}>
                   {intelligence.tagging.tags.map((tag) => (
                     <Pill key={tag} label={tag} tone="default" />
@@ -912,7 +987,7 @@ function InsightsTab({
 
             {intelligence.validation && (intelligence.validation.errors.length > 0 || intelligence.validation.warnings.length > 0) && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Validation</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.validation")}</Text>
                 {intelligence.validation.errors.map((e, i) => (
                   <Text key={`e-${i}`} style={styles.validationError}>{e}</Text>
                 ))}
@@ -924,12 +999,12 @@ function InsightsTab({
 
             {intelligence.pipeline && (
               <View style={styles.intelSection}>
-                <Text style={styles.intelLabel}>Pipeline</Text>
-                {intelligence.pipeline.framework && <Text style={styles.hintText}>Framework: {intelligence.pipeline.framework}</Text>}
-                {intelligence.pipeline.status && <Text style={styles.hintText}>Status: {intelligence.pipeline.status}</Text>}
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.pipeline")}</Text>
+                {intelligence.pipeline.framework && <Text style={styles.hintText}>{t("documentDetail.insights.framework")}: {intelligence.pipeline.framework}</Text>}
+                {intelligence.pipeline.status && <Text style={styles.hintText}>{t("documentDetail.insights.pipelineStatus")}: {intelligence.pipeline.status}</Text>}
                 {Object.keys(intelligence.pipeline.durationsMs).length > 0 && (
                   <Text style={styles.hintText}>
-                    Durations: {Object.entries(intelligence.pipeline.durationsMs).map(([k, v]) => `${k}: ${v}ms`).join(", ")}
+                    {t("documentDetail.insights.durations")}: {Object.entries(intelligence.pipeline.durationsMs).map(([k, v]) => `${k}: ${v}ms`).join(", ")}
                   </Text>
                 )}
               </View>
@@ -941,15 +1016,15 @@ function InsightsTab({
       {/* Review evidence */}
       {document.metadata?.reviewEvidence && (
         <>
-          <SectionTitle title="Review evidence" />
+          <SectionTitle title={t("documentDetail.insights.reviewEvidence")} />
           <Card>
             <Text style={styles.metaText}>
-              <Text style={styles.metaLabel}>Document class: </Text>
+              <Text style={styles.metaLabel}>{t("documentDetail.insights.documentClass")}: </Text>
               {document.metadata.reviewEvidence.documentClass}
             </Text>
             {document.metadata.reviewEvidence.missingFields.length > 0 && (
               <View>
-                <Text style={styles.intelLabel}>Missing fields</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.missingFields")}</Text>
                 <View style={styles.tagRow}>
                   {document.metadata.reviewEvidence.missingFields.map((f) => (
                     <Pill key={f} label={f} tone="warning" />
@@ -959,10 +1034,10 @@ function InsightsTab({
             )}
             {document.metadata.reviewEvidence.confidence != null && (
               <Text style={styles.metaText}>
-                <Text style={styles.metaLabel}>Confidence: </Text>
+                <Text style={styles.metaLabel}>{t("documentDetail.insights.confidence")}: </Text>
                 {Math.round(document.metadata.reviewEvidence.confidence * 100)}%
                 {document.metadata.reviewEvidence.confidenceThreshold != null &&
-                  ` (threshold: ${Math.round(document.metadata.reviewEvidence.confidenceThreshold * 100)}%)`}
+                  ` (${t("documentDetail.insights.threshold")}: ${Math.round(document.metadata.reviewEvidence.confidenceThreshold * 100)}%)`}
               </Text>
             )}
           </Card>
@@ -970,14 +1045,14 @@ function InsightsTab({
       )}
 
       {/* Document Q&A */}
-      <SectionTitle title="Ask this document" hint="Ask questions about this specific document." />
+      <SectionTitle title={t("documentDetail.insights.askDocument")} hint={t("documentDetail.insights.askHint")} />
       <Card>
         <View style={styles.qaInputRow}>
           <TextInput
             style={styles.qaInput}
             value={qaQuestion}
             onChangeText={setQaQuestion}
-            placeholder="Ask a question..."
+            placeholder={t("documentDetail.insights.askPlaceholder")}
             placeholderTextColor={colors.muted}
             multiline
             returnKeyType="send"
@@ -985,33 +1060,33 @@ function InsightsTab({
           />
           <Pressable
             onPress={handleAsk}
-            disabled={qa.status === "streaming" || !qaQuestion.trim()}
+            disabled={offlineMode || qa.status === "streaming" || !qaQuestion.trim()}
             style={({ pressed }) => [
               styles.qaButton,
               pressed && styles.qaButtonPressed,
-              (qa.status === "streaming" || !qaQuestion.trim()) && styles.qaButtonDisabled,
+              (offlineMode || qa.status === "streaming" || !qaQuestion.trim()) && styles.qaButtonDisabled,
             ]}
           >
             {qa.status === "streaming" ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.qaButtonText}>Ask</Text>
+              <Text style={styles.qaButtonText}>{t("documentDetail.insights.ask")}</Text>
             )}
           </Pressable>
         </View>
 
-        {qa.status === "streaming" && (
+        {!offlineMode && qa.status === "streaming" && (
           <View style={styles.qaAnswer}>
-            <Markdown style={markdownStyles}>{qa.answerText || "Thinking..."}</Markdown>
+            <Markdown style={markdownStyles}>{qa.answerText || t("documentDetail.insights.thinking")}</Markdown>
           </View>
         )}
 
-        {qa.status === "done" && qa.answerText && (
+        {!offlineMode && qa.status === "done" && qa.answerText && (
           <View style={styles.qaAnswer}>
             <Markdown style={markdownStyles}>{qa.answerText}</Markdown>
             {qa.citations.length > 0 && (
               <View style={styles.citationsWrap}>
-                <Text style={styles.intelLabel}>Sources</Text>
+                <Text style={styles.intelLabel}>{t("documentDetail.insights.sources")}</Text>
                 {qa.citations.map((c, i) => (
                   <Text key={i} style={styles.hintText}>
                     {c.pageFrom ? `p.${c.pageFrom}${c.pageTo && c.pageTo !== c.pageFrom ? `-${c.pageTo}` : ""}` : `chunk ${c.chunkIndex}`}
@@ -1022,11 +1097,11 @@ function InsightsTab({
                 ))}
               </View>
             )}
-            <Button label="Save to history" variant="secondary" onPress={() => void saveQaEntry()} />
+            <Button label={t("documentDetail.insights.saveToHistory")} variant="secondary" onPress={() => void saveQaEntry()} />
           </View>
         )}
 
-        {qa.status === "error" && (
+        {!offlineMode && qa.status === "error" && (
           <Text style={styles.error}>{qa.errorMessage}</Text>
         )}
       </Card>
@@ -1034,7 +1109,7 @@ function InsightsTab({
       {/* Q&A history */}
       {qaHistory.length > 0 && (
         <>
-          <SectionTitle title="Q&A history" />
+          <SectionTitle title={t("documentDetail.insights.qaHistory")} />
           {qaHistory.map((entry) => (
             <Card key={entry.id}>
               <Text style={styles.qaHistoryQuestion}>{entry.question}</Text>
@@ -1061,6 +1136,7 @@ function ActivityTab({
   textQuery: ReturnType<typeof useQuery<DocumentTextResponse>>;
   historyQuery: ReturnType<typeof useQuery<DocumentHistoryResponse>>;
 }) {
+  const { t } = useI18n();
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   // Group OCR blocks by page
@@ -1080,32 +1156,32 @@ function ActivityTab({
   return (
     <>
       {/* OCR text by page */}
-      <SectionTitle title="OCR text" hint="Extracted text grouped by page." />
+      <SectionTitle title={t("documentDetail.activity.ocrText")} hint={t("documentDetail.activity.ocrHint")} />
       {textQuery.isLoading && (
         <Card>
           <ActivityIndicator color={colors.primary} />
-          <Text style={styles.helper}>Loading OCR text...</Text>
+          <Text style={styles.helper}>{t("documentDetail.activity.loadingOcr")}</Text>
         </Card>
       )}
       {textQuery.data && pageGroups.length === 0 && (
-        <EmptyState title="No OCR text" body="No readable text was extracted from this document." />
+        <EmptyState title={t("documentDetail.activity.noOcrTitle")} body={t("documentDetail.activity.noOcrBody")} />
       )}
       {pageGroups.map(({ page, text }) => (
         <Card key={page}>
-          <Text style={styles.pageLabel}>Page {page}</Text>
+          <Text style={styles.pageLabel}>{`${t("documentDetail.activity.page")} ${page}`}</Text>
           <Text style={styles.ocrText} selectable>{text}</Text>
         </Card>
       ))}
 
       {/* Audit history timeline */}
-      <SectionTitle title="History" hint="Audit trail of document events." />
+      <SectionTitle title={t("documentDetail.activity.history")} hint={t("documentDetail.activity.historyHint")} />
       {historyQuery.isLoading && (
         <Card>
           <ActivityIndicator color={colors.primary} />
         </Card>
       )}
       {historyQuery.data && historyQuery.data.items.length === 0 && (
-        <EmptyState title="No history" body="No audit events recorded for this document yet." />
+        <EmptyState title={t("documentDetail.activity.noHistoryTitle")} body={t("documentDetail.activity.noHistoryBody")} />
       )}
       {historyQuery.data?.items.map((item, index) => {
         const isExpanded = expandedEvents.has(item.id);
@@ -1132,10 +1208,10 @@ function ActivityTab({
               <View style={styles.timelineContent}>
                 <Text style={styles.historyTitle}>{formatEventType(item.eventType)}</Text>
                 <Text style={styles.historyMeta}>
-                  {formatDate(item.createdAt)} \u00B7 {item.actorDisplayName ?? item.actorEmail ?? "System"}
+                  {formatDate(item.createdAt)} \u00B7 {item.actorDisplayName ?? item.actorEmail ?? t("documentDetail.activity.system")}
                 </Text>
                 {hasPayload && (
-                  <Text style={styles.expandHint}>{isExpanded ? "Collapse" : "Tap to expand"}</Text>
+                  <Text style={styles.expandHint}>{isExpanded ? t("documentDetail.activity.collapse") : t("documentDetail.activity.expand")}</Text>
                 )}
                 {isExpanded && hasPayload && (
                   <View style={styles.payloadWrap}>
@@ -1169,6 +1245,38 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatDocumentStatus(
+  t: ReturnType<typeof useI18n>["t"],
+  status: string,
+) {
+  switch (status) {
+    case "pending":
+      return t("documentDetail.status.pending");
+    case "processing":
+      return t("documentDetail.status.processing");
+    case "ready":
+      return t("documentDetail.status.ready");
+    case "failed":
+      return t("documentDetail.status.failed");
+    default:
+      return status;
+  }
+}
+
+function formatReviewStatus(
+  t: ReturnType<typeof useI18n>["t"],
+  status: string,
+) {
+  switch (status) {
+    case "pending":
+      return t("documentDetail.reviewStatus.pending");
+    case "resolved":
+      return t("documentDetail.reviewStatus.resolved");
+    default:
+      return status;
+  }
+}
+
 function PickerField({
   label,
   selectedId,
@@ -1192,6 +1300,7 @@ function PickerField({
   createPending?: boolean;
   createError?: string | null;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const filtered = options.filter((o) =>
@@ -1214,7 +1323,7 @@ function PickerField({
             style={styles.pickerSearch}
             value={search}
             onChangeText={setSearch}
-            placeholder="Filter..."
+            placeholder={t("documentDetail.picker.filter")}
             placeholderTextColor={colors.muted}
           />
           {onCreateValueChange && onCreateOption && (
@@ -1223,7 +1332,7 @@ function PickerField({
                 style={styles.pickerCreateInput}
                 value={createValue ?? ""}
                 onChangeText={onCreateValueChange}
-                placeholder="Add new"
+                placeholder={t("documentDetail.picker.addNew")}
                 placeholderTextColor={colors.muted}
               />
               <Pressable
@@ -1234,7 +1343,7 @@ function PickerField({
                   (createPending || !(createValue ?? "").trim()) && styles.pickerCreateButtonDisabled,
                 ]}
               >
-                <Text style={styles.pickerCreateButtonText}>{createPending ? "Adding..." : "Add"}</Text>
+                <Text style={styles.pickerCreateButtonText}>{createPending ? t("documentDetail.picker.adding") : t("documentDetail.picker.add")}</Text>
               </Pressable>
             </View>
           )}
@@ -1248,7 +1357,7 @@ function PickerField({
             }}
             style={styles.pickerOption}
           >
-            <Text style={[styles.pickerOptionText, styles.pickerOptionClear]}>None</Text>
+            <Text style={[styles.pickerOptionText, styles.pickerOptionClear]}>{t("documentDetail.picker.none")}</Text>
           </Pressable>
           <ScrollView style={styles.pickerList} nestedScrollEnabled>
             {filtered.map((o) => (

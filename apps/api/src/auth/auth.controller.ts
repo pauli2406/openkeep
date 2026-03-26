@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  Patch,
   Post,
   UseGuards,
 } from "@nestjs/common";
@@ -22,6 +23,7 @@ import {
   LoginDto,
   RefreshDto,
   SetupOwnerDto,
+  UpdateUserLanguagePreferencesDto,
 } from "./dto/auth.dto";
 import { AccessAuthGuard } from "./access-auth.guard";
 import { AuthService } from "./auth.service";
@@ -59,6 +61,17 @@ export class AuthController {
   @ApiOkResponse({ description: "Current authenticated principal" })
   async me(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
     return this.authService.getMe(principal);
+  }
+
+  @Patch("me/preferences")
+  @UseGuards(AccessAuthGuard)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: "Updated current user preferences" })
+  async updatePreferences(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Body() body: UpdateUserLanguagePreferencesDto,
+  ) {
+    return this.authService.updatePreferences(principal, body);
   }
 
   @Get("tokens")

@@ -13,6 +13,8 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Markdown from "react-native-markdown-display";
 import { useAuth } from "../auth";
 import { Card, ErrorCard, Screen } from "../components/ui";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import { linkifyCitations, titleForDocument, type AnswerCitation } from "../lib";
@@ -26,6 +28,8 @@ import { useSuggestions } from "../hooks/useSuggestions";
 
 export function SearchScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [query, setQuery] = useState("");
   const inputRef = useRef<TextInput>(null);
@@ -71,10 +75,38 @@ export function SearchScreen() {
     [answerStream],
   );
 
+  if (offline.shouldUseOffline) {
+    return (
+        <Screen
+          title={t("search.title")}
+          subtitle={t("search.offlineSubtitle")}
+          headerVariant="compact"
+        >
+          <Card>
+          <Text style={styles.offlineTitle}>{t("search.offlineTitle")}</Text>
+          <Text style={styles.offlineBody}>{t("search.offlineBody")}</Text>
+          </Card>
+        <ZeroState
+          recentSearches={recentSearches}
+          suggestions={[]}
+          suggestionsLoading={false}
+          onSelectQuery={handleRecentPress}
+          onSelectRecent={handleRecentPress}
+          onRemoveRecent={removeSearch}
+          onClearAll={clearAll}
+          recentLabel={t("search.recentSearches")}
+          clearAllLabel={t("search.clearAll")}
+          suggestedLabel={t("search.suggested")}
+          noSuggestionsLabel={t("search.noSuggestions")}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen
-      title="Search"
-      subtitle="Hybrid keyword + semantic search across your archive"
+      title={t("search.title")}
+      subtitle={t("search.subtitle")}
       headerVariant="compact"
     >
       {/* ─── Search bar ─── */}
@@ -85,7 +117,7 @@ export function SearchScreen() {
             ref={inputRef}
             value={query}
             onChangeText={setQuery}
-            placeholder="Ask your archive..."
+            placeholder={t("search.placeholder")}
             placeholderTextColor={colors.muted}
             returnKeyType="search"
             onSubmitEditing={() => runSearch()}
@@ -118,7 +150,7 @@ export function SearchScreen() {
           {isStreaming ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.searchButtonText}>Search</Text>
+            <Text style={styles.searchButtonText}>{t("search.search")}</Text>
           )}
         </Pressable>
       </View>
@@ -126,18 +158,24 @@ export function SearchScreen() {
       {/* ─── Error ─── */}
       {answerStream.status === "error" && (
         <ErrorCard
-          message={answerStream.errorMessage ?? "Search failed. Please try again."}
+          message={answerStream.errorMessage ?? t("search.searchFailed")}
           onRetry={() => runSearch()}
         />
       )}
 
       {/* ─── Searching state ─── */}
-      {answerStream.status === "searching" && <SearchingSkeleton />}
+      {answerStream.status === "searching" && <SearchingSkeleton label={t("search.searching")} />}
 
       {/* ─── AI Answer panel ─── */}
       {hasAnswer && (
         <AIAnswerPanel
           answerStream={answerStream}
+          documentLabel={t("search.document")}
+          aiAnswerLabel={t("search.aiAnswer")}
+          generatingLabel={t("search.generating")}
+          answerReadyLabel={t("search.answerReady")}
+          insufficientLabel={t("search.insufficient")}
+          sourcesLabel={t("search.sources")}
           onCitationPress={(citation) =>
             navigation.navigate("DocumentDetail", {
               documentId: citation.documentId,
@@ -157,6 +195,10 @@ export function SearchScreen() {
           onSelectRecent={handleRecentPress}
           onRemoveRecent={removeSearch}
           onClearAll={clearAll}
+          recentLabel={t("search.recentSearches")}
+          clearAllLabel={t("search.clearAll")}
+          suggestedLabel={t("search.suggested")}
+          noSuggestionsLabel={t("search.noSuggestions")}
         />
       )}
     </Screen>
@@ -167,7 +209,7 @@ export function SearchScreen() {
 // Searching skeleton
 // ---------------------------------------------------------------------------
 
-function SearchingSkeleton() {
+function SearchingSkeleton({ label }: { label: string }) {
   const opacity = useRef(new Animated.Value(0.35)).current;
 
   useState(() => {
@@ -191,7 +233,7 @@ function SearchingSkeleton() {
     <Card>
       <View style={styles.searchingHeader}>
         <ActivityIndicator color={colors.accent} size="small" />
-        <Text style={styles.searchingText}>Searching your archive...</Text>
+        <Text style={styles.searchingText}>{label}</Text>
       </View>
       <View style={styles.skeletonLines}>
         <Animated.View style={[styles.skeletonLine, { width: "90%", opacity }]} />
@@ -212,18 +254,30 @@ function SearchingSkeleton() {
 
 function AIAnswerPanel({
   answerStream,
+  documentLabel,
+  aiAnswerLabel,
+  generatingLabel,
+  answerReadyLabel,
+  insufficientLabel,
+  sourcesLabel,
   onCitationPress,
 }: {
   answerStream: ReturnType<typeof useAnswerStream>;
+  documentLabel: string;
+  aiAnswerLabel: string;
+  generatingLabel: string;
+  answerReadyLabel: string;
+  insufficientLabel: string;
+  sourcesLabel: string;
   onCitationPress: (citation: AnswerCitation) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
 
   const statusLabel = isStreaming
-    ? "Generating..."
+    ? generatingLabel
     : answerStream.status === "done"
-      ? "Answer ready"
+      ? answerReadyLabel
       : "";
 
   const linkedText = linkifyCitations(
@@ -248,7 +302,7 @@ function AIAnswerPanel({
           <Text style={[styles.aiIconText, expanded ? styles.aiIconTextExpanded : null]}>{"✦"}</Text>
         </View>
         <View style={styles.aiPanelHeaderText}>
-          <Text style={styles.aiPanelTitle}>AI Answer</Text>
+          <Text style={styles.aiPanelTitle}>{aiAnswerLabel}</Text>
           <Text style={styles.aiPanelStatus}>{statusLabel}</Text>
         </View>
         {isStreaming && <ActivityIndicator color={colors.accent} size="small" />}
@@ -269,7 +323,7 @@ function AIAnswerPanel({
                     const cit = answerStream.citations.find((c) => c.documentId === documentId);
                     onCitationPress({
                       documentId,
-                      documentTitle: cit?.documentTitle ?? "Document",
+                      documentTitle: cit?.documentTitle ?? documentLabel,
                       chunkIndex: cit?.chunkIndex ?? 0,
                       quote: cit?.quote ?? "",
                       pageFrom: cit?.pageFrom ?? null,
@@ -292,7 +346,7 @@ function AIAnswerPanel({
           {answerStream.status === "done" && !answerStream.answerText && (
             <View style={styles.insufficientBox}>
               <Text style={styles.insufficientText}>
-                Not enough evidence in your archive to answer this question confidently.
+                {insufficientLabel}
               </Text>
             </View>
           )}
@@ -300,7 +354,7 @@ function AIAnswerPanel({
           {/* Sources */}
           {answerStream.citations.length > 0 && (
             <View style={styles.sourcesSection}>
-              <Text style={styles.sourcesLabel}>{"⊞  SOURCES"}</Text>
+              <Text style={styles.sourcesLabel}>{`⊞  ${sourcesLabel}`}</Text>
               <View style={styles.sourcesGrid}>
                 {answerStream.citations.map((cit, i) => (
                   <Pressable
@@ -354,6 +408,10 @@ function ZeroState({
   onSelectRecent,
   onRemoveRecent,
   onClearAll,
+  recentLabel,
+  clearAllLabel,
+  suggestedLabel,
+  noSuggestionsLabel,
 }: {
   recentSearches: Array<{ query: string; timestamp: number }>;
   suggestions: string[];
@@ -362,6 +420,10 @@ function ZeroState({
   onSelectRecent: (query: string) => void;
   onRemoveRecent: (query: string) => void;
   onClearAll: () => void;
+  recentLabel: string;
+  clearAllLabel: string;
+  suggestedLabel: string;
+  noSuggestionsLabel: string;
 }) {
   return (
     <View style={styles.zeroState}>
@@ -369,9 +431,9 @@ function ZeroState({
       {recentSearches.length > 0 && (
         <View style={styles.zeroSection}>
           <View style={styles.zeroSectionHeader}>
-            <Text style={styles.zeroSectionTitle}>RECENT SEARCHES</Text>
+            <Text style={styles.zeroSectionTitle}>{recentLabel}</Text>
             <Pressable onPress={() => void onClearAll()} hitSlop={8}>
-              <Text style={styles.zeroClearAll}>Clear all</Text>
+              <Text style={styles.zeroClearAll}>{clearAllLabel}</Text>
             </Pressable>
           </View>
           {recentSearches.map((item) => (
@@ -402,7 +464,7 @@ function ZeroState({
       {/* Suggestions */}
       <View style={styles.zeroSection}>
         <View style={styles.zeroSectionHeader}>
-          <Text style={styles.zeroSectionTitle}>SUGGESTED FOR YOU</Text>
+          <Text style={styles.zeroSectionTitle}>{suggestedLabel}</Text>
         </View>
 
         {suggestionsLoading ? (
@@ -438,7 +500,7 @@ function ZeroState({
         ) : (
           <View style={styles.zeroRow}>
             <Text style={styles.zeroEmptyText}>
-              No suggestions yet. Upload documents to get started.
+              {noSuggestionsLabel}
             </Text>
           </View>
         )}
@@ -572,6 +634,15 @@ const markdownStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  offlineTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  offlineBody: {
+    color: colors.muted,
+    lineHeight: 22,
+  },
   // Search bar
   searchBarContainer: {
     flexDirection: "row",

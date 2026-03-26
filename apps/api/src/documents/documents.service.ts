@@ -1121,7 +1121,11 @@ export class DocumentsService {
     };
   }
 
-  async answerQuery(request: AnswerQueryRequest): Promise<AnswerQueryResponse> {
+  async answerQuery(
+    request: AnswerQueryRequest,
+    principal: AuthenticatedPrincipal,
+  ): Promise<AnswerQueryResponse> {
+    const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
     const results = await this.semanticSearch({
       query: request.query,
       filters: request.filters,
@@ -1134,6 +1138,7 @@ export class DocumentsService {
       question: request.query,
       results: results.items,
       maxCitations: request.maxCitations,
+      responseLanguage,
     });
 
     return {
@@ -1146,7 +1151,11 @@ export class DocumentsService {
   // Streaming answer (for unified search)
   // ---------------------------------------------------------------------------
 
-  async *streamAnswer(request: AnswerQueryRequest): AsyncGenerator<string> {
+  async *streamAnswer(
+    request: AnswerQueryRequest,
+    principal: AuthenticatedPrincipal,
+  ): AsyncGenerator<string> {
+    const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
     const results = await this.semanticSearch({
       query: request.query,
       filters: request.filters,
@@ -1163,6 +1172,7 @@ export class DocumentsService {
       question: request.query,
       results: results.items,
       maxCitations: request.maxCitations,
+      responseLanguage,
     });
 
     let fullAnswer = "";
@@ -1192,8 +1202,13 @@ export class DocumentsService {
   // Per-document AI: Summary
   // ---------------------------------------------------------------------------
 
-  async *streamDocumentSummary(documentId: string, force = false): AsyncGenerator<string> {
+  async *streamDocumentSummary(
+    documentId: string,
+    principal: AuthenticatedPrincipal,
+    force = false,
+  ): AsyncGenerator<string> {
     const document = await this.getDocument(documentId);
+    const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
 
     // Check for cached summary (skip if force-regenerating)
     if (!force) {
@@ -1248,7 +1263,9 @@ export class DocumentsService {
             "- Do NOT list every single field or data point from the document. Focus on what matters most.",
             "- Use markdown formatting: **bold** for emphasis, `code` for reference numbers/IDs.",
             "- Keep the total summary under 200 words.",
-            "- Answer in the same language as the document content.",
+            responseLanguage === "de"
+              ? "- Write the summary in German."
+              : "- Write the summary in English.",
             "- Do NOT invent information not present in the document.",
           ].join("\n"),
         },
@@ -1317,8 +1334,13 @@ export class DocumentsService {
   // Per-document AI: Q&A
   // ---------------------------------------------------------------------------
 
-  async *streamDocumentAnswer(documentId: string, question: string): AsyncGenerator<string> {
+  async *streamDocumentAnswer(
+    documentId: string,
+    question: string,
+    principal: AuthenticatedPrincipal,
+  ): AsyncGenerator<string> {
     const document = await this.getDocument(documentId);
+    const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
 
     if (!this.llmService.isConfigured()) {
       yield `event: error\ndata: ${JSON.stringify({ message: "No LLM provider configured" })}\n\n`;
@@ -1421,7 +1443,9 @@ export class DocumentsService {
             "Base your answer ONLY on the provided excerpts.",
             "If the excerpts don't contain enough information, say so clearly.",
             "Cite specific pages when referencing information (e.g., 'On page 3...').",
-            "Be concise and direct. Answer in the same language as the question.",
+            responseLanguage === "de"
+              ? "Be concise and direct. Answer in German."
+              : "Be concise and direct. Answer in English.",
           ].join("\n"),
         },
         {
@@ -2266,6 +2290,16 @@ export class DocumentsService {
       eventType: input.eventType,
       payload: input.payload,
     });
+  }
+
+  private async getUserAiChatLanguage(userId: string): Promise<"en" | "de"> {
+    const [user] = await this.databaseService.db
+      .select({ aiChatLanguage: users.aiChatLanguage })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    return user?.aiChatLanguage === "de" ? "de" : "en";
   }
 
   private computeChecksum(buffer: Buffer): string {

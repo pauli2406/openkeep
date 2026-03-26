@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import type { ArchiveDocument } from "../lib";
 import { getDocumentProcessingLabel, isDocumentProcessing } from "../document-processing";
+import { useI18n } from "../i18n";
 import { colors } from "../theme";
 
 export function DocumentProcessingIndicator({
@@ -8,11 +9,13 @@ export function DocumentProcessingIndicator({
 }: {
   document: Pick<ArchiveDocument, "status" | "latestProcessingJob">;
 }) {
+  const { t } = useI18n();
+
   if (!isDocumentProcessing(document)) {
     return null;
   }
 
-  const label = getDocumentProcessingLabel(document) ?? "Processing";
+  const label = getDocumentProcessingLabel(document) ?? t("common.processing");
 
   return (
     <View style={styles.wrap}>

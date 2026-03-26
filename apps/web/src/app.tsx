@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { AuthProvider, useAuth } from "./hooks/use-auth";
+import { I18nProvider } from "./lib/i18n";
 
 export function createAppQueryClient() {
   return new QueryClient({
@@ -49,7 +50,11 @@ export function AppRouter({
     router.invalidate();
   }, [auth.isAuthenticated, auth.isLoading, auth.needsSetup, router]);
 
-  return <RouterProvider router={router} context={{ auth, queryClient }} />;
+  return (
+    <I18nProvider language={auth.user?.preferences.uiLanguage}>
+      <RouterProvider router={router} context={{ auth, queryClient }} />
+    </I18nProvider>
+  );
 }
 
 export function App() {

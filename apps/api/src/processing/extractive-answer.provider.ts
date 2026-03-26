@@ -11,6 +11,7 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
     question: string;
     results: SemanticSearchResult[];
     maxCitations: number;
+    responseLanguage?: "en" | "de" | null;
   }): Promise<{
     status: AnswerQueryResponse["status"];
     answer: string | null;

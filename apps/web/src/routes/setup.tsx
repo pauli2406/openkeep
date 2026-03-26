@@ -13,6 +13,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { OpenKeepLogo } from "@/components/brand/openkeep-logo";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/setup")({
   beforeLoad: ({ context }) => {
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/setup")({
 
 function SetupPage() {
   const auth = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,12 +40,12 @@ function SetupPage() {
     setError("");
 
     if (password.length < 12) {
-      setError("Password must be at least 12 characters");
+      setError(t("setup.errorPasswordLength"));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t("setup.errorPasswordsMatch"));
       return;
     }
 
@@ -66,26 +68,26 @@ function SetupPage() {
           <div className="mb-4 flex justify-center">
             <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
           </div>
-          <CardTitle className="text-lg">Create your account</CardTitle>
+          <CardTitle className="text-lg">{t("setup.title")}</CardTitle>
           <CardDescription>
-            Set up the initial owner account for your OpenKeep archive
+            {t("setup.description")}
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="displayName">Display name</Label>
+              <Label htmlFor="displayName">{t("setup.displayName")}</Label>
               <Input
                 id="displayName"
                 type="text"
-                placeholder="Your name"
+                placeholder={t("setup.yourName")}
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("setup.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -96,11 +98,11 @@ function SetupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("setup.password")}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Minimum 12 characters"
+                placeholder={t("setup.passwordMin")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -108,7 +110,7 @@ function SetupPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Label htmlFor="confirmPassword">{t("setup.confirmPassword")}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -124,15 +126,15 @@ function SetupPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Creating account..." : "Create account"}
+              {isSubmitting ? t("setup.creatingAccount") : t("setup.createAccount")}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Already set up?{" "}
+              {t("setup.alreadySetup")} {" "}
               <Link
                 to="/login"
                 className="text-primary underline-offset-4 hover:underline"
               >
-                Sign in
+                {t("setup.signIn")}
               </Link>
             </p>
           </CardFooter>

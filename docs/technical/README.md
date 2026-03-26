@@ -14,7 +14,8 @@ This section documents how OpenKeep works for contributors and maintainers.
 2. [API and Data Flows](./api-and-data-flows.md)
 3. [Agentic Document Intelligence](./agentic-document-intelligence.md)
 4. [Web Application](./web-application.md)
-5. [Testing and Validation](./testing-and-validation.md)
+5. [Mobile Offline Mode and Local Sync](./mobile-offline-sync.md)
+6. [Testing and Validation](./testing-and-validation.md)
 
 ## Existing Deep-Dive Notes
 

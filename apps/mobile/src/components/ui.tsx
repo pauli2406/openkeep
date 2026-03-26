@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useI18n } from "../i18n";
 import { colors, shadow } from "../theme";
 
 export function Screen({
@@ -34,6 +35,7 @@ export function Screen({
   headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
 }) {
+  const { t } = useI18n();
   const scrollRef = useRef<ScrollView>(null);
 
   useScrollToTop(scrollRef);
@@ -43,7 +45,9 @@ export function Screen({
     <View style={[styles.content, contentContainerStyle]}>
       <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
         <View style={styles.headerTextWrap}>
-          <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>OpenKeep mobile</Text>
+          <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>
+            {t("app.brandMobile")}
+          </Text>
           <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
           {subtitle ? <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>{subtitle}</Text> : null}
         </View>
@@ -208,11 +212,20 @@ export function EmptyState({
 }
 
 export function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const { t } = useI18n();
   return (
     <Card>
-      <Text style={styles.errorTitle}>Something needs attention</Text>
+      <Text style={styles.errorTitle}>
+        {t("common.attentionTitle")}
+      </Text>
       <Text style={styles.errorBody}>{message}</Text>
-      {onRetry ? <Button label="Retry" variant="secondary" onPress={onRetry} /> : null}
+      {onRetry ? (
+        <Button
+          label={t("common.retry")}
+          variant="secondary"
+          onPress={onRetry}
+        />
+      ) : null}
     </Card>
   );
 }

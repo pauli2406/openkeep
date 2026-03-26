@@ -16,11 +16,18 @@ const API_URL_KEY = "openkeep.mobile.api-url";
 const ACCESS_TOKEN_KEY = "openkeep.mobile.access-token";
 const REFRESH_TOKEN_KEY = "openkeep.mobile.refresh-token";
 
+type UserLanguagePreferences = {
+  uiLanguage: "en" | "de";
+  aiProcessingLanguage: "en" | "de";
+  aiChatLanguage: "en" | "de";
+};
+
 type User = {
   id: string;
   email: string;
   displayName: string;
   isOwner: boolean;
+  preferences: UserLanguagePreferences;
 };
 
 type AuthContextValue = {
@@ -37,6 +44,7 @@ type AuthContextValue = {
     email: string;
     password: string;
   }) => Promise<void>;
+  updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
@@ -367,6 +375,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [completeAuth, probeServer],
   );
 
+  const updatePreferences = useCallback(
+    async (preferences: UserLanguagePreferences) => {
+      const response = await authFetch("/api/auth/me/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preferences),
+      });
+
+      if (!response.ok) {
+        throw new Error(await readResponseMessage(response));
+      }
+
+      const payload = (await response.json()) as User;
+      setUser(payload);
+    },
+    [authFetch],
+  );
+
   const logout = useCallback(async () => {
     await clearTokens();
     setUser(null);
@@ -382,11 +408,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       probeServer,
       login,
       setup,
+      updatePreferences,
       logout,
       authFetch,
       streamFetch,
     }),
-    [apiUrl, authFetch, isLoading, login, logout, probeServer, setApiUrl, setup, streamFetch, user],
+    [
+      apiUrl,
+      authFetch,
+      isLoading,
+      login,
+      logout,
+      probeServer,
+      setApiUrl,
+      setup,
+      streamFetch,
+      updatePreferences,
+      user,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

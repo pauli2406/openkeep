@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
+import { useI18n, type AppLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -93,60 +94,61 @@ interface CreateTokenResponse {
 
 type TaxonomyEntity = Tag | Correspondent | DocumentType;
 type TaxonomyKind = "tags" | "correspondents" | "document-types";
+type Translate = ReturnType<typeof useI18n>["t"];
 
-async function listTaxonomy(kind: TaxonomyKind): Promise<TaxonomyEntity[]> {
+async function listTaxonomy(kind: TaxonomyKind, t: Translate): Promise<TaxonomyEntity[]> {
   switch (kind) {
     case "tags": {
       const { data, error } = await api.GET("/api/taxonomies/tags", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load tags"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToLoadTags")));
       }
       return (data ?? []) as Tag[];
     }
     case "correspondents": {
       const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load correspondents"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToLoadCorrespondents")));
       }
       return (data ?? []) as Correspondent[];
     }
     case "document-types": {
       const { data, error } = await api.GET("/api/taxonomies/document-types", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to load document types"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToLoadDocumentTypes")));
       }
       return (data ?? []) as DocumentType[];
     }
   }
 }
 
-async function createTaxonomy(kind: TaxonomyKind, name: string): Promise<void> {
+async function createTaxonomy(kind: TaxonomyKind, name: string, t: Translate): Promise<void> {
   switch (kind) {
     case "tags": {
       const { error } = await api.POST("/api/taxonomies/tags", { body: { name } });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to create tag"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToCreateTag")));
       }
       return;
     }
     case "correspondents": {
       const { error } = await api.POST("/api/taxonomies/correspondents", { body: { name } });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to create correspondent"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToCreateCorrespondent")));
       }
       return;
     }
     case "document-types": {
       const { error } = await api.POST("/api/taxonomies/document-types", { body: { name } });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to create document type"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToCreateDocumentType")));
       }
       return;
     }
   }
 }
 
-async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string): Promise<void> {
+async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string, t: Translate): Promise<void> {
   switch (kind) {
     case "tags": {
       const { error } = await api.PATCH("/api/taxonomies/tags/{id}", {
@@ -154,7 +156,7 @@ async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string): Pro
         body: { name },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to update tag"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToUpdateTag")));
       }
       return;
     }
@@ -164,7 +166,7 @@ async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string): Pro
         body: { name },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to update correspondent"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToUpdateCorrespondent")));
       }
       return;
     }
@@ -174,21 +176,21 @@ async function updateTaxonomy(kind: TaxonomyKind, id: string, name: string): Pro
         body: { name },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to update document type"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToUpdateDocumentType")));
       }
       return;
     }
   }
 }
 
-async function deleteTaxonomy(kind: TaxonomyKind, id: string): Promise<void> {
+async function deleteTaxonomy(kind: TaxonomyKind, id: string, t: Translate): Promise<void> {
   switch (kind) {
     case "tags": {
       const { error } = await api.DELETE("/api/taxonomies/tags/{id}", {
         params: { path: { id } },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to delete tag"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToDeleteTag")));
       }
       return;
     }
@@ -197,7 +199,7 @@ async function deleteTaxonomy(kind: TaxonomyKind, id: string): Promise<void> {
         params: { path: { id } },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to delete correspondent"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToDeleteCorrespondent")));
       }
       return;
     }
@@ -206,14 +208,14 @@ async function deleteTaxonomy(kind: TaxonomyKind, id: string): Promise<void> {
         params: { path: { id } },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to delete document type"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToDeleteDocumentType")));
       }
       return;
     }
   }
 }
 
-async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): Promise<void> {
+async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string, t: Translate): Promise<void> {
   switch (kind) {
     case "tags": {
       const { error } = await api.POST("/api/taxonomies/tags/{id}/merge", {
@@ -221,7 +223,7 @@ async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): 
         body: { targetId },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to merge tag"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToMergeTag")));
       }
       return;
     }
@@ -231,7 +233,7 @@ async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): 
         body: { targetId },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to merge correspondent"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToMergeCorrespondent")));
       }
       return;
     }
@@ -241,7 +243,7 @@ async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): 
         body: { targetId },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to merge document type"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToMergeDocumentType")));
       }
       return;
     }
@@ -249,18 +251,24 @@ async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: string): 
 }
 
 function SettingsPage() {
+  const { t } = useI18n();
+
   return (
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("settings.title")}</h1>
         <p className="text-muted-foreground">
-          Manage your account and system configuration
+          {t("settings.subtitle")}
         </p>
       </div>
 
       {/* User Profile */}
       <UserProfileSection />
+
+      <Separator />
+
+      <LanguagePreferencesSection />
 
       <Separator />
 
@@ -293,41 +301,159 @@ function SettingsPage() {
   );
 }
 
+function LanguagePreferencesSection() {
+  const auth = useAuth();
+  const { t } = useI18n();
+  const [preferences, setPreferences] = useState(
+    auth.user?.preferences ?? {
+      uiLanguage: "en" as const,
+      aiProcessingLanguage: "en" as const,
+      aiChatLanguage: "en" as const,
+    },
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<"default" | "destructive">("default");
+
+  useEffect(() => {
+    if (auth.user?.preferences) {
+      setPreferences(auth.user.preferences);
+    }
+  }, [auth.user?.preferences]);
+
+  async function handleSave() {
+    setIsSaving(true);
+    setStatusMessage(null);
+
+    try {
+      await auth.updatePreferences(preferences);
+      setStatusTone("default");
+      setStatusMessage(t("settings.preferencesSaved"));
+    } catch (error) {
+      setStatusTone("destructive");
+      setStatusMessage(
+        error instanceof Error ? error.message : t("settings.preferencesSaveFailed"),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Brain className="h-5 w-5" />
+          {t("settings.languagePreferences")}
+        </CardTitle>
+        <CardDescription>{t("settings.languagePreferencesDescription")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label>{t("settings.uiLanguage")}</Label>
+            <Select
+              value={preferences.uiLanguage}
+              onValueChange={(value: "en" | "de") =>
+                setPreferences((current) => ({ ...current, uiLanguage: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{t("settings.english")}</SelectItem>
+                <SelectItem value="de">{t("settings.german")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("settings.aiProcessingLanguage")}</Label>
+            <Select
+              value={preferences.aiProcessingLanguage}
+              onValueChange={(value: "en" | "de") =>
+                setPreferences((current) => ({ ...current, aiProcessingLanguage: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{t("settings.english")}</SelectItem>
+                <SelectItem value="de">{t("settings.german")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>{t("settings.aiChatLanguage")}</Label>
+            <Select
+              value={preferences.aiChatLanguage}
+              onValueChange={(value: "en" | "de") =>
+                setPreferences((current) => ({ ...current, aiChatLanguage: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{t("settings.english")}</SelectItem>
+                <SelectItem value="de">{t("settings.german")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button onClick={() => void handleSave()} disabled={isSaving}>
+            {isSaving ? t("settings.saving") : t("settings.savePreferences")}
+          </Button>
+          {statusMessage ? (
+            <p className={`text-sm ${statusTone === "destructive" ? "text-destructive" : "text-muted-foreground"}`}>
+              {statusMessage}
+            </p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function UserProfileSection() {
   const auth = useAuth();
+  const { t } = useI18n();
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Shield className="h-5 w-5" />
-          User Profile
+          {t("settings.userProfile")}
         </CardTitle>
-        <CardDescription>Your account information</CardDescription>
+        <CardDescription>{t("settings.accountInfo")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">
-              Display Name
+              {t("settings.displayName")}
             </Label>
             <p className="text-sm font-medium">
-              {auth.user?.displayName ?? "Unknown"}
+              {auth.user?.displayName ?? t("settings.unknown")}
             </p>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Email</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.email")}</Label>
             <p className="text-sm font-medium">
-              {auth.user?.email ?? "Unknown"}
+              {auth.user?.email ?? t("settings.unknown")}
             </p>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Role</Label>
+            <Label className="text-xs text-muted-foreground">{t("settings.role")}</Label>
             <div>
               {auth.user?.isOwner ? (
-                <Badge variant="default">Owner</Badge>
+                <Badge variant="default">{t("settings.owner")}</Badge>
               ) : (
-                <Badge variant="secondary">User</Badge>
+                <Badge variant="secondary">{t("settings.user")}</Badge>
               )}
             </div>
           </div>
@@ -338,6 +464,7 @@ function UserProfileSection() {
 }
 
 function ApiTokensSection() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [tokenName, setTokenName] = useState("");
@@ -350,7 +477,7 @@ function ApiTokensSection() {
     queryKey: ["auth", "tokens"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/auth/tokens", {});
-      if (error) throw new Error("Failed to fetch tokens");
+      if (error) throw new Error(t("settings.failedToFetchTokens"));
       return (data ?? []) as ApiToken[];
     },
   });
@@ -364,7 +491,7 @@ function ApiTokensSection() {
       const { data, error } = await api.POST("/api/auth/tokens", {
         body,
       });
-      if (error) throw new Error("Failed to create token");
+      if (error) throw new Error(t("settings.failedToCreateToken"));
       return data as unknown as CreateTokenResponse;
     },
     onSuccess: (data) => {
@@ -380,7 +507,7 @@ function ApiTokensSection() {
       const { error } = await api.DELETE("/api/auth/tokens/{id}", {
         params: { path: { id } },
       });
-      if (error) throw new Error("Failed to delete token");
+      if (error) throw new Error(t("settings.failedToDeleteToken"));
     },
     onSuccess: () => {
       setDeleteConfirmId(null);
@@ -425,26 +552,26 @@ function ApiTokensSection() {
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Key className="h-5 w-5" />
-              API Tokens
+              {t("settings.apiTokensTitle")}
             </CardTitle>
             <CardDescription>
-              Manage API tokens for programmatic access
+              {t("settings.apiTokensDescription")}
             </CardDescription>
           </div>
           <Dialog open={createDialogOpen} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="h-4 w-4" />
-                Create Token
+                {t("settings.createToken")}
               </Button>
             </DialogTrigger>
             <DialogContent>
               {generatedToken ? (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Token Created</DialogTitle>
+                    <DialogTitle>{t("settings.tokenCreated")}</DialogTitle>
                     <DialogDescription>
-                      Copy this token now. It will not be shown again.
+                      {t("settings.tokenCreatedDescription")}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-3">
@@ -469,37 +596,37 @@ function ApiTokensSection() {
                     </div>
                     <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                       <AlertCircle className="h-4 w-4 shrink-0" />
-                      This token will only be shown once. Store it securely.
+                      {t("settings.tokenShownOnce")}
                     </div>
                   </div>
                   <DialogFooter>
                     <Button onClick={() => handleDialogClose(false)}>
-                      Done
+                      {t("settings.done")}
                     </Button>
                   </DialogFooter>
                 </>
               ) : (
                 <>
                   <DialogHeader>
-                    <DialogTitle>Create API Token</DialogTitle>
+                    <DialogTitle>{t("settings.createApiToken")}</DialogTitle>
                     <DialogDescription>
-                      Create a new token for API access
+                      {t("settings.createApiTokenDescription")}
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleCreate} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="token-name">Name</Label>
+                      <Label htmlFor="token-name">{t("settings.name")}</Label>
                       <Input
                         id="token-name"
                         value={tokenName}
                         onChange={(e) => setTokenName(e.target.value)}
-                        placeholder="e.g. CI/CD Pipeline"
+                        placeholder={t("settings.tokenNamePlaceholder")}
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="token-expiry">
-                        Expiry date (optional)
+                        {t("settings.expiryOptional")}
                       </Label>
                       <Input
                         id="token-expiry"
@@ -511,7 +638,7 @@ function ApiTokensSection() {
                     </div>
                     {createMutation.isError && (
                       <p className="text-sm text-destructive">
-                        Failed to create token. Please try again.
+                        {t("settings.createTokenFailed")}
                       </p>
                     )}
                     <DialogFooter>
@@ -520,7 +647,7 @@ function ApiTokensSection() {
                         variant="outline"
                         onClick={() => handleDialogClose(false)}
                       >
-                        Cancel
+                        {t("settings.cancel")}
                       </Button>
                       <Button
                         type="submit"
@@ -531,10 +658,10 @@ function ApiTokensSection() {
                         {createMutation.isPending ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            Creating...
+                            {t("settings.creating")}
                           </>
                         ) : (
-                          "Create"
+                          t("settings.create")
                         )}
                       </Button>
                     </DialogFooter>
@@ -554,7 +681,7 @@ function ApiTokensSection() {
 
         {tokensQuery.isError && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-            Failed to load tokens.
+            {t("settings.loadTokensFailed")}
           </div>
         )}
 
@@ -562,7 +689,7 @@ function ApiTokensSection() {
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Key className="h-8 w-8 text-muted-foreground/40" />
             <p className="mt-2 text-sm text-muted-foreground">
-              No API tokens created yet
+              {t("settings.noApiTokens")}
             </p>
           </div>
         )}
@@ -580,25 +707,25 @@ function ApiTokensSection() {
                     <span className="font-mono">{token.tokenPrefix}...</span>
                     {token.lastUsedAt && (
                       <span>
-                        Last used:{" "}
+                        {t("settings.lastUsed")}:{" "}
                         {format(new Date(token.lastUsedAt), "MMM d, yyyy")}
                       </span>
                     )}
-                    {!token.lastUsedAt && <span>Never used</span>}
+                    {!token.lastUsedAt && <span>{t("settings.neverUsed")}</span>}
                     {token.expiresAt && (
                       <span>
-                        Expires:{" "}
+                        {t("settings.expires")}:{" "}
                         {format(new Date(token.expiresAt), "MMM d, yyyy")}
                       </span>
                     )}
-                    {!token.expiresAt && <span>No expiry</span>}
+                    {!token.expiresAt && <span>{t("settings.noExpiry")}</span>}
                   </div>
                 </div>
 
                 {deleteConfirmId === token.id ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
-                      Delete?
+                      {t("settings.deleteConfirm")}
                     </span>
                     <Button
                       variant="destructive"
@@ -609,7 +736,7 @@ function ApiTokensSection() {
                       {deleteMutation.isPending ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        "Yes"
+                        t("settings.yes")
                       )}
                     </Button>
                     <Button
@@ -617,7 +744,7 @@ function ApiTokensSection() {
                       size="sm"
                       onClick={() => setDeleteConfirmId(null)}
                     >
-                      No
+                      {t("settings.no")}
                     </Button>
                   </div>
                 ) : (
@@ -628,7 +755,7 @@ function ApiTokensSection() {
                     onClick={() => setDeleteConfirmId(token.id)}
                   >
                     <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
+                    <span className="sr-only">{t("settings.delete")}</span>
                   </Button>
                 )}
               </div>
@@ -641,33 +768,34 @@ function ApiTokensSection() {
 }
 
 function TaxonomyManagementSection() {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <div>
         <h2 className="flex items-center gap-2 text-lg font-semibold">
           <Layers className="h-5 w-5" />
-          Taxonomy Management
+          {t("settings.taxonomyManagement")}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Curate AI-generated labels for tags, correspondents, and document types.
+          {t("settings.taxonomyManagementDescription")}
         </p>
       </div>
 
       <div className="space-y-4">
         <TaxonomySection
           kind="tags"
-          title="Tags"
-          description="Lightweight categories used across the archive."
+          title={t("settings.tags")}
+          description={t("settings.tagsDescription")}
         />
         <TaxonomySection
           kind="correspondents"
-          title="Correspondents"
-          description="Organizations and people detected as senders or counterparties."
+          title={t("settings.correspondents")}
+          description={t("settings.correspondentsDescription")}
         />
         <TaxonomySection
           kind="document-types"
-          title="Document Types"
-          description="Stable type labels such as invoice, contract, or statement."
+          title={t("settings.documentTypes")}
+          description={t("settings.documentTypesDescription")}
         />
       </div>
     </div>
@@ -683,6 +811,7 @@ function TaxonomySection({
   title: string;
   description: string;
 }) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -692,11 +821,11 @@ function TaxonomySection({
 
   const listQuery = useQuery({
     queryKey: ["taxonomies", kind],
-    queryFn: () => listTaxonomy(kind),
+    queryFn: () => listTaxonomy(kind, t),
   });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => createTaxonomy(kind, name),
+    mutationFn: (name: string) => createTaxonomy(kind, name, t),
     onSuccess: () => {
       setNewName("");
       queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
@@ -705,7 +834,7 @@ function TaxonomySection({
 
   const updateMutation = useMutation({
     mutationFn: (params: { id: string; name: string }) =>
-      updateTaxonomy(kind, params.id, params.name),
+      updateTaxonomy(kind, params.id, params.name, t),
     onSuccess: () => {
       setEditingId(null);
       setEditingName("");
@@ -714,7 +843,7 @@ function TaxonomySection({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteTaxonomy(kind, id),
+    mutationFn: (id: string) => deleteTaxonomy(kind, id, t),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
     },
@@ -722,7 +851,7 @@ function TaxonomySection({
 
   const mergeMutation = useMutation({
     mutationFn: (params: { id: string; targetId: string }) =>
-      mergeTaxonomy(kind, params.id, params.targetId),
+      mergeTaxonomy(kind, params.id, params.targetId, t),
     onSuccess: () => {
       setMergeSourceId(null);
       setMergeTargetId("");
@@ -752,7 +881,7 @@ function TaxonomySection({
           <Input
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
-            placeholder={`Create ${title.slice(0, -1).toLowerCase()}...`}
+            placeholder={t("settings.createItemPlaceholder")}
           />
           <Button
             type="submit"
@@ -763,7 +892,7 @@ function TaxonomySection({
             ) : (
               <>
                 <Plus className="h-4 w-4" />
-                Add
+                {t("settings.add")}
               </>
             )}
           </Button>
@@ -773,7 +902,7 @@ function TaxonomySection({
           <p className="text-sm text-destructive">
             {createMutation.error instanceof Error
               ? createMutation.error.message
-              : `Failed to create ${title.toLowerCase()}.`}
+              : t("settings.createItemFailed")}
           </p>
         )}
 
@@ -785,13 +914,13 @@ function TaxonomySection({
 
         {listQuery.isError && (
           <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            Failed to load {title.toLowerCase()}.
+            {t("settings.loadItemsFailed")}
           </div>
         )}
 
         {listQuery.isSuccess && items.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No {title.toLowerCase()} created yet.
+            {t("settings.noItemsCreated")}
           </p>
         )}
 
@@ -804,7 +933,7 @@ function TaxonomySection({
                     <Input
                       value={editingName}
                       onChange={(event) => setEditingName(event.target.value)}
-                      aria-label={`${title} name`}
+                      aria-label={`${title} ${t("settings.nameSuffix")}`}
                     />
                     <div className="flex gap-2">
                       <Button
@@ -820,7 +949,7 @@ function TaxonomySection({
                         {updateMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Save"
+                          t("settings.save")
                         )}
                       </Button>
                       <Button
@@ -831,7 +960,7 @@ function TaxonomySection({
                           setEditingName("");
                         }}
                       >
-                        Cancel
+                        {t("settings.cancel")}
                       </Button>
                     </div>
                   </div>
@@ -856,7 +985,7 @@ function TaxonomySection({
                         }}
                       >
                         <Edit2 className="h-3.5 w-3.5" />
-                        Edit
+                        {t("settings.edit")}
                       </Button>
                       <Button
                         size="sm"
@@ -869,7 +998,7 @@ function TaxonomySection({
                         }}
                         disabled={items.length < 2}
                       >
-                        Merge
+                        {t("settings.merge")}
                       </Button>
                       <Button
                         size="sm"
@@ -879,7 +1008,7 @@ function TaxonomySection({
                         disabled={deleteMutation.isPending}
                       >
                         <Trash2 className="h-4 w-4" />
-                        Delete
+                        {t("settings.delete")}
                       </Button>
                     </div>
                   </div>
@@ -888,10 +1017,10 @@ function TaxonomySection({
                 {mergeSourceId === item.id && editingId !== item.id && (
                   <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
                     <div className="space-y-2">
-                      <Label>Merge Into</Label>
+                      <Label>{t("settings.mergeInto")}</Label>
                       <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select target" />
+                          <SelectValue placeholder={t("settings.selectTarget")} />
                         </SelectTrigger>
                         <SelectContent>
                           {items
@@ -918,7 +1047,7 @@ function TaxonomySection({
                         {mergeMutation.isPending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          "Confirm Merge"
+                          t("settings.confirmMerge")
                         )}
                       </Button>
                       <Button
@@ -929,7 +1058,7 @@ function TaxonomySection({
                           setMergeTargetId("");
                         }}
                       >
-                        Cancel
+                        {t("settings.cancel")}
                       </Button>
                     </div>
                   </div>
@@ -947,7 +1076,7 @@ function TaxonomySection({
                 ? deleteMutation.error.message
                 : mergeMutation.error instanceof Error
                   ? mergeMutation.error.message
-                  : `Failed to update ${title.toLowerCase()}.`}
+                  : t("settings.updateItemFailed")}
           </p>
         )}
       </CardContent>
@@ -956,6 +1085,7 @@ function TaxonomySection({
 }
 
 function ArchiveOperationsSection() {
+  const { t } = useI18n();
   const [snapshotText, setSnapshotText] = useState("");
   const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
   const [watchDryRun, setWatchDryRun] = useState(true);
@@ -966,7 +1096,7 @@ function ArchiveOperationsSection() {
     mutationFn: async () => {
       const { data, error } = await api.GET("/api/archive/export", {});
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to export archive"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToExportArchive")));
       }
       return data as ArchiveSnapshot;
     },
@@ -985,7 +1115,7 @@ function ArchiveOperationsSection() {
         },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to import archive"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToImportArchive")));
       }
       return data as ArchiveImportResult;
     },
@@ -1000,7 +1130,7 @@ function ArchiveOperationsSection() {
         body: { dryRun: watchDryRun },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to scan watch folder"));
+        throw new Error(getApiErrorMessage(error, t("settings.failedToScanWatchFolder")));
       }
       return data as WatchFolderScanResponse;
     },
@@ -1033,7 +1163,7 @@ function ArchiveOperationsSection() {
             params: { path: { id: item.documentId! } },
           });
           if (error) {
-            throw new Error(getApiErrorMessage(error, "Failed to load scan result details"));
+            throw new Error(getApiErrorMessage(error, t("settings.failedToLoadScanResultDetails")));
           }
           return data as Document;
         },
@@ -1050,14 +1180,13 @@ function ArchiveOperationsSection() {
       .filter((item) => item.documentId)
       .map((item, index) => [item.documentId!, watchReviewDocumentQueries[index]]),
   );
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Archive Portability</CardTitle>
-        <CardDescription>
-          Export snapshots, restore them, and trigger watch-folder ingestion.
-        </CardDescription>
+          <CardTitle className="text-lg">{t("settings.archivePortability")}</CardTitle>
+          <CardDescription>
+            {t("settings.archivePortabilityDescription")}
+          </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex flex-wrap gap-2">
@@ -1067,13 +1196,13 @@ function ArchiveOperationsSection() {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            Export Snapshot
+            {t("settings.exportSnapshot")}
           </Button>
           <Button
             variant={watchDryRun ? "outline" : "secondary"}
             onClick={() => setWatchDryRun((value) => !value)}
           >
-            {watchDryRun ? "Dry Run Enabled" : "Dry Run Disabled"}
+            {watchDryRun ? t("settings.dryRunEnabled") : t("settings.dryRunDisabled")}
           </Button>
           <Button
             variant="outline"
@@ -1085,7 +1214,7 @@ function ArchiveOperationsSection() {
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
-            Scan Watch Folder
+            {t("settings.scanWatchFolder")}
           </Button>
         </div>
 
@@ -1093,13 +1222,13 @@ function ArchiveOperationsSection() {
           <p className="text-sm text-destructive">
             {exportMutation.error instanceof Error
               ? exportMutation.error.message
-              : "Failed to export archive."}
+              : t("settings.exportArchiveFailed")}
           </p>
         )}
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="archive-snapshot">Snapshot JSON</Label>
+            <Label htmlFor="archive-snapshot">{t("settings.snapshotJson")}</Label>
             <Select
               value={importMode}
               onValueChange={(value: "replace" | "merge") => setImportMode(value)}
@@ -1108,8 +1237,8 @@ function ArchiveOperationsSection() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="replace">Replace</SelectItem>
-                <SelectItem value="merge">Merge</SelectItem>
+                <SelectItem value="replace">{t("settings.replace")}</SelectItem>
+                <SelectItem value="merge">{t("settings.merge")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1117,7 +1246,7 @@ function ArchiveOperationsSection() {
             id="archive-snapshot"
             value={snapshotText}
             onChange={(event) => setSnapshotText(event.target.value)}
-            placeholder="Export a snapshot or paste one here for import"
+            placeholder={t("settings.snapshotPlaceholder")}
             className="min-h-56 w-full rounded-md border bg-background px-3 py-2 text-sm font-mono outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           />
           <div className="flex gap-2">
@@ -1131,21 +1260,21 @@ function ArchiveOperationsSection() {
               ) : (
                 <Upload className="h-4 w-4" />
               )}
-              Import Snapshot
+              {t("settings.importSnapshot")}
             </Button>
           </div>
           {importMutation.isError && (
             <p className="text-sm text-destructive">
               {importMutation.error instanceof Error
                 ? importMutation.error.message
-                : "Failed to import archive."}
+                : t("settings.importArchiveFailed")}
             </p>
           )}
         </div>
 
         {lastImportResult && (
           <div className="space-y-2">
-            <Label>Last Import Result</Label>
+            <Label>{t("settings.lastImportResult")}</Label>
             <pre className="overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono">
               {lastImportResult}
             </pre>
@@ -1155,36 +1284,36 @@ function ArchiveOperationsSection() {
         {watchResult && (
           <div className="space-y-3 rounded-lg border p-3">
             <div>
-              <p className="text-sm font-medium">Watch Folder Scan</p>
+              <p className="text-sm font-medium">{t("settings.watchFolderScan")}</p>
               <p className="text-xs text-muted-foreground">
-                Path: {watchResult.configuredPath}
-              </p>
+                {t("settings.path")}: {watchResult.configuredPath}
+               </p>
             </div>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <QueueCard
-                label="Imported"
+                label={t("settings.imported")}
                 value={watchImportedCount}
                 active={watchImportedCount > 0}
               />
               <QueueCard
-                label="Duplicates"
+                label={t("settings.duplicates")}
                 value={watchDuplicateCount}
                 active={watchDuplicateCount > 0}
               />
               <QueueCard
-                label="Unsupported"
+                label={t("settings.unsupported")}
                 value={watchUnsupportedCount}
                 active={watchUnsupportedCount > 0}
                 variant="warning"
               />
               <QueueCard
-                label="Failures"
+                label={t("settings.failures")}
                 value={watchFailedCount}
                 active={watchFailedCount > 0}
                 variant="warning"
               />
               <QueueCard
-                label={watchResult.dryRun ? "Planned" : "Total"}
+                label={watchResult.dryRun ? t("settings.planned") : t("settings.total")}
                 value={watchResult.dryRun ? watchPlannedCount : watchResult.summary.total}
                 active={(watchResult.dryRun ? watchPlannedCount : watchResult.summary.total) > 0}
               />
@@ -1193,10 +1322,10 @@ function ArchiveOperationsSection() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Current scan results
+                    {t("settings.currentScanResults")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {watchResult.items.length} {watchResult.items.length === 1 ? "item" : "items"}
+                    {watchResult.items.length} {t(watchResult.items.length === 1 ? "settings.itemOne" : "settings.itemOther")}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -1214,10 +1343,10 @@ function ArchiveOperationsSection() {
                             <span className="break-all text-sm font-medium">{item.path}</span>
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>Reason: {formatWatchFolderReason(item.reason)}</span>
+                            <span>{t("settings.reason")}: {formatWatchFolderReason(item.reason)}</span>
                             {item.mimeType && <span>MIME: {item.mimeType}</span>}
                             {item.destinationPath && (
-                              <span>Destination: {item.destinationPath}</span>
+                              <span>{t("settings.destination")}: {item.destinationPath}</span>
                             )}
                           </div>
                           {item.detail && (
@@ -1231,7 +1360,7 @@ function ArchiveOperationsSection() {
                                 to="/documents/$documentId"
                                 params={{ documentId: item.documentId }}
                               >
-                                Open document
+                                {t("settings.openDocument")}
                               </Link>
                             </Button>
                           </div>
@@ -1240,7 +1369,7 @@ function ArchiveOperationsSection() {
                       {item.documentId && (
                         <details className="mt-3 rounded-md border bg-muted/20 px-3 py-2">
                           <summary className="cursor-pointer text-sm font-medium text-foreground">
-                            Inspect extracted fields
+                            {t("settings.inspectExtractedFields")}
                           </summary>
                           <div className="mt-3">
                             <WatchFolderFieldReview
@@ -1259,7 +1388,7 @@ function ArchiveOperationsSection() {
             {watchProblemItems.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Current scan issues
+                  {t("settings.currentScanIssues")}
                 </p>
                 <div className="space-y-2">
                   {watchProblemItems.map((item) => (
@@ -1280,13 +1409,13 @@ function ArchiveOperationsSection() {
                         <span className="text-sm font-medium">{item.path}</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span>Reason: {formatWatchFolderReason(item.reason)}</span>
+                        <span>{t("settings.reason")}: {formatWatchFolderReason(item.reason)}</span>
                         {item.failureCode && (
-                          <span>Code: {item.failureCode}</span>
+                          <span>{t("settings.code")}: {item.failureCode}</span>
                         )}
                         {item.mimeType && <span>MIME: {item.mimeType}</span>}
                         {item.destinationPath && (
-                          <span>Destination: {item.destinationPath}</span>
+                          <span>{t("settings.destination")}: {item.destinationPath}</span>
                         )}
                       </div>
                       {item.detail && (
@@ -1302,7 +1431,7 @@ function ArchiveOperationsSection() {
             {watchResult.history.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  Recent scans
+                  {t("settings.recentScans")}
                 </p>
                 <div className="space-y-2">
                   {watchResult.history.map((entry) => (
@@ -1315,7 +1444,7 @@ function ArchiveOperationsSection() {
                           {format(new Date(entry.scannedAt), "MMM d, yyyy HH:mm")}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {entry.dryRun ? "Dry run" : "Live scan"}
+                          {entry.dryRun ? t("settings.dryRunEnabled") : t("settings.liveScan")}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -1337,7 +1466,7 @@ function ArchiveOperationsSection() {
           <p className="text-sm text-destructive">
             {watchMutation.error instanceof Error
               ? watchMutation.error.message
-              : "Failed to scan watch folder."}
+              : t("settings.failedToScanWatchFolder")}
           </p>
         )}
       </CardContent>
@@ -1371,12 +1500,13 @@ function queueLabel(queueName: string): string {
 }
 
 function ProcessingActivitySection() {
+  const { language, t } = useI18n();
   const statusQuery = useQuery({
     queryKey: ["health", "status"],
     queryFn: async () => {
       const { data, error, response } = await api.GET("/api/health/status");
       if (!response.ok || error || !data) {
-        throw error ?? new Error("Failed to fetch status");
+        throw error ?? new Error(t("settings.failedToFetchStatus"));
       }
       return data as ProcessingStatusResponse;
     },
@@ -1396,10 +1526,10 @@ function ProcessingActivitySection() {
           <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Activity className="h-5 w-5" />
-              Processing Activity
+              {t("settings.processingActivity")}
             </CardTitle>
             <CardDescription>
-              Queue depths, document status breakdown, and recent jobs
+              {t("settings.processingActivityDescription")}
             </CardDescription>
           </div>
           <Button
@@ -1424,7 +1554,7 @@ function ProcessingActivitySection() {
         {statusQuery.isError && (
           <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            Failed to load processing status.
+            {t("settings.failedToLoadProcessingStatus")}
           </div>
         )}
 
@@ -1433,22 +1563,22 @@ function ProcessingActivitySection() {
             {/* Queue depths + Document counts */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <QueueCard
-                label="OCR Queue"
+                label={t("settings.ocrQueue")}
                 value={data.queues.processing.depth}
                 active={data.queues.processing.depth > 0}
               />
               <QueueCard
-                label="Embed Queue"
+                label={t("settings.embedQueue")}
                 value={data.queues.embedding.depth}
                 active={data.queues.embedding.depth > 0}
               />
               <QueueCard
-                label="Total Docs"
+                label={t("settings.totalDocs")}
                 value={totalDocs}
                 active={false}
               />
               <QueueCard
-                label="Pending Review"
+                label={t("settings.pendingReview")}
                 value={data.documents.pendingReview}
                 active={data.documents.pendingReview > 0}
                 variant="warning"
@@ -1458,7 +1588,7 @@ function ProcessingActivitySection() {
             {/* Document status breakdown */}
             {Object.keys(data.documents.byStatus).length > 0 && (
               <div>
-                <p className="mb-2 text-sm font-medium">Documents by Status</p>
+                <p className="mb-2 text-sm font-medium">{t("settings.documentsByStatus")}</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(data.documents.byStatus).map(
                     ([status, count]) => (
@@ -1496,10 +1626,10 @@ function ProcessingActivitySection() {
 
             {/* Recent jobs */}
             <div>
-              <p className="mb-2 text-sm font-medium">Recent Jobs</p>
+              <p className="mb-2 text-sm font-medium">{t("settings.recentJobs")}</p>
               {data.recentJobs.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  No processing jobs yet.
+                  {t("settings.noProcessingJobs")}
                 </p>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto">
@@ -1528,7 +1658,7 @@ function ProcessingActivitySection() {
                           {job.documentId.slice(0, 8)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatJobTime(job.createdAt)}
+                          {formatJobTime(job.createdAt, language, t)}
                         </p>
                       </div>
                     </div>
@@ -1667,16 +1797,17 @@ function WatchFolderFieldReview({
   isLoading: boolean;
   isError: boolean;
 }) {
+  const { t } = useI18n();
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading extracted fields...</p>;
+    return <p className="text-sm text-muted-foreground">{t("settings.loadingExtractedFields")}</p>;
   }
 
   if (isError) {
-    return <p className="text-sm text-destructive">Failed to load extracted fields.</p>;
+    return <p className="text-sm text-destructive">{t("settings.failedToLoadExtractedFields")}</p>;
   }
 
   if (!document) {
-    return <p className="text-sm text-muted-foreground">No extracted fields available yet.</p>;
+    return <p className="text-sm text-muted-foreground">{t("settings.noExtractedFieldsYet")}</p>;
   }
 
   const requiredFields =
@@ -1685,7 +1816,7 @@ function WatchFolderFieldReview({
   if (requiredFields.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Key field extraction is not available for this document yet.
+        {t("settings.keyFieldExtractionUnavailable")}
       </p>
     );
   }
@@ -1703,14 +1834,14 @@ function WatchFolderFieldReview({
       {document.metadata.reviewEvidence?.confidence != null && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>
-            Confidence:{" "}
+            {t("settings.confidence")}:{" "}
             <span className={confidenceTextClass(document.metadata.reviewEvidence.confidence)}>
               {(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%
             </span>
           </span>
           {document.metadata.reviewEvidence.confidenceThreshold != null && (
             <span>
-              Threshold: {(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%
+              {t("settings.threshold")}: {(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%
             </span>
           )}
         </div>
@@ -1718,7 +1849,7 @@ function WatchFolderFieldReview({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-md border bg-background/70 p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Found values
+            {t("settings.foundValues")}
           </p>
           <div className="mt-2 space-y-2">
             {foundFields.length > 0 ? (
@@ -1731,13 +1862,13 @@ function WatchFolderFieldReview({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">No key fields found yet.</p>
+              <p className="text-sm text-muted-foreground">{t("settings.noKeyFieldsFound")}</p>
             )}
           </div>
         </div>
         <div className="rounded-md border bg-background/70 p-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Missing key fields
+            {t("settings.missingKeyFields")}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {missingFields.size > 0 ? (
@@ -1747,7 +1878,7 @@ function WatchFolderFieldReview({
                 </Badge>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">None missing.</p>
+              <p className="text-sm text-muted-foreground">{t("settings.noneMissing")}</p>
             )}
           </div>
         </div>
@@ -1762,18 +1893,18 @@ function confidenceTextClass(confidence: number): string {
   return "font-medium text-red-600";
 }
 
-function formatJobTime(dateStr: string): string {
+function formatJobTime(dateStr: string, language: AppLanguage, t: Translate): string {
   try {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec < 60) return `${diffSec}s ago`;
+    if (diffSec < 60) return `${diffSec}${t("settings.secondsAgo")}`;
     const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffMin < 60) return `${diffMin}${t("settings.minutesAgo")}`;
     const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h ago`;
-    return format(date, "MMM d, HH:mm");
+    if (diffHr < 24) return `${diffHr}${t("settings.hoursAgo")}`;
+    return format(date, language === "de" ? "d. MMM, HH:mm" : "MMM d, HH:mm");
   } catch {
     return dateStr;
   }
@@ -1837,12 +1968,13 @@ function resolveChatProvider(cfg: ProviderConfig): {
 }
 
 function AiProvidersSection() {
+  const { language, t } = useI18n();
   const healthQuery = useQuery({
     queryKey: ["health"],
     queryFn: async () => {
       const { data, error, response } = await api.GET("/api/health");
       if (!response.ok || error || !data) {
-        throw error ?? new Error("Failed to fetch health");
+        throw error ?? new Error(t("settings.failedToFetchHealth"));
       }
       return data as HealthResponse;
     },
@@ -1854,7 +1986,7 @@ function AiProvidersSection() {
     queryFn: async () => {
       const { data, error, response } = await api.GET("/api/health/providers");
       if (!response.ok || error || !data) {
-        throw error ?? new Error("Failed to fetch providers");
+        throw error ?? new Error(t("settings.failedToFetchProviders"));
       }
       return data as HealthProvidersResponse;
     },
@@ -1878,24 +2010,24 @@ function AiProvidersSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Brain className="h-5 w-5" />
-          AI & Providers
+          {t("settings.aiProviders")}
         </CardTitle>
         <CardDescription>
-          Configured AI providers for chat, embeddings, and document parsing
+          {t("settings.aiProvidersDescription")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         {healthQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading provider configuration...
+            {t("settings.loadingProviderConfiguration")}
           </div>
         )}
 
         {healthQuery.isError && (
           <div className="flex items-center gap-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
-            Unable to load provider configuration
+            {t("settings.unableToLoadProviderConfiguration")}
           </div>
         )}
 
@@ -1903,7 +2035,7 @@ function AiProvidersSection() {
           <>
             {/* Active Chat Model */}
             <div>
-              <p className="mb-2 text-sm font-medium">Chat Model</p>
+              <p className="mb-2 text-sm font-medium">{t("settings.chatModel")}</p>
               {activeChat ? (
                 <div className="flex items-center justify-between rounded-md border px-3 py-2">
                   <div className="flex items-center gap-2">
@@ -1913,19 +2045,19 @@ function AiProvidersSection() {
                       <Badge variant="secondary">{activeChat.model}</Badge>
                     )}
                   </div>
-                  <Badge variant="success">active</Badge>
+                  <Badge variant="success">{t("settings.active")}</Badge>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
                   <AlertCircle className="h-4 w-4" />
-                  No chat provider configured. Set `ACTIVE_CHAT_PROVIDER` with matching provider credentials, or configure any supported chat provider key.
+                  {t("settings.noChatProviderConfigured")}
                 </div>
               )}
             </div>
 
             {/* All Chat Providers */}
             <div>
-              <p className="mb-2 text-sm font-medium">Chat Providers</p>
+              <p className="mb-2 text-sm font-medium">{t("settings.chatProviders")}</p>
               <div className="space-y-2">
                 {chatProviders.map((p) => (
                   <div
@@ -1944,7 +2076,7 @@ function AiProvidersSection() {
                       )}
                     </div>
                     <Badge variant={p.hasKey ? "success" : "secondary"}>
-                      {p.hasKey ? "configured" : "not configured"}
+                      {p.hasKey ? t("settings.configured") : t("settings.notConfigured")}
                     </Badge>
                   </div>
                 ))}
@@ -1956,7 +2088,7 @@ function AiProvidersSection() {
             {/* Embedding Providers */}
             {providersQuery.data && (
               <div>
-                <p className="mb-2 text-sm font-medium">Embedding Providers</p>
+                <p className="mb-2 text-sm font-medium">{t("settings.embeddingProviders")}</p>
                 <div className="space-y-2">
                   {providersQuery.data.embeddingProviders.map((ep) => (
                     <div
@@ -1978,10 +2110,10 @@ function AiProvidersSection() {
                       </div>
                       <div className="flex items-center gap-2">
                         {ep.id === cfg.activeEmbeddingProvider && (
-                          <Badge variant="success">active</Badge>
+                          <Badge variant="success">{t("settings.active")}</Badge>
                         )}
                         <Badge variant={ep.available ? "success" : "secondary"}>
-                          {ep.available ? "available" : "not configured"}
+                          {ep.available ? t("settings.available") : t("settings.notConfigured")}
                         </Badge>
                       </div>
                     </div>
@@ -1995,7 +2127,7 @@ function AiProvidersSection() {
             {/* Parse Providers */}
             {providersQuery.data && (
               <div>
-                <p className="mb-2 text-sm font-medium">Parse Providers</p>
+                <p className="mb-2 text-sm font-medium">{t("settings.parseProviders")}</p>
                 <div className="space-y-2">
                   {providersQuery.data.parseProviders.map((pp) => (
                     <div
@@ -2014,13 +2146,13 @@ function AiProvidersSection() {
                       </div>
                       <div className="flex items-center gap-2">
                         {pp.id === cfg.activeParseProvider && (
-                          <Badge variant="success">active</Badge>
+                          <Badge variant="success">{t("settings.active")}</Badge>
                         )}
                         {pp.id === cfg.fallbackParseProvider && (
-                          <Badge variant="warning">fallback</Badge>
+                          <Badge variant="warning">{t("settings.fallback")}</Badge>
                         )}
                         <Badge variant={pp.available ? "success" : "secondary"}>
-                          {pp.available ? "available" : "not configured"}
+                          {pp.available ? t("settings.available") : t("settings.notConfigured")}
                         </Badge>
                       </div>
                     </div>
@@ -2032,7 +2164,7 @@ function AiProvidersSection() {
             {/* Processing mode */}
             <Separator />
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Processing Mode</span>
+              <span className="text-sm text-muted-foreground">{t("settings.processingMode")}</span>
               <Badge variant="outline">{cfg.mode}</Badge>
             </div>
           </>
@@ -2045,12 +2177,13 @@ function AiProvidersSection() {
 // --- System Health ---
 
 function SystemHealthSection() {
+  const { t } = useI18n();
   const healthQuery = useQuery({
     queryKey: ["health"],
     queryFn: async () => {
       const { data, error, response } = await api.GET("/api/health");
       if (!response.ok || error || !data) {
-        throw error ?? new Error("Failed to fetch health");
+        throw error ?? new Error(t("settings.failedToFetchHealth"));
       }
       return data as HealthResponse;
     },
@@ -2062,7 +2195,7 @@ function SystemHealthSection() {
     queryFn: async () => {
       const { data, error, response } = await api.GET("/api/health/ready");
       if (!response.ok || error || !data) {
-        throw error ?? new Error("Failed to fetch readiness");
+        throw error ?? new Error(t("settings.failedToFetchReadiness"));
       }
       return data as ReadinessResponse;
     },
@@ -2074,23 +2207,23 @@ function SystemHealthSection() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Server className="h-5 w-5" />
-          System Health
+          {t("settings.systemHealth")}
         </CardTitle>
-        <CardDescription>Server status and readiness checks</CardDescription>
+        <CardDescription>{t("settings.systemHealthDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Health status */}
         {healthQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Checking health...
+            {t("settings.checkingHealth")}
           </div>
         )}
 
         {healthQuery.isError && (
           <div className="flex items-center gap-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4" />
-            Unable to reach server
+            {t("settings.unableToReachServer")}
           </div>
         )}
 
@@ -2106,7 +2239,7 @@ function SystemHealthSection() {
             />
             <div>
               <p className="text-sm font-medium">
-                Server:{" "}
+                {t("settings.server")}:{" "}
                 <span className="capitalize">{healthQuery.data.status}</span>
               </p>
             </div>
@@ -2117,7 +2250,7 @@ function SystemHealthSection() {
         {readinessQuery.isLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Running readiness checks...
+            {t("settings.runningReadinessChecks")}
           </div>
         )}
 
@@ -2125,7 +2258,7 @@ function SystemHealthSection() {
           <>
             <Separator />
             <div>
-              <p className="mb-2 text-sm font-medium">Readiness Checks</p>
+              <p className="mb-2 text-sm font-medium">{t("settings.readinessChecks")}</p>
               <div className="space-y-2">
                 {Object.entries(readinessQuery.data.checks).map(
                   ([name, healthy]) => (
@@ -2142,7 +2275,7 @@ function SystemHealthSection() {
                         <span className="text-sm capitalize">{name}</span>
                       </div>
                       <Badge variant={healthy ? "success" : "destructive"}>
-                        {healthy ? "ok" : "fail"}
+                        {healthy ? t("settings.ok") : t("settings.fail")}
                       </Badge>
                     </div>
                   ),

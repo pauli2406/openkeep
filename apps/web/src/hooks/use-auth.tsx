@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   api,
+  authFetch,
   setTokens,
   clearTokens,
   hasTokens,
@@ -16,11 +17,18 @@ import {
 } from "@/lib/api";
 import type { QueryClient } from "@tanstack/react-query";
 
+interface UserLanguagePreferences {
+  uiLanguage: "en" | "de";
+  aiProcessingLanguage: "en" | "de";
+  aiChatLanguage: "en" | "de";
+}
+
 interface User {
   id: string;
   email: string;
   displayName: string;
   isOwner: boolean;
+  preferences: UserLanguagePreferences;
 }
 
 export interface AuthState {
@@ -34,6 +42,7 @@ export interface AuthState {
     password: string,
     displayName: string,
   ) => Promise<void>;
+  updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => void;
 }
 
@@ -138,6 +147,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updatePreferences = useCallback(async (preferences: UserLanguagePreferences) => {
+    const response = await authFetch("/api/auth/me/preferences", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(preferences),
+    });
+
+    if (!response.ok) {
+      let message = "Failed to update preferences";
+      try {
+        const payload = (await response.json()) as { message?: string | string[] };
+        if (typeof payload.message === "string") {
+          message = payload.message;
+        } else if (Array.isArray(payload.message) && payload.message.length > 0) {
+          message = payload.message.join(", ");
+        }
+      } catch {
+        // ignore JSON parse issues
+      }
+      throw new Error(message);
+    }
+
+    const userData = (await response.json()) as User;
+    setUser(userData);
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -147,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         needsSetup,
         login,
         setup,
+        updatePreferences,
         logout,
       }}
     >

@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -11,6 +11,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
+import { I18nProvider, useI18n } from "./src/i18n";
+import { OfflineArchiveProvider, useOfflineArchive } from "./src/offline-archive";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { DocumentDetailScreen } from "./src/screens/DocumentDetailScreen";
 import { DocumentsScreen } from "./src/screens/DocumentsScreen";
@@ -47,6 +49,7 @@ function HomeTabs() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Dashboard");
+  const { t } = useI18n();
 
   const showFab = activeTab !== "Settings";
 
@@ -91,10 +94,26 @@ function HomeTabs() {
           },
         })}
       >
-        <Tabs.Screen name="Dashboard" component={DashboardScreen} />
-        <Tabs.Screen name="Documents" component={DocumentsScreen} />
-        <Tabs.Screen name="Search" component={SearchScreen} />
-        <Tabs.Screen name="Settings" component={SettingsScreen} />
+        <Tabs.Screen
+          name="Dashboard"
+          component={DashboardScreen}
+          options={{ title: t("tabs.dashboard"), tabBarLabel: t("tabs.dashboard") }}
+        />
+        <Tabs.Screen
+          name="Documents"
+          component={DocumentsScreen}
+          options={{ title: t("tabs.documents"), tabBarLabel: t("tabs.documents") }}
+        />
+        <Tabs.Screen
+          name="Search"
+          component={SearchScreen}
+          options={{ title: t("tabs.search"), tabBarLabel: t("tabs.search") }}
+        />
+        <Tabs.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: t("tabs.settings"), tabBarLabel: t("tabs.settings") }}
+        />
       </Tabs.Navigator>
 
       {showFab ? (
@@ -115,13 +134,14 @@ function HomeTabs() {
 
 function AppNavigator() {
   const auth = useAuth();
+  const { t } = useI18n();
 
   if (auth.isLoading) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingTitle}>Loading OpenKeep</Text>
-        <Text style={styles.loadingText}>Restoring your mobile archive session.</Text>
+        <Text style={styles.loadingTitle}>{t("app.loadingTitle")}</Text>
+        <Text style={styles.loadingText}>{t("app.loadingText")}</Text>
       </SafeAreaView>
     );
   }
@@ -146,49 +166,121 @@ function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
-      <Stack.Screen
-        name="DocumentDetail"
-        component={DocumentDetailScreen}
-        options={({ route }) => ({
-          title: route.params.title ?? "Document",
-        })}
-      />
-      <Stack.Screen
-        name="Review"
-        component={ReviewScreen}
-        options={{ title: "Review queue" }}
-      />
-      <Stack.Screen
-        name="Scan"
-        component={ScanScreen}
-        options={{ title: "Scan & upload" }}
-      />
-      <Stack.Screen
-        name="Correspondents"
-        component={CorrespondentsScreen}
-        options={{ title: "Correspondents" }}
-      />
-      <Stack.Screen
-        name="CorrespondentDossier"
-        component={CorrespondentDossierScreen}
-        options={({ route }) => ({
-          title: route.params.name,
-        })}
-      />
-    </Stack.Navigator>
+    <>
+      <AutoSyncManager />
+      <Stack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.surface },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
+        <Stack.Screen
+          name="DocumentDetail"
+          component={DocumentDetailScreen}
+          options={({ route }) => ({
+            title: route.params.title ?? t("screens.document"),
+          })}
+        />
+        <Stack.Screen
+          name="Review"
+          component={ReviewScreen}
+          options={{ title: t("screens.reviewQueue") }}
+        />
+        <Stack.Screen
+          name="Scan"
+          component={ScanScreen}
+          options={{ title: t("screens.scanUpload") }}
+        />
+        <Stack.Screen
+          name="Correspondents"
+          component={CorrespondentsScreen}
+          options={{ title: t("screens.correspondents") }}
+        />
+        <Stack.Screen
+          name="CorrespondentDossier"
+          component={CorrespondentDossierScreen}
+          options={({ route }) => ({
+            title: route.params.name,
+          })}
+        />
+      </Stack.Navigator>
+    </>
   );
 }
 
+function AutoSyncManager() {
+  const auth = useAuth();
+  const offline = useOfflineArchive();
+  const wasConnectedRef = useRef(offline.isConnected);
+  const lastAutoSyncAtRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const justReconnected = !wasConnectedRef.current && offline.isConnected;
+    wasConnectedRef.current = offline.isConnected;
+
+    if (
+      !auth.isAuthenticated ||
+      !offline.isReady ||
+      !offline.isConnected ||
+      !auth.apiUrl ||
+      offline.isSyncing ||
+      !offline.summary ||
+      !justReconnected
+    ) {
+      return;
+    }
+
+    if (lastAutoSyncAtRef.current === offline.summary.lastSyncedAt) {
+      return;
+    }
+
+    lastAutoSyncAtRef.current = offline.summary.lastSyncedAt;
+    void offline
+      .checkArchiveReachability(auth.probeServer, auth.apiUrl)
+      .then((isReachable) => {
+        if (!isReachable) {
+          throw new Error("Archive unreachable");
+        }
+        return offline.syncArchive(auth.authFetch);
+      })
+      .catch(() => {
+        lastAutoSyncAtRef.current = null;
+      });
+  }, [
+    auth.apiUrl,
+    auth.authFetch,
+    auth.isAuthenticated,
+    auth.probeServer,
+    offline.checkArchiveReachability,
+    offline.isConnected,
+    offline.isReady,
+    offline.isSyncing,
+    offline.summary,
+    offline.syncArchive,
+  ]);
+
+  return null;
+}
+
 function Root() {
+  return (
+    <GestureHandlerRootView style={styles.flex}>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <AppShell />
+          </AuthProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function AppShell() {
+  const auth = useAuth();
   const theme = useMemo(
     () => ({
       ...DefaultTheme,
@@ -206,18 +298,14 @@ function Root() {
   );
 
   return (
-    <GestureHandlerRootView style={styles.flex}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <NavigationContainer theme={theme}>
-              <StatusBar style="dark" />
-              <AppNavigator />
-            </NavigationContainer>
-          </AuthProvider>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <I18nProvider language={auth.user?.preferences.uiLanguage}>
+      <OfflineArchiveProvider>
+        <NavigationContainer theme={theme}>
+          <StatusBar style="dark" />
+          <AppNavigator />
+        </NavigationContainer>
+      </OfflineArchiveProvider>
+    </I18nProvider>
   );
 }
 

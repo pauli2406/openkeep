@@ -7,7 +7,13 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { apiTokens, documentTypes, users } from "@openkeep/db";
-import type { AuthTokens, CreateApiTokenInput, LoginInput, SetupOwnerInput } from "@openkeep/types";
+import type {
+  AuthTokens,
+  CreateApiTokenInput,
+  LoginInput,
+  SetupOwnerInput,
+  UpdateUserLanguagePreferences,
+} from "@openkeep/types";
 import { and, count, eq, sql } from "drizzle-orm";
 import { compare, hash } from "bcryptjs";
 import { createHash, randomBytes } from "crypto";
@@ -107,6 +113,9 @@ export class AuthService implements OnModuleInit {
         email: users.email,
         displayName: users.displayName,
         isOwner: users.isOwner,
+        uiLanguage: users.uiLanguage,
+        aiProcessingLanguage: users.aiProcessingLanguage,
+        aiChatLanguage: users.aiChatLanguage,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -117,7 +126,37 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException("User not found");
     }
 
-    return user;
+    return {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      isOwner: user.isOwner,
+      preferences: {
+        uiLanguage: user.uiLanguage,
+        aiProcessingLanguage: user.aiProcessingLanguage,
+        aiChatLanguage: user.aiChatLanguage,
+      },
+      createdAt: user.createdAt,
+    };
+  }
+
+  async updatePreferences(
+    principal: AuthenticatedPrincipal,
+    input: UpdateUserLanguagePreferences,
+  ) {
+    this.assertInteractiveUser(principal);
+
+    await this.databaseService.db
+      .update(users)
+      .set({
+        uiLanguage: input.uiLanguage,
+        aiProcessingLanguage: input.aiProcessingLanguage,
+        aiChatLanguage: input.aiChatLanguage,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, principal.userId));
+
+    return this.getMe(principal);
   }
 
   async createApiToken(

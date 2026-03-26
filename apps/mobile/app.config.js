@@ -1,6 +1,9 @@
-{
+const IS_DEV = process.env.APP_VARIANT === 'development';
+
+export default {
   "expo": {
     "name": "OpenKeep",
+    name: IS_DEV ? 'OpenKeep (Dev)' : 'OpenKeep',
     "slug": "openkeep-mobile",
     "scheme": "openkeep",
     "platforms": [
@@ -25,14 +28,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.openkeep.mobile",
+      "bundleIdentifier": IS_DEV ? "com.openkeep.mobile.dev" : "com.openkeep.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "OpenKeep uses the camera to scan paper documents into your archive."
       },
       "appleTeamId": "6DTWU4679K"
     },
     "android": {
-      "package": "com.openkeep.mobile",
+      "package": IS_DEV ? "com.openkeep.mobile.dev" : "com.openkeep.mobile",
       "permissions": [
         "android.permission.CAMERA"
       ],
@@ -47,4 +50,4 @@
       }
     }
   }
-}
+};

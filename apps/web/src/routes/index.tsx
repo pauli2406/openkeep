@@ -12,6 +12,7 @@ import {
 import { api, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { fetchDashboardInsights, formatCurrency } from "@/lib/explorer";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { DashboardDeadlineItem, MonthlyActivityPoint } from "@openkeep/types";
 
@@ -108,6 +109,7 @@ function ClusterStrip({
     currency: string | null;
   }>;
 }) {
+  const { t } = useI18n();
   if (items.length === 0) {
     return (
       <div className="flex min-h-40 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
@@ -168,10 +170,12 @@ function TaskTable({
   onComplete: (documentId: string) => void;
   error: string | null;
 }) {
+  const { t } = useI18n();
+
   if (items.length === 0) {
     return (
       <div className="flex min-h-44 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
-        No tasks in view
+        {t("dashboard.noTasksInView")}
       </div>
     );
   }
@@ -179,12 +183,12 @@ function TaskTable({
   return (
     <div className="overflow-hidden rounded-[1.7rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
       <div className="grid grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] gap-4 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper-strong)] px-4 py-3 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
-        <span>Correspondent</span>
-        <span>Document</span>
-        <span>What to do</span>
-        <span>Amount</span>
-        <span>Deadline</span>
-        <span>Action</span>
+        <span>{t("dashboard.correspondent")}</span>
+        <span>{t("dashboard.document")}</span>
+        <span>{t("dashboard.whatToDo")}</span>
+        <span>{t("dashboard.amount")}</span>
+        <span>{t("dashboard.deadline")}</span>
+        <span>{t("dashboard.action")}</span>
       </div>
       <div className="divide-y divide-[color:var(--explorer-border)]">
         {items.map((item) => {
@@ -199,10 +203,10 @@ function TaskTable({
             >
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">
-                  {item.correspondentName ?? "Unfiled"}
+                  {item.correspondentName ?? t("dashboard.unfiled")}
                 </p>
                 <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[color:var(--explorer-muted)]">
-                  {item.documentTypeName ?? "Document"}
+                  {item.documentTypeName ?? t("dashboard.documentFallback")}
                 </p>
               </div>
               <Link
@@ -219,9 +223,9 @@ function TaskTable({
               <div className="text-sm text-[color:var(--explorer-ink)]">
                 <p>{formatTaskDateLabel(item.dueDate)}</p>
                 <p className="mt-1 text-xs text-[color:var(--explorer-muted)]">
-                  {item.isOverdue
-                    ? `${Math.abs(item.daysUntilDue)}d overdue`
-                    : `${item.daysUntilDue}d left`}
+                    {item.isOverdue
+                      ? `${Math.abs(item.daysUntilDue)}${t("dashboard.overdueDays")}`
+                      : `${item.daysUntilDue}${t("dashboard.daysLeft")}`}
                 </p>
               </div>
               <div>
@@ -234,7 +238,7 @@ function TaskTable({
                   className="w-full rounded-full md:w-auto"
                 >
                   <Check className="h-4 w-4" />
-                  {isCompleting ? "Saving..." : "Done"}
+                  {isCompleting ? t("dashboard.saving") : t("dashboard.done")}
                 </Button>
               </div>
             </div>
@@ -251,6 +255,7 @@ function TaskTable({
 }
 
 function DashboardPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const insightsQuery = useQuery({
     queryKey: ["dashboard", "insights"],
@@ -265,7 +270,7 @@ function DashboardPage() {
         body: { taskCompletedAt: new Date().toISOString() },
       });
       if (error) {
-        throw new Error(getApiErrorMessage(error, "Failed to complete task"));
+        throw new Error(getApiErrorMessage(error, t("dashboard.failedToCompleteTask")));
       }
       return data;
     },
@@ -275,17 +280,17 @@ function DashboardPage() {
   });
 
   if (insightsQuery.isLoading) {
-    return <LoadingBlock label="Loading dashboard atlas" />;
+    return <LoadingBlock label={t("dashboard.loadingAtlas")} />;
   }
 
   if (insightsQuery.isError || !insightsQuery.data) {
     return (
       <div className="p-6 md:p-8">
         <ErrorBlock
-          label="Failed to load dashboard insights. Please try again."
+          label={t("dashboard.failedToLoadInsights")}
           action={
             <Button variant="outline" onClick={() => insightsQuery.refetch()}>
-              Retry
+              {t("dashboard.retry")}
             </Button>
           }
         />
@@ -302,30 +307,30 @@ function DashboardPage() {
   return (
     <div className="space-y-8 p-6 md:p-8">
       <ExplorerSectionHeader
-        eyebrow="Document Atlas"
+        eyebrow={t("dashboard.eyebrow")}
         title="Dashboard"
-        description="A high-level reading room for your archive: who sends documents, what is due next, and how the archive has shifted over the last year."
+        description={t("dashboard.description")}
       />
 
       <MetricRibbon
         items={[
           {
-            label: "Total Documents",
+            label: t("dashboard.totalDocuments"),
             value: data.stats.totalDocuments.toLocaleString(),
             tone: "neutral",
           },
           {
-            label: "Pending Review",
+            label: t("dashboard.pendingReview"),
             value: data.stats.pendingReview.toLocaleString(),
             tone: data.stats.pendingReview > 0 ? "rust" : "neutral",
           },
           {
-            label: "Document Types",
+            label: t("dashboard.documentTypes"),
             value: data.stats.documentTypesCount.toLocaleString(),
             tone: "cobalt",
           },
           {
-            label: "Correspondents",
+            label: t("dashboard.correspondents"),
             value: data.stats.correspondentsCount.toLocaleString(),
             tone: "neutral",
           },
@@ -336,15 +341,15 @@ function DashboardPage() {
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
-              Intake Trend
-            </p>
-            <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
-              12-month rhythm
-            </h2>
+               {t("dashboard.intakeTrend")}
+             </p>
+             <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+               {t("dashboard.rhythm")}
+             </h2>
           </div>
           <Button asChild variant="ghost" className="rounded-full">
             <Link to="/documents" search={{ view: "timeline" }}>
-              Open timeline
+              {t("dashboard.openTimeline")}
             </Link>
           </Button>
         </div>
@@ -355,16 +360,16 @@ function DashboardPage() {
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
-              Correspondents
-            </p>
-            <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
-              Largest clusters
-            </h2>
+               {t("dashboard.correspondents")}
+             </p>
+             <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+               {t("dashboard.largestClusters")}
+             </h2>
           </div>
           <Button asChild variant="ghost" className="rounded-full">
             <Link to="/documents" search={{ view: "galaxy" }}>
               <Sparkles className="h-4 w-4" />
-              Open galaxy view
+              {t("dashboard.openGalaxyView")}
             </Link>
           </Button>
         </div>
@@ -375,11 +380,11 @@ function DashboardPage() {
       <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-5">
           <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
-            Deadlines
-          </p>
-          <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
-            Upcoming tasks
-          </h2>
+             {t("dashboard.deadlines")}
+           </p>
+           <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+             {t("dashboard.upcomingTasks")}
+           </h2>
         </div>
         <TaskTable
           items={taskItems}

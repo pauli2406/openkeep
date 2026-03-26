@@ -7,6 +7,8 @@ import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Card, EmptyState, ErrorCard, Field, Pill, Screen, SectionTitle } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors } from "../theme";
 import { formatCurrency, formatDate, titleForDocument, type SearchDocumentsResponse } from "../lib";
@@ -15,9 +17,42 @@ const statuses = ["all", "pending", "processing", "ready", "failed"] as const;
 
 export function DocumentsScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
+
+  function statusFilterLabel(value: (typeof statuses)[number]) {
+    switch (value) {
+      case "all":
+        return t("documents.filter.all");
+      case "pending":
+        return t("documents.filter.pending");
+      case "processing":
+        return t("documents.filter.processing");
+      case "ready":
+        return t("documents.filter.ready");
+      case "failed":
+        return t("documents.filter.failed");
+    }
+  }
+
+  function statusPillLabel(value: string) {
+    switch (value) {
+      case "pending":
+        return t("documents.docStatus.pending");
+      case "processing":
+        return t("documents.docStatus.processing");
+      case "ready":
+        return t("documents.docStatus.ready");
+      case "failed":
+        return t("documents.docStatus.failed");
+      default:
+        return value;
+    }
+  }
+
   const params = useMemo(() => {
     const search = new URLSearchParams();
     search.set("page", "1");
@@ -32,39 +67,46 @@ export function DocumentsScreen() {
   }, [query, status]);
 
   const documentsQuery = useQuery({
-    queryKey: ["documents", auth.apiUrl, params],
+    queryKey: ["documents", auth.apiUrl, params, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     queryFn: async () => {
-      const response = await auth.authFetch(`/api/documents?${params}`);
-      if (!response.ok) {
-        throw new Error("Failed to load documents.");
+      if (offline.shouldUseOffline) {
+        return offline.loadDocuments({ query, status });
       }
-      return (await response.json()) as SearchDocumentsResponse;
+
+        const response = await auth.authFetch(`/api/documents?${params}`);
+        if (!response.ok) {
+        throw new Error(t("documents.loadError"));
+        }
+        return (await response.json()) as SearchDocumentsResponse;
     },
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   return (
-    <Screen title="Documents" subtitle="Search across your archive and jump straight into document detail.">
+    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")}>
       <Card>
-        <Field label="Query" value={query} onChangeText={setQuery} placeholder="Search title, OCR text, or metadata" />
-        <SectionTitle title="Status" hint="A light mobile filter for the first MVP release." />
+        <Field label={t("documents.query")} value={query} onChangeText={setQuery} placeholder={t("documents.placeholder")} />
+        {offline.shouldUseOffline ? <Text style={styles.helper}>{t("documents.offlineBrowsing")}</Text> : null}
+        <SectionTitle title={t("documents.status")} hint={t("documents.statusHint")} />
         <View style={styles.filterRow}>
           {statuses.map((value) => (
             <Pressable key={value} onPress={() => setStatus(value)} style={[styles.filterChip, status === value ? styles.filterChipActive : null]}>
-              <Text style={[styles.filterText, status === value ? styles.filterTextActive : null]}>{value}</Text>
-            </Pressable>
-          ))}
-        </View>
+               <Text style={[styles.filterText, status === value ? styles.filterTextActive : null]}>{statusFilterLabel(value)}</Text>
+              </Pressable>
+            ))}
+          </View>
       </Card>
 
-      {documentsQuery.isLoading ? <Card><Text style={styles.helper}>Loading documents...</Text></Card> : null}
-      {documentsQuery.isError ? <ErrorCard message="Your documents could not be loaded." onRetry={() => documentsQuery.refetch()} /> : null}
+      {documentsQuery.isLoading ? <Card><Text style={styles.helper}>{t("documents.loading")}</Text></Card> : null}
+      {documentsQuery.isError ? <ErrorCard message={t("documents.loadError")} onRetry={() => documentsQuery.refetch()} /> : null}
 
       {documentsQuery.data ? (
         <>
-          <SectionTitle title={`${documentsQuery.data.total} results`} hint="Tap a document to inspect OCR, metadata, history, and actions." />
+          <SectionTitle title={`${documentsQuery.data.total} ${t("documents.results")}`} hint={t("documents.resultsHint")} />
           {documentsQuery.data.items.length === 0 ? (
-            <EmptyState title="No documents found" body="Try a different query or clear the status filter." />
+            <EmptyState title={t("documents.noneTitle")} body={t("documents.noneBody")} />
           ) : (
             documentsQuery.data.items.map((document) => (
               <Pressable
@@ -75,13 +117,13 @@ export function DocumentsScreen() {
                 <Card>
                   <View style={styles.titleRow}>
                     <Text style={styles.title}>{titleForDocument(document)}</Text>
-                    <Pill label={document.status} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
+                    <Pill label={statusPillLabel(document.status)} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
                   </View>
                   <DocumentProcessingIndicator document={document} />
-                  <Text style={styles.helper}>{document.correspondent?.name ?? "Unfiled"} • {document.documentType?.name ?? "Document"}</Text>
-                  <Text style={styles.detailLine}>Created {formatDate(document.createdAt)}</Text>
+                  <Text style={styles.helper}>{document.correspondent?.name ?? t("documents.unfiled")} • {document.documentType?.name ?? t("documents.document")}</Text>
+                  <Text style={styles.detailLine}>{`${t("documents.created")} ${formatDate(document.createdAt)}`}</Text>
                   <Text style={styles.detailLine}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>
-                  {document.reviewStatus === "pending" ? <Pill label="Needs review" tone="warning" /> : null}
+                  {document.reviewStatus === "pending" ? <Pill label={t("documents.needsReview")} tone="warning" /> : null}
                 </Card>
               </Pressable>
             ))

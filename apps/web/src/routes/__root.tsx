@@ -25,33 +25,31 @@ import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, type RouterContext } from "@/hooks/use-auth";
 import { Omnibar } from "@/components/omnibar/omnibar";
-
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/documents", label: "Documents", icon: FileText },
-  { to: "/review", label: "Review", icon: ClipboardCheck },
-  { to: "/search", label: "Search", icon: Search },
-  { to: "/upload", label: "Upload", icon: Upload },
-] as const;
-
-const bottomNavItems = [
-  { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+import { useI18n } from "@/lib/i18n";
 
 function RootComponent() {
   const auth = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const publicPaths = ["/login", "/setup"];
   const isPublicRoute = publicPaths.some((path) => location.pathname === path);
+  const navItems = [
+    { to: "/", label: t("root.nav.dashboard"), icon: LayoutDashboard },
+    { to: "/documents", label: t("root.nav.documents"), icon: FileText },
+    { to: "/review", label: t("root.nav.review"), icon: ClipboardCheck },
+    { to: "/search", label: t("root.nav.search"), icon: Search },
+    { to: "/upload", label: t("root.nav.upload"), icon: Upload },
+  ] as const;
+  const bottomNavItems = [{ to: "/settings", label: t("root.nav.settings"), icon: Settings }] as const;
 
   if (auth.isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-muted-foreground">{t("root.loading")}</p>
         </div>
       </div>
     );
@@ -123,7 +121,7 @@ function RootComponent() {
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4" />
-          Logout
+          {t("root.nav.logout")}
         </Button>
       </div>
     </>
@@ -158,7 +156,7 @@ function RootComponent() {
               onClick={() => setMobileMenuOpen(false)}
             >
               <X className="h-5 w-5" />
-              <span className="sr-only">Close menu</span>
+              <span className="sr-only">{t("root.menu.close")}</span>
             </Button>
           </div>
           {sidebarContent}
@@ -174,7 +172,7 @@ function RootComponent() {
               onClick={() => setMobileMenuOpen(true)}
             >
               <Menu className="h-5 w-5" />
-              <span className="sr-only">Open menu</span>
+              <span className="sr-only">{t("root.menu.open")}</span>
             </Button>
             <div className="flex items-center gap-2">
               <OpenKeepLogo markClassName="h-7 w-7" wordmarkClassName="text-xl" />

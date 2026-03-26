@@ -1,5 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
-import type { AnswerCitation, AnswerQueryResponse, SemanticSearchResult } from "@openkeep/types";
+import type {
+  AppLanguage,
+  AnswerCitation,
+  AnswerQueryResponse,
+  SemanticSearchResult,
+} from "@openkeep/types";
 
 import type { AnswerProvider } from "./provider.types";
 import { ExtractiveAnswerProvider } from "./extractive-answer.provider";
@@ -18,6 +23,7 @@ export class LlmAnswerProvider implements AnswerProvider {
     question: string;
     results: SemanticSearchResult[];
     maxCitations: number;
+    responseLanguage?: AppLanguage | null;
   }): Promise<{
     status: AnswerQueryResponse["status"];
     answer: string | null;
@@ -40,7 +46,7 @@ export class LlmAnswerProvider implements AnswerProvider {
       };
     }
 
-    const messages = this.buildMessages(input.question, context.prompt);
+    const messages = this.buildMessages(input.question, context.prompt, input.responseLanguage);
     const answer = await this.llmService.complete({
       messages,
       temperature: 0.1,
@@ -64,6 +70,7 @@ export class LlmAnswerProvider implements AnswerProvider {
     question: string;
     results: SemanticSearchResult[];
     maxCitations: number;
+    responseLanguage?: AppLanguage | null;
   }): AsyncGenerator<LlmStreamChunk & { citations?: AnswerCitation[] }> {
     if (!this.llmService.isConfigured()) {
       const result = await this.extractiveProvider.answer(input);
@@ -81,7 +88,7 @@ export class LlmAnswerProvider implements AnswerProvider {
       return;
     }
 
-    const messages = this.buildMessages(input.question, context.prompt);
+    const messages = this.buildMessages(input.question, context.prompt, input.responseLanguage);
 
     const stream = this.llmService.stream({
       messages,
@@ -184,7 +191,14 @@ export class LlmAnswerProvider implements AnswerProvider {
     };
   }
 
-  private buildMessages(question: string, context: string) {
+  private buildMessages(question: string, context: string, responseLanguage?: AppLanguage | null) {
+    const targetLanguageInstruction =
+      responseLanguage === "de"
+        ? "- Answer in German."
+        : responseLanguage === "en"
+          ? "- Answer in English."
+          : "- Answer in the same language as the question (e.g., German question = German answer).";
+
     return [
       {
         role: "system" as const,
@@ -196,7 +210,7 @@ export class LlmAnswerProvider implements AnswerProvider {
           "- If the excerpts do not contain enough information, clearly state that.",
           '- Cite sources inline using the format [Document: "Title", Page: N] when referencing specific information.',
           "- Be concise and direct. Avoid unnecessary preamble.",
-          "- Answer in the same language as the question (e.g., German question = German answer).",
+          targetLanguageInstruction,
           "- When multiple documents corroborate the same fact, mention the agreement.",
           "- If amounts, dates, or key terms are present, include them precisely.",
         ].join("\n"),

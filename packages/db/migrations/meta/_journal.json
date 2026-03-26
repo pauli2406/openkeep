@@ -78,6 +78,13 @@
       "when": 1774380204927,
       "tag": "0011_dashboard_task_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1774684800000,
+      "tag": "0012_user_language_preferences",
+      "breakpoints": true
     }
   ]
 }

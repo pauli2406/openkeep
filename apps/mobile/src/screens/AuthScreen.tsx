@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Field, Screen } from "../components/ui";
 import { useAuth } from "../auth";
+import { useI18n } from "../i18n";
 import { colors } from "../theme";
 
 type Mode = "login" | "setup";
 
 export function AuthScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [apiUrl, setApiUrl] = useState(auth.apiUrl || "http://localhost:3000");
   const [displayName, setDisplayName] = useState("");
@@ -23,17 +25,17 @@ export function AuthScreen() {
     try {
       if (mode === "setup") {
         if (password.length < 12) {
-          throw new Error("Password must be at least 12 characters.");
+          throw new Error(t("auth.errorPasswordLength"));
         }
         if (password !== confirmPassword) {
-          throw new Error("Passwords do not match.");
+          throw new Error(t("auth.errorPasswordsMatch"));
         }
         await auth.setup({ apiUrl, displayName, email, password });
       } else {
         await auth.login({ apiUrl, email, password });
       }
     } catch (value) {
-      setError(value instanceof Error ? value.message : "Authentication failed.");
+      setError(value instanceof Error ? value.message : t("auth.errorGeneric"));
     } finally {
       setBusy(false);
     }
@@ -41,20 +43,22 @@ export function AuthScreen() {
 
   return (
     <Screen
-      title="Archive in your pocket"
-      subtitle="Point the app at your OpenKeep server, then sign in or create the initial owner account."
+      title={t("auth.title")}
+      subtitle={t("auth.subtitle")}
       contentContainerStyle={styles.content}
       headerVariant="compact"
     >
       <Card>
         <View style={styles.introRow}>
           <View style={styles.introBadge}>
-            <Text style={styles.introBadgeText}>{mode === "setup" ? "First-time setup" : "Secure sign-in"}</Text>
+            <Text style={styles.introBadgeText}>
+              {mode === "setup" ? t("auth.setupBadge") : t("auth.signInBadge")}
+            </Text>
           </View>
           <Text style={styles.introText}>
             {mode === "setup"
-              ? "Create the owner account that will manage this archive."
-              : "Use the same server URL and account credentials as your OpenKeep workspace."}
+              ? t("auth.setupIntro")
+              : t("auth.signInIntro")}
           </Text>
         </View>
 
@@ -70,14 +74,14 @@ export function AuthScreen() {
               ]}
             >
               <Text style={[styles.segmentText, mode === value ? styles.segmentTextActive : null]}>
-                {value === "login" ? "Sign in" : "Setup"}
+                {value === "login" ? t("auth.signIn") : t("auth.setup")}
               </Text>
             </Pressable>
           ))}
         </View>
 
         <Field
-          label="Server URL"
+          label={t("auth.serverUrl")}
           value={apiUrl}
           onChangeText={setApiUrl}
           keyboardType="url"
@@ -86,11 +90,11 @@ export function AuthScreen() {
         />
 
         {mode === "setup" ? (
-          <Field label="Display name" value={displayName} onChangeText={setDisplayName} />
+          <Field label={t("auth.displayName")} value={displayName} onChangeText={setDisplayName} />
         ) : null}
 
         <Field
-          label="Email"
+          label={t("auth.email")}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -98,15 +102,15 @@ export function AuthScreen() {
           placeholder="you@example.com"
         />
         <Field
-          label="Password"
+          label={t("auth.password")}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder={mode === "setup" ? "Minimum 12 characters" : "Your account password"}
+          placeholder={mode === "setup" ? t("auth.passwordMin") : t("auth.passwordPlaceholder")}
         />
         {mode === "setup" ? (
           <Field
-            label="Confirm password"
+            label={t("auth.confirmPassword")}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -116,7 +120,7 @@ export function AuthScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button
-          label={mode === "setup" ? "Create owner account" : "Sign in"}
+          label={mode === "setup" ? t("auth.createOwner") : t("auth.signIn")}
           onPress={handleSubmit}
           loading={busy}
         />

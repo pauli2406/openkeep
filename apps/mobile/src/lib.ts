@@ -266,6 +266,7 @@ export type ArchiveDocument = {
   latestProcessingJob: ProcessingJobSummary | null;
   metadata: DocumentMetadata;
   processedAt: string | null;
+  updatedAt: string;
   snippets?: string[];
 };
 

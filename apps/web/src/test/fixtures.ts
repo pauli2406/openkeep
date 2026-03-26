@@ -19,12 +19,22 @@ export function makeUser(overrides: Partial<{
   email: string;
   displayName: string;
   isOwner: boolean;
+  preferences: {
+    uiLanguage: "en" | "de";
+    aiProcessingLanguage: "en" | "de";
+    aiChatLanguage: "en" | "de";
+  };
 }> = {}) {
   return {
     id: "11111111-1111-1111-1111-111111111111",
     email: "owner@example.com",
     displayName: "Owner",
     isOwner: true,
+    preferences: {
+      uiLanguage: "en",
+      aiProcessingLanguage: "en",
+      aiChatLanguage: "en",
+    },
     ...overrides,
   };
 }

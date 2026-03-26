@@ -13,6 +13,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import Pdf from "react-native-pdf";
 import { Buffer } from "buffer";
+import { useI18n } from "../i18n";
 import { colors, shadow } from "../theme";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,8 @@ type ViewerProps = {
   documentId: string;
   mimeType: string;
   searchablePdfAvailable: boolean;
+  localFileUri?: string | null;
+  offlineMode?: boolean;
   /** Pre-fetched OCR text blocks (optional). Falls back to fetching. */
   textBlocks?: Array<{ page: number; text: string }>;
 };
@@ -91,8 +94,11 @@ export function DocumentViewer({
   documentId,
   mimeType,
   searchablePdfAvailable,
+  localFileUri,
+  offlineMode = false,
   textBlocks,
 }: ViewerProps) {
+  const { t } = useI18n();
   const [fileState, setFileState] = useState<FileState>({ status: "idle" });
   const [textContent, setTextContent] = useState<string | null>(null);
 
@@ -100,8 +106,21 @@ export function DocumentViewer({
 
   // Download file to local cache for PDF/image rendering
   const downloadFile = useCallback(async () => {
+    if (offlineMode && !localFileUri) {
+      setFileState({ status: "error", message: t("documentViewer.offlineFileMissing") });
+      return;
+    }
+
     setFileState({ status: "loading" });
     try {
+      if (localFileUri) {
+        const info = await FileSystem.getInfoAsync(localFileUri);
+        if (info.exists) {
+          setFileState({ status: "ready", uri: localFileUri });
+          return;
+        }
+      }
+
       // For PDFs, prefer searchable version when available
       const endpoint =
         isPdf(mimeType) && searchablePdfAvailable
@@ -123,17 +142,32 @@ export function DocumentViewer({
       );
       setFileState({ status: "ready", uri });
     } catch (err) {
-      setFileState({
-        status: "error",
-        message: err instanceof Error ? err.message : "Failed to download file",
-      });
-    }
-  }, [authFetch, documentId, mimeType, searchablePdfAvailable]);
+        setFileState({
+          status: "error",
+          message: err instanceof Error ? err.message : t("documentViewer.downloadFailed"),
+        });
+      }
+  }, [authFetch, documentId, localFileUri, mimeType, offlineMode, searchablePdfAvailable, t]);
 
   // For text files, fetch as text
   const fetchText = useCallback(async () => {
+    if (offlineMode && !localFileUri) {
+      setFileState({ status: "error", message: t("documentViewer.offlineTextMissing") });
+      return;
+    }
+
     setFileState({ status: "loading" });
     try {
+      if (localFileUri) {
+        const info = await FileSystem.getInfoAsync(localFileUri);
+        if (info.exists) {
+          const text = await FileSystem.readAsStringAsync(localFileUri);
+          setTextContent(text);
+          setFileState({ status: "ready", uri: localFileUri });
+          return;
+        }
+      }
+
       const response = await authFetch(
         `/api/documents/${documentId}/download`,
       );
@@ -142,12 +176,12 @@ export function DocumentViewer({
       setTextContent(text);
       setFileState({ status: "ready", uri: "" });
     } catch (err) {
-      setFileState({
-        status: "error",
-        message: err instanceof Error ? err.message : "Failed to load text",
-      });
-    }
-  }, [authFetch, documentId]);
+        setFileState({
+          status: "error",
+          message: err instanceof Error ? err.message : t("documentViewer.loadTextFailed"),
+        });
+      }
+  }, [authFetch, documentId, localFileUri, offlineMode, t]);
 
   // Auto-load on mount when previewable
   useEffect(() => {
@@ -162,6 +196,18 @@ export function DocumentViewer({
   // Fallback: share to external app
   const handleShare = useCallback(async () => {
     try {
+      if (localFileUri) {
+        const info = await FileSystem.getInfoAsync(localFileUri);
+        if (info.exists) {
+          await Sharing.shareAsync(localFileUri);
+          return;
+        }
+      }
+
+      if (offlineMode) {
+        throw new Error(t("documentViewer.shareOfflineMissing"));
+      }
+
       setFileState({ status: "loading" });
       const response = await authFetch(
         `/api/documents/${documentId}/download`,
@@ -180,10 +226,10 @@ export function DocumentViewer({
     } catch (err) {
       setFileState({
         status: "error",
-        message: err instanceof Error ? err.message : "Share failed",
+        message: err instanceof Error ? err.message : t("documentViewer.shareFailed"),
       });
     }
-  }, [authFetch, documentId, mimeType]);
+  }, [authFetch, documentId, localFileUri, mimeType, offlineMode, t]);
 
   // ---- Unsupported type fallback ----
   if (!canPreview) {
@@ -194,9 +240,9 @@ export function DocumentViewer({
             {mimeType.split("/")[1]?.toUpperCase().slice(0, 5) ?? "FILE"}
           </Text>
         </View>
-        <Text style={styles.fallbackTitle}>Preview not available</Text>
+        <Text style={styles.fallbackTitle}>{t("documentViewer.previewUnavailable")}</Text>
         <Text style={styles.fallbackBody}>
-          {mimeType} files cannot be previewed inline yet.
+          {`${mimeType} ${t("documentViewer.inlinePreviewUnsupported")}`}
         </Text>
         <Pressable
           style={({ pressed }) => [
@@ -208,7 +254,7 @@ export function DocumentViewer({
           {fileState.status === "loading" ? (
             <ActivityIndicator color={colors.primary} size="small" />
           ) : (
-            <Text style={styles.shareButtonText}>Share to open</Text>
+            <Text style={styles.shareButtonText}>{t("documentViewer.shareToOpen")}</Text>
           )}
         </Pressable>
       </View>
@@ -220,7 +266,7 @@ export function DocumentViewer({
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.loadingText}>Loading preview...</Text>
+        <Text style={styles.loadingText}>{t("documentViewer.loadingPreview")}</Text>
       </View>
     );
   }
@@ -240,7 +286,7 @@ export function DocumentViewer({
             else void downloadFile();
           }}
         >
-          <Text style={styles.shareButtonText}>Retry</Text>
+          <Text style={styles.shareButtonText}>{t("documentViewer.retry")}</Text>
         </Pressable>
       </View>
     );
@@ -266,7 +312,7 @@ export function DocumentViewer({
           ]}
           onPress={() => void Sharing.shareAsync(fileState.uri)}
         >
-          <Text style={styles.shareButtonText}>Share PDF</Text>
+          <Text style={styles.shareButtonText}>{t("documentViewer.sharePdf")}</Text>
         </Pressable>
       </View>
     );
@@ -289,7 +335,7 @@ export function DocumentViewer({
           ]}
           onPress={() => void Sharing.shareAsync(fileState.uri)}
         >
-          <Text style={styles.shareButtonText}>Share image</Text>
+          <Text style={styles.shareButtonText}>{t("documentViewer.shareImage")}</Text>
         </Pressable>
       </View>
     );

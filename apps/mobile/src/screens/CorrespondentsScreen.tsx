@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { Card, EmptyState, ErrorCard, Screen } from "../components/ui";
+import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import type { FacetsResponse } from "../lib";
@@ -15,14 +17,24 @@ import type { FacetsResponse } from "../lib";
 
 export function CorrespondentsScreen() {
   const auth = useAuth();
+  const { t } = useI18n();
+  const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl],
+    queryKey: ["document-facets", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        const cached = await offline.loadFacets();
+        if (!cached) {
+          throw new Error(t("correspondents.loadError"));
+        }
+        return cached;
+      }
+
       const response = await auth.authFetch("/api/documents/facets");
       if (!response.ok) {
-        throw new Error("Failed to load correspondents.");
+        throw new Error(t("correspondents.loadError"));
       }
       return (await response.json()) as FacetsResponse;
     },
@@ -38,29 +50,29 @@ export function CorrespondentsScreen() {
 
   return (
     <Screen
-      title="Correspondents"
-      subtitle="Everyone who sends or receives documents in your archive. Tap a correspondent to open their full dossier."
+      title={t("correspondents.title")}
+      subtitle={t("correspondents.subtitle")}
       headerVariant="compact"
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
     >
       {facetsQuery.isLoading ? (
         <Card>
-          <Text style={styles.loadingText}>Loading correspondents...</Text>
+          <Text style={styles.loadingText}>{t("correspondents.loading")}</Text>
         </Card>
       ) : null}
 
       {facetsQuery.isError ? (
         <ErrorCard
-          message="Could not load the correspondents list."
+          message={t("correspondents.loadError")}
           onRetry={() => facetsQuery.refetch()}
         />
       ) : null}
 
       {facetsQuery.data && sorted.length === 0 ? (
         <EmptyState
-          title="No correspondents yet"
-          body="Correspondents are created automatically when documents are processed."
+          title={t("correspondents.emptyTitle")}
+          body={t("correspondents.emptyBody")}
         />
       ) : null}
 
@@ -84,7 +96,7 @@ export function CorrespondentsScreen() {
                   {item.name}
                 </Text>
                 <Text style={styles.docCount}>
-                  {item.count} {item.count === 1 ? "document" : "documents"}
+                  {item.count} {item.count === 1 ? t("correspondents.document") : t("correspondents.documents")}
                 </Text>
               </View>
               <MaterialCommunityIcons

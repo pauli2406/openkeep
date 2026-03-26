@@ -250,6 +250,35 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(Array.isArray(documentsResponse.body.items)).toBe(true);
   });
 
+  it("updates user language preferences via PATCH /api/auth/me/preferences", async () => {
+    const response = await request(app.getHttpServer())
+      .patch("/api/auth/me/preferences")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        uiLanguage: "de",
+        aiProcessingLanguage: "de",
+        aiChatLanguage: "en",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.preferences).toEqual({
+      uiLanguage: "de",
+      aiProcessingLanguage: "de",
+      aiChatLanguage: "en",
+    });
+
+    const meResponse = await request(app.getHttpServer())
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.preferences).toEqual({
+      uiLanguage: "de",
+      aiProcessingLanguage: "de",
+      aiChatLanguage: "en",
+    });
+  });
+
   it("rejects invalid date filters before querying the database", async () => {
     const response = await request(app.getHttpServer())
       .get("/api/documents?dateFrom=2026-03-01&dateTo=2026-04-31")

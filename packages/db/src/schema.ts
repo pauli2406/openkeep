@@ -46,6 +46,11 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     displayName: varchar("display_name", { length: 255 }).notNull(),
     isOwner: boolean("is_owner").notNull().default(true),
+    uiLanguage: varchar("ui_language", { length: 8 }).notNull().default("en"),
+    aiProcessingLanguage: varchar("ai_processing_language", { length: 8 })
+      .notNull()
+      .default("en"),
+    aiChatLanguage: varchar("ai_chat_language", { length: 8 }).notNull().default("en"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

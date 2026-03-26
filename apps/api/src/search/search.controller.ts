@@ -9,6 +9,8 @@ import {
 import type { FastifyReply } from "fastify";
 
 import { AccessAuthGuard } from "../auth/access-auth.guard";
+import { CurrentPrincipal } from "../auth/current-principal.decorator";
+import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
   AnswerQueryDto,
   SearchDocumentsQueryDto,
@@ -52,14 +54,21 @@ export class SearchController {
 
   @Post("answer")
   @ApiCreatedResponse({ description: "Extractive answer with citations" })
-  async answerQuery(@Body() body: AnswerQueryDto) {
-    return this.documentsService.answerQuery(body);
+  async answerQuery(
+    @Body() body: AnswerQueryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.answerQuery(body, principal);
   }
 
   @Post("answer/stream")
   @ApiOperation({ summary: "Stream an LLM-generated answer for a search query via SSE" })
   @ApiCreatedResponse({ description: "SSE stream of answer tokens" })
-  async streamAnswer(@Body() body: AnswerQueryDto, @Res() reply: FastifyReply) {
+  async streamAnswer(
+    @Body() body: AnswerQueryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Res() reply: FastifyReply,
+  ) {
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
@@ -68,7 +77,7 @@ export class SearchController {
     });
 
     try {
-      for await (const chunk of this.documentsService.streamAnswer(body)) {
+      for await (const chunk of this.documentsService.streamAnswer(body, principal)) {
         reply.raw.write(chunk);
       }
     } catch (error) {

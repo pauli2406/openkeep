@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAnswerStream, linkifyCitations } from "@/hooks/use-answer-stream";
+import { useI18n } from "@/lib/i18n";
 
 type SearchParams = {
   q?: string;
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/search")({
 // ---------------------------------------------------------------------------
 
 function SearchPage() {
+  const { language } = useI18n();
   const { q } = Route.useSearch();
   const navigate = Route.useNavigate();
 
@@ -69,6 +71,41 @@ function SearchPage() {
     answerStream.status === "searching" || answerStream.status === "streaming";
   const hasAnswer =
     answerStream.status === "streaming" || answerStream.status === "done";
+  const copy = language === "de"
+    ? {
+        title: "Suche",
+        subtitle: "Hybride Schlagwort- und semantische Suche in deinem Archiv",
+        placeholder: "Frage dein Archiv...",
+        search: "Suchen",
+        aiAnswer: "KI-Antwort",
+        generating: "Wird erstellt...",
+        answerReady: "Antwort bereit",
+        error: "Fehler",
+        errorTitle: "Antwort konnte nicht erstellt werden",
+        retry: "Erneut versuchen",
+        searching: "Dein Archiv wird durchsucht und eine Antwort vorbereitet...",
+        sources: "Quellen",
+        insufficient: "Nicht genug Belege in deinem Archiv, um diese Frage sicher zu beantworten.",
+        emptyTitle: "Durchsuche dein Archiv",
+        emptyBody: "Gib eine Anfrage ein, um alle Dokumente zu durchsuchen. Die KI analysiert dein Archiv und liefert eine direkte Antwort mit Quellen.",
+      }
+    : {
+        title: "Search",
+        subtitle: "Hybrid keyword + semantic search across your archive",
+        placeholder: "Ask your archive...",
+        search: "Search",
+        aiAnswer: "AI Answer",
+        generating: "Generating...",
+        answerReady: "Answer ready",
+        error: "Error",
+        errorTitle: "Could not generate an answer",
+        retry: "Retry",
+        searching: "Searching your archive and preparing an answer...",
+        sources: "Sources",
+        insufficient: "Not enough evidence in your archive to answer this question confidently.",
+        emptyTitle: "Search your archive",
+        emptyBody: "Enter a query to search across all your documents. The AI will analyze your archive and provide a direct answer with sources.",
+      };
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6 pb-20">
@@ -76,11 +113,11 @@ function SearchPage() {
       <header>
         <h1 className="flex items-center gap-2.5 text-3xl font-bold tracking-tight">
           <SearchIcon className="h-7 w-7 text-[var(--explorer-cobalt)]" />
-          Search
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Hybrid keyword + semantic search across your archive
-        </p>
+           {copy.title}
+         </h1>
+         <p className="mt-1 text-sm text-muted-foreground">
+           {copy.subtitle}
+         </p>
       </header>
 
       {/* ─── Search bar ─── */}
@@ -90,7 +127,7 @@ function SearchPage() {
           <Input
             name="search"
             defaultValue={searchTerm}
-            placeholder="Ask your archive..."
+            placeholder={copy.placeholder}
             className="h-11 rounded-xl border-[var(--explorer-border-strong)] bg-card pl-10 text-[15px] shadow-sm transition-shadow focus-visible:shadow-md"
           />
         </div>
@@ -102,7 +139,7 @@ function SearchPage() {
           {isStreaming ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            "Search"
+            copy.search
           )}
         </Button>
       </form>
@@ -133,16 +170,16 @@ function SearchPage() {
             </span>
             <span className="flex-1">
               <span className="text-sm font-semibold text-foreground">
-                AI Answer
-              </span>
-              <span className="ml-2 text-xs text-muted-foreground">
-                {isStreaming
-                  ? "Generating..."
-                  : answerStream.status === "done"
-                    ? "Answer ready"
-                    : answerStream.status === "error"
-                      ? "Error"
-                      : ""}
+                 {copy.aiAnswer}
+               </span>
+               <span className="ml-2 text-xs text-muted-foreground">
+                 {isStreaming
+                   ? copy.generating
+                   : answerStream.status === "done"
+                     ? copy.answerReady
+                     : answerStream.status === "error"
+                       ? copy.error
+                       : ""}
               </span>
             </span>
             {isStreaming && (
@@ -163,7 +200,7 @@ function SearchPage() {
                 <div className="flex items-start gap-3 rounded-xl border border-[var(--explorer-rust-soft)] bg-[var(--explorer-rust-soft)] px-4 py-3">
                   <X className="mt-0.5 h-4 w-4 shrink-0 text-[var(--explorer-rust)]" />
                   <div className="flex-1 text-sm text-[var(--explorer-rust)]">
-                    <p className="font-medium">Could not generate an answer</p>
+                    <p className="font-medium">{copy.errorTitle}</p>
                     <p className="mt-0.5 text-xs opacity-80">
                       {answerStream.errorMessage}
                     </p>
@@ -174,7 +211,7 @@ function SearchPage() {
                     onClick={handleRetry}
                     className="shrink-0"
                   >
-                    Retry
+                    {copy.retry}
                   </Button>
                 </div>
               )}
@@ -185,7 +222,7 @@ function SearchPage() {
                   <div className="flex items-center gap-2.5">
                     <Loader2 className="h-5 w-5 animate-spin text-[var(--explorer-cobalt)]" />
                     <span className="text-sm text-muted-foreground">
-                      Searching your archive and preparing an answer...
+                      {copy.searching}
                     </span>
                   </div>
                   {/* Text skeletons */}
@@ -289,7 +326,7 @@ function SearchPage() {
                     <div className="space-y-2.5 border-t border-[var(--explorer-border)] pt-4">
                       <p className="flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         <Quote className="h-3 w-3" />
-                        Sources
+                        {copy.sources}
                       </p>
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         {answerStream.citations.map((cit, i) => (
@@ -330,8 +367,7 @@ function SearchPage() {
                   {answerStream.status === "done" &&
                     !answerStream.answerText && (
                       <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
-                        Not enough evidence in your archive to answer this
-                        question confidently.
+                        {copy.insufficient}
                       </div>
                     )}
                 </div>
@@ -348,11 +384,10 @@ function SearchPage() {
             <SearchIcon className="h-7 w-7 text-[var(--explorer-cobalt)]" />
           </div>
           <p className="mt-5 text-lg font-semibold text-foreground">
-            Search your archive
+            {copy.emptyTitle}
           </p>
           <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
-            Enter a query to search across all your documents. The AI will
-            analyze your archive and provide a direct answer with sources.
+            {copy.emptyBody}
           </p>
         </div>
       )}

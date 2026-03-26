@@ -248,6 +248,7 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: "SSE stream of summary tokens" })
   async streamDocumentSummary(
     @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query("force") force: string | undefined,
     @Res() reply: FastifyReply,
   ) {
@@ -260,7 +261,7 @@ export class DocumentsController {
     });
 
     try {
-      for await (const chunk of this.documentsService.streamDocumentSummary(id, forceRegenerate)) {
+      for await (const chunk of this.documentsService.streamDocumentSummary(id, principal, forceRegenerate)) {
         reply.raw.write(chunk);
       }
     } catch (error) {
@@ -277,6 +278,7 @@ export class DocumentsController {
   async streamDocumentAnswer(
     @Param("id") id: string,
     @Body() body: DocumentAskDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res() reply: FastifyReply,
   ) {
     reply.raw.writeHead(200, {
@@ -287,7 +289,7 @@ export class DocumentsController {
     });
 
     try {
-      for await (const chunk of this.documentsService.streamDocumentAnswer(id, body.question)) {
+      for await (const chunk of this.documentsService.streamDocumentAnswer(id, body.question, principal)) {
         reply.raw.write(chunk);
       }
     } catch (error) {

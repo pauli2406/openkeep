@@ -13,6 +13,7 @@ import {
   documents,
   processingJobs,
   tags,
+  users,
 } from "@openkeep/db";
 import {
   AnswerQueryResponse,
@@ -154,6 +155,7 @@ export class ProcessingService {
     const [record] = await this.databaseService.db
       .select({
         documentId: documents.id,
+        ownerUserId: documents.ownerUserId,
         title: documents.title,
         mimeType: documents.mimeType,
         metadata: documents.metadata,
@@ -209,6 +211,7 @@ export class ProcessingService {
         title: record.title,
         mimeType: record.mimeType,
         parsed,
+        preferredLanguage: await this.getUserAiProcessingLanguage(record.ownerUserId),
       });
       this.metricsService.observeMetadataExtractionDuration(
         (Date.now() - extractionStartedAt) / 1000,
@@ -532,6 +535,7 @@ export class ProcessingService {
     question: string;
     results: SemanticSearchResult[];
     maxCitations: number;
+    responseLanguage?: "en" | "de" | null;
   }): Promise<Pick<AnswerQueryResponse, "status" | "answer" | "reasoning" | "citations">> {
     return this.answerProvider.answer(input);
   }
@@ -1629,5 +1633,15 @@ export class ProcessingService {
       rawNameNormalized:
         typeof extraction.rawNameNormalized === "string" ? extraction.rawNameNormalized : null,
     };
+  }
+
+  private async getUserAiProcessingLanguage(userId: string): Promise<"en" | "de"> {
+    const [user] = await this.databaseService.db
+      .select({ aiProcessingLanguage: users.aiProcessingLanguage })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    return user?.aiProcessingLanguage === "de" ? "de" : "en";
   }
 }

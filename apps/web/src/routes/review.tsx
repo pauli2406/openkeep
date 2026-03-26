@@ -32,6 +32,7 @@ import {
   Inbox,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useI18n } from "@/lib/i18n";
 
 function formatReviewReason(reason: string): string {
   return reason
@@ -90,6 +91,7 @@ function getFieldValue(document: Document, field: string): string | null {
 }
 
 function ReviewFieldPanel({ item }: { item: Document }) {
+  const { language } = useI18n();
   const requiredFields =
     item.metadata?.reviewEvidence?.requiredFields ?? item.documentType?.requiredFields ?? [];
 
@@ -105,6 +107,28 @@ function ReviewFieldPanel({ item }: { item: Document }) {
     .map((field) => ({ field, value: getFieldValue(item, field) }))
     .filter((entry) => !missingFieldSet.has(entry.field) && entry.value !== null);
 
+  const copy = language === "de"
+    ? {
+        verify: "Extrahierte Felder prufen",
+        missingCount: (count: number) => `${count} fehlen`,
+        allFound: "Alle Pflichtfelder gefunden",
+        foundCount: (count: number) => `${count} gefunden`,
+        foundValues: "Gefundene Werte",
+        noValues: "Noch keine Pflichtwerte gefunden.",
+        missingFields: "Fehlende Pflichtfelder",
+        noneMissing: "Keine fehlen.",
+      }
+    : {
+        verify: "Verify extracted fields",
+        missingCount: (count: number) => `${count} missing`,
+        allFound: "All key fields found",
+        foundCount: (count: number) => `${count} found`,
+        foundValues: "Found values",
+        noValues: "No required values found yet.",
+        missingFields: "Missing key fields",
+        noneMissing: "None missing.",
+      };
+
   return (
     <details
       className="mt-4 rounded-2xl border border-border/70 bg-background/70"
@@ -112,15 +136,15 @@ function ReviewFieldPanel({ item }: { item: Document }) {
     >
       <summary className="cursor-pointer list-none px-4 py-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium text-foreground">Verify extracted fields</span>
+          <span className="font-medium text-foreground">{copy.verify}</span>
           <Badge variant={missingFields.length > 0 ? "warning" : "success"}>
             {missingFields.length > 0
-              ? `${missingFields.length} missing`
-              : "All key fields found"}
+              ? copy.missingCount(missingFields.length)
+              : copy.allFound}
           </Badge>
           {foundFields.length > 0 && (
             <span className="text-xs text-muted-foreground">
-              {foundFields.length} found
+              {copy.foundCount(foundFields.length)}
             </span>
           )}
         </div>
@@ -128,7 +152,7 @@ function ReviewFieldPanel({ item }: { item: Document }) {
       <div className="grid gap-3 border-t border-border/60 px-4 py-4 md:grid-cols-2">
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Found values
+            {copy.foundValues}
           </p>
           {foundFields.length > 0 ? (
             foundFields.map(({ field, value }) => (
@@ -138,12 +162,12 @@ function ReviewFieldPanel({ item }: { item: Document }) {
               </div>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">No required values found yet.</p>
+            <p className="text-sm text-muted-foreground">{copy.noValues}</p>
           )}
         </div>
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Missing key fields
+            {copy.missingFields}
           </p>
           {missingFields.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -155,7 +179,7 @@ function ReviewFieldPanel({ item }: { item: Document }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">None missing.</p>
+            <p className="text-sm text-muted-foreground">{copy.noneMissing}</p>
           )}
         </div>
       </div>
@@ -168,9 +192,54 @@ export const Route = createFileRoute("/review")({
 });
 
 function ReviewPage() {
+  const { language } = useI18n();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [reasonFilter, setReasonFilter] = useState<ReviewReason | "all">("all");
+
+  const copy = language === "de"
+    ? {
+        fetchError: "Prufungswarteschlange konnte nicht geladen werden",
+        loadFailed: "Die Prufungswarteschlange konnte nicht geladen werden. Bitte versuche es erneut.",
+        retry: "Erneut versuchen",
+        title: "Prufungswarteschlange",
+        pendingDocs: (count: number) => `${count} ${count === 1 ? "Dokument" : "Dokumente"} warten auf Prufung`,
+        filterByReason: "Nach Grund filtern",
+        allReasons: "Alle Grunde",
+        allCaughtUp: "Alles erledigt!",
+        noReview: "Keine Dokumente brauchen eine Prufung",
+        noMatching: "Keine passenden Dokumente",
+        noMatchFilter: "Keine Dokumente passen zum gewahlten Filter",
+        clearFilter: "Filter zurucksetzen",
+        untitled: "Unbenanntes Dokument",
+        resolve: "Abschliessen",
+        requeue: "Neu einreihen",
+        confidence: "Konfidenz",
+        previous: "Zuruck",
+        next: "Weiter",
+        page: (page: number, totalPages: number) => `Seite ${page} von ${totalPages}`,
+      }
+    : {
+        fetchError: "Failed to fetch review queue",
+        loadFailed: "Failed to load review queue. Please try again.",
+        retry: "Retry",
+        title: "Review Queue",
+        pendingDocs: (count: number) => `${count} ${count === 1 ? "document" : "documents"} pending review`,
+        filterByReason: "Filter by reason",
+        allReasons: "All reasons",
+        allCaughtUp: "All caught up!",
+        noReview: "No documents need review",
+        noMatching: "No matching documents",
+        noMatchFilter: "No documents match the selected filter",
+        clearFilter: "Clear filter",
+        untitled: "Untitled Document",
+        resolve: "Resolve",
+        requeue: "Requeue",
+        confidence: "Confidence",
+        previous: "Previous",
+        next: "Next",
+        page: (page: number, totalPages: number) => `Page ${page} of ${totalPages}`,
+      };
 
   const reviewQuery = useQuery({
     queryKey: ["documents", "review", page],
@@ -184,7 +253,7 @@ function ReviewPage() {
         },
       });
       if (!response.ok || error || !data) {
-        throw new Error("Failed to fetch review queue");
+        throw new Error(copy.fetchError);
       }
       return data;
     },
@@ -232,10 +301,10 @@ function ReviewPage() {
       <div className="flex h-96 flex-col items-center justify-center gap-4">
         <AlertTriangle className="h-8 w-8 text-destructive" />
         <p className="text-sm text-muted-foreground">
-          Failed to load review queue. Please try again.
+          {copy.loadFailed}
         </p>
         <Button variant="outline" onClick={() => reviewQuery.refetch()}>
-          Retry
+          {copy.retry}
         </Button>
       </div>
     );
@@ -266,10 +335,10 @@ function ReviewPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
             <ClipboardCheck className="h-7 w-7" />
-            Review Queue
+            {copy.title}
           </h1>
           <p className="text-muted-foreground">
-            {total} {total === 1 ? "document" : "documents"} pending review
+            {copy.pendingDocs(total)}
           </p>
         </div>
 
@@ -280,10 +349,10 @@ function ReviewPage() {
             onValueChange={(value) => setReasonFilter(value as ReviewReason | "all")}
           >
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by reason" />
+              <SelectValue placeholder={copy.filterByReason} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All reasons</SelectItem>
+              <SelectItem value="all">{copy.allReasons}</SelectItem>
               {Array.from(allReasons).map((reason) => (
                 <SelectItem key={reason} value={reason}>
                   {reason}
@@ -301,26 +370,26 @@ function ReviewPage() {
             {total === 0 ? (
               <>
                 <CheckCircle className="h-12 w-12 text-emerald-500" />
-                <h3 className="mt-4 text-lg font-semibold">All caught up!</h3>
+                <h3 className="mt-4 text-lg font-semibold">{copy.allCaughtUp}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  No documents need review
+                  {copy.noReview}
                 </p>
               </>
             ) : (
               <>
                 <Inbox className="h-12 w-12 text-muted-foreground" />
                 <h3 className="mt-4 text-lg font-semibold">
-                  No matching documents
+                  {copy.noMatching}
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  No documents match the selected filter
+                  {copy.noMatchFilter}
                 </p>
                 <Button
                   variant="outline"
                   className="mt-4"
                   onClick={() => setReasonFilter("all")}
                 >
-                  Clear filter
+                  {copy.clearFilter}
                 </Button>
               </>
             )}
@@ -343,7 +412,7 @@ function ReviewPage() {
                     >
                       <span className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        {item.title || "Untitled Document"}
+                        {item.title || copy.untitled}
                       </span>
                     </Link>
                   </CardTitle>
@@ -391,7 +460,7 @@ function ReviewPage() {
                     ) : (
                       <CheckCircle className="h-4 w-4" />
                     )}
-                    Resolve
+                    {copy.resolve}
                   </Button>
                   <Button
                     size="sm"
@@ -407,7 +476,7 @@ function ReviewPage() {
                     ) : (
                       <RotateCcw className="h-4 w-4" />
                     )}
-                    Requeue
+                    {copy.requeue}
                   </Button>
                 </div>
               </div>
@@ -423,7 +492,7 @@ function ReviewPage() {
                 ))}
                 {item.confidence !== null && item.confidence !== undefined && (
                   <Badge variant="secondary">
-                    Confidence: {Math.round(item.confidence * 100)}%
+                    {copy.confidence}: {Math.round(item.confidence * 100)}%
                   </Badge>
                 )}
                 {item.metadata?.intelligence?.routing?.documentType && (
@@ -462,10 +531,10 @@ function ReviewPage() {
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
           >
-            Previous
+            {copy.previous}
           </Button>
           <span className="text-sm text-muted-foreground">
-            Page {page} of {Math.ceil(total / 20)}
+            {copy.page(page, Math.ceil(total / 20))}
           </span>
           <Button
             variant="outline"
@@ -473,7 +542,7 @@ function ReviewPage() {
             disabled={page >= Math.ceil(total / 20)}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
+            {copy.next}
           </Button>
         </div>
       )}

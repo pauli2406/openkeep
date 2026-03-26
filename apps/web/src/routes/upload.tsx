@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { getAccessToken } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/upload")({
   component: UploadPage,
@@ -54,6 +55,7 @@ function formatFileSize(bytes: number): string {
 }
 
 function UploadPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -295,7 +297,7 @@ function UploadPage() {
                         onClick={() => removeFile(item.id)}
                       >
                         <X className="h-4 w-4" />
-                        <span className="sr-only">Remove</span>
+                        <span className="sr-only">{t("upload.remove")}</span>
                       </Button>
                     )}
                   </div>
@@ -306,13 +308,13 @@ function UploadPage() {
                         htmlFor={`title-${item.id}`}
                         className="text-xs text-muted-foreground"
                       >
-                        Title override (optional)
+                        {t("upload.titleOverrideOptional")}
                       </Label>
                       <Input
                         id={`title-${item.id}`}
                         value={item.titleOverride}
                         onChange={(e) => updateTitle(item.id, e.target.value)}
-                        placeholder="Auto-detected from content"
+                        placeholder={t("upload.autoDetectedFromContent")}
                         className="h-8 text-sm"
                       />
                     </div>
@@ -341,7 +343,7 @@ function UploadPage() {
             }}
             disabled={isUploading}
           >
-            Clear all
+            {t("upload.clearAll")}
           </Button>
           <Button
             onClick={() => uploadMutation.mutate()}
@@ -350,12 +352,12 @@ function UploadPage() {
             {isUploading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Uploading...
+                {t("upload.uploading")}
               </>
             ) : (
               <>
                 <UploadIcon className="h-4 w-4" />
-                Upload {pendingCount} {pendingCount === 1 ? "file" : "files"}
+                Upload {pendingCount} {pendingCount === 1 ? t("upload.file") : t("upload.files")}
               </>
             )}
           </Button>
@@ -367,15 +369,15 @@ function UploadPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <CheckCircle className="h-10 w-10 text-emerald-500" />
-            <h3 className="mt-3 text-lg font-semibold">Upload complete</h3>
+            <h3 className="mt-3 text-lg font-semibold">{t("upload.complete")}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {doneCount} {doneCount === 1 ? "document was" : "documents were"}{" "}
-              uploaded successfully
-              {errorCount > 0 && `, ${errorCount} failed`}
+              {doneCount} {doneCount === 1 ? t("upload.documentWas") : t("upload.documentsWere")}{" "}
+              {t("upload.uploadedSuccessfully")}
+              {errorCount > 0 && `, ${errorCount} ${t("upload.failed")}`}
             </p>
             <div className="mt-4 flex gap-2">
               <Button variant="outline" asChild>
-                <Link to="/documents">View documents</Link>
+                <Link to="/documents">{t("upload.viewDocuments")}</Link>
               </Button>
               <Button
                 onClick={() => {
@@ -383,7 +385,7 @@ function UploadPage() {
                   setAllDone(false);
                 }}
               >
-                Upload more
+                {t("upload.uploadMore")}
               </Button>
             </div>
           </CardContent>

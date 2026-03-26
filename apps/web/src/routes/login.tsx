@@ -7,12 +7,12 @@ import { Label } from "@/components/ui/label";
 import {
   Card,
   CardHeader,
-  CardTitle,
   CardDescription,
   CardContent,
   CardFooter,
 } from "@/components/ui/card";
 import { OpenKeepLogo } from "@/components/brand/openkeep-logo";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: ({ context }) => {
@@ -25,6 +25,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const auth = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -53,12 +54,12 @@ function LoginPage() {
           <div className="mb-4 flex justify-center">
             <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
           </div>
-          <CardDescription>Sign in to your document archive</CardDescription>
+          <CardDescription>{t("login.description")}</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("login.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -69,7 +70,7 @@ function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -84,15 +85,15 @@ function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? t("login.signingIn") : t("login.signIn")}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Need to set up?{" "}
+              {t("login.needSetup")} {" "}
               <Link
                 to="/setup"
                 className="text-primary underline-offset-4 hover:underline"
               >
-                Go to setup
+                {t("login.goToSetup")}
               </Link>
             </p>
           </CardFooter>
