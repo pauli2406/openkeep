@@ -27,7 +27,10 @@ type ViewerProps = {
   mimeType: string;
   searchablePdfAvailable: boolean;
   localFileUri?: string | null;
+  hasLocalFile?: boolean;
   offlineMode?: boolean;
+  canFetchOnline?: boolean;
+  onPersistOnlineFile?: () => Promise<string | null>;
   /** Pre-fetched OCR text blocks (optional). Falls back to fetching. */
   textBlocks?: Array<{ page: number; text: string }>;
 };
@@ -95,7 +98,10 @@ export function DocumentViewer({
   mimeType,
   searchablePdfAvailable,
   localFileUri,
+  hasLocalFile = Boolean(localFileUri),
   offlineMode = false,
+  canFetchOnline = true,
+  onPersistOnlineFile,
   textBlocks,
 }: ViewerProps) {
   const { t } = useI18n();
@@ -106,7 +112,7 @@ export function DocumentViewer({
 
   // Download file to local cache for PDF/image rendering
   const downloadFile = useCallback(async () => {
-    if (offlineMode && !localFileUri) {
+    if (offlineMode && !hasLocalFile) {
       setFileState({ status: "error", message: t("documentViewer.offlineFileMissing") });
       return;
     }
@@ -122,24 +128,32 @@ export function DocumentViewer({
       }
 
       // For PDFs, prefer searchable version when available
-      const endpoint =
-        isPdf(mimeType) && searchablePdfAvailable
-          ? `/api/documents/${documentId}/download/searchable`
-          : `/api/documents/${documentId}/download`;
+      const uri = onPersistOnlineFile
+        ? await onPersistOnlineFile()
+        : await (async () => {
+            const endpoint =
+              isPdf(mimeType) && searchablePdfAvailable
+                ? `/api/documents/${documentId}/download/searchable`
+                : `/api/documents/${documentId}/download`;
 
-      const response = await authFetch(endpoint);
-      if (!response.ok) {
-        throw new Error(`Download failed (${response.status})`);
+            const response = await authFetch(endpoint);
+            if (!response.ok) {
+              throw new Error(`Download failed (${response.status})`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const ext = extensionForMime(mimeType);
+            const nextUri = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}openkeep-preview-${documentId}${ext}`;
+            await FileSystem.writeAsStringAsync(
+              nextUri,
+              Buffer.from(arrayBuffer).toString("base64"),
+              { encoding: FileSystem.EncodingType.Base64 },
+            );
+            return nextUri;
+          })();
+      if (!uri) {
+        throw new Error(t("documentViewer.downloadFailed"));
       }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const ext = extensionForMime(mimeType);
-      const uri = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}openkeep-preview-${documentId}${ext}`;
-      await FileSystem.writeAsStringAsync(
-        uri,
-        Buffer.from(arrayBuffer).toString("base64"),
-        { encoding: FileSystem.EncodingType.Base64 },
-      );
       setFileState({ status: "ready", uri });
     } catch (err) {
         setFileState({
@@ -147,11 +161,11 @@ export function DocumentViewer({
           message: err instanceof Error ? err.message : t("documentViewer.downloadFailed"),
         });
       }
-  }, [authFetch, documentId, localFileUri, mimeType, offlineMode, searchablePdfAvailable, t]);
+  }, [authFetch, documentId, hasLocalFile, localFileUri, mimeType, offlineMode, onPersistOnlineFile, searchablePdfAvailable, t]);
 
   // For text files, fetch as text
   const fetchText = useCallback(async () => {
-    if (offlineMode && !localFileUri) {
+    if (offlineMode && !hasLocalFile) {
       setFileState({ status: "error", message: t("documentViewer.offlineTextMissing") });
       return;
     }
@@ -168,9 +182,18 @@ export function DocumentViewer({
         }
       }
 
-      const response = await authFetch(
-        `/api/documents/${documentId}/download`,
-      );
+      if (onPersistOnlineFile) {
+        const uri = await onPersistOnlineFile();
+        if (!uri) {
+          throw new Error(t("documentViewer.loadTextFailed"));
+        }
+        const text = await FileSystem.readAsStringAsync(uri);
+        setTextContent(text);
+        setFileState({ status: "ready", uri });
+        return;
+      }
+
+      const response = await authFetch(`/api/documents/${documentId}/download`);
       if (!response.ok) throw new Error(`Download failed (${response.status})`);
       const text = await response.text();
       setTextContent(text);
@@ -181,7 +204,7 @@ export function DocumentViewer({
           message: err instanceof Error ? err.message : t("documentViewer.loadTextFailed"),
         });
       }
-  }, [authFetch, documentId, localFileUri, offlineMode, t]);
+  }, [authFetch, documentId, hasLocalFile, localFileUri, offlineMode, onPersistOnlineFile, t]);
 
   // Auto-load on mount when previewable
   useEffect(() => {
@@ -272,6 +295,27 @@ export function DocumentViewer({
   }
 
   // ---- Error state ----
+  if (fileState.status === "error" && !offlineMode && !hasLocalFile && canFetchOnline) {
+    return (
+      <View style={styles.fallbackContainer}>
+        <Text style={styles.fallbackTitle}>{t("documentViewer.onlineFetchTitle")}</Text>
+        <Text style={styles.fallbackBody}>{t("documentViewer.onlineFetchBody")}</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.shareButton,
+            pressed ? styles.shareButtonPressed : null,
+          ]}
+          onPress={() => {
+            if (isText(mimeType)) void fetchText();
+            else void downloadFile();
+          }}
+        >
+          <Text style={styles.shareButtonText}>{t("documentViewer.fetchNow")}</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (fileState.status === "error") {
     return (
       <View style={styles.fallbackContainer}>

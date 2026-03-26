@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Card, EmptyState, ErrorCard, Field, Pill, Screen, SectionTitle } from "../components/ui";
+import { Button, Card, EmptyState, ErrorCard, Field, Pill, Screen, SectionTitle } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -22,6 +22,8 @@ export function DocumentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   function statusFilterLabel(value: (typeof statuses)[number]) {
     switch (value) {
@@ -84,11 +86,52 @@ export function DocumentsScreen() {
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
+  const indicatorsQuery = useQuery({
+    queryKey: ["document-offline-indicators", documentsQuery.data?.items.map((item) => item.id).join(","), offline.summary?.lastSyncedAt],
+    enabled: Boolean(documentsQuery.data?.items.length),
+    queryFn: () => offline.getDocumentIndicators(documentsQuery.data?.items.map((item) => item.id) ?? []),
+  });
+
+  async function handlePinSelected() {
+    const items = documentsQuery.data?.items.filter((document) => selectedIds.includes(document.id)) ?? [];
+    for (const document of items) {
+      await offline.setDocumentPinnedOffline(auth.authFetch, document, true);
+    }
+    setSelectedIds([]);
+    setSelectionMode(false);
+    await indicatorsQuery.refetch();
+    await documentsQuery.refetch();
+  }
+
+  function toggleSelected(documentId: string) {
+    setSelectedIds((current) => current.includes(documentId)
+      ? current.filter((id) => id !== documentId)
+      : [...current, documentId]);
+  }
+
   return (
     <Screen title={t("documents.title")} subtitle={t("documents.subtitle")}>
       <Card>
         <Field label={t("documents.query")} value={query} onChangeText={setQuery} placeholder={t("documents.placeholder")} />
         {offline.shouldUseOffline ? <Text style={styles.helper}>{t("documents.offlineBrowsing")}</Text> : null}
+        <View style={styles.selectionActions}>
+          <Button
+            label={selectionMode ? t("documents.cancelSelection") : t("documents.select")}
+            variant="secondary"
+            onPress={() => {
+              setSelectionMode((current) => !current);
+              setSelectedIds([]);
+            }}
+          />
+          {selectionMode ? (
+            <Button
+              label={t("documents.pinSelected")}
+              onPress={() => void handlePinSelected()}
+              disabled={selectedIds.length === 0}
+            />
+          ) : null}
+        </View>
+        {selectionMode ? <Text style={styles.helper}>{t("documents.selectionHint")}</Text> : null}
         <SectionTitle title={t("documents.status")} hint={t("documents.statusHint")} />
         <View style={styles.filterRow}>
           {statuses.map((value) => (
@@ -111,16 +154,28 @@ export function DocumentsScreen() {
             documentsQuery.data.items.map((document) => (
               <Pressable
                 key={document.id}
-                onPress={() => navigation.navigate("DocumentDetail", { documentId: document.id, title: titleForDocument(document) })}
+                onPress={() => selectionMode
+                  ? toggleSelected(document.id)
+                  : navigation.navigate("DocumentDetail", { documentId: document.id, title: titleForDocument(document) })}
                 style={({ pressed }) => [pressed ? styles.pressed : null]}
               >
-                <Card>
+                <Card style={selectedIds.includes(document.id) ? styles.selectedCard : undefined}>
                   <View style={styles.titleRow}>
                     <Text style={styles.title}>{titleForDocument(document)}</Text>
                     <Pill label={statusPillLabel(document.status)} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
                   </View>
                   <DocumentProcessingIndicator document={document} />
                   <Text style={styles.helper}>{document.correspondent?.name ?? t("documents.unfiled")} • {document.documentType?.name ?? t("documents.document")}</Text>
+                  <View style={styles.indicatorRow}>
+                    {indicatorsQuery.data?.get(document.id)?.hasLocalFile ? (
+                      <Pill label={t("documents.localFile")} tone="success" />
+                    ) : indicatorsQuery.data?.get(document.id) ? (
+                      <Pill label={t("documents.metadataOnly")} tone="warning" />
+                    ) : null}
+                    {indicatorsQuery.data?.get(document.id)?.isPinnedOffline ? (
+                      <Pill label={t("documents.pinnedOffline")} tone="default" />
+                    ) : null}
+                  </View>
                   <Text style={styles.detailLine}>{`${t("documents.created")} ${formatDate(document.createdAt)}`}</Text>
                   <Text style={styles.detailLine}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>
                   {document.reviewStatus === "pending" ? <Pill label={t("documents.needsReview")} tone="warning" /> : null}
@@ -159,6 +214,11 @@ const styles = StyleSheet.create({
   helper: {
     color: colors.muted,
   },
+  selectionActions: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
   titleRow: {
     flexDirection: "row",
     gap: 12,
@@ -173,6 +233,15 @@ const styles = StyleSheet.create({
   detailLine: {
     color: colors.text,
     lineHeight: 20,
+  },
+  indicatorRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  selectedCard: {
+    borderColor: colors.primary,
+    borderWidth: 1.5,
   },
   pressed: {
     opacity: 0.92,

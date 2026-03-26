@@ -4,6 +4,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Buffer } from "buffer";
 import {
   createContext,
+  useRef,
   useCallback,
   useContext,
   useEffect,
@@ -19,21 +20,62 @@ import type {
   FacetsResponse,
   SearchDocumentsResponse,
 } from "./lib";
+import {
+  getOfflineDocumentsIndicatorMap,
+  getOfflineDocumentMetadata,
+  getOfflineDocumentStats,
+  hasCompletedOfflineMigration,
+  listOfflineDocumentsForSummary,
+  listOfflineFileCandidatesForCleanup,
+  loadOfflineDashboardState,
+  loadOfflineFacetsState,
+  loadOfflineSummaryState,
+  markOfflineMigrationCompleted,
+  queryOfflineDocuments,
+  removeOfflineDocumentMetadata,
+  saveOfflineDashboardState,
+  saveOfflineFacetsState,
+  saveOfflineSummaryState,
+  setOfflineDocumentFileState,
+  upsertOfflineDocumentMetadata,
+} from "./offline-metadata-store";
 
 const OFFLINE_MODE_KEY = "openkeep.mobile.offline-archive-mode";
+const OFFLINE_RETENTION_SETTINGS_KEY = "openkeep.mobile.offline-retention-settings";
 const OFFLINE_ROOT_DIR = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? ""}openkeep-offline`;
 const OFFLINE_DOCUMENTS_DIR = `${OFFLINE_ROOT_DIR}/documents`;
 const OFFLINE_FILES_DIR = `${OFFLINE_ROOT_DIR}/files`;
 const OFFLINE_INDEX_PATH = `${OFFLINE_ROOT_DIR}/index.json`;
+const RECENTLY_VIEWED_GRACE_DAYS = 30;
+const LEGACY_INDEX_MIGRATION_KEY = "legacy-index-json-v1";
+
+export type OfflineFileRetentionMode = "full_mirror" | "smart_cache";
+export type OfflineAvailability = "available_offline" | "metadata_only" | "syncing";
+
+export type OfflineRetentionSettings = {
+  mode: OfflineFileRetentionMode;
+  maxFileStorageBytes: number | null;
+  keepFilesForYears: number | null;
+};
+
+const DEFAULT_RETENTION_SETTINGS: OfflineRetentionSettings = {
+  mode: "full_mirror",
+  maxFileStorageBytes: null,
+  keepFilesForYears: null,
+};
 
 type OfflineArchiveIndex = {
-  version: 1;
+  version: 3;
   lastSyncedAt: string | null;
   documentCount: number;
+  localFileCount: number;
+  metadataBytes: number;
+  fileStorageBytes: number;
   storageBytes: number;
   documents: ArchiveDocument[];
   dashboard: DashboardInsights | null;
   facets: FacetsResponse | null;
+  retentionSettings: OfflineRetentionSettings;
 };
 
 type OfflineDocumentRecord = {
@@ -41,6 +83,10 @@ type OfflineDocumentRecord = {
   text: DocumentTextResponse | null;
   history: DocumentHistoryResponse | null;
   fileUri: string | null;
+  hasLocalFile: boolean;
+  isPinnedOffline: boolean;
+  availability: OfflineAvailability;
+  lastViewedAt: string | null;
   syncedAt: string;
 };
 
@@ -81,12 +127,30 @@ type OfflineArchiveContextValue = {
   lastReachabilityCheckedAt: string | null;
   syncProgress: SyncProgress | null;
   summary: OfflineArchiveIndex | null;
+  retentionSettings: OfflineRetentionSettings;
   setOfflineModeEnabled: (value: boolean) => Promise<void>;
+  setRetentionSettings: (value: OfflineRetentionSettings) => Promise<void>;
+  cleanupRetainedFiles: () => Promise<{ removedFiles: number; fileStorageBytes: number }>;
   checkArchiveReachability: (probe: (value: string) => Promise<void>, apiUrl: string) => Promise<boolean>;
   syncArchive: (
     authFetch: (path: string, init?: RequestInit) => Promise<Response>,
     options?: SyncArchiveOptions,
   ) => Promise<SyncResult>;
+  persistViewedDocument: (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+  ) => Promise<void>;
+  ensureDocumentFileAvailable: (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+  ) => Promise<string>;
+  setDocumentPinnedOffline: (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+    pinned: boolean,
+  ) => Promise<void>;
+  getDocumentAvailability: (documentId: string) => Promise<OfflineAvailability>;
+  getDocumentIndicators: (documentIds: string[]) => Promise<Map<string, { hasLocalFile: boolean; isPinnedOffline: boolean }>>;
   loadDocuments: (options?: LoadDocumentsOptions) => Promise<SearchDocumentsResponse>;
   loadDocumentRecord: (documentId: string) => Promise<OfflineDocumentRecord | null>;
   loadDashboard: () => Promise<DashboardInsights | null>;
@@ -205,37 +269,15 @@ async function downloadDocumentFile(
 
   const extension = extensionForMime(preferredMimeType);
   const uri = `${OFFLINE_FILES_DIR}/${document.id}${extension}`;
+  const tempUri = `${uri}.tmp`;
   const arrayBuffer = await response.arrayBuffer();
-  await FileSystem.writeAsStringAsync(uri, Buffer.from(arrayBuffer).toString("base64"), {
+  await FileSystem.writeAsStringAsync(tempUri, Buffer.from(arrayBuffer).toString("base64"), {
     encoding: FileSystem.EncodingType.Base64,
   });
+  await deleteIfExists(uri);
+  await FileSystem.moveAsync({ from: tempUri, to: uri });
 
   return { uri, bytes: arrayBuffer.byteLength };
-}
-
-function includesQuery(document: ArchiveDocument, normalizedQuery: string) {
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  const haystack = [
-    document.title,
-    document.correspondent?.name,
-    document.documentType?.name,
-    document.referenceNumber,
-    document.holderName,
-    document.issuingAuthority,
-    ...document.tags.map((tag) => tag.name),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(normalizedQuery);
-}
-
-function compareByCreatedAtDesc(a: ArchiveDocument, b: ArchiveDocument) {
-  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 }
 
 function shouldRefreshDocument(existing: ArchiveDocument | undefined, incoming: ArchiveDocument) {
@@ -251,17 +293,60 @@ function shouldRefreshDocument(existing: ArchiveDocument | undefined, incoming: 
   );
 }
 
-async function calculateStorageBytes(records: OfflineDocumentRecord[]) {
-  let total = 0;
+function normalizeRetentionSettings(
+  value: OfflineRetentionSettings | null | undefined,
+): OfflineRetentionSettings {
+  return {
+    mode: value?.mode === "smart_cache" ? "smart_cache" : "full_mirror",
+    maxFileStorageBytes:
+      typeof value?.maxFileStorageBytes === "number" && value.maxFileStorageBytes > 0
+        ? value.maxFileStorageBytes
+        : null,
+    keepFilesForYears:
+      typeof value?.keepFilesForYears === "number" && value.keepFilesForYears > 0
+        ? value.keepFilesForYears
+        : null,
+  };
+}
+
+function documentAgeCutoffIso(years: number | null) {
+  if (!years) {
+    return null;
+  }
+
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - years);
+  return cutoff.toISOString();
+}
+
+function recentlyViewedCutoffIso() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - RECENTLY_VIEWED_GRACE_DAYS);
+  return cutoff.toISOString();
+}
+
+async function readAllDocumentRecords() {
+  await ensureOfflineDirs();
+  const entries = await FileSystem.readDirectoryAsync(OFFLINE_DOCUMENTS_DIR).catch(() => [] as string[]);
+  const records = await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith(".json"))
+      .map((entry) => readJsonFile<OfflineDocumentRecord>(`${OFFLINE_DOCUMENTS_DIR}/${entry}`)),
+  );
+  return records.filter(Boolean) as OfflineDocumentRecord[];
+}
+
+async function calculateStorageStats(records: OfflineDocumentRecord[]) {
+  let metadataBytes = 0;
+  let fileStorageBytes = 0;
 
   for (const record of records) {
-    total += JSON.stringify(record).length;
-
-    if (record.fileUri) {
+    metadataBytes += Buffer.byteLength(JSON.stringify(record), "utf8");
+    if (record.fileUri && record.hasLocalFile) {
       try {
         const info = await FileSystem.getInfoAsync(record.fileUri);
         if (info.exists && "size" in info && typeof info.size === "number") {
-          total += info.size;
+          fileStorageBytes += info.size;
         }
       } catch {
         // ignore size lookup failures
@@ -269,7 +354,42 @@ async function calculateStorageBytes(records: OfflineDocumentRecord[]) {
     }
   }
 
-  return total;
+  return {
+    metadataBytes,
+    fileStorageBytes,
+    storageBytes: metadataBytes + fileStorageBytes,
+  };
+}
+
+async function writeDocumentRecord(record: OfflineDocumentRecord) {
+  await writeJsonFile(buildDocumentRecordPath(record.document.id), record);
+}
+
+async function backfillLegacyOfflineState(
+  legacySummary: OfflineArchiveIndex | null,
+) {
+  if (!legacySummary?.documents?.length) {
+    return false;
+  }
+
+  for (const document of legacySummary.documents) {
+    const record = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(document.id));
+    await upsertOfflineDocumentMetadata(document, {
+      hasLocalFile: record?.hasLocalFile ?? false,
+      isPinnedOffline: record?.isPinnedOffline ?? false,
+      lastViewedAt: record?.lastViewedAt ?? null,
+      syncedAt: record?.syncedAt ?? legacySummary.lastSyncedAt,
+    });
+  }
+
+  await saveOfflineDashboardState(legacySummary.dashboard ?? null);
+  await saveOfflineFacetsState(legacySummary.facets ?? null);
+  await saveOfflineSummaryState({
+    lastSyncedAt: legacySummary.lastSyncedAt,
+    retentionSettings: legacySummary.retentionSettings,
+  });
+
+  return true;
 }
 
 export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
@@ -281,23 +401,147 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   const [lastReachabilityCheckedAt, setLastReachabilityCheckedAt] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [summary, setSummary] = useState<OfflineArchiveIndex | null>(null);
+  const [retentionSettings, setRetentionSettingsState] = useState<OfflineRetentionSettings>(DEFAULT_RETENTION_SETTINGS);
+  const legacyIndexBackfilledRef = useRef(false);
+
+  const refreshSummary = useCallback(async (overrides?: Partial<OfflineArchiveIndex>) => {
+    const [sqliteSummaryState, dashboardState, facetsState, records, documents, docStats] = await Promise.all([
+      loadOfflineSummaryState(),
+      loadOfflineDashboardState(),
+      loadOfflineFacetsState(),
+      readAllDocumentRecords(),
+      listOfflineDocumentsForSummary(),
+      getOfflineDocumentStats(),
+    ]);
+    const stats = await calculateStorageStats(records);
+    const nextSummary: OfflineArchiveIndex = {
+      version: 3,
+      lastSyncedAt: overrides?.lastSyncedAt ?? sqliteSummaryState?.lastSyncedAt ?? null,
+      documentCount: docStats.documentCount,
+      localFileCount: docStats.localFileCount,
+      metadataBytes: stats.metadataBytes,
+      fileStorageBytes: stats.fileStorageBytes,
+      storageBytes: stats.storageBytes,
+      documents: overrides?.documents ?? documents,
+      dashboard: overrides?.dashboard ?? dashboardState ?? null,
+      facets: overrides?.facets ?? facetsState ?? null,
+      retentionSettings: overrides?.retentionSettings ?? sqliteSummaryState?.retentionSettings ?? retentionSettings,
+    };
+    await saveOfflineSummaryState({
+      lastSyncedAt: nextSummary.lastSyncedAt,
+      retentionSettings: nextSummary.retentionSettings,
+    });
+    await saveOfflineDashboardState(nextSummary.dashboard);
+    await saveOfflineFacetsState(nextSummary.facets);
+    setSummary(nextSummary);
+    return nextSummary;
+  }, [retentionSettings]);
+
+  const cleanupRetainedFiles = useCallback(async () => {
+    const settings = retentionSettings;
+    if (settings.mode !== "smart_cache") {
+      const nextSummary = await refreshSummary({ retentionSettings: settings });
+      return { removedFiles: 0, fileStorageBytes: nextSummary.fileStorageBytes };
+    }
+
+    const candidates = await listOfflineFileCandidatesForCleanup();
+    const cutoffIso = documentAgeCutoffIso(settings.keepFilesForYears);
+    const recentViewCutoffIso = recentlyViewedCutoffIso();
+    let removedFiles = 0;
+
+    for (const candidate of candidates) {
+      if (candidate.isPinnedOffline) {
+        continue;
+      }
+      if (candidate.lastViewedAt && candidate.lastViewedAt >= recentViewCutoffIso) {
+        continue;
+      }
+      if (cutoffIso && candidate.createdAt >= cutoffIso) {
+        continue;
+      }
+      const record = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(candidate.id));
+      if (!record?.fileUri) {
+        continue;
+      }
+      await deleteIfExists(record.fileUri);
+      record.fileUri = null;
+      record.hasLocalFile = false;
+      record.availability = "metadata_only";
+      await writeDocumentRecord(record);
+      await setOfflineDocumentFileState(candidate.id, { hasLocalFile: false });
+      removedFiles += 1;
+    }
+
+    if (settings.maxFileStorageBytes) {
+      let currentStats = await calculateStorageStats(await readAllDocumentRecords());
+      const removable = (await listOfflineFileCandidatesForCleanup())
+        .filter((candidate) => !candidate.isPinnedOffline)
+        .sort((left, right) => {
+          const leftViewed = left.lastViewedAt ? new Date(left.lastViewedAt).getTime() : 0;
+          const rightViewed = right.lastViewedAt ? new Date(right.lastViewedAt).getTime() : 0;
+          if (leftViewed !== rightViewed) {
+            return leftViewed - rightViewed;
+          }
+          return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+        });
+
+      for (const candidate of removable) {
+        if (currentStats.fileStorageBytes <= settings.maxFileStorageBytes) {
+          break;
+        }
+        const record = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(candidate.id));
+        if (!record?.fileUri) {
+          continue;
+        }
+        await deleteIfExists(record.fileUri);
+        record.fileUri = null;
+        record.hasLocalFile = false;
+        record.availability = "metadata_only";
+        await writeDocumentRecord(record);
+        await setOfflineDocumentFileState(candidate.id, { hasLocalFile: false });
+        removedFiles += 1;
+        currentStats = await calculateStorageStats(await readAllDocumentRecords());
+      }
+    }
+
+    const nextSummary = await refreshSummary({ retentionSettings: settings });
+    return { removedFiles, fileStorageBytes: nextSummary.fileStorageBytes };
+  }, [refreshSummary, retentionSettings]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function bootstrap() {
       await ensureOfflineDirs();
-      const [storedMode, storedSummary] = await Promise.all([
+      const migrationCompleted = await hasCompletedOfflineMigration(LEGACY_INDEX_MIGRATION_KEY);
+      const [storedMode, storedSummary, storedRetentionSettings] = await Promise.all([
         AsyncStorage.getItem(OFFLINE_MODE_KEY),
-        readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH),
+        migrationCompleted || legacyIndexBackfilledRef.current
+          ? Promise.resolve(null)
+          : readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH),
+        AsyncStorage.getItem(OFFLINE_RETENTION_SETTINGS_KEY),
       ]);
 
       if (!isMounted) {
         return;
       }
 
+      const nextRetentionSettings = normalizeRetentionSettings(
+        storedRetentionSettings ? JSON.parse(storedRetentionSettings) as OfflineRetentionSettings : storedSummary?.retentionSettings,
+      );
+      if (!migrationCompleted && !legacyIndexBackfilledRef.current) {
+        const migratedLegacyIndex = await backfillLegacyOfflineState(storedSummary);
+        if (migratedLegacyIndex) {
+          await deleteIfExists(OFFLINE_INDEX_PATH);
+          await markOfflineMigrationCompleted(LEGACY_INDEX_MIGRATION_KEY);
+        }
+        legacyIndexBackfilledRef.current = true;
+      } else if (migrationCompleted) {
+        legacyIndexBackfilledRef.current = true;
+      }
       setIsOfflineModeEnabledState(storedMode === "true");
-      setSummary(storedSummary);
+      setRetentionSettingsState(nextRetentionSettings);
+      await refreshSummary({ retentionSettings: nextRetentionSettings });
       setIsReady(true);
     }
 
@@ -316,7 +560,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       isMounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [refreshSummary]);
 
   useEffect(() => {
     if (!isConnected) {
@@ -329,6 +573,13 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     setIsOfflineModeEnabledState(value);
     await AsyncStorage.setItem(OFFLINE_MODE_KEY, String(value));
   }, []);
+
+  const setRetentionSettings = useCallback(async (value: OfflineRetentionSettings) => {
+    const normalized = normalizeRetentionSettings(value);
+    setRetentionSettingsState(normalized);
+    await AsyncStorage.setItem(OFFLINE_RETENTION_SETTINGS_KEY, JSON.stringify(normalized));
+    await refreshSummary({ retentionSettings: normalized });
+  }, [refreshSummary]);
 
   const checkArchiveReachability = useCallback(async (
     probe: (value: string) => Promise<void>,
@@ -353,30 +604,73 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected]);
 
+  const getDocumentAvailability = useCallback(async (documentId: string) => {
+    const metadata = await getOfflineDocumentMetadata(documentId);
+    if (!metadata) {
+      return "syncing" as const;
+    }
+    return metadata.hasLocalFile ? "available_offline" as const : "metadata_only" as const;
+  }, []);
+
   const loadDocumentRecord = useCallback(async (documentId: string) => {
-    return readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(documentId));
+    const record = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(documentId));
+    const metadata = await getOfflineDocumentMetadata(documentId);
+    if (!metadata && !record) {
+      return null;
+    }
+
+    const baseDocument = record?.document ?? metadata?.document;
+    if (!baseDocument) {
+      return null;
+    }
+
+    let nextFileUri = record?.fileUri ?? null;
+    let hasLocalFile = metadata?.hasLocalFile ?? record?.hasLocalFile ?? false;
+    if (nextFileUri) {
+      const info = await FileSystem.getInfoAsync(nextFileUri).catch(() => ({ exists: false }));
+      if (!info.exists) {
+        nextFileUri = null;
+        hasLocalFile = false;
+      }
+    }
+
+    const nextRecord: OfflineDocumentRecord = {
+      document: baseDocument,
+      text: record?.text ?? null,
+      history: record?.history ?? null,
+      fileUri: nextFileUri,
+      hasLocalFile,
+      isPinnedOffline: metadata?.isPinnedOffline ?? false,
+      availability: hasLocalFile ? "available_offline" : "metadata_only",
+      lastViewedAt: metadata?.lastViewedAt ?? record?.lastViewedAt ?? null,
+      syncedAt: metadata?.syncedAt ?? record?.syncedAt ?? new Date().toISOString(),
+    };
+
+    await writeDocumentRecord(nextRecord);
+    await upsertOfflineDocumentMetadata(baseDocument, {
+      hasLocalFile,
+      isPinnedOffline: nextRecord.isPinnedOffline,
+      lastViewedAt: nextRecord.lastViewedAt,
+      syncedAt: nextRecord.syncedAt,
+    });
+
+    return nextRecord;
   }, []);
 
   const loadDashboard = useCallback(async () => {
-    const index = await readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH);
-    return index?.dashboard ?? null;
+    return loadOfflineDashboardState();
   }, []);
 
   const loadFacets = useCallback(async () => {
-    const index = await readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH);
-    return index?.facets ?? null;
+    return loadOfflineFacetsState();
+  }, []);
+
+  const getDocumentIndicators = useCallback(async (documentIds: string[]) => {
+    return getOfflineDocumentsIndicatorMap(documentIds);
   }, []);
 
   const loadDocuments = useCallback(async (options?: LoadDocumentsOptions) => {
-    const index = await readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH);
-    const normalizedQuery = options?.query?.trim().toLowerCase() ?? "";
-    const items = (index?.documents ?? [])
-      .filter((document) => (options?.status && options.status !== "all" ? document.status === options.status : true))
-      .filter((document) => (options?.reviewOnly ? document.reviewStatus === "pending" : true))
-      .filter((document) => (options?.correspondentSlug ? document.correspondent?.slug === options.correspondentSlug : true))
-      .filter((document) => includesQuery(document, normalizedQuery))
-      .sort(compareByCreatedAtDesc);
-
+    const items = await queryOfflineDocuments(options);
     return {
       items: items.slice(0, options?.reviewOnly ? 25 : 30),
       total: items.length,
@@ -384,6 +678,108 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       pageSize: options?.reviewOnly ? 25 : 30,
     } satisfies SearchDocumentsResponse;
   }, []);
+
+  const persistViewedDocument = useCallback(async (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+  ) => {
+    await ensureOfflineDirs();
+    const previousRecord = await loadDocumentRecord(document.id);
+    const now = new Date().toISOString();
+    const [detail, file] = await Promise.all([
+      fetchJson<ArchiveDocument>(authFetch, `/api/documents/${document.id}`).catch(() => document),
+      downloadDocumentFile(authFetch, document).catch(() => null),
+    ]);
+    const nextRecord: OfflineDocumentRecord = {
+      document: detail,
+      text: previousRecord?.text ?? null,
+      history: previousRecord?.history ?? null,
+      fileUri: file?.uri ?? previousRecord?.fileUri ?? null,
+      hasLocalFile: Boolean(file?.uri ?? previousRecord?.hasLocalFile),
+      isPinnedOffline: previousRecord?.isPinnedOffline ?? false,
+      availability: file?.uri ?? previousRecord?.hasLocalFile ? "available_offline" : "metadata_only",
+      lastViewedAt: now,
+      syncedAt: previousRecord?.syncedAt ?? now,
+    };
+    await writeDocumentRecord(nextRecord);
+    await upsertOfflineDocumentMetadata(detail, {
+      hasLocalFile: nextRecord.hasLocalFile,
+      isPinnedOffline: nextRecord.isPinnedOffline,
+      lastViewedAt: nextRecord.lastViewedAt,
+      syncedAt: nextRecord.syncedAt,
+    });
+    await refreshSummary();
+    if (retentionSettings.mode === "smart_cache") {
+      await cleanupRetainedFiles();
+    }
+  }, [cleanupRetainedFiles, loadDocumentRecord, refreshSummary, retentionSettings.mode]);
+
+  const ensureDocumentFileAvailable = useCallback(async (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+  ) => {
+    const existingRecord = await loadDocumentRecord(document.id);
+    if (existingRecord?.fileUri && existingRecord.hasLocalFile) {
+      const info = await FileSystem.getInfoAsync(existingRecord.fileUri).catch(() => ({ exists: false }));
+      if (info.exists) {
+        return existingRecord.fileUri;
+      }
+    }
+
+    const file = await downloadDocumentFile(authFetch, document);
+    const now = new Date().toISOString();
+    const nextRecord: OfflineDocumentRecord = {
+      document: existingRecord?.document ?? document,
+      text: existingRecord?.text ?? null,
+      history: existingRecord?.history ?? null,
+      fileUri: file.uri,
+      hasLocalFile: true,
+      isPinnedOffline: existingRecord?.isPinnedOffline ?? false,
+      availability: "available_offline",
+      lastViewedAt: now,
+      syncedAt: existingRecord?.syncedAt ?? now,
+    };
+    await writeDocumentRecord(nextRecord);
+    await upsertOfflineDocumentMetadata(nextRecord.document, {
+      hasLocalFile: true,
+      isPinnedOffline: nextRecord.isPinnedOffline,
+      lastViewedAt: now,
+      syncedAt: nextRecord.syncedAt,
+    });
+    await refreshSummary();
+    return file.uri;
+  }, [loadDocumentRecord, refreshSummary]);
+
+  const setDocumentPinnedOffline = useCallback(async (
+    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    document: ArchiveDocument,
+    pinned: boolean,
+  ) => {
+    const record = await loadDocumentRecord(document.id);
+    if (pinned) {
+      await ensureDocumentFileAvailable(authFetch, document);
+    }
+
+    const nextRecord: OfflineDocumentRecord = {
+      document: record?.document ?? document,
+      text: record?.text ?? null,
+      history: record?.history ?? null,
+      fileUri: record?.fileUri ?? null,
+      hasLocalFile: record?.hasLocalFile ?? false,
+      isPinnedOffline: pinned,
+      availability: record?.hasLocalFile ? "available_offline" : "metadata_only",
+      lastViewedAt: record?.lastViewedAt ?? null,
+      syncedAt: record?.syncedAt ?? new Date().toISOString(),
+    };
+    await writeDocumentRecord(nextRecord);
+    await upsertOfflineDocumentMetadata(nextRecord.document, {
+      hasLocalFile: nextRecord.hasLocalFile,
+      isPinnedOffline: pinned,
+      lastViewedAt: nextRecord.lastViewedAt,
+      syncedAt: nextRecord.syncedAt,
+    });
+    await refreshSummary();
+  }, [ensureDocumentFileAvailable, loadDocumentRecord, refreshSummary]);
 
   const syncArchive = useCallback(
     async (
@@ -400,8 +796,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       try {
         await ensureOfflineDirs();
 
-        const existingSummary = await readJsonFile<OfflineArchiveIndex>(OFFLINE_INDEX_PATH);
-        const existingDocuments = new Map((existingSummary?.documents ?? []).map((document) => [document.id, document]));
+        const existingDocuments = new Map((summary?.documents ?? []).map((document) => [document.id, document]));
         const [documents, dashboard, facets] = await Promise.all([
           fetchAllDocuments(authFetch),
           fetchJson<DashboardInsights>(authFetch, "/api/dashboard/insights").catch(() => null),
@@ -413,7 +808,6 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
         let syncedDocuments = 0;
         let reusedDocuments = 0;
         let removedDocuments = 0;
-        const nextRecordMap = new Map<string, OfflineDocumentRecord>();
         const incomingIds = new Set(documents.map((document) => document.id));
         const documentsToSync = options?.forceFull
           ? documents
@@ -430,13 +824,24 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
         });
 
         for (const document of documents) {
-          if (!options?.forceFull && !shouldRefreshDocument(existingDocuments.get(document.id), document)) {
-            const existingRecord = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(document.id));
-            if (existingRecord) {
-              nextRecordMap.set(document.id, existingRecord);
-              reusedDocuments += 1;
-            }
+          const existingRecord = await loadDocumentRecord(document.id);
+          if (!options?.forceFull && !shouldRefreshDocument(existingDocuments.get(document.id), document) && existingRecord) {
+            reusedDocuments += 1;
+            await upsertOfflineDocumentMetadata(existingRecord.document, {
+              hasLocalFile: existingRecord.hasLocalFile,
+              isPinnedOffline: existingRecord.isPinnedOffline,
+              lastViewedAt: existingRecord.lastViewedAt,
+              syncedAt: existingRecord.syncedAt,
+            });
+            continue;
           }
+
+          await upsertOfflineDocumentMetadata(document, {
+            hasLocalFile: existingRecord?.hasLocalFile ?? false,
+            isPinnedOffline: existingRecord?.isPinnedOffline ?? false,
+            lastViewedAt: existingRecord?.lastViewedAt ?? null,
+            syncedAt,
+          });
         }
 
         for (const [index, document] of documentsToSync.entries()) {
@@ -447,66 +852,64 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
           });
 
           try {
-            const previousRecord = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(document.id));
-            const [detail, text, history, file] = await Promise.all([
-              fetchJson<ArchiveDocument>(authFetch, `/api/documents/${document.id}`),
-              fetchJson<DocumentTextResponse>(authFetch, `/api/documents/${document.id}/text`).catch(() => null),
-              fetchJson<DocumentHistoryResponse>(authFetch, `/api/documents/${document.id}/history`).catch(() => null),
-              downloadDocumentFile(authFetch, document).catch(async () => {
-                if (previousRecord?.fileUri) {
-                  return { uri: previousRecord.fileUri, bytes: 0 };
-                }
-                return null;
-              }),
-            ]);
+            const previousRecord = await loadDocumentRecord(document.id);
+            const detail = await fetchJson<ArchiveDocument>(authFetch, `/api/documents/${document.id}`);
+            const shouldStoreFile = retentionSettings.mode === "full_mirror" || options?.forceFull || previousRecord?.isPinnedOffline;
+            const file = shouldStoreFile
+              ? await downloadDocumentFile(authFetch, detail).catch(async () => {
+                  if (previousRecord?.fileUri) {
+                    return { uri: previousRecord.fileUri, bytes: 0 };
+                  }
+                  return null;
+                })
+              : null;
 
             const record: OfflineDocumentRecord = {
               document: detail,
-              text,
-              history,
-              fileUri: file?.uri ?? null,
+              text: previousRecord?.text ?? null,
+              history: previousRecord?.history ?? null,
+              fileUri: file?.uri ?? previousRecord?.fileUri ?? null,
+              hasLocalFile: Boolean(file?.uri ?? previousRecord?.hasLocalFile),
+              isPinnedOffline: previousRecord?.isPinnedOffline ?? false,
+              availability: file?.uri ?? previousRecord?.hasLocalFile ? "available_offline" : "metadata_only",
+              lastViewedAt: previousRecord?.lastViewedAt ?? null,
               syncedAt,
             };
-            nextRecordMap.set(document.id, record);
-            await writeJsonFile(buildDocumentRecordPath(document.id), record);
-            if (previousRecord?.fileUri && previousRecord.fileUri !== record.fileUri) {
+            await writeDocumentRecord(record);
+            await upsertOfflineDocumentMetadata(detail, {
+              hasLocalFile: record.hasLocalFile,
+              isPinnedOffline: record.isPinnedOffline,
+              lastViewedAt: record.lastViewedAt,
+              syncedAt,
+            });
+            if (previousRecord?.fileUri && record.fileUri && previousRecord.fileUri !== record.fileUri) {
               await deleteIfExists(previousRecord.fileUri);
             }
             syncedDocuments += 1;
           } catch {
             failedDocuments += 1;
-
-            const existingRecord = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(document.id));
-            if (existingRecord) {
-              nextRecordMap.set(document.id, existingRecord);
-              reusedDocuments += 1;
-            }
           }
         }
 
         for (const existingDocument of existingDocuments.values()) {
           if (!incomingIds.has(existingDocument.id)) {
-            const existingRecord = await readJsonFile<OfflineDocumentRecord>(buildDocumentRecordPath(existingDocument.id));
+            const existingRecord = await loadDocumentRecord(existingDocument.id);
             await deleteIfExists(existingRecord?.fileUri);
             await deleteIfExists(buildDocumentRecordPath(existingDocument.id));
+            await removeOfflineDocumentMetadata(existingDocument.id);
             removedDocuments += 1;
           }
         }
 
-        const finalRecords = Array.from(nextRecordMap.values()).sort((left, right) => compareByCreatedAtDesc(left.document, right.document));
-        const storageBytes = await calculateStorageBytes(finalRecords);
-
-        const nextSummary: OfflineArchiveIndex = {
-          version: 1,
+        await refreshSummary({
           lastSyncedAt: syncedAt,
-          documentCount: finalRecords.length,
-          storageBytes,
-          documents: finalRecords.map((record) => record.document),
           dashboard,
           facets,
-        };
-        await writeJsonFile(OFFLINE_INDEX_PATH, nextSummary);
-        setSummary(nextSummary);
+          retentionSettings,
+        });
+        if (retentionSettings.mode === "smart_cache") {
+          await cleanupRetainedFiles();
+        }
         setSyncProgress({
           completed: documentsToSync.length,
           total: Math.max(documentsToSync.length, 1),
@@ -518,7 +921,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
         });
 
         return {
-          documentCount: finalRecords.length,
+          documentCount: documents.length,
           failedDocuments,
           syncedDocuments,
           reusedDocuments,
@@ -529,7 +932,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
         setTimeout(() => setSyncProgress(null), 1200);
       }
     },
-    [],
+    [cleanupRetainedFiles, loadDocumentRecord, refreshSummary, retentionSettings],
   );
 
   const value = useMemo<OfflineArchiveContextValue>(
@@ -543,27 +946,43 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       lastReachabilityCheckedAt,
       syncProgress,
       summary,
+      retentionSettings,
       setOfflineModeEnabled,
+      setRetentionSettings,
+      cleanupRetainedFiles,
       checkArchiveReachability,
       syncArchive,
+      persistViewedDocument,
+      ensureDocumentFileAvailable,
+      setDocumentPinnedOffline,
+      getDocumentAvailability,
+      getDocumentIndicators,
       loadDocuments,
       loadDocumentRecord,
       loadDashboard,
       loadFacets,
     }),
     [
+      archiveReachability,
+      checkArchiveReachability,
+      cleanupRetainedFiles,
+      ensureDocumentFileAvailable,
+      getDocumentAvailability,
+      getDocumentIndicators,
       isConnected,
       isOfflineModeEnabled,
       isReady,
       isSyncing,
-      archiveReachability,
-      checkArchiveReachability,
       lastReachabilityCheckedAt,
       loadDashboard,
       loadDocumentRecord,
       loadDocuments,
       loadFacets,
+      persistViewedDocument,
+      retentionSettings,
+      setDocumentPinnedOffline,
       setOfflineModeEnabled,
+      setRetentionSettings,
       summary,
       syncArchive,
       syncProgress,

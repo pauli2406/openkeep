@@ -180,6 +180,82 @@ export function SettingsScreen() {
     }
   }
 
+  async function handleCleanup() {
+    try {
+      const result = await offline.cleanupRetainedFiles();
+      Alert.alert(
+        t("settings.cleanupTitle"),
+        `${result.removedFiles} ${t("settings.cleanupRemovedSuffix")}. ${t("settings.retention.localFiles")}: ${formatStorage(result.fileStorageBytes)}.`,
+      );
+    } catch (error) {
+      Alert.alert(
+        t("settings.syncFailedTitle"),
+        error instanceof Error ? error.message : t("settings.syncFailedBody"),
+      );
+    }
+  }
+
+  function handleToggleRetentionMode() {
+    const nextMode = offline.retentionSettings.mode === "full_mirror" ? "smart_cache" : "full_mirror";
+    void offline.setRetentionSettings({
+      ...offline.retentionSettings,
+      mode: nextMode,
+      keepFilesForYears: nextMode === "smart_cache" ? offline.retentionSettings.keepFilesForYears ?? 5 : null,
+      maxFileStorageBytes: nextMode === "smart_cache" ? offline.retentionSettings.maxFileStorageBytes ?? 5 * 1024 * 1024 * 1024 : null,
+    });
+  }
+
+  function cycleFileAgeThreshold() {
+    const values = [3, 5, 10, null] as const;
+    const currentIndex = values.findIndex((value) => value === offline.retentionSettings.keepFilesForYears);
+    const nextValue = values[(currentIndex + 1 + values.length) % values.length];
+    void offline.setRetentionSettings({
+      ...offline.retentionSettings,
+      mode: "smart_cache",
+      keepFilesForYears: nextValue,
+    });
+  }
+
+  function cycleStorageCap() {
+    const values = [2, 5, 10, null] as const;
+    const currentGb = offline.retentionSettings.maxFileStorageBytes
+      ? Math.round(offline.retentionSettings.maxFileStorageBytes / (1024 * 1024 * 1024))
+      : null;
+    const currentIndex = values.findIndex((value) => value === currentGb);
+    const nextValue = values[(currentIndex + 1 + values.length) % values.length];
+    void offline.setRetentionSettings({
+      ...offline.retentionSettings,
+      mode: "smart_cache",
+      maxFileStorageBytes: nextValue ? nextValue * 1024 * 1024 * 1024 : null,
+    });
+  }
+
+  function retentionModeLabel() {
+    return offline.retentionSettings.mode === "full_mirror"
+      ? t("settings.retention.fullMirror")
+      : t("settings.retention.smartCache");
+  }
+
+  function fileAgeLabel() {
+    if (offline.retentionSettings.mode !== "smart_cache") {
+      return t("settings.retention.notApplicable");
+    }
+    if (!offline.retentionSettings.keepFilesForYears) {
+      return t("settings.retention.noAgeLimit");
+    }
+    return `${offline.retentionSettings.keepFilesForYears} ${t("settings.retention.yearsSuffix")}`;
+  }
+
+  function storageCapLabel() {
+    if (offline.retentionSettings.mode !== "smart_cache") {
+      return t("settings.retention.notApplicable");
+    }
+    if (!offline.retentionSettings.maxFileStorageBytes) {
+      return t("settings.retention.noStorageLimit");
+    }
+    return formatStorage(offline.retentionSettings.maxFileStorageBytes);
+  }
+
   function labelForLanguage(language: "en" | "de") {
     return language === "de" ? t("settings.german") : t("settings.english");
   }
@@ -321,6 +397,27 @@ export function SettingsScreen() {
         />
         <Divider />
         <SettingsRow
+          icon="database-cog-outline"
+          label={t("settings.retention.mode")}
+          value={retentionModeLabel()}
+          onPress={handleToggleRetentionMode}
+        />
+        <Divider />
+        <SettingsRow
+          icon="calendar-clock-outline"
+          label={t("settings.retention.fileAge")}
+          value={fileAgeLabel()}
+          onPress={cycleFileAgeThreshold}
+        />
+        <Divider />
+        <SettingsRow
+          icon="harddisk-plus"
+          label={t("settings.retention.storageCap")}
+          value={storageCapLabel()}
+          onPress={cycleStorageCap}
+        />
+        <Divider />
+        <SettingsRow
           icon="file-cabinet-outline"
           label={t("settings.cachedDocuments")}
           value={offline.summary ? String(offline.summary.documentCount) : "0"}
@@ -330,6 +427,19 @@ export function SettingsScreen() {
           icon="harddisk"
           label={t("settings.localStorage")}
           value={offline.summary ? formatStorage(offline.summary.storageBytes) : "0 B"}
+        />
+        <Divider />
+        <SettingsRow
+          icon="file-outline"
+          label={t("settings.retention.localFiles")}
+          value={offline.summary ? formatStorage(offline.summary.fileStorageBytes) : "0 B"}
+          onPress={offline.summary ? () => void handleCleanup() : undefined}
+        />
+        <Divider />
+        <SettingsRow
+          icon="file-document-outline"
+          label={t("settings.retention.localFileCount")}
+          value={offline.summary ? String(offline.summary.localFileCount) : "0"}
         />
         <Divider />
         <SettingsRow
