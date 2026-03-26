@@ -13,4 +13,6 @@ data
 openapi.json
 apps/docs/.docusaurus
 apps/docs/build
+apps/mobile/ios
+apps/mobile/android
 .expo/
