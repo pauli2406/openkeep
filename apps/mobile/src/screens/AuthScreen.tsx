@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Field, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import { colors } from "../theme";
 
 type Mode = "login" | "setup";
@@ -10,6 +11,7 @@ type Mode = "login" | "setup";
 export function AuthScreen() {
   const auth = useAuth();
   const { t } = useI18n();
+  const offline = useOfflineArchive();
   const [mode, setMode] = useState<Mode>("login");
   const [apiUrl, setApiUrl] = useState(auth.apiUrl || "http://localhost:3000");
   const [displayName, setDisplayName] = useState("");
@@ -18,6 +20,14 @@ export function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const hasOfflineSnapshot = Boolean(
+    offline.summary && (
+      offline.summary.lastSyncedAt ||
+      offline.summary.documentCount > 0 ||
+      offline.summary.dashboard ||
+      offline.summary.facets
+    ),
+  );
 
   async function handleSubmit() {
     setError("");
@@ -60,6 +70,9 @@ export function AuthScreen() {
               ? t("auth.setupIntro")
               : t("auth.signInIntro")}
           </Text>
+          {!hasOfflineSnapshot && auth.apiUrl ? (
+            <Text style={styles.error}>{t("auth.offlineSnapshotRequired")}</Text>
+          ) : null}
         </View>
 
         <View style={styles.segmentWrap}>

@@ -15,6 +15,8 @@ import {
 const API_URL_KEY = "openkeep.mobile.api-url";
 const ACCESS_TOKEN_KEY = "openkeep.mobile.access-token";
 const REFRESH_TOKEN_KEY = "openkeep.mobile.refresh-token";
+const USER_KEY = "openkeep.mobile.user";
+const AUTH_REQUEST_TIMEOUT_MS = 12000;
 
 type UserLanguagePreferences = {
   uiLanguage: "en" | "de";
@@ -35,6 +37,7 @@ type AuthContextValue = {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isOfflineSession: boolean;
   setApiUrl: (value: string) => Promise<void>;
   probeServer: (value: string) => Promise<void>;
   login: (args: { apiUrl: string; email: string; password: string }) => Promise<void>;
@@ -46,6 +49,7 @@ type AuthContextValue = {
   }) => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
+  revalidateSession: () => Promise<boolean>;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
@@ -73,6 +77,25 @@ function resolveUrl(apiUrl: string, path: string) {
   return `${apiUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+async function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timed out. Check your connection and try again.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 async function readResponseMessage(response: Response) {
   const text = await response.text();
   if (!text) {
@@ -98,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [apiUrl, setApiUrlState] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionMode, setSessionMode] = useState<"none" | "online" | "offline">("none");
   const apiUrlRef = useRef("");
   const tokensRef = useRef({ accessToken: "", refreshToken: "" });
 
@@ -112,6 +136,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
   }, []);
+
+  const persistUser = useCallback(async (nextUser: User | null) => {
+    setUser(nextUser);
+    if (nextUser) {
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+      return;
+    }
+
+    await AsyncStorage.removeItem(USER_KEY);
+  }, []);
+
+  const clearSession = useCallback(async () => {
+    await clearTokens();
+    await persistUser(null);
+    setSessionMode("none");
+  }, [clearTokens, persistUser]);
 
   const setApiUrl = useCallback(async (value: string) => {
     const next = normalizeApiUrl(value);
@@ -132,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let response: Response;
     try {
-      response = await fetch(resolveUrl(next, "/api/health"));
+      response = await withTimeout(fetch(resolveUrl(next, "/api/health")), "Server health check");
     } catch {
       throw new Error("Could not reach the OpenKeep server.");
     }
@@ -148,15 +188,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    const response = await fetch(resolveUrl(currentApiUrl, "/api/auth/refresh"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: tokensRef.current.refreshToken }),
-    });
+    const response = await withTimeout(
+      fetch(resolveUrl(currentApiUrl, "/api/auth/refresh"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: tokensRef.current.refreshToken }),
+      }),
+      "Session refresh",
+    );
 
     if (!response.ok) {
-      await clearTokens();
-      setUser(null);
+      await clearSession();
       return false;
     }
 
@@ -166,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     await persistTokens(payload.accessToken, payload.refreshToken);
     return true;
-  }, [clearTokens, persistTokens]);
+  }, [clearSession, persistTokens]);
 
   const authFetch = useCallback(
     async (path: string, init?: RequestInit) => {
@@ -202,13 +244,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (response.status === 401 && allowRefresh) {
-        await clearTokens();
-        setUser(null);
+        await clearSession();
       }
 
       return response;
     },
-    [apiUrl, clearTokens, refreshAccessToken],
+    [apiUrl, clearSession, refreshAccessToken],
   );
 
   /**
@@ -251,24 +292,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const loadCurrentUser = useCallback(async () => {
-    const response = await authFetch("/api/auth/me");
+    const response = await withTimeout(authFetch("/api/auth/me"), "Session restore");
     if (!response.ok) {
       throw new Error(await readResponseMessage(response));
     }
 
     const payload = (await response.json()) as User;
-    setUser(payload);
-  }, [authFetch]);
+    await persistUser(payload);
+    setSessionMode("online");
+  }, [authFetch, persistUser]);
+
+  const restoreCachedSession = useCallback(async (storedUser: User | null) => {
+    if (!storedUser) {
+      return false;
+    }
+
+    await persistUser(storedUser);
+    setSessionMode("offline");
+    return true;
+  }, [persistUser]);
+
+  const revalidateSession = useCallback(async () => {
+    if (!apiUrlRef.current || !tokensRef.current.accessToken || !tokensRef.current.refreshToken) {
+      return false;
+    }
+
+    try {
+      await loadCurrentUser();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [loadCurrentUser]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function bootstrap() {
       try {
-        const [storedApiUrl, accessToken, refreshToken] = await Promise.all([
+        const [storedApiUrl, accessToken, refreshToken, storedUserRaw] = await Promise.all([
           AsyncStorage.getItem(API_URL_KEY),
           SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
           SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
+          AsyncStorage.getItem(USER_KEY),
         ]);
 
         if (cancelled) {
@@ -276,6 +342,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const nextApiUrl = normalizeApiUrl(storedApiUrl ?? "");
+        let storedUser: User | null = null;
+        if (storedUserRaw) {
+          try {
+            storedUser = JSON.parse(storedUserRaw) as User;
+          } catch {
+            await AsyncStorage.removeItem(USER_KEY);
+          }
+        }
+
         apiUrlRef.current = nextApiUrl;
         setApiUrlState(nextApiUrl);
         tokensRef.current = {
@@ -285,31 +360,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (nextApiUrl && accessToken && refreshToken) {
           try {
-            const response = await fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            });
+            const response = await withTimeout(
+              fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                },
+              }),
+              "Session restore",
+            );
 
             if (response.ok) {
               const payload = (await response.json()) as User;
               if (!cancelled) {
-                setUser(payload);
+                await persistUser(payload);
+                setSessionMode("online");
               }
             } else if (response.status === 401) {
               setApiUrlState(nextApiUrl);
               if (!cancelled) {
-                await refreshAccessToken();
                 try {
-                  await loadCurrentUser();
+                  const refreshed = await refreshAccessToken();
+                  if (refreshed) {
+                    await loadCurrentUser();
+                  }
                 } catch {
-                  await clearTokens();
+                  const restored = await restoreCachedSession(storedUser);
+                  if (!restored) {
+                    await clearSession();
+                  }
                 }
               }
+            } else if (!cancelled) {
+              await restoreCachedSession(storedUser);
             }
           } catch {
-            // Keep the server URL so the user can retry.
+            if (!cancelled) {
+              await restoreCachedSession(storedUser);
+            }
           }
+        } else if (!cancelled && storedUser && nextApiUrl) {
+          await restoreCachedSession(storedUser);
         }
       } finally {
         if (!cancelled) {
@@ -322,7 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clearTokens, loadCurrentUser, refreshAccessToken]);
+  }, [clearSession, loadCurrentUser, persistUser, refreshAccessToken, restoreCachedSession]);
 
   const completeAuth = useCallback(
     async (nextApiUrl: string, response: Response) => {
@@ -346,11 +436,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async ({ apiUrl: inputApiUrl, email, password }: { apiUrl: string; email: string; password: string }) => {
       const nextApiUrl = normalizeApiUrl(inputApiUrl);
       await probeServer(nextApiUrl);
-      const response = await fetch(resolveUrl(nextApiUrl, "/api/auth/login"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await withTimeout(
+        fetch(resolveUrl(nextApiUrl, "/api/auth/login"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }),
+        "Login request",
+      );
       await completeAuth(nextApiUrl, response);
     },
     [completeAuth, probeServer],
@@ -365,11 +458,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }) => {
       const nextApiUrl = normalizeApiUrl(inputApiUrl);
       await probeServer(nextApiUrl);
-      const response = await fetch(resolveUrl(nextApiUrl, "/api/auth/setup"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName, email, password }),
-      });
+      const response = await withTimeout(
+        fetch(resolveUrl(nextApiUrl, "/api/auth/setup"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName, email, password }),
+        }),
+        "Setup request",
+      );
       await completeAuth(nextApiUrl, response);
     },
     [completeAuth, probeServer],
@@ -388,15 +484,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const payload = (await response.json()) as User;
-      setUser(payload);
+      await persistUser(payload);
+      setSessionMode("online");
     },
-    [authFetch],
+    [authFetch, persistUser],
   );
 
   const logout = useCallback(async () => {
-    await clearTokens();
-    setUser(null);
-  }, [clearTokens]);
+    await clearSession();
+  }, [clearSession]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -404,12 +500,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isAuthenticated: Boolean(user),
       isLoading,
+      isOfflineSession: sessionMode === "offline",
       setApiUrl,
       probeServer,
       login,
       setup,
       updatePreferences,
       logout,
+      revalidateSession,
       authFetch,
       streamFetch,
     }),
@@ -420,6 +518,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       probeServer,
+      revalidateSession,
+      sessionMode,
       setApiUrl,
       setup,
       streamFetch,

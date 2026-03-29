@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -107,13 +107,19 @@ export function DocumentViewer({
   const { t } = useI18n();
   const [fileState, setFileState] = useState<FileState>({ status: "idle" });
   const [textContent, setTextContent] = useState<string | null>(null);
+  const lastLoadedUriRef = useRef<string | null>(null);
 
   const canPreview = isPdf(mimeType) || isImage(mimeType) || isText(mimeType);
 
+  useEffect(() => {
+    setFileState({ status: "idle" });
+    setTextContent(null);
+    lastLoadedUriRef.current = null;
+  }, [documentId, mimeType]);
+
   // Download file to local cache for PDF/image rendering
   const downloadFile = useCallback(async () => {
-    if (offlineMode && !hasLocalFile) {
-      setFileState({ status: "error", message: t("documentViewer.offlineFileMissing") });
+    if (localFileUri && fileState.status === "ready" && fileState.uri === localFileUri) {
       return;
     }
 
@@ -122,6 +128,7 @@ export function DocumentViewer({
       if (localFileUri) {
         const info = await FileSystem.getInfoAsync(localFileUri);
         if (info.exists) {
+          lastLoadedUriRef.current = localFileUri;
           setFileState({ status: "ready", uri: localFileUri });
           return;
         }
@@ -154,6 +161,7 @@ export function DocumentViewer({
       if (!uri) {
         throw new Error(t("documentViewer.downloadFailed"));
       }
+      lastLoadedUriRef.current = uri;
       setFileState({ status: "ready", uri });
     } catch (err) {
         setFileState({
@@ -165,8 +173,7 @@ export function DocumentViewer({
 
   // For text files, fetch as text
   const fetchText = useCallback(async () => {
-    if (offlineMode && !hasLocalFile) {
-      setFileState({ status: "error", message: t("documentViewer.offlineTextMissing") });
+    if (localFileUri && fileState.status === "ready" && fileState.uri === localFileUri && textContent !== null) {
       return;
     }
 
@@ -177,6 +184,7 @@ export function DocumentViewer({
         if (info.exists) {
           const text = await FileSystem.readAsStringAsync(localFileUri);
           setTextContent(text);
+          lastLoadedUriRef.current = localFileUri;
           setFileState({ status: "ready", uri: localFileUri });
           return;
         }
@@ -189,6 +197,7 @@ export function DocumentViewer({
         }
         const text = await FileSystem.readAsStringAsync(uri);
         setTextContent(text);
+        lastLoadedUriRef.current = uri;
         setFileState({ status: "ready", uri });
         return;
       }
@@ -197,6 +206,7 @@ export function DocumentViewer({
       if (!response.ok) throw new Error(`Download failed (${response.status})`);
       const text = await response.text();
       setTextContent(text);
+      lastLoadedUriRef.current = "";
       setFileState({ status: "ready", uri: "" });
     } catch (err) {
         setFileState({
@@ -209,12 +219,14 @@ export function DocumentViewer({
   // Auto-load on mount when previewable
   useEffect(() => {
     if (!canPreview) return;
+    if (fileState.status !== "idle") return;
+    if (localFileUri && lastLoadedUriRef.current === localFileUri) return;
     if (isText(mimeType)) {
       void fetchText();
     } else {
       void downloadFile();
     }
-  }, [canPreview, mimeType, fetchText, downloadFile]);
+  }, [canPreview, fileState.status, mimeType, localFileUri, fetchText, downloadFile]);
 
   // Fallback: share to external app
   const handleShare = useCallback(async () => {
@@ -295,27 +307,6 @@ export function DocumentViewer({
   }
 
   // ---- Error state ----
-  if (fileState.status === "error" && !offlineMode && !hasLocalFile && canFetchOnline) {
-    return (
-      <View style={styles.fallbackContainer}>
-        <Text style={styles.fallbackTitle}>{t("documentViewer.onlineFetchTitle")}</Text>
-        <Text style={styles.fallbackBody}>{t("documentViewer.onlineFetchBody")}</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.shareButton,
-            pressed ? styles.shareButtonPressed : null,
-          ]}
-          onPress={() => {
-            if (isText(mimeType)) void fetchText();
-            else void downloadFile();
-          }}
-        >
-          <Text style={styles.shareButtonText}>{t("documentViewer.fetchNow")}</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   if (fileState.status === "error") {
     return (
       <View style={styles.fallbackContainer}>

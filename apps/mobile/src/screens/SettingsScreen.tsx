@@ -1,20 +1,11 @@
-import { useEffect } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { Card, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
-import { useOfflineArchive } from "../offline-archive";
 import { colors, shadow } from "../theme";
 
 const APP_VERSION = "0.1.0";
-
-function formatStorage(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
 
 function SettingsRow({
   icon,
@@ -138,123 +129,6 @@ const sectionStyles = StyleSheet.create({
 export function SettingsScreen() {
   const auth = useAuth();
   const { t } = useI18n();
-  const offline = useOfflineArchive();
-
-  useEffect(() => {
-    if (!auth.apiUrl || !offline.isConnected || !offline.isReady) {
-      return;
-    }
-
-    void offline.checkArchiveReachability(auth.probeServer, auth.apiUrl);
-  }, [auth.apiUrl, auth.probeServer, offline.checkArchiveReachability, offline.isConnected, offline.isReady]);
-
-  const reachabilityLabel =
-    offline.archiveReachability === "reachable"
-      ? t("settings.reachability.reachable")
-      : offline.archiveReachability === "unreachable"
-        ? t("settings.reachability.unreachable")
-        : offline.archiveReachability === "checking"
-          ? t("settings.reachability.checking")
-          : t("settings.reachability.unknown");
-
-  const reachabilityValue = offline.lastReachabilityCheckedAt
-    ? `${reachabilityLabel} - ${new Date(offline.lastReachabilityCheckedAt).toLocaleTimeString()}`
-    : reachabilityLabel;
-
-  async function handleSync(forceFull = false) {
-    try {
-      const result = await offline.syncArchive(auth.authFetch, { forceFull });
-      Alert.alert(
-        forceFull
-          ? t("settings.syncRefreshedTitle")
-          : t("settings.syncUpdatedTitle"),
-        `${result.syncedDocuments} refreshed, ${result.reusedDocuments} unchanged, ${result.removedDocuments} removed. Cached ${result.documentCount} documents${result.failedDocuments > 0 ? `, ${result.failedDocuments} kept from the previous snapshot` : ""}.`,
-      );
-    } catch (error) {
-      Alert.alert(
-        t("settings.syncFailedTitle"),
-        error instanceof Error
-          ? error.message
-          : t("settings.syncFailedBody"),
-      );
-    }
-  }
-
-  async function handleCleanup() {
-    try {
-      const result = await offline.cleanupRetainedFiles();
-      Alert.alert(
-        t("settings.cleanupTitle"),
-        `${result.removedFiles} ${t("settings.cleanupRemovedSuffix")}. ${t("settings.retention.localFiles")}: ${formatStorage(result.fileStorageBytes)}.`,
-      );
-    } catch (error) {
-      Alert.alert(
-        t("settings.syncFailedTitle"),
-        error instanceof Error ? error.message : t("settings.syncFailedBody"),
-      );
-    }
-  }
-
-  function handleToggleRetentionMode() {
-    const nextMode = offline.retentionSettings.mode === "full_mirror" ? "smart_cache" : "full_mirror";
-    void offline.setRetentionSettings({
-      ...offline.retentionSettings,
-      mode: nextMode,
-      keepFilesForYears: nextMode === "smart_cache" ? offline.retentionSettings.keepFilesForYears ?? 5 : null,
-      maxFileStorageBytes: nextMode === "smart_cache" ? offline.retentionSettings.maxFileStorageBytes ?? 5 * 1024 * 1024 * 1024 : null,
-    });
-  }
-
-  function cycleFileAgeThreshold() {
-    const values = [3, 5, 10, null] as const;
-    const currentIndex = values.findIndex((value) => value === offline.retentionSettings.keepFilesForYears);
-    const nextValue = values[(currentIndex + 1 + values.length) % values.length];
-    void offline.setRetentionSettings({
-      ...offline.retentionSettings,
-      mode: "smart_cache",
-      keepFilesForYears: nextValue,
-    });
-  }
-
-  function cycleStorageCap() {
-    const values = [2, 5, 10, null] as const;
-    const currentGb = offline.retentionSettings.maxFileStorageBytes
-      ? Math.round(offline.retentionSettings.maxFileStorageBytes / (1024 * 1024 * 1024))
-      : null;
-    const currentIndex = values.findIndex((value) => value === currentGb);
-    const nextValue = values[(currentIndex + 1 + values.length) % values.length];
-    void offline.setRetentionSettings({
-      ...offline.retentionSettings,
-      mode: "smart_cache",
-      maxFileStorageBytes: nextValue ? nextValue * 1024 * 1024 * 1024 : null,
-    });
-  }
-
-  function retentionModeLabel() {
-    return offline.retentionSettings.mode === "full_mirror"
-      ? t("settings.retention.fullMirror")
-      : t("settings.retention.smartCache");
-  }
-
-  function fileAgeLabel() {
-    if (offline.retentionSettings.mode !== "smart_cache") {
-      return t("settings.retention.notApplicable");
-    }
-    if (!offline.retentionSettings.keepFilesForYears) {
-      return t("settings.retention.noAgeLimit");
-    }
-    return `${offline.retentionSettings.keepFilesForYears} ${t("settings.retention.yearsSuffix")}`;
-  }
-
-  function storageCapLabel() {
-    if (offline.retentionSettings.mode !== "smart_cache") {
-      return t("settings.retention.notApplicable");
-    }
-    if (!offline.retentionSettings.maxFileStorageBytes) {
-      return t("settings.retention.noStorageLimit");
-    }
-    return formatStorage(offline.retentionSettings.maxFileStorageBytes);
-  }
 
   function labelForLanguage(language: "en" | "de") {
     return language === "de" ? t("settings.german") : t("settings.english");
@@ -363,89 +237,6 @@ export function SettingsScreen() {
           icon="server-network"
           label={t("settings.connectedArchive")}
           value={auth.apiUrl || t("settings.notConnected")}
-        />
-        <Divider />
-        <SettingsRow
-          icon={offline.shouldUseOffline ? "archive-lock-outline" : "archive-outline"}
-          label={t("settings.offlineArchiveMode")}
-          value={offline.isOfflineModeEnabled ? t("settings.enabled") : offline.isConnected ? t("settings.readyWhenNeeded") : t("settings.usingLocalArchive")}
-          onPress={() => void offline.setOfflineModeEnabled(!offline.isOfflineModeEnabled)}
-        />
-        <Divider />
-        <SettingsRow
-          icon={offline.archiveReachability === "reachable" ? "lan-connect" : offline.archiveReachability === "checking" ? "lan-pending" : "lan-disconnect"}
-          label={t("settings.archiveStatus")}
-          value={reachabilityValue}
-          onPress={auth.apiUrl && offline.isConnected ? () => void offline.checkArchiveReachability(auth.probeServer, auth.apiUrl) : undefined}
-        />
-      </Card>
-
-      <SectionLabel label={t("settings.offlineArchive")} />
-      <Card>
-        <SettingsRow
-          icon="database-arrow-down-outline"
-          label={t("settings.syncLocalArchive")}
-          value={offline.isSyncing ? (offline.syncProgress ? `${offline.syncProgress.completed}/${offline.syncProgress.total}` : t("settings.running")) : t("settings.syncLocalArchiveHint")}
-          onPress={offline.isConnected ? () => void handleSync() : undefined}
-        />
-        <Divider />
-        <SettingsRow
-          icon="database-refresh-outline"
-          label={t("settings.forceFullResync")}
-          value={t("settings.forceFullResyncHint")}
-          onPress={offline.isConnected ? () => void handleSync(true) : undefined}
-        />
-        <Divider />
-        <SettingsRow
-          icon="database-cog-outline"
-          label={t("settings.retention.mode")}
-          value={retentionModeLabel()}
-          onPress={handleToggleRetentionMode}
-        />
-        <Divider />
-        <SettingsRow
-          icon="calendar-clock-outline"
-          label={t("settings.retention.fileAge")}
-          value={fileAgeLabel()}
-          onPress={cycleFileAgeThreshold}
-        />
-        <Divider />
-        <SettingsRow
-          icon="harddisk-plus"
-          label={t("settings.retention.storageCap")}
-          value={storageCapLabel()}
-          onPress={cycleStorageCap}
-        />
-        <Divider />
-        <SettingsRow
-          icon="file-cabinet-outline"
-          label={t("settings.cachedDocuments")}
-          value={offline.summary ? String(offline.summary.documentCount) : "0"}
-        />
-        <Divider />
-        <SettingsRow
-          icon="harddisk"
-          label={t("settings.localStorage")}
-          value={offline.summary ? formatStorage(offline.summary.storageBytes) : "0 B"}
-        />
-        <Divider />
-        <SettingsRow
-          icon="file-outline"
-          label={t("settings.retention.localFiles")}
-          value={offline.summary ? formatStorage(offline.summary.fileStorageBytes) : "0 B"}
-          onPress={offline.summary ? () => void handleCleanup() : undefined}
-        />
-        <Divider />
-        <SettingsRow
-          icon="file-document-outline"
-          label={t("settings.retention.localFileCount")}
-          value={offline.summary ? String(offline.summary.localFileCount) : "0"}
-        />
-        <Divider />
-        <SettingsRow
-          icon="clock-outline"
-          label={t("settings.lastSync")}
-          value={offline.summary?.lastSyncedAt ? new Date(offline.summary.lastSyncedAt).toLocaleString() : t("settings.never")}
         />
       </Card>
 

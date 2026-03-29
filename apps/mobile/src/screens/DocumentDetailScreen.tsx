@@ -71,11 +71,6 @@ export function DocumentDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
-  const availabilityQuery = useQuery({
-    queryKey: ["offline-availability", documentId, offline.summary?.lastSyncedAt],
-    queryFn: () => offline.getDocumentAvailability(documentId),
-  });
-
   const offlineRecordQuery = useQuery({
     queryKey: ["offline-document-record", documentId, offline.summary?.lastSyncedAt],
     enabled: offline.shouldUseOffline,
@@ -177,14 +172,6 @@ export function DocumentDetailScreen() {
     },
   });
 
-  useEffect(() => {
-    if (!offline.shouldUseOffline && documentQuery.data) {
-      void offline.persistViewedDocument(auth.authFetch, documentQuery.data).catch(() => {
-        // best-effort local persistence
-      });
-    }
-  }, [auth.authFetch, documentQuery.data, offline, offline.shouldUseOffline]);
-
   // ---- Loading / error ----
   if (documentQuery.isLoading) {
     return (
@@ -216,7 +203,6 @@ export function DocumentDetailScreen() {
       <View style={styles.statusRow}>
         <Pill label={formatDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
         <Pill label={formatReviewStatus(t, document.reviewStatus)} tone={toneForStatus(document.reviewStatus)} />
-        <Pill label={formatAvailabilityStatus(t, availabilityQuery.data ?? "syncing")} tone={toneForAvailability(availabilityQuery.data ?? "syncing")} />
         {document.confidence !== null && document.confidence !== undefined && (
           <Pill
             label={`${Math.round(document.confidence * 100)}% ${t("documentDetail.confidenceShort")}`}
@@ -236,7 +222,6 @@ export function DocumentDetailScreen() {
           authFetch={auth.authFetch}
           localFileUri={offlineRecordQuery.data?.fileUri ?? null}
           hasLocalFile={offlineRecordQuery.data?.hasLocalFile ?? false}
-          isPinnedOffline={offlineRecordQuery.data?.isPinnedOffline ?? false}
           offlineMode={offline.shouldUseOffline}
           textBlocks={textQuery.data?.blocks}
         />
@@ -360,7 +345,6 @@ function PreviewTab({
   authFetch,
   localFileUri,
   hasLocalFile,
-  isPinnedOffline,
   offlineMode,
   textBlocks,
 }: {
@@ -368,23 +352,19 @@ function PreviewTab({
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   localFileUri?: string | null;
   hasLocalFile: boolean;
-  isPinnedOffline: boolean;
   offlineMode: boolean;
   textBlocks?: Array<{ page: number; text: string }>;
 }) {
   const { t } = useI18n();
-  const offline = useOfflineArchive();
+  const { ensureDocumentFileAvailable, isConnected } = useOfflineArchive();
+  const persistOnlineFile = useCallback(
+    () => ensureDocumentFileAvailable(authFetch, document),
+    [authFetch, document, ensureDocumentFileAvailable],
+  );
 
   return (
     <>
       <Card>
-        <View style={styles.previewActionRow}>
-          <Button
-            label={isPinnedOffline ? t("documentDetail.preview.keepOfflineOn") : t("documentDetail.preview.keepOfflineOff")}
-            variant={isPinnedOffline ? "primary" : "secondary"}
-            onPress={() => void offline.setDocumentPinnedOffline(authFetch, document, !isPinnedOffline)}
-          />
-        </View>
         <DocumentViewer
           authFetch={authFetch}
           documentId={document.id}
@@ -393,8 +373,8 @@ function PreviewTab({
           localFileUri={localFileUri}
           hasLocalFile={hasLocalFile}
           offlineMode={offlineMode}
-          canFetchOnline={!offlineMode || offline.isConnected}
-          onPersistOnlineFile={() => offline.ensureDocumentFileAvailable(authFetch, document)}
+          canFetchOnline={!offlineMode || isConnected}
+          onPersistOnlineFile={persistOnlineFile}
           textBlocks={textBlocks}
         />
       </Card>
@@ -675,9 +655,6 @@ function OverviewTab({
       {/* Metadata editing */}
       <SectionTitle title={t("documentDetail.overview.editMetadata")} hint={t("documentDetail.overview.editHint")} />
       <Card>
-        {offlineReadOnly ? (
-          <Text style={styles.hintText}>{t("documentDetail.overview.offlineReadOnly")}</Text>
-        ) : null}
         <Field
           label={`${t("documentDetail.overview.title")}${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
           value={form.title}
@@ -1308,31 +1285,6 @@ function formatReviewStatus(
   }
 }
 
-function formatAvailabilityStatus(
-  t: ReturnType<typeof useI18n>["t"],
-  availability: "available_offline" | "metadata_only" | "syncing",
-) {
-  switch (availability) {
-    case "available_offline":
-      return t("documentDetail.availability.availableOffline");
-    case "metadata_only":
-      return t("documentDetail.availability.metadataOnly");
-    default:
-      return t("documentDetail.availability.syncing");
-  }
-}
-
-function toneForAvailability(availability: "available_offline" | "metadata_only" | "syncing") {
-  switch (availability) {
-    case "available_offline":
-      return "success" as const;
-    case "metadata_only":
-      return "warning" as const;
-    default:
-      return "default" as const;
-  }
-}
-
 function PickerField({
   label,
   selectedId,
@@ -1634,9 +1586,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 20,
     fontSize: 14,
-  },
-  previewActionRow: {
-    marginBottom: 12,
   },
   metaLabel: {
     fontWeight: "700",

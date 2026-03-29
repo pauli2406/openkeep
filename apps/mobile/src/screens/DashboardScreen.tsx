@@ -744,11 +744,6 @@ export function DashboardScreen() {
               onComplete={offline.shouldUseOffline ? undefined : (id) => completeMutation.mutate(id)}
               busyId={busyTaskId}
             />
-            {offline.shouldUseOffline ? (
-              <Card>
-                <Text style={styles.offlineText}>{t("dashboard.screen.offlineTaskDisabled")}</Text>
-              </Card>
-            ) : null}
             {completeMutation.isError ? (
               <ErrorCard
                 message={
@@ -797,10 +792,6 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    color: colors.muted,
-    lineHeight: 20,
-  },
-  offlineText: {
     color: colors.muted,
     lineHeight: 20,
   },

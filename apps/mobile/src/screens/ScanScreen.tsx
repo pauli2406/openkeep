@@ -67,16 +67,6 @@ export function ScanScreen() {
 
   const pageUris = useMemo(() => pages.map((page) => page.uri), [pages]);
 
-  if (offline.shouldUseOffline) {
-    return (
-      <Screen title={t("scan.title")} subtitle={t("scan.offlineSubtitle")}>
-        <Card>
-          <Text style={styles.offlineText}>{t("scan.offlineBody")}</Text>
-        </Card>
-      </Screen>
-    );
-  }
-
   const uploadMutation = useMutation({
     mutationFn: async () => {
       let fileUri = pdfUri;
@@ -213,18 +203,19 @@ export function ScanScreen() {
           <Button label={t("scan.importImages")} variant="secondary" onPress={() => void handlePickImages()} />
           <Button label={t("scan.importPdf")} variant="secondary" onPress={() => void handlePickFile()} />
         </View>
+        {offline.shouldUseOffline ? <Text style={styles.helper}>{t("scan.uploadsPaused")}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
       {pdfUri ? (
         <Card>
-          <SectionTitle title={t("scan.importedPdf")} hint={t("scan.importedHint")} />
-          <Text style={styles.fileText}>{pdfUri.split("/").pop() ?? pdfUri}</Text>
-          <View style={styles.buttonStack}>
-            <Button label={t("scan.shareCopy")} variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
-            <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
-          </View>
-        </Card>
+            <SectionTitle title={t("scan.importedPdf")} hint={t("scan.importedHint")} />
+            <Text style={styles.fileText}>{pdfUri.split("/").pop() ?? pdfUri}</Text>
+            <View style={styles.buttonStack}>
+              <Button label={t("scan.shareCopy")} variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
+              <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={offline.shouldUseOffline} />
+            </View>
+          </Card>
       ) : null}
 
       {pages.length > 0 ? (
@@ -240,7 +231,7 @@ export function ScanScreen() {
             </Card>
           ))}
           {uploadMutation.isError ? <ErrorCard message={uploadMutation.error instanceof Error ? uploadMutation.error.message : t("scan.uploadFailed")} /> : null}
-          <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} />
+          <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={offline.shouldUseOffline} />
         </>
       ) : null}
 
@@ -252,12 +243,12 @@ export function ScanScreen() {
 }
 
 const styles = StyleSheet.create({
-  offlineText: {
-    color: colors.muted,
-    lineHeight: 20,
-  },
   buttonStack: {
     gap: 10,
+  },
+  helper: {
+    color: colors.muted,
+    lineHeight: 20,
   },
   error: {
     color: colors.danger,

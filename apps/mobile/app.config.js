@@ -30,7 +30,8 @@ export default {
       "supportsTablet": true,
       "bundleIdentifier": IS_DEV ? "com.openkeep.mobile.dev" : "com.openkeep.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "OpenKeep uses the camera to scan paper documents into your archive."
+        "NSCameraUsageDescription": "OpenKeep uses the camera to scan paper documents into your archive.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "6DTWU4679K"
     },

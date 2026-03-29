@@ -106,10 +106,6 @@ export function ReviewScreen() {
           ))
         )
       ) : null}
-
-      {offline.shouldUseOffline ? (
-        <Card><Text style={styles.helper}>{t("review.offlineDisabled")}</Text></Card>
-      ) : null}
     </Screen>
   );
 }

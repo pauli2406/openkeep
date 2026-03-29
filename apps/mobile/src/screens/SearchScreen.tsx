@@ -38,7 +38,7 @@ export function SearchScreen() {
   const { recentSearches, addSearch, removeSearch, clearAll } = useRecentSearches();
   const { suggestions, isLoading: suggestionsLoading } = useSuggestions(
     auth.authFetch,
-    true,
+    !offline.shouldUseOffline,
   );
 
   const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
@@ -74,34 +74,6 @@ export function SearchScreen() {
     },
     [answerStream],
   );
-
-  if (offline.shouldUseOffline) {
-    return (
-        <Screen
-          title={t("search.title")}
-          subtitle={t("search.offlineSubtitle")}
-          headerVariant="compact"
-        >
-          <Card>
-          <Text style={styles.offlineTitle}>{t("search.offlineTitle")}</Text>
-          <Text style={styles.offlineBody}>{t("search.offlineBody")}</Text>
-          </Card>
-        <ZeroState
-          recentSearches={recentSearches}
-          suggestions={[]}
-          suggestionsLoading={false}
-          onSelectQuery={handleRecentPress}
-          onSelectRecent={handleRecentPress}
-          onRemoveRecent={removeSearch}
-          onClearAll={clearAll}
-          recentLabel={t("search.recentSearches")}
-          clearAllLabel={t("search.clearAll")}
-          suggestedLabel={t("search.suggested")}
-          noSuggestionsLabel={t("search.noSuggestions")}
-        />
-      </Screen>
-    );
-  }
 
   return (
     <Screen
@@ -634,15 +606,6 @@ const markdownStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  offlineTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  offlineBody: {
-    color: colors.muted,
-    lineHeight: 22,
-  },
   // Search bar
   searchBarContainer: {
     flexDirection: "row",

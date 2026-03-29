@@ -947,26 +947,11 @@ export function CorrespondentDossierScreen() {
   const offline = useOfflineArchive();
 
   const { slug, name } = route.params;
-  if (offline.shouldUseOffline) {
-    return (
-      <Screen
-        title={name}
-        headerVariant="compact"
-        includeTopSafeArea={false}
-        contentContainerStyle={styles.content}
-      >
-        <Card>
-          <Text style={styles.loadingText}>
-            {t("correspondent.screen.offlineOnly")}
-          </Text>
-        </Card>
-      </Screen>
-    );
-  }
 
   // ── Primary query: insights (polls every 4s while pending) ──
   const insightsQuery = useQuery({
-    queryKey: ["correspondent", slug, "insights", auth.apiUrl],
+    queryKey: ["correspondent", slug, "insights", auth.apiUrl, offline.shouldUseOffline],
+    enabled: !offline.shouldUseOffline,
     queryFn: async () => {
       const response = await auth.authFetch(
         `/api/correspondents/${encodeURIComponent(slug)}/insights`,
@@ -994,8 +979,14 @@ export function CorrespondentDossierScreen() {
       "documents",
       correspondentId,
       auth.apiUrl,
+      offline.shouldUseOffline,
+      offline.summary?.lastSyncedAt,
     ],
     queryFn: async () => {
+      if (offline.shouldUseOffline) {
+        return offline.loadDocuments({ correspondentSlug: slug });
+      }
+
       const params = new URLSearchParams({
         correspondentIds: correspondentId!,
         page: "1",
@@ -1011,12 +1002,14 @@ export function CorrespondentDossierScreen() {
       }
       return (await response.json()) as SearchDocumentsResponse;
     },
-    enabled: Boolean(correspondentId),
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+    enabled: offline.shouldUseOffline || Boolean(correspondentId),
+    refetchInterval: offline.shouldUseOffline
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   // ── Loading state ──
-  if (insightsQuery.isLoading) {
+  if (!offline.shouldUseOffline && insightsQuery.isLoading) {
     return (
       <Screen
         title={name}
@@ -1034,7 +1027,7 @@ export function CorrespondentDossierScreen() {
   }
 
   // ── Error state ──
-  if (insightsQuery.isError || !insightsQuery.data) {
+  if (!offline.shouldUseOffline && (insightsQuery.isError || !insightsQuery.data)) {
     return (
       <Screen
         title={name}
@@ -1051,17 +1044,17 @@ export function CorrespondentDossierScreen() {
   }
 
   // ── Data ready ──
-  const data = insightsQuery.data;
-  const intelligence = data.intelligence;
-  const intelligenceStatus = data.intelligenceStatus;
-  const smartHighlight = buildSmartHighlight(data, intelligence, t);
+  const data = insightsQuery.data ?? null;
+  const intelligence = data?.intelligence ?? null;
+  const intelligenceStatus = data?.intelligenceStatus ?? "unavailable";
+  const smartHighlight = data ? buildSmartHighlight(data, intelligence, t) : null;
 
   const orderedDocuments = [
     ...(documentsQuery.data?.items ?? []),
   ].sort(compareDocumentsNewestFirst);
 
   const summaryText =
-    data.summary ??
+    data?.summary ??
     intelligence?.profile?.narrative ??
     t("correspondent.screen.noSummary");
 
@@ -1073,62 +1066,65 @@ export function CorrespondentDossierScreen() {
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
     >
-      {/* ── Metric ribbon ── */}
-      <MetricRibbon
-        items={[
-          {
-              label: t("correspondent.screen.metricDocuments"),
-            value: data.stats.documentCount.toLocaleString(),
-          },
-          smartHighlight,
-          {
-              label: t("correspondent.screen.metricLastDocument"),
-              value: data.stats.dateRange.to ?? t("correspondent.screen.undated"),
-            },
-            {
-              label: t("correspondent.screen.metricChanges"),
-              value: String(intelligence?.changes.length ?? 0),
-            },
-        ]}
-      />
+      {data ? (
+        <>
+          {/* ── Metric ribbon ── */}
+          <MetricRibbon
+            items={[
+              {
+                label: t("correspondent.screen.metricDocuments"),
+                value: data.stats.documentCount.toLocaleString(),
+              },
+              smartHighlight!,
+              {
+                label: t("correspondent.screen.metricLastDocument"),
+                value: data.stats.dateRange.to ?? t("correspondent.screen.undated"),
+              },
+              {
+                label: t("correspondent.screen.metricChanges"),
+                value: String(intelligence?.changes.length ?? 0),
+              },
+            ]}
+          />
 
-      {/* ── Relationship overview ── */}
-      <RelationshipOverview
-        intelligence={intelligence}
-        intelligenceStatus={intelligenceStatus}
-      />
+          {/* ── Relationship overview ── */}
+          <RelationshipOverview
+            intelligence={intelligence}
+            intelligenceStatus={intelligenceStatus}
+          />
 
-      {/* ── Key changes ── */}
-      <KeyChanges changes={intelligence?.changes ?? []} />
+          {/* ── Key changes ── */}
+          <KeyChanges changes={intelligence?.changes ?? []} />
 
-      {/* ── Monthly activity ── */}
-      {data.timeline.length > 0 ? (
-        <MonthlyActivity data={data.timeline} />
+          {/* ── Monthly activity ── */}
+          {data.timeline.length > 0 ? (
+            <MonthlyActivity data={data.timeline} />
+          ) : null}
+
+          {/* ── Current state ── */}
+          <CurrentState facts={intelligence?.currentState ?? []} />
+
+          {/* ── Timeline highlights ── */}
+          <TimelineHighlights events={intelligence?.timeline ?? []} />
+
+          {/* ── Insurance lens (conditional) ── */}
+          {intelligence?.domainInsights.insurance ? (
+            <InsuranceLens insurance={intelligence.domainInsights.insurance} />
+          ) : null}
+        </>
       ) : null}
 
-      {/* ── Current state ── */}
-      <CurrentState facts={intelligence?.currentState ?? []} />
-
-      {/* ── Timeline highlights ── */}
-      <TimelineHighlights events={intelligence?.timeline ?? []} />
-
-      {/* ── Insurance lens (conditional) ── */}
-      {intelligence?.domainInsights.insurance ? (
-        <InsuranceLens insurance={intelligence.domainInsights.insurance} />
-      ) : null}
-
-      {/* ── Type breakdown ── */}
-      <TypeBreakdown items={data.documentTypeBreakdown} />
+      {data ? <TypeBreakdown items={data.documentTypeBreakdown} /> : null}
 
       {/* ── Legacy summary ── */}
-      <LegacySummary text={summaryText} />
+      {data ? <LegacySummary text={summaryText} /> : null}
 
       {/* ── Documents ── */}
       <View style={styles.documentsSection}>
         <View style={styles.documentsSectionHeader}>
           <Text style={sectionStyles.eyebrow}>{t("correspondent.screen.documents")}</Text>
           <Text style={styles.documentsTitle}>
-            {`${t("correspondent.screen.documentsFrom")} ${data.correspondent.name}`}
+            {`${t("correspondent.screen.documentsFrom")} ${data?.correspondent.name ?? name}`}
           </Text>
         </View>
 

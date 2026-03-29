@@ -111,6 +111,7 @@ export async function upsertOfflineDocumentMetadata(
   },
 ) {
   const db = await getDb();
+  const updatedAt = document.updatedAt ?? document.createdAt ?? new Date().toISOString();
   const existing = await db.getFirstAsync<Pick<MetadataRow, "hasLocalFile" | "isPinnedOffline" | "lastViewedAt" | "syncedAt">>(
     "SELECT has_local_file as hasLocalFile, is_pinned_offline as isPinnedOffline, last_viewed_at as lastViewedAt, synced_at as syncedAt FROM offline_documents WHERE id = ?",
     document.id,
@@ -134,7 +135,7 @@ export async function upsertOfflineDocumentMetadata(
     document.id,
     JSON.stringify(document),
     document.createdAt,
-    document.updatedAt,
+    updatedAt,
     document.status,
     document.reviewStatus,
     document.correspondent?.slug ?? null,

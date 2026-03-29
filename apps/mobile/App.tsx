@@ -135,8 +135,18 @@ function HomeTabs() {
 function AppNavigator() {
   const auth = useAuth();
   const { t } = useI18n();
+  const offline = useOfflineArchive();
 
-  if (auth.isLoading) {
+  const hasOfflineSnapshot = Boolean(
+    offline.summary && (
+      offline.summary.lastSyncedAt ||
+      offline.summary.documentCount > 0 ||
+      offline.summary.dashboard ||
+      offline.summary.facets
+    ),
+  );
+
+  if (auth.isLoading || !offline.isReady) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -146,7 +156,9 @@ function AppNavigator() {
     );
   }
 
-  if (!auth.isAuthenticated) {
+  const canEnterApp = auth.isAuthenticated && (!auth.isOfflineSession || hasOfflineSnapshot);
+
+  if (!canEnterApp) {
     return (
       <Stack.Navigator
         screenOptions={{
@@ -221,15 +233,7 @@ function AutoSyncManager() {
     const justReconnected = !wasConnectedRef.current && offline.isConnected;
     wasConnectedRef.current = offline.isConnected;
 
-    if (
-      !auth.isAuthenticated ||
-      !offline.isReady ||
-      !offline.isConnected ||
-      !auth.apiUrl ||
-      offline.isSyncing ||
-      !offline.summary ||
-      !justReconnected
-    ) {
+    if (!auth.isAuthenticated || !offline.isReady || !offline.isConnected || !auth.apiUrl || offline.isSyncing || !offline.summary || !justReconnected) {
       return;
     }
 
@@ -238,8 +242,17 @@ function AutoSyncManager() {
     }
 
     lastAutoSyncAtRef.current = offline.summary.lastSyncedAt;
-    void offline
-      .checkArchiveReachability(auth.probeServer, auth.apiUrl)
+    void Promise.resolve()
+      .then(async () => {
+        if (auth.isOfflineSession) {
+          const revalidated = await auth.revalidateSession();
+          if (!revalidated) {
+            throw new Error("Session could not be revalidated");
+          }
+        }
+
+        return offline.checkArchiveReachability(auth.probeServer, auth.apiUrl);
+      })
       .then((isReachable) => {
         if (!isReachable) {
           throw new Error("Archive unreachable");
@@ -253,7 +266,9 @@ function AutoSyncManager() {
     auth.apiUrl,
     auth.authFetch,
     auth.isAuthenticated,
+    auth.isOfflineSession,
     auth.probeServer,
+    auth.revalidateSession,
     offline.checkArchiveReachability,
     offline.isConnected,
     offline.isReady,
