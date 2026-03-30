@@ -25,6 +25,7 @@ export function Screen({
   contentContainerStyle,
   headerVariant = "default",
   includeTopSafeArea = true,
+  showEyebrow = false,
 }: {
   title: string;
   subtitle?: string;
@@ -34,6 +35,7 @@ export function Screen({
   contentContainerStyle?: ViewStyle;
   headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
+  showEyebrow?: boolean;
 }) {
   const { t } = useI18n();
   const scrollRef = useRef<ScrollView>(null);
@@ -45,9 +47,11 @@ export function Screen({
     <View style={[styles.content, contentContainerStyle]}>
       <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
         <View style={styles.headerTextWrap}>
-          <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>
-            {t("app.brandMobile")}
-          </Text>
+          {showEyebrow ? (
+            <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>
+              {t("app.brandMobile")}
+            </Text>
+          ) : null}
           <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
           {subtitle ? <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>{subtitle}</Text> : null}
         </View>

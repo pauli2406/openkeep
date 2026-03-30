@@ -187,7 +187,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <Screen title={t("settings.title")} subtitle={t("settings.subtitle")}>
+    <Screen title={t("settings.title")} subtitle={t("settings.subtitle")} showEyebrow>
       {/* Account */}
       <SectionLabel label={t("settings.account")} />
       <Card>

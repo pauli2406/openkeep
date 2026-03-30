@@ -85,7 +85,7 @@ export function DocumentsScreen() {
   });
 
   return (
-    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")}>
+    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")} showEyebrow>
       <Card>
         <Field label={t("documents.query")} value={query} onChangeText={setQuery} placeholder={t("documents.placeholder")} />
         <SectionTitle title={t("documents.status")} hint={t("documents.statusHint")} />

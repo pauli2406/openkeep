@@ -165,6 +165,7 @@ function AppNavigator() {
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.text,
           headerShadowVisible: false,
+          headerBackButtonDisplayMode: "minimal",
           contentStyle: { backgroundColor: colors.background },
         }}
       >
@@ -185,6 +186,7 @@ function AppNavigator() {
           headerStyle: { backgroundColor: colors.surface },
           headerTintColor: colors.text,
           headerShadowVisible: false,
+          headerBackButtonDisplayMode: "minimal",
           contentStyle: { backgroundColor: colors.background },
         }}
       >
@@ -192,9 +194,7 @@ function AppNavigator() {
         <Stack.Screen
           name="DocumentDetail"
           component={DocumentDetailScreen}
-          options={({ route }) => ({
-            title: route.params.title ?? t("screens.document"),
-          })}
+          options={{ title: "" }}
         />
         <Stack.Screen
           name="Review"

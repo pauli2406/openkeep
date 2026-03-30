@@ -274,8 +274,6 @@ function ScreenShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
-  const { t } = useI18n();
-
   return (
     <View style={styles.root}>
       <ScrollView
@@ -286,7 +284,6 @@ function ScreenShell({
         <View style={styles.content}>
           <View style={styles.headerRow}>
             <View style={styles.headerTextWrap}>
-              <Text style={styles.eyebrow}>{t("app.brandMobile")}</Text>
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
               {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             </View>
@@ -1513,14 +1510,6 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
-  },
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
   },
   title: {
     fontSize: 26,

@@ -680,6 +680,7 @@ export function DashboardScreen() {
     <Screen
       title={t("dashboard.screen.title")}
       subtitle={t("dashboard.screen.subtitle")}
+      showEyebrow
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (

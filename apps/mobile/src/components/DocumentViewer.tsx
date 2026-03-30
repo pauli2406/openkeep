@@ -3,16 +3,15 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
-  Modal,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import FileViewer from "react-native-file-viewer";
 import Pdf, { type PdfRef } from "react-native-pdf";
 import { Buffer } from "buffer";
 import { useI18n } from "../i18n";
@@ -144,33 +143,6 @@ function ExpandIcon({ color = colors.muted, size = 16 }: { color?: string; size?
         {/* Bottom-right */}
         <View style={{ position: "absolute", bottom: 0, right: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderRightWidth: 2, borderColor: color }} />
       </View>
-    </View>
-  );
-}
-
-function CloseIcon({ color = "#fff", size = 20 }: { color?: string; size?: number }) {
-  return (
-    <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
-      <View
-        style={{
-          position: "absolute",
-          width: size * 0.85,
-          height: 2.5,
-          backgroundColor: color,
-          transform: [{ rotate: "45deg" }],
-          borderRadius: 2,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          width: size * 0.85,
-          height: 2.5,
-          backgroundColor: color,
-          transform: [{ rotate: "-45deg" }],
-          borderRadius: 2,
-        }}
-      />
     </View>
   );
 }
@@ -338,221 +310,6 @@ const navStyles = StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// Fullscreen Modal
-// ---------------------------------------------------------------------------
-
-function FullscreenPdfModal({
-  visible,
-  uri,
-  initialPage,
-  onClose,
-  onPageChanged,
-  closeLabel,
-  pageLabel,
-  ofLabel,
-}: {
-  visible: boolean;
-  uri: string;
-  initialPage: number;
-  onClose: () => void;
-  onPageChanged: (page: number, total: number) => void;
-  closeLabel: string;
-  pageLabel: string;
-  ofLabel: string;
-}) {
-  const pdfRef = useRef<PdfRef>(null);
-  const [page, setPage] = useState(initialPage);
-  const [total, setTotal] = useState(0);
-  const [showControls, setShowControls] = useState(true);
-
-  // Sync initial page when modal opens
-  useEffect(() => {
-    if (visible) {
-      setPage(initialPage);
-      setShowControls(true);
-    }
-  }, [visible, initialPage]);
-
-  const handlePageChanged = useCallback(
-    (p: number, t: number) => {
-      setPage(p);
-      setTotal(t);
-      onPageChanged(p, t);
-    },
-    [onPageChanged],
-  );
-
-  const handleTap = useCallback(() => {
-    setShowControls((prev) => !prev);
-  }, []);
-
-  const handlePrev = useCallback(() => {
-    if (page > 1) pdfRef.current?.setPage(page - 1);
-  }, [page]);
-
-  const handleNext = useCallback(() => {
-    if (page < total) pdfRef.current?.setPage(page + 1);
-  }, [page, total]);
-
-  if (!visible) return null;
-
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      supportedOrientations={["portrait", "landscape"]}
-      onRequestClose={onClose}
-    >
-      <StatusBar barStyle="light-content" animated />
-      <View style={fullscreenStyles.backdrop}>
-        {/* PDF */}
-        <Pdf
-          ref={pdfRef}
-          source={{ uri }}
-          page={initialPage}
-          style={fullscreenStyles.pdf}
-          enablePaging
-          enableDoubleTapZoom
-          trustAllCerts={false}
-          minScale={1.0}
-          maxScale={5.0}
-          spacing={0}
-          onLoadComplete={(numberOfPages) => {
-            setTotal(numberOfPages);
-          }}
-          onPageChanged={handlePageChanged}
-          onPageSingleTap={handleTap}
-          onError={() => {
-            /* handled by parent */
-          }}
-        />
-
-        {/* Top bar (close button) */}
-        {showControls && (
-          <View style={fullscreenStyles.topBar}>
-            <Pressable
-              onPress={onClose}
-              style={({ pressed }) => [
-                fullscreenStyles.closeButton,
-                pressed && { opacity: 0.7 },
-              ]}
-              hitSlop={12}
-            >
-              <CloseIcon color="#fff" size={18} />
-              <Text style={fullscreenStyles.closeText}>{closeLabel}</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Bottom bar (page navigation) */}
-        {showControls && total > 0 && (
-          <View style={fullscreenStyles.bottomBar}>
-            <Pressable
-              onPress={handlePrev}
-              disabled={page <= 1}
-              style={({ pressed }) => [
-                fullscreenStyles.bottomNavButton,
-                page <= 1 && { opacity: 0.3 },
-                pressed && page > 1 && { opacity: 0.7 },
-              ]}
-              hitSlop={8}
-            >
-              <ChevronLeft color="#fff" size={16} />
-            </Pressable>
-
-            <Text style={fullscreenStyles.bottomPageText}>
-              {`${pageLabel} ${page} ${ofLabel} ${total}`}
-            </Text>
-
-            <Pressable
-              onPress={handleNext}
-              disabled={page >= total}
-              style={({ pressed }) => [
-                fullscreenStyles.bottomNavButton,
-                page >= total && { opacity: 0.3 },
-                pressed && page < total && { opacity: 0.7 },
-              ]}
-              hitSlop={8}
-            >
-              <ChevronRight color="#fff" size={16} />
-            </Pressable>
-          </View>
-        )}
-      </View>
-    </Modal>
-  );
-}
-
-const fullscreenStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  pdf: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  topBar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 56,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    // gradient-like feel via semi-transparent background
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  closeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  closeText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingBottom: 40,
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 16,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  bottomNavButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  bottomPageText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-    minWidth: 100,
-    textAlign: "center",
-  },
-});
-
-// ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 
@@ -578,7 +335,7 @@ export function DocumentViewer({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [loadProgress, setLoadProgress] = useState(0);
-  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [openingNativeViewer, setOpeningNativeViewer] = useState(false);
 
   const canPreview = isPdf(mimeType) || isImage(mimeType) || isText(mimeType);
 
@@ -750,18 +507,29 @@ export function DocumentViewer({
   }, [currentPage, totalPages]);
 
   const handleOpenFullscreen = useCallback(() => {
-    setFullscreenVisible(true);
-  }, []);
+    if (fileState.status !== "ready" || openingNativeViewer) {
+      return;
+    }
 
-  const handleCloseFullscreen = useCallback(() => {
-    setFullscreenVisible(false);
-  }, []);
-
-  const handleFullscreenPageChanged = useCallback((page: number, _total: number) => {
-    setCurrentPage(page);
-    // Sync inline viewer to the same page when fullscreen closes
-    pdfRef.current?.setPage(page);
-  }, []);
+    setOpeningNativeViewer(true);
+    void FileViewer.open(fileState.uri, {
+      displayName: `Document ${documentId}`,
+      onDismiss: () => {
+        setOpeningNativeViewer(false);
+      },
+      showAppsSuggestions: true,
+      showOpenWithDialog: false,
+    })
+      .catch((error) => {
+        setFileState({
+          status: "error",
+          message: error instanceof Error ? error.message : t("documentViewer.previewUnavailable"),
+        });
+      })
+      .finally(() => {
+        setOpeningNativeViewer(false);
+      });
+  }, [documentId, fileState, openingNativeViewer, t]);
 
   // ---- Unsupported type fallback ----
   if (!canPreview) {
@@ -830,10 +598,7 @@ export function DocumentViewer({
     const pdfWidth = screenWidth - 40; // 20px padding each side
     return (
       <View style={styles.pdfContainer}>
-        <Pressable
-          onPress={handleOpenFullscreen}
-          style={styles.pdfTapTarget}
-        >
+        <View style={styles.pdfTapTarget}>
           <Pdf
             ref={pdfRef}
             source={{ uri: fileState.uri }}
@@ -859,14 +624,11 @@ export function DocumentViewer({
                 message: t("documentViewer.pdfRenderError"),
               });
             }}
-            onPageSingleTap={() => {
-              handleOpenFullscreen();
-            }}
             renderActivityIndicator={(progress) => (
               <PdfProgressBar progress={progress} />
             )}
           />
-        </Pressable>
+        </View>
 
         {/* Page navigation bar */}
         {totalPages > 0 && (
@@ -881,7 +643,6 @@ export function DocumentViewer({
           />
         )}
 
-        {/* Share button */}
         <Pressable
           style={({ pressed }) => [
             styles.shareButton,
@@ -892,18 +653,6 @@ export function DocumentViewer({
         >
           <Text style={styles.shareButtonText}>{t("documentViewer.sharePdf")}</Text>
         </Pressable>
-
-        {/* Fullscreen modal */}
-        <FullscreenPdfModal
-          visible={fullscreenVisible}
-          uri={fileState.uri}
-          initialPage={currentPage}
-          onClose={handleCloseFullscreen}
-          onPageChanged={handleFullscreenPageChanged}
-          closeLabel={t("documentViewer.closeFullscreen")}
-          pageLabel={t("documentViewer.page")}
-          ofLabel={t("documentViewer.of")}
-        />
       </View>
     );
   }

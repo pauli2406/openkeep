@@ -79,7 +79,7 @@ export function SearchScreen() {
     <Screen
       title={t("search.title")}
       subtitle={t("search.subtitle")}
-      headerVariant="compact"
+      showEyebrow
     >
       {/* ─── Search bar ─── */}
       <View style={styles.searchBarContainer}>

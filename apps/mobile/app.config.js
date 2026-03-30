@@ -40,6 +40,17 @@ export default {
       "permissions": [
         "android.permission.CAMERA"
       ],
+      "intentFilters": [],
+      "queries": {
+        "intent": [
+          {
+            "action": "VIEW",
+            "data": {
+              "mimeType": "application/pdf"
+            }
+          }
+        ]
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#f6f3ed"
