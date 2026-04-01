@@ -34,11 +34,12 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
     }
 
     const best = citations[0]!;
+    const selected = this.selectBestCitation(citations, input.question);
     const supporting = citations.slice(1, 3).map((citation) => this.describeCitation(citation));
 
     return {
       status: "answered",
-      answer: best.quote,
+      answer: selected.quote,
       reasoning:
         supporting.length > 0
           ? `Answer selected from the highest-scoring grounded chunk, with corroborating evidence in ${supporting.join(", ")}.`
@@ -52,7 +53,7 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
     maxCitations: number,
   ): AnswerCitation[] {
     const ranked = results
-      .flatMap((result) =>
+      .flatMap((result, resultIndex) =>
         result.matchedChunks.map((chunk) => ({
           documentId: result.document.id,
           documentTitle: result.document.title,
@@ -61,12 +62,22 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
           pageTo: chunk.pageTo,
           quote: this.normalizeQuote(chunk.text),
           score: chunk.score,
+          resultScore: result.score,
+          resultIndex,
         })),
       )
       .filter((citation) => citation.score >= ExtractiveAnswerProvider.MIN_EVIDENCE_SCORE)
       .sort((left, right) => {
         if (right.score !== left.score) {
           return right.score - left.score;
+        }
+
+        if (right.resultScore !== left.resultScore) {
+          return right.resultScore - left.resultScore;
+        }
+
+        if (left.resultIndex !== right.resultIndex) {
+          return left.resultIndex - right.resultIndex;
         }
 
         const leftSpan = this.pageSpan(left);
@@ -97,6 +108,62 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
 
   private normalizeQuote(text: string): string {
     return text.replace(/\s+/g, " ").trim().slice(0, 280);
+  }
+
+  private selectBestCitation(citations: AnswerCitation[], question: string): AnswerCitation {
+    if (citations.length === 0) {
+      throw new Error("Expected at least one citation");
+    }
+
+    if (!/amount|betrag|total|summe|due/i.test(question)) {
+      return citations[0]!;
+    }
+
+    const clusters = new Map<
+      string,
+      { totalScore: number; count: number; bestCitation: AnswerCitation }
+    >();
+
+    for (const citation of citations) {
+      const amountKey = this.extractAmountFingerprint(citation.quote);
+      if (!amountKey) {
+        continue;
+      }
+
+      const existing = clusters.get(amountKey);
+      if (!existing) {
+        clusters.set(amountKey, {
+          totalScore: citation.score,
+          count: 1,
+          bestCitation: citation,
+        });
+        continue;
+      }
+
+      existing.totalScore += citation.score;
+      existing.count += 1;
+      if (citation.score > existing.bestCitation.score) {
+        existing.bestCitation = citation;
+      }
+    }
+
+    const strongestCluster = [...clusters.values()].sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count;
+      }
+      return right.totalScore - left.totalScore;
+    })[0];
+
+    return strongestCluster?.bestCitation ?? citations[0]!;
+  }
+
+  private extractAmountFingerprint(text: string): string | null {
+    const match = text.match(/(?:EUR|USD|GBP|CHF|\$|€|£)?\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})/i);
+    if (!match) {
+      return null;
+    }
+
+    return match[0].replace(/\s+/g, "").replace(/,/g, ".").toUpperCase();
   }
 
   private normalizedFingerprint(text: string): string {

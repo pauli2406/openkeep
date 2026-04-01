@@ -293,15 +293,15 @@ export const ReviewEvidenceSchema = z.object({
   requiredFields: z.array(ReviewEvidenceFieldSchema),
   missingFields: z.array(ReviewEvidenceFieldSchema),
   extracted: z.object({
-    correspondent: z.boolean(),
-    issueDate: z.boolean(),
-    dueDate: z.boolean(),
-    amount: z.boolean(),
-    currency: z.boolean(),
-    referenceNumber: z.boolean(),
-    expiryDate: z.boolean(),
-    holderName: z.boolean(),
-    issuingAuthority: z.boolean(),
+    correspondent: z.boolean().default(false),
+    issueDate: z.boolean().default(false),
+    dueDate: z.boolean().default(false),
+    amount: z.boolean().default(false),
+    currency: z.boolean().default(false),
+    referenceNumber: z.boolean().default(false),
+    expiryDate: z.boolean().default(false),
+    holderName: z.boolean().default(false),
+    issuingAuthority: z.boolean().default(false),
   }),
   activeReasons: z.array(ReviewReasonSchema),
   confidence: z.number().min(0).max(1).nullable().optional(),
@@ -1066,12 +1066,43 @@ export const AnswerQueryRequestSchema = z.object({
   maxChunkMatches: z.number().int().min(1).max(10).default(6),
 });
 
+export const AnswerRouteSchema = z.enum(["semantic", "structured", "hybrid"]);
+
+export const AnswerStructuredDataSchema = z.object({
+  kind: z.enum(["deadline_items"]),
+  title: z.string().min(1),
+  description: z.string().nullable(),
+  items: z.array(DashboardDeadlineItemSchema),
+  totalOpenCount: z.number().int().nonnegative(),
+  totalAmount: z.number().nullable(),
+  currency: z.string().length(3).nullable(),
+  windowStart: z.string().nullable(),
+  windowEnd: z.string().nullable(),
+});
+
+export const AnswerStructuredDocumentListSchema = z.object({
+  kind: z.enum(["pending_review_documents", "expiring_contracts"]),
+  title: z.string().min(1),
+  description: z.string().nullable(),
+  items: z.array(DocumentSchema),
+  totalCount: z.number().int().nonnegative(),
+  windowStart: z.string().nullable().optional(),
+  windowEnd: z.string().nullable().optional(),
+});
+
+export const AnswerStructuredPayloadSchema = z.union([
+  AnswerStructuredDataSchema,
+  AnswerStructuredDocumentListSchema,
+]);
+
 export const AnswerQueryResponseSchema = z.object({
   status: z.enum(["answered", "insufficient_evidence"]),
+  route: AnswerRouteSchema.default("semantic"),
   answer: z.string().nullable(),
   reasoning: z.string().nullable().optional(),
   citations: z.array(AnswerCitationSchema),
   results: z.array(SemanticSearchResultSchema),
+  structuredData: AnswerStructuredPayloadSchema.nullable().optional(),
 });
 
 export const DocumentAskRequestSchema = z.object({
@@ -1143,13 +1174,13 @@ export const ArchiveDocumentSchema = z.object({
   pageCount: z.number().int().nonnegative(),
   issueDate: ArchiveDateSchema.nullable(),
   dueDate: ArchiveDateSchema.nullable(),
-  taskCompletedAt: ArchiveTimestampSchema.nullable(),
-  expiryDate: ArchiveDateSchema.nullable(),
+  taskCompletedAt: ArchiveTimestampSchema.nullable().default(null),
+  expiryDate: ArchiveDateSchema.nullable().default(null),
   amount: z.number().nullable(),
   currency: z.string().length(3).nullable(),
   referenceNumber: z.string().nullable(),
-  holderName: z.string().nullable(),
-  issuingAuthority: z.string().nullable(),
+  holderName: z.string().nullable().default(null),
+  issuingAuthority: z.string().nullable().default(null),
   confidence: z.number().min(0).max(1).nullable(),
   reviewStatus: ReviewStatusSchema,
   reviewReasons: z.array(ReviewReasonSchema),
@@ -1432,6 +1463,10 @@ export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;
 export type DeleteTaxonomyResponse = z.infer<typeof DeleteTaxonomyResponseSchema>;
 export type DeleteDocumentResponse = z.infer<typeof DeleteDocumentResponseSchema>;
 export type AnswerCitation = z.infer<typeof AnswerCitationSchema>;
+export type AnswerRoute = z.infer<typeof AnswerRouteSchema>;
+export type AnswerStructuredData = z.infer<typeof AnswerStructuredDataSchema>;
+export type AnswerStructuredDocumentList = z.infer<typeof AnswerStructuredDocumentListSchema>;
+export type AnswerStructuredPayload = z.infer<typeof AnswerStructuredPayloadSchema>;
 export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
 export type DocumentAskRequest = z.infer<typeof DocumentAskRequestSchema>;

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import { AppConfigService } from "../common/config/app-config.service";
 
@@ -37,7 +37,7 @@ interface LlmProviderConfig {
 export class LlmService {
   private readonly logger = new Logger(LlmService.name);
 
-  constructor(private readonly configService: AppConfigService) {}
+  constructor(@Inject(AppConfigService) private readonly configService: AppConfigService) {}
 
   isConfigured(): boolean {
     return this.getProviderConfig() !== null;
@@ -148,7 +148,7 @@ export class LlmService {
   }
 
   private getDefaultProviderOrder(): LlmProviderId[] {
-    const activeProvider = this.configService.get("ACTIVE_CHAT_PROVIDER");
+    const activeProvider = this.configService?.get("ACTIVE_CHAT_PROVIDER");
     return activeProvider ? [activeProvider] : ["openai", "gemini", "mistral"];
   }
 

@@ -71,6 +71,7 @@ function SearchPage() {
     answerStream.status === "searching" || answerStream.status === "streaming";
   const hasAnswer =
     answerStream.status === "streaming" || answerStream.status === "done";
+  const hasStructuredItems = (answerStream.structuredData?.items.length ?? 0) > 0;
   const copy = language === "de"
     ? {
         title: "Suche",
@@ -85,6 +86,16 @@ function SearchPage() {
         retry: "Erneut versuchen",
         searching: "Dein Archiv wird durchsucht und eine Antwort vorbereitet...",
         sources: "Quellen",
+        structuredResults: "Offene Eintrage",
+        total: "Gesamt",
+        openItems: "Treffer",
+        dueDate: "Falligkeit",
+        expiryDate: "Ablauf",
+        amount: "Betrag",
+        action: "Aktion",
+        reviewStatus: "Prufstatus",
+        reviewReasons: "Grunde",
+        openDocument: "Dokument offnen",
         insufficient: "Nicht genug Belege in deinem Archiv, um diese Frage sicher zu beantworten.",
         emptyTitle: "Durchsuche dein Archiv",
         emptyBody: "Gib eine Anfrage ein, um alle Dokumente zu durchsuchen. Die KI analysiert dein Archiv und liefert eine direkte Antwort mit Quellen.",
@@ -102,6 +113,16 @@ function SearchPage() {
         retry: "Retry",
         searching: "Searching your archive and preparing an answer...",
         sources: "Sources",
+        structuredResults: "Open items",
+        total: "Total",
+        openItems: "Matches",
+        dueDate: "Due",
+        expiryDate: "Expiry",
+        amount: "Amount",
+        action: "Action",
+        reviewStatus: "Review",
+        reviewReasons: "Reasons",
+        openDocument: "Open document",
         insufficient: "Not enough evidence in your archive to answer this question confidently.",
         emptyTitle: "Search your archive",
         emptyBody: "Enter a query to search across all your documents. The AI will analyze your archive and provide a direct answer with sources.",
@@ -321,6 +342,122 @@ function SearchPage() {
                     )}
                   </div>
 
+                  {answerStream.structuredData && (
+                    <div className="space-y-3 rounded-xl border border-[var(--explorer-border)] bg-[var(--explorer-paper)] px-4 py-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {answerStream.structuredData.title}
+                          </p>
+                          {answerStream.structuredData.description && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {answerStream.structuredData.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-[var(--explorer-cobalt-soft)] px-2.5 py-1 font-medium text-[var(--explorer-cobalt)]">
+                            {copy.openItems}:{" "}
+                            {answerStream.structuredData.kind === "deadline_items"
+                              ? answerStream.structuredData.totalOpenCount
+                              : answerStream.structuredData.totalCount}
+                          </span>
+                          {answerStream.structuredData.kind === "deadline_items" &&
+                          answerStream.structuredData.totalAmount !== null &&
+                          answerStream.structuredData.currency ? (
+                            <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1 font-medium text-foreground">
+                              {copy.total}: {formatMoney(
+                                answerStream.structuredData.totalAmount,
+                                answerStream.structuredData.currency,
+                                language,
+                              )}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {hasStructuredItems ? (
+                        <div className="grid gap-2.5">
+                          {answerStream.structuredData.kind === "deadline_items"
+                            ? answerStream.structuredData.items.map((item) => (
+                                <Link
+                                  key={item.documentId}
+                                  to="/documents/$documentId"
+                                  params={{ documentId: item.documentId }}
+                                  className="rounded-xl border border-[var(--explorer-border)] bg-card px-3.5 py-3 transition-colors hover:border-[var(--explorer-border-strong)]"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-medium text-foreground">
+                                        {item.title}
+                                      </p>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {[item.correspondentName, item.documentTypeName]
+                                          .filter(Boolean)
+                                          .join(" - ") || copy.openDocument}
+                                      </p>
+                                    </div>
+                                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                    <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                      {copy.dueDate}: {item.dueDate}
+                                    </span>
+                                    {item.amount !== null && item.currency && (
+                                      <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                        {copy.amount}: {formatMoney(item.amount, item.currency, language)}
+                                      </span>
+                                    )}
+                                    <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                      {copy.action}: {item.taskLabel}
+                                    </span>
+                                  </div>
+                                </Link>
+                              ))
+                            : answerStream.structuredData.items.map((item) => (
+                                <Link
+                                  key={item.id}
+                                  to="/documents/$documentId"
+                                  params={{ documentId: item.id }}
+                                  className="rounded-xl border border-[var(--explorer-border)] bg-card px-3.5 py-3 transition-colors hover:border-[var(--explorer-border-strong)]"
+                                >
+                                  <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-medium text-foreground">
+                                        {item.title}
+                                      </p>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {[item.correspondent?.name, item.documentType?.name]
+                                          .filter(Boolean)
+                                          .join(" - ") || copy.openDocument}
+                                      </p>
+                                    </div>
+                                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                    {item.expiryDate && (
+                                      <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                        {copy.expiryDate}: {item.expiryDate}
+                                      </span>
+                                    )}
+                                    {item.reviewStatus === "pending" && (
+                                      <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                        {copy.reviewStatus}: {item.reviewStatus}
+                                      </span>
+                                    )}
+                                    {item.reviewReasons.length > 0 && (
+                                      <span className="rounded-full bg-[var(--explorer-paper-strong)] px-2.5 py-1">
+                                        {copy.reviewReasons}: {item.reviewReasons.join(", ")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </Link>
+                              ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
                   {/* Sources */}
                   {answerStream.citations.length > 0 && (
                     <div className="space-y-2.5 border-t border-[var(--explorer-border)] pt-4">
@@ -365,7 +502,8 @@ function SearchPage() {
 
                   {/* Insufficient evidence */}
                   {answerStream.status === "done" &&
-                    !answerStream.answerText && (
+                    !answerStream.answerText &&
+                    !hasStructuredItems && (
                       <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
                         {copy.insufficient}
                       </div>
@@ -393,4 +531,11 @@ function SearchPage() {
       )}
     </div>
   );
+}
+
+function formatMoney(amount: number, currency: string, language: "en" | "de") {
+  return new Intl.NumberFormat(language === "de" ? "de-DE" : "en-US", {
+    style: "currency",
+    currency,
+  }).format(amount);
 }

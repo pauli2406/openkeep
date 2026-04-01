@@ -17,13 +17,18 @@ import {
   SemanticSearchDto,
 } from "../documents/dto/document.dto";
 import { DocumentsService } from "../documents/documents.service";
+import { SearchOrchestratorService } from "./search-orchestrator.service";
 
 @ApiTags("search")
 @ApiBearerAuth()
 @UseGuards(AccessAuthGuard)
 @Controller("search")
 export class SearchController {
-  constructor(@Inject(DocumentsService) private readonly documentsService: DocumentsService) {}
+  constructor(
+    @Inject(DocumentsService) private readonly documentsService: DocumentsService,
+    @Inject(SearchOrchestratorService)
+    private readonly searchOrchestratorService: SearchOrchestratorService,
+  ) {}
 
   @Get("documents")
   @ApiOkResponse({ description: "Paginated search results" })
@@ -58,7 +63,7 @@ export class SearchController {
     @Body() body: AnswerQueryDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
-    return this.documentsService.answerQuery(body, principal);
+    return this.searchOrchestratorService.answerQuery(body, principal);
   }
 
   @Post("answer/stream")
@@ -77,7 +82,7 @@ export class SearchController {
     });
 
     try {
-      for await (const chunk of this.documentsService.streamAnswer(body, principal)) {
+      for await (const chunk of this.searchOrchestratorService.streamAnswer(body, principal)) {
         reply.raw.write(chunk);
       }
     } catch (error) {

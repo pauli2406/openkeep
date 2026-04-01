@@ -58,7 +58,16 @@ export const toUtcDateOnly = (year: number, month: number, day: number): Date | 
     return null;
   }
 
-  return new Date(Date.UTC(year, month - 1, day));
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
 };
 
 export const parseDateOnly = (raw: string | null | undefined): Date | null => {

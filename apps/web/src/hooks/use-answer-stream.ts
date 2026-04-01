@@ -1,5 +1,33 @@
 import { useCallback, useRef, useState } from "react";
-import type { AnswerCitation, SemanticSearchResult } from "@openkeep/types";
+import type {
+  AnswerCitation,
+  Document,
+  DashboardDeadlineItem,
+  SemanticSearchResult,
+} from "@openkeep/types";
+
+type AnswerRoute = "semantic" | "structured" | "hybrid";
+type AnswerStructuredData =
+  | {
+      kind: "deadline_items";
+      title: string;
+      description: string | null;
+      items: DashboardDeadlineItem[];
+      totalOpenCount: number;
+      totalAmount: number | null;
+      currency: string | null;
+      windowStart: string | null;
+      windowEnd: string | null;
+    }
+  | {
+      kind: "pending_review_documents" | "expiring_contracts";
+      title: string;
+      description: string | null;
+      items: Document[];
+      totalCount: number;
+      windowStart?: string | null;
+      windowEnd?: string | null;
+    };
 import { authFetch } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
@@ -139,18 +167,22 @@ export function linkifyCitations(
 
 export type StreamState = {
   status: "idle" | "searching" | "streaming" | "done" | "error";
+  route: AnswerRoute | null;
   answerText: string;
   citations: AnswerCitation[];
   searchResults: SemanticSearchResult[];
+  structuredData: AnswerStructuredData | null;
   errorMessage: string | null;
 };
 
 export function useAnswerStream() {
   const [state, setState] = useState<StreamState>({
     status: "idle",
+    route: null,
     answerText: "",
     citations: [],
     searchResults: [],
+    structuredData: null,
     errorMessage: null,
   });
 
@@ -164,9 +196,11 @@ export function useAnswerStream() {
 
     setState({
       status: "searching",
+      route: null,
       answerText: "",
       citations: [],
       searchResults: [],
+      structuredData: null,
       errorMessage: null,
     });
 
@@ -224,8 +258,10 @@ export function useAnswerStream() {
                 setState((s) => ({
                   ...s,
                   status: "done",
+                  route: parsed.route ?? s.route,
                   citations: parsed.citations ?? s.citations,
                   answerText: parsed.fullAnswer ?? s.answerText,
+                  structuredData: parsed.structuredData ?? s.structuredData,
                 }));
               } else if (currentEvent === "error") {
                 setState((s) => ({
@@ -284,9 +320,11 @@ export function useAnswerStream() {
     abortRef.current?.abort();
     setState({
       status: "idle",
+      route: null,
       answerText: "",
       citations: [],
       searchResults: [],
+      structuredData: null,
       errorMessage: null,
     });
   }, []);

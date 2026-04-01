@@ -417,12 +417,48 @@ export type AnswerCitation = {
 
 export type AnswerQueryResponse = {
   status: "answered" | "insufficient_evidence";
+  route: "semantic" | "structured" | "hybrid";
   answer: string | null;
   citations: AnswerCitation[];
   results: Array<{
     document: ArchiveDocument;
     score: number;
   }>;
+  structuredData:
+    | {
+        kind: "deadline_items";
+        title: string;
+        description: string | null;
+        items: Array<{
+          documentId: string;
+          title: string;
+          referenceNumber: string | null;
+          dueDate: string;
+          amount: number | null;
+          currency: string | null;
+          correspondentName: string | null;
+          documentTypeName: string | null;
+          taskLabel: string;
+          daysUntilDue: number;
+          isOverdue: boolean;
+          taskCompletedAt: string | null;
+        }>;
+        totalOpenCount: number;
+        totalAmount: number | null;
+        currency: string | null;
+        windowStart: string | null;
+        windowEnd: string | null;
+      }
+    | {
+        kind: "pending_review_documents" | "expiring_contracts";
+        title: string;
+        description: string | null;
+        items: ArchiveDocument[];
+        totalCount: number;
+        windowStart?: string | null;
+        windowEnd?: string | null;
+      }
+    | null;
 };
 
 export type FacetsResponse = {

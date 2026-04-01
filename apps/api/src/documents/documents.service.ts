@@ -392,6 +392,58 @@ export class DocumentsService {
     };
   }
 
+  async listExpiringDocuments(input: {
+    expiryDateFrom?: string | null;
+    expiryDateTo?: string | null;
+    limit?: number;
+  }): Promise<SearchDocumentsResponse> {
+    const page = 1;
+    const pageSize = input.limit ?? 20;
+    const params: unknown[] = [];
+    const clauses: string[] = [
+      "d.expiry_date IS NOT NULL",
+      "d.status <> 'failed'",
+      "(lower(coalesce(dt.slug, '')) LIKE '%contract%' OR lower(coalesce(dt.name, '')) LIKE '%contract%' OR lower(coalesce(dt.name, '')) LIKE '%agreement%' OR lower(coalesce(dt.name, '')) LIKE '%vertrag%')",
+    ];
+
+    if (input.expiryDateFrom) {
+      params.push(input.expiryDateFrom);
+      clauses.push(`d.expiry_date >= $${params.length}::date`);
+    }
+
+    if (input.expiryDateTo) {
+      params.push(input.expiryDateTo);
+      clauses.push(`d.expiry_date <= $${params.length}::date`);
+    }
+
+    const totalResult = await this.databaseService.pool.query<{ total: string }>(
+      `SELECT count(*)::int AS total
+       FROM documents d
+       LEFT JOIN document_types dt ON dt.id = d.document_type_id
+       WHERE ${clauses.join(" AND ")}`,
+      params,
+    );
+
+    const listResult = await this.databaseService.pool.query<{ id: string }>(
+      `SELECT d.id
+       FROM documents d
+       LEFT JOIN document_types dt ON dt.id = d.document_type_id
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY d.expiry_date ASC, d.id DESC
+       LIMIT $${params.length + 1}
+       OFFSET $${params.length + 2}`,
+      [...params, pageSize, 0],
+    );
+
+    return {
+      items: await this.getDocumentsByIds(listResult.rows.map((row) => row.id)),
+      total: Number(totalResult.rows[0]?.total ?? 0),
+      page,
+      pageSize,
+      appliedFilters: {},
+    };
+  }
+
   async getBrowseFacets() {
     const [years, correspondentFacets, typeFacets, tagFacets, amountRange, statusFacets] =
       await Promise.all([
@@ -1142,8 +1194,10 @@ export class DocumentsService {
     });
 
     return {
+      route: "semantic",
       ...answered,
       results: results.items,
+      structuredData: null,
     };
   }
 
@@ -1193,8 +1247,10 @@ export class DocumentsService {
 
     yield `event: done\ndata: ${JSON.stringify({
       status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      route: "semantic",
       fullAnswer: fullAnswer || null,
       citations,
+      structuredData: null,
     })}\n\n`;
   }
 
@@ -1656,6 +1712,9 @@ export class DocumentsService {
       );
     }
 
+    this.assertValidDateFilter(filters?.dateFrom, "dateFrom");
+    this.assertValidDateFilter(filters?.dateTo, "dateTo");
+
     if (filters?.dateFrom) {
       const placeholder = push(filters.dateFrom);
       clauses.push(`coalesce(d.issue_date, d.created_at::date) >= ${placeholder}::date`);
@@ -1721,6 +1780,16 @@ export class DocumentsService {
       whereSql: clauses.join(" AND "),
       params,
     };
+  }
+
+  private assertValidDateFilter(value: string | undefined, fieldName: string) {
+    if (!value) {
+      return;
+    }
+
+    if (!parseDateOnly(value)) {
+      throw new BadRequestException(`Invalid ${fieldName}; expected YYYY-MM-DD`);
+    }
   }
 
   private async listDocumentIdsByFilters(filters: SearchDocumentsRequest["filters"] = {}) {

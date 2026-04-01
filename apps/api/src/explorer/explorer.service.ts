@@ -164,6 +164,100 @@ export class ExplorerService {
     };
   }
 
+  async listDeadlineItems(input: {
+    overdue?: boolean;
+    correspondentId?: string;
+    limit?: number;
+    dueDateFrom?: string | null;
+    dueDateTo?: string | null;
+    invoiceOnly?: boolean;
+  }): Promise<DashboardDeadlineItem[]> {
+    const params: unknown[] = [];
+    const clauses = [
+      "d.due_date IS NOT NULL",
+      "d.status <> 'failed'",
+      "d.task_completed_at IS NULL",
+    ];
+
+    if (input.overdue) {
+      clauses.push("d.due_date < current_date");
+    } else {
+      clauses.push("d.due_date >= current_date");
+    }
+
+    if (input.dueDateFrom) {
+      params.push(input.dueDateFrom);
+      clauses.push(`d.due_date >= $${params.length}::date`);
+    }
+
+    if (input.dueDateTo) {
+      params.push(input.dueDateTo);
+      clauses.push(`d.due_date <= $${params.length}::date`);
+    }
+
+    if (input.correspondentId) {
+      params.push(input.correspondentId);
+      clauses.push(`d.correspondent_id = $${params.length}::uuid`);
+    }
+
+    if (input.invoiceOnly) {
+      clauses.push(
+        "(lower(coalesce(dt.slug, '')) LIKE '%invoice%' OR lower(coalesce(dt.name, '')) LIKE '%invoice%' OR lower(coalesce(dt.name, '')) LIKE '%bill%' OR lower(coalesce(dt.name, '')) LIKE '%rechnung%')",
+      );
+    }
+
+    params.push(input.limit ?? 6);
+
+    const result = await this.databaseService.pool.query<{
+      document_id: string;
+      title: string;
+      reference_number: string | null;
+      due_date: string;
+      amount: string | null;
+      currency: string | null;
+      correspondent_name: string | null;
+      document_type_name: string | null;
+      days_until_due: string;
+      is_overdue: boolean;
+      task_completed_at: Date | null;
+    }>(
+      `SELECT
+         d.id AS document_id,
+         d.title,
+         d.reference_number,
+         d.due_date::text AS due_date,
+         d.amount::text AS amount,
+         d.currency,
+         c.name AS correspondent_name,
+         dt.name AS document_type_name,
+         (d.due_date - current_date)::int::text AS days_until_due,
+         (d.due_date < current_date) AS is_overdue,
+         d.task_completed_at
+        FROM documents d
+        LEFT JOIN correspondents c ON c.id = d.correspondent_id
+        LEFT JOIN document_types dt ON dt.id = d.document_type_id
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY d.due_date ASC, d.id DESC
+        LIMIT $${params.length}`,
+      params,
+    );
+
+    return result.rows.map((row) => ({
+      documentId: row.document_id,
+      title: row.title,
+      referenceNumber: row.reference_number,
+      dueDate: row.due_date,
+      amount: toNullableNumber(row.amount),
+      currency: row.currency,
+      correspondentName: row.correspondent_name,
+      documentTypeName: row.document_type_name,
+      taskLabel: buildTaskLabel(row.document_type_name, row.is_overdue),
+      daysUntilDue: Number(row.days_until_due),
+      isOverdue: row.is_overdue,
+      taskCompletedAt: row.task_completed_at?.toISOString() ?? null,
+    }));
+  }
+
   async getCorrespondentInsightsBySlug(
     slug: string,
   ): Promise<CorrespondentInsightsResponse> {
@@ -809,69 +903,7 @@ export class ExplorerService {
     correspondentId?: string,
     limit = 6,
   ): Promise<DashboardDeadlineItem[]> {
-    const params: unknown[] = [];
-    const clauses = [
-      "d.due_date IS NOT NULL",
-      overdue ? "d.due_date < current_date" : "d.due_date >= current_date",
-      "d.status <> 'failed'",
-      "d.task_completed_at IS NULL",
-    ];
-
-    if (correspondentId) {
-      params.push(correspondentId);
-      clauses.push(`d.correspondent_id = $${params.length}::uuid`);
-    }
-
-    params.push(limit);
-
-    const result = await this.databaseService.pool.query<{
-      document_id: string;
-      title: string;
-      reference_number: string | null;
-      due_date: string;
-      amount: string | null;
-      currency: string | null;
-      correspondent_name: string | null;
-      document_type_name: string | null;
-      days_until_due: string;
-      is_overdue: boolean;
-      task_completed_at: Date | null;
-    }>(
-      `SELECT
-         d.id AS document_id,
-         d.title,
-         d.reference_number,
-         d.due_date::text AS due_date,
-         d.amount::text AS amount,
-         d.currency,
-         c.name AS correspondent_name,
-         dt.name AS document_type_name,
-         (d.due_date - current_date)::int::text AS days_until_due,
-         (d.due_date < current_date) AS is_overdue,
-         d.task_completed_at
-        FROM documents d
-        LEFT JOIN correspondents c ON c.id = d.correspondent_id
-        LEFT JOIN document_types dt ON dt.id = d.document_type_id
-        WHERE ${clauses.join(" AND ")}
-        ORDER BY d.due_date ASC, d.id DESC
-        LIMIT $${params.length}`,
-      params,
-    );
-
-    return result.rows.map((row) => ({
-      documentId: row.document_id,
-      title: row.title,
-      referenceNumber: row.reference_number,
-      dueDate: row.due_date,
-      amount: toNullableNumber(row.amount),
-      currency: row.currency,
-      correspondentName: row.correspondent_name,
-      documentTypeName: row.document_type_name,
-      taskLabel: buildTaskLabel(row.document_type_name, row.is_overdue),
-      daysUntilDue: Number(row.days_until_due),
-      isOverdue: row.is_overdue,
-      taskCompletedAt: row.task_completed_at?.toISOString() ?? null,
-    }));
+    return this.listDeadlineItems({ overdue, correspondentId, limit });
   }
 }
 

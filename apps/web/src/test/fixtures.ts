@@ -341,7 +341,7 @@ export function makeAnswerQueryResponse(
       },
     ],
     ...overrides,
-  };
+  } as AnswerQueryResponse;
 }
 
 export function makeWatchFolderScanResponse(

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { AnswerCitation } from "../lib";
+import type { AnswerCitation, AnswerQueryResponse } from "../lib";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -9,20 +9,24 @@ export type StreamStatus = "idle" | "searching" | "streaming" | "done" | "error"
 
 export type StreamState = {
   status: StreamStatus;
+  route: AnswerQueryResponse["route"] | null;
   answerText: string;
   citations: AnswerCitation[];
   searchResults: Array<{
     document: { id: string; title: string };
     score: number;
   }>;
+  structuredData: AnswerQueryResponse["structuredData"];
   errorMessage: string | null;
 };
 
 const INITIAL_STATE: StreamState = {
   status: "idle",
+  route: null,
   answerText: "",
   citations: [],
   searchResults: [],
+  structuredData: null,
   errorMessage: null,
 };
 
@@ -49,9 +53,11 @@ export function useAnswerStream(
 
       setState({
         status: "searching",
+        route: null,
         answerText: "",
         citations: [],
         searchResults: [],
+        structuredData: null,
         errorMessage: null,
       });
 
@@ -114,8 +120,10 @@ export function useAnswerStream(
                   setState((s) => ({
                     ...s,
                     status: "done",
+                    route: parsed.route ?? s.route,
                     citations: parsed.citations ?? s.citations,
                     answerText: parsed.fullAnswer ?? s.answerText,
+                    structuredData: parsed.structuredData ?? s.structuredData,
                   }));
                 } else if (currentEvent === "error") {
                   setState((s) => ({

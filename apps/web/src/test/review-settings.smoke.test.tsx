@@ -389,7 +389,7 @@ describe("settings smoke", () => {
 
     expect(await screen.findByText("Taxonomy Management")).toBeInTheDocument();
 
-    const tagInputs = await screen.findAllByPlaceholderText(/create tag/i);
+    const tagInputs = await screen.findAllByPlaceholderText(/enter a name/i);
     await user.type(tagInputs[0], "Urgent");
     await user.click(screen.getAllByRole("button", { name: /add/i })[0]);
 

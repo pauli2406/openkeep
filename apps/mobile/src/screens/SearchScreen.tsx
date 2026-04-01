@@ -17,10 +17,17 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
-import { linkifyCitations, titleForDocument, type AnswerCitation } from "../lib";
+import {
+  formatCurrency,
+  formatDate,
+  linkifyCitations,
+  titleForDocument,
+  type AnswerCitation,
+} from "../lib";
 import { useAnswerStream } from "../hooks/useAnswerStream";
 import { useRecentSearches } from "../hooks/useRecentSearches";
 import { useSuggestions } from "../hooks/useSuggestions";
+import { Pill } from "../components/ui";
 
 // ---------------------------------------------------------------------------
 // Main screen
@@ -148,10 +155,25 @@ export function SearchScreen() {
           answerReadyLabel={t("search.answerReady")}
           insufficientLabel={t("search.insufficient")}
           sourcesLabel={t("search.sources")}
+          openItemsLabel={t("search.openItems")}
+          totalLabel={t("search.total")}
+          structuredResultsLabel={t("search.structuredResults")}
+          dueDateLabel={t("search.dueDate")}
+          expiryDateLabel={t("search.expiryDate")}
+          amountLabel={t("search.amount")}
+          actionLabel={t("search.action")}
+          reviewLabel={t("search.reviewStatus")}
+          reviewReasonsLabel={t("search.reviewReasons")}
           onCitationPress={(citation) =>
             navigation.navigate("DocumentDetail", {
               documentId: citation.documentId,
               title: citation.documentTitle,
+            })
+          }
+          onDocumentPress={(documentId, title) =>
+            navigation.navigate("DocumentDetail", {
+              documentId,
+              title,
             })
           }
         />
@@ -232,7 +254,17 @@ function AIAnswerPanel({
   answerReadyLabel,
   insufficientLabel,
   sourcesLabel,
+  openItemsLabel,
+  totalLabel,
+  structuredResultsLabel,
+  dueDateLabel,
+  expiryDateLabel,
+  amountLabel,
+  actionLabel,
+  reviewLabel,
+  reviewReasonsLabel,
   onCitationPress,
+  onDocumentPress,
 }: {
   answerStream: ReturnType<typeof useAnswerStream>;
   documentLabel: string;
@@ -241,7 +273,17 @@ function AIAnswerPanel({
   answerReadyLabel: string;
   insufficientLabel: string;
   sourcesLabel: string;
+  openItemsLabel: string;
+  totalLabel: string;
+  structuredResultsLabel: string;
+  dueDateLabel: string;
+  expiryDateLabel: string;
+  amountLabel: string;
+  actionLabel: string;
+  reviewLabel: string;
+  reviewReasonsLabel: string;
   onCitationPress: (citation: AnswerCitation) => void;
+  onDocumentPress: (documentId: string, title: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
@@ -323,6 +365,101 @@ function AIAnswerPanel({
             </View>
           )}
 
+          {answerStream.structuredData && (
+            <View style={styles.structuredSection}>
+              <View style={styles.structuredHeader}>
+                <View style={styles.structuredTitleWrap}>
+                  <Text style={styles.sourcesLabel}>{`⊞  ${structuredResultsLabel}`}</Text>
+                  <Text style={styles.structuredTitle}>{answerStream.structuredData.title}</Text>
+                  {answerStream.structuredData.description ? (
+                    <Text style={styles.structuredDescription}>
+                      {answerStream.structuredData.description}
+                    </Text>
+                  ) : null}
+                </View>
+                <View style={styles.structuredPills}>
+                  <Pill
+                    label={`${openItemsLabel} ${
+                      answerStream.structuredData.kind === "deadline_items"
+                        ? answerStream.structuredData.totalOpenCount
+                        : answerStream.structuredData.totalCount
+                    }`}
+                  />
+                  {answerStream.structuredData.kind === "deadline_items" &&
+                  answerStream.structuredData.totalAmount !== null ? (
+                    <Pill
+                      label={`${totalLabel} ${formatCurrency(
+                        answerStream.structuredData.totalAmount,
+                        answerStream.structuredData.currency ?? "EUR",
+                      )}`}
+                      tone="warning"
+                    />
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={styles.structuredList}>
+                {answerStream.structuredData.kind === "deadline_items"
+                  ? answerStream.structuredData.items.map((item) => (
+                      <Pressable
+                        key={item.documentId}
+                        onPress={() => onDocumentPress(item.documentId, item.title)}
+                        style={({ pressed }) => [
+                          styles.structuredCard,
+                          pressed ? styles.sourceCardPressed : null,
+                        ]}
+                      >
+                        <Text style={styles.structuredItemTitle}>{item.title}</Text>
+                        <Text style={styles.structuredItemMeta}>
+                          {[item.correspondentName, item.documentTypeName]
+                            .filter(Boolean)
+                            .join(" · ") || documentLabel}
+                        </Text>
+                        <View style={styles.structuredChipRow}>
+                          <StructuredChip label={`${dueDateLabel} ${formatDate(item.dueDate)}`} />
+                          {item.amount !== null ? (
+                            <StructuredChip
+                              label={`${amountLabel} ${formatCurrency(item.amount, item.currency ?? "EUR")}`}
+                            />
+                          ) : null}
+                          <StructuredChip label={`${actionLabel} ${item.taskLabel}`} />
+                        </View>
+                      </Pressable>
+                    ))
+                  : answerStream.structuredData.items.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => onDocumentPress(item.id, titleForDocument(item))}
+                        style={({ pressed }) => [
+                          styles.structuredCard,
+                          pressed ? styles.sourceCardPressed : null,
+                        ]}
+                      >
+                        <Text style={styles.structuredItemTitle}>{titleForDocument(item)}</Text>
+                        <Text style={styles.structuredItemMeta}>
+                          {[item.correspondent?.name, item.documentType?.name]
+                            .filter(Boolean)
+                            .join(" · ") || documentLabel}
+                        </Text>
+                        <View style={styles.structuredChipRow}>
+                          {item.expiryDate ? (
+                            <StructuredChip label={`${expiryDateLabel} ${formatDate(item.expiryDate)}`} />
+                          ) : null}
+                          {item.reviewStatus === "pending" ? (
+                            <StructuredChip label={`${reviewLabel} ${item.reviewStatus}`} />
+                          ) : null}
+                          {item.reviewReasons.length > 0 ? (
+                            <StructuredChip
+                              label={`${reviewReasonsLabel} ${item.reviewReasons.join(", ")}`}
+                            />
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    ))}
+              </View>
+            </View>
+          )}
+
           {/* Sources */}
           {answerStream.citations.length > 0 && (
             <View style={styles.sourcesSection}>
@@ -364,6 +501,14 @@ function AIAnswerPanel({
           )}
         </View>
       )}
+    </View>
+  );
+}
+
+function StructuredChip({ label }: { label: string }) {
+  return (
+    <View style={styles.structuredChip}>
+      <Text style={styles.structuredChipText}>{label}</Text>
     </View>
   );
 }
@@ -791,6 +936,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.warning,
     lineHeight: 20,
+  },
+
+  structuredSection: {
+    gap: 12,
+  },
+  structuredHeader: {
+    gap: 10,
+  },
+  structuredTitleWrap: {
+    gap: 4,
+  },
+  structuredTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  structuredDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.muted,
+  },
+  structuredPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  structuredList: {
+    gap: 10,
+  },
+  structuredCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    gap: 8,
+  },
+  structuredItemTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  structuredItemMeta: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.muted,
+  },
+  structuredChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  structuredChip: {
+    borderRadius: 999,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  structuredChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.text,
   },
 
   // Sources
