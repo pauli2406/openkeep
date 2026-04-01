@@ -14,7 +14,7 @@ OpenKeep stores your documents, extracts text and metadata from them, and helps 
 - document upload
 - OCR and metadata extraction
 - archive browsing with filters and visual views
-- semantic search
+- hybrid and structured archive search
 - AI-assisted answers and summaries
 - review and correction workflows
 
@@ -63,7 +63,7 @@ The Documents area is the main archive browser. It supports three views:
 
 ### Search
 
-Search combines keyword matching and semantic search. You can also expand the AI Answer panel to ask archive-wide questions.
+Search combines keyword matching, semantic search, and structured archive answers. Use it for both exploratory questions and operational questions like open invoices, pending review items, or expiring contracts.
 
 ### Review
 

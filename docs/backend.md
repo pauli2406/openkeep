@@ -154,7 +154,14 @@ flowchart TD
   - vector similarity over chunk embeddings
   - weighted reciprocal rank fusion
 - Semantic responses stay document-centric and include matched chunks as explainability data.
-- `POST /api/search/answer` reuses the retrieval stack, returns grounded citations, and can explicitly decline to answer when evidence is too weak.
+- `POST /api/search/answer` and `POST /api/search/answer/stream` first pass through a search orchestrator.
+- The orchestrator can answer from structured archive state for operational queries such as:
+  - open or overdue invoices and deadlines
+  - documents pending review
+  - expiring contracts
+- Structured answers return `route: structured` plus `structuredData`, and may legitimately return empty `citations` and `results` when the answer comes from normalized archive fields instead of chunk retrieval.
+- When no structured route applies, `POST /api/search/answer` falls back to the retrieval stack, returns grounded citations, and can explicitly decline to answer when evidence is too weak.
+- `POST /api/search/answer/stream` uses server-sent events with `search-results`, `answer-token`, `done`, and `error` events. Structured routes emit an immediate `done` payload after an empty `search-results` event.
 - Embedding summary fields on documents include:
   - `embeddingStatus`
   - `embeddingProvider`
@@ -176,6 +183,7 @@ flowchart TD
 - `POST /api/documents/:id/review/resolve` marks manual review complete.
 - `POST /api/documents/:id/review/requeue` clears review state and publishes a fresh processing job.
 - `GET /api/documents/:id/download/searchable` returns the derived searchable PDF when one exists.
+- Both web and mobile clients consume the same archive-wide search SSE contract.
 - `GET /api/archive/export`, `POST /api/archive/import`, and `POST /api/archive/watch-folder/scan` expose portability and automated-ingestion primitives.
 - `GET/POST/PATCH/DELETE` plus merge endpoints under `/api/taxonomies/*` expose curation flows for tags, correspondents, and document types.
 - `GET /api/health` exposes provider configuration metadata including the active parse provider, active embedding provider, and available credential-backed capabilities.
@@ -256,4 +264,4 @@ flowchart TD
 
 - Retrieval evaluation is present in test coverage but not yet exposed as a dedicated operator-facing benchmark command.
 - Email ingestion, workflow automation, and richer custom fields are still future phases.
-- Mobile and desktop clients are still future phases on top of the current backend and web app.
+- Desktop-specific clients are still a future phase. The backend already serves both the current web app and the React Native mobile client.

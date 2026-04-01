@@ -1,0 +1,25 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Allow tracked example env templates"
+paths = [
+  '''^\.env(\..+)?\.example$''',
+]
+
+[[allowlists]]
+description = "Allow local development defaults and explicit placeholders"
+regexes = [
+  '''change-me-typesense-admin-key''',
+  '''openkeep123''',
+  '''test-openai-key''',
+  '''openai-key''',
+  '''gemini-key''',
+  '''mistral-key''',
+]
+
+[[allowlists]]
+description = "Allow test-only credential fixtures"
+paths = [
+  '''^apps/api/test/.*\.spec\.ts$''',
+]

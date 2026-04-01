@@ -76,8 +76,27 @@ Relevant endpoints:
 Current model:
 
 - semantic search returns document-centric results with matched chunks
-- grounded answer endpoints build on retrieval results
+- archive-wide answer endpoints first pass through a search orchestrator
+- routed answers can be:
+  - `semantic`: retrieval-backed answer with citations
+  - `structured`: answer from normalized archive state such as due dates, review status, expiry dates, and task completion state
+- current structured payload families are:
+  - `deadline_items`
+  - `pending_review_documents`
+  - `expiring_contracts`
+- response payloads now include:
+  - `route`
+  - `structuredData` when applicable
 - streaming answers are delivered via server-sent events
+
+Current search SSE event flow:
+
+- `search-results`
+- `answer-token`
+- `done`
+- `error`
+
+For structured routes, the stream currently emits an empty `search-results` payload followed by an immediate `done` payload containing `route` and `structuredData`.
 
 ## Explorer Surface
 

@@ -37,13 +37,24 @@ The API handles:
 - authentication
 - document upload and metadata CRUD
 - review queue and document history
-- semantic search and answer endpoints
+- semantic search and routed archive answer endpoints
 - dashboard and explorer endpoints
 - taxonomy management
 - archive export/import and watch-folder scan triggers
 - health and metrics endpoints
 
+Archive-wide answers are routed through a search orchestration layer before execution. Depending on query intent, the API can answer from retrieval over document chunks or from structured archive state such as deadlines, review status, and contract expiry dates.
+
 In production-style builds, the API also serves the built web SPA assets.
+
+### Clients
+
+OpenKeep currently ships with:
+
+- a web SPA
+- a React Native mobile app
+
+Both clients consume the same archive-wide search APIs and SSE answer stream contract.
 
 ### Worker
 

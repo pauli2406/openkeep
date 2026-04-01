@@ -35,7 +35,7 @@ Common reasons:
 - OCR quality is weak
 - the question is too broad
 
-Try a narrower question or inspect the underlying search results.
+Try a narrower question, inspect citations when they are present, or open the linked structured items when the answer is based on archive state.
 
 ## Why is the searchable PDF missing?
 

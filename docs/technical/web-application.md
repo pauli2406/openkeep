@@ -96,11 +96,13 @@ Correspondent dossier view powered by correspondent insights plus filtered docum
 
 ### `/search`
 
-Hybrid search interface with:
+Answer-first archive search interface with:
 
-- semantic result list
-- expandable AI Answer panel
-- SSE answer streaming
+- hybrid keyword + semantic retrieval for exploratory questions
+- structured operational answers for open deadlines, pending review items, and expiring contracts
+- linked citations for semantic answers
+- linked item cards for structured answers
+- SSE answer streaming shared with the mobile client
 
 ### `/review`
 

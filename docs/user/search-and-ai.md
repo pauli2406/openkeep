@@ -23,36 +23,66 @@ OpenKeep runs hybrid search, which combines:
 - keyword matching
 - semantic similarity
 
+Search is answer-first. Instead of only showing a traditional result list, OpenKeep tries to return the most useful archive answer for the question you asked.
+
 This helps with both exact terms and more natural-language questions.
 
-## Reading Search Results
+For some questions, OpenKeep also uses structured archive state instead of relying only on free-text retrieval. This is especially important for operational questions about open work, review queues, and deadlines.
 
-Each search result may show:
+## How Search Results Appear
 
-- title
-- correspondent
-- date
-- document type
-- ranking score
-- matched excerpts
+Depending on the question, search can return one of two main answer styles.
 
-Open matched excerpts to see the chunks that contributed to the result.
+### Semantic Answers
+
+For exploratory or knowledge-style questions, OpenKeep returns:
+
+- a generated answer
+- linked citations back to source documents
+- supporting source cards
+
+This path is best for questions like:
+
+- What does the archive say about a particular supplier?
+- Which document mentions a contract end date?
+- What amount is mentioned in this letter?
+
+### Structured Answers
+
+For operational questions, OpenKeep may answer directly from structured archive fields such as due date, expiry date, review status, and task completion state.
+
+These answers can show:
+
+- a short summary
+- linked item cards
+- counts
+- totals when applicable
+- due dates, expiry dates, review reasons, or action labels
+
+This path is best for questions like:
+
+- Which invoices are still open this month?
+- Which documents still need review?
+- Which contracts expire soon?
 
 ## AI Answer for Archive-Wide Questions
 
-On the Search page, expand `AI Answer` to ask your archive a question.
+On the Search page, use the `AI Answer` panel to ask your archive a question.
 
 Examples:
 
 - When is the invoice due?
 - Which document mentions a contract end date?
 - What does the archive say about a particular supplier?
+- Which invoices are still open this month?
+- Which documents still need review?
+- Which contracts expire soon?
 
 When successful, OpenKeep shows:
 
 - a generated answer
-- linked citations back to source documents
-- supporting source cards
+- linked citations back to source documents for semantic answers
+- structured item cards for operational answers
 
 If the evidence is too weak, OpenKeep may refuse to answer confidently.
 
@@ -65,6 +95,8 @@ Always verify:
 - the cited document
 - the quoted excerpt
 - important dates, amounts, and obligations
+
+For structured answers, verification may mean opening the linked document card and checking the extracted fields that were used for the answer.
 
 This is especially important for invoices, contracts, tax documents, and legal records.
 
@@ -130,6 +162,7 @@ You may see limited or missing AI output when:
 ## Good Search Habits
 
 - start with plain-language questions
+- ask operational questions explicitly when you care about current state, for example `still open`, `due this month`, `pending review`, or `expires soon`
 - try a narrower query if you get too many results
 - use document search and document-level Q&A together
 - check citations before acting on an answer

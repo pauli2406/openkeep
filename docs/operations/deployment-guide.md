@@ -22,6 +22,15 @@ The repo currently provides a single-host Docker Compose deployment model built 
 
 The current deployment does not use a separate web container. The API image builds the web app and serves the static SPA bundle.
 
+The repository keeps real credentials out of the Docker build context by excluding `.env*` files and only allowing tracked `*.example` templates through. Keep production or personal secrets in untracked local env files or an external secret manager.
+
+Before publishing the repository or any images, run the built-in secret checks:
+
+- `pnpm secrets:scan`
+- `pnpm secrets:scan:history`
+
+If you also want to inspect untracked local files such as a personal `.env`, run `pnpm secrets:scan:local`.
+
 The compose file is:
 
 - `docker-compose.yml`

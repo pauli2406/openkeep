@@ -77,6 +77,12 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 
 If you want the full containerized stack, use `pnpm docker:up` or `pnpm docker:up:build`. Those wrappers auto-build the shared `worker-base` OCR image if it is missing locally, then start the usual compose stack on `http://localhost:3000`, docs on `http://localhost:3001`, and Typesense on `http://localhost:8108`.
 
+Local secret hygiene:
+
+- keep real credentials only in untracked local env files such as `.env`
+- the Docker build context excludes `.env*` by default, while still allowing tracked `*.example` templates into images where needed
+- if real credentials were ever present in local `.env` before this protection was added, rotate them before publishing images or the repository
+
 Optional docs-site search:
 
 - set `TYPESENSE_COLLECTION_NAME` and `TYPESENSE_ADMIN_API_KEY` in `.env`
@@ -97,6 +103,19 @@ For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a c
 - `pnpm docker:up:build`
 - `pnpm docs:search:up`
 - `pnpm docs:search:index`
+- `pnpm secrets:scan`
+- `pnpm secrets:scan:history`
+- `pnpm secrets:scan:local`
+
+## Secret Scanning
+
+Run secret checks before publishing the repository or any images:
+
+- `pnpm secrets:scan` scans the tracked repository state and history
+- `pnpm secrets:scan:history` is an explicit history scan alias
+- `pnpm secrets:scan:local` scans the full local working tree, including untracked files such as local `.env`
+
+The helper uses a local `gitleaks` binary when available and otherwise falls back to the official Docker image. Repo-specific allowlists live in `.gitleaks.toml`.
 - `pnpm typecheck`
 - `pnpm test:api:unit`
 - `pnpm test:api:integration`
