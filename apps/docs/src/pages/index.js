@@ -82,6 +82,9 @@ export default function Home() {
                   Explore search and AI
                 </Link>
               </div>
+              <p className={styles.licenseNote}>
+                Free for personal and other noncommercial use. Commercial use requires a separate license.
+              </p>
             </div>
 
             <div className={styles.heroPanel}>

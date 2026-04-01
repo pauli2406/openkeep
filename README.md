@@ -14,6 +14,16 @@
 
 OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation includes a NestJS API, async processing worker, PostgreSQL plus pgvector, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, chunk-level embeddings, grounded document Q&A, archive governance flows, and a connected web client on top of the backend APIs.
 
+## License
+
+OpenKeep is licensed under `PolyForm Noncommercial 1.0.0`.
+
+- personal and other noncommercial use is allowed for free
+- commercial use requires a separate commercial license
+- see `LICENSE` for the full terms
+
+For commercial licensing, contact the project owner before using OpenKeep in a commercial product, service, or internal business offering.
+
 ## Documentation
 
 - User documentation: `docs/user/getting-started.md`
@@ -30,7 +40,7 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 - `apps/api`: NestJS REST API with auth, document upload, search, and archive metadata APIs.
 - `apps/worker`: background processing worker for OCR and metadata extraction jobs.
 - `apps/web`: TanStack Router web client for search, review, document detail, admin settings, and archive operations.
-- `apps/mobile`: reserved placeholder for the future React Native client.
+- `apps/mobile`: React Native mobile client.
 - `apps/desktop`: reserved placeholder for the future Electron client.
 - `packages/config`: shared environment parsing and provider configuration.
 - `packages/db`: Drizzle schema and migrations.

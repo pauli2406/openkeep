@@ -1,6 +1,7 @@
 {
   "name": "openkeep",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "packageManager": "pnpm@10.26.2",
   "engines": {
     "node": ">=22.0.0"

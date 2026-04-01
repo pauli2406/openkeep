@@ -95,6 +95,13 @@
   margin-top: 2rem;
 }
 
+.licenseNote {
+  margin: 1rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(22, 54, 47, 0.74);
+}
+
 .primary,
 .secondary {
   border-radius: 999px;
