@@ -43,6 +43,7 @@ module.exports = {
       items: [
         "operations/README",
         "operations/deployment-guide",
+        "operations/cloudflare-pages-and-oracle-typesense",
         "operations/configuration-reference",
         "operations/runbooks",
         "operations/backup-restore-and-portability",

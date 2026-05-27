@@ -1,21 +1,44 @@
 import * as SQLite from "expo-sqlite";
-import type { ArchiveDocument, DashboardInsights, FacetsResponse } from "./lib";
+import type {
+  ArchiveDocument,
+  DashboardInsights,
+  DocumentHistoryResponse,
+  DocumentTextResponse,
+  FacetsResponse,
+} from "./lib";
 
-const DB_NAME = "openkeep-offline.db";
+const DB_NAME = "openkeep-cache.db";
 
-type MetadataRow = {
+export type CachedDocumentRecord = {
+  document: ArchiveDocument;
+  text: DocumentTextResponse;
+  history: DocumentHistoryResponse;
+  fileUri: string | null;
+  cachedAt: string;
+  lastViewedAt: string;
+  fileStorageBytes: number;
+};
+
+type CachedDocumentRow = {
   id: string;
   documentJson: string;
+  textJson: string;
+  historyJson: string;
+  fileUri: string | null;
+  cachedAt: string;
+  lastViewedAt: string;
   createdAt: string;
   updatedAt: string;
   status: string;
   reviewStatus: string;
+  correspondentId: string | null;
+  correspondentName: string | null;
   correspondentSlug: string | null;
+  documentTypeId: string | null;
+  documentTypeName: string | null;
+  documentTypeSlug: string | null;
   searchText: string;
-  hasLocalFile: number;
-  isPinnedOffline: number;
-  lastViewedAt: string | null;
-  syncedAt: string | null;
+  fileStorageBytes: number;
 };
 
 type LoadDocumentsOptions = {
@@ -27,7 +50,7 @@ type LoadDocumentsOptions = {
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
-function buildSearchText(document: ArchiveDocument) {
+function buildSearchText(document: ArchiveDocument, text: DocumentTextResponse) {
   return [
     document.title,
     document.correspondent?.name,
@@ -36,13 +59,26 @@ function buildSearchText(document: ArchiveDocument) {
     document.holderName,
     document.issuingAuthority,
     ...document.tags.map((tag) => tag.name),
+    ...text.blocks.map((block) => block.text),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 }
 
-function rowToDocument(row: Pick<MetadataRow, "documentJson">) {
+function rowToRecord(row: Pick<CachedDocumentRow, "documentJson" | "textJson" | "historyJson" | "fileUri" | "cachedAt" | "lastViewedAt" | "fileStorageBytes">): CachedDocumentRecord {
+  return {
+    document: JSON.parse(row.documentJson) as ArchiveDocument,
+    text: JSON.parse(row.textJson) as DocumentTextResponse,
+    history: JSON.parse(row.historyJson) as DocumentHistoryResponse,
+    fileUri: row.fileUri,
+    cachedAt: row.cachedAt,
+    lastViewedAt: row.lastViewedAt,
+    fileStorageBytes: row.fileStorageBytes,
+  };
+}
+
+function rowToDocument(row: Pick<CachedDocumentRow, "documentJson">) {
   return JSON.parse(row.documentJson) as ArchiveDocument;
 }
 
@@ -54,210 +90,118 @@ async function getDb() {
   const db = await dbPromise;
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
-    CREATE TABLE IF NOT EXISTS offline_documents (
+    CREATE TABLE IF NOT EXISTS cached_documents (
       id TEXT PRIMARY KEY NOT NULL,
       document_json TEXT NOT NULL,
+      text_json TEXT NOT NULL,
+      history_json TEXT NOT NULL,
+      file_uri TEXT,
+      cached_at TEXT NOT NULL,
+      last_viewed_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       status TEXT NOT NULL,
       review_status TEXT NOT NULL,
+      correspondent_id TEXT,
+      correspondent_name TEXT,
       correspondent_slug TEXT,
+      document_type_id TEXT,
+      document_type_name TEXT,
+      document_type_slug TEXT,
       search_text TEXT NOT NULL,
-      has_local_file INTEGER NOT NULL DEFAULT 0,
-      is_pinned_offline INTEGER NOT NULL DEFAULT 0,
-      last_viewed_at TEXT,
-      synced_at TEXT
+      file_storage_bytes INTEGER NOT NULL DEFAULT 0
     );
-    CREATE INDEX IF NOT EXISTS idx_offline_documents_created_at ON offline_documents(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_offline_documents_status ON offline_documents(status);
-    CREATE INDEX IF NOT EXISTS idx_offline_documents_review_status ON offline_documents(review_status);
-    CREATE INDEX IF NOT EXISTS idx_offline_documents_correspondent_slug ON offline_documents(correspondent_slug);
-    CREATE TABLE IF NOT EXISTS offline_state (
-      key TEXT PRIMARY KEY NOT NULL,
-      value_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_last_viewed_at ON cached_documents(last_viewed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_created_at ON cached_documents(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_status ON cached_documents(status);
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_review_status ON cached_documents(review_status);
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_correspondent_slug ON cached_documents(correspondent_slug);
   `);
   return db;
 }
 
-export async function setOfflineStateValue<T>(key: string, value: T) {
+export async function upsertCachedDocument(record: CachedDocumentRecord) {
   const db = await getDb();
-  await db.runAsync(
-    `INSERT OR REPLACE INTO offline_state (key, value_json, updated_at)
-     VALUES (?, ?, ?)`,
-    key,
-    JSON.stringify(value),
-    new Date().toISOString(),
-  );
-}
-
-export async function getOfflineStateValue<T>(key: string) {
-  const db = await getDb();
-  const row = await db.getFirstAsync<{ valueJson: string }>(
-    "SELECT value_json as valueJson FROM offline_state WHERE key = ?",
-    key,
-  );
-  return row ? JSON.parse(row.valueJson) as T : null;
-}
-
-export async function upsertOfflineDocumentMetadata(
-  document: ArchiveDocument,
-  options?: {
-    hasLocalFile?: boolean;
-    isPinnedOffline?: boolean;
-    lastViewedAt?: string | null;
-    syncedAt?: string | null;
-  },
-) {
-  const db = await getDb();
-  const updatedAt = document.updatedAt ?? document.createdAt ?? new Date().toISOString();
-  const existing = await db.getFirstAsync<Pick<MetadataRow, "hasLocalFile" | "isPinnedOffline" | "lastViewedAt" | "syncedAt">>(
-    "SELECT has_local_file as hasLocalFile, is_pinned_offline as isPinnedOffline, last_viewed_at as lastViewedAt, synced_at as syncedAt FROM offline_documents WHERE id = ?",
-    document.id,
-  );
+  const document = record.document;
+  const updatedAt = document.updatedAt ?? document.createdAt ?? record.cachedAt;
 
   await db.runAsync(
-    `INSERT OR REPLACE INTO offline_documents (
+    `INSERT OR REPLACE INTO cached_documents (
       id,
       document_json,
+      text_json,
+      history_json,
+      file_uri,
+      cached_at,
+      last_viewed_at,
       created_at,
       updated_at,
       status,
       review_status,
+      correspondent_id,
+      correspondent_name,
       correspondent_slug,
+      document_type_id,
+      document_type_name,
+      document_type_slug,
       search_text,
-      has_local_file,
-      is_pinned_offline,
-      last_viewed_at,
-      synced_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      file_storage_bytes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     document.id,
     JSON.stringify(document),
+    JSON.stringify(record.text),
+    JSON.stringify(record.history),
+    record.fileUri,
+    record.cachedAt,
+    record.lastViewedAt,
     document.createdAt,
     updatedAt,
     document.status,
     document.reviewStatus,
+    document.correspondent?.id ?? null,
+    document.correspondent?.name ?? null,
     document.correspondent?.slug ?? null,
-    buildSearchText(document),
-    options?.hasLocalFile ?? existing?.hasLocalFile ?? 0,
-    options?.isPinnedOffline ?? existing?.isPinnedOffline ?? 0,
-    options?.lastViewedAt ?? existing?.lastViewedAt ?? null,
-    options?.syncedAt ?? existing?.syncedAt ?? null,
+    document.documentType?.id ?? null,
+    document.documentType?.name ?? null,
+    document.documentType?.slug ?? null,
+    buildSearchText(document, record.text),
+    record.fileStorageBytes,
   );
 }
 
-export async function setOfflineDocumentFileState(
-  documentId: string,
-  values: { hasLocalFile?: boolean; isPinnedOffline?: boolean; lastViewedAt?: string | null; syncedAt?: string | null },
-) {
+export async function getCachedDocument(documentId: string) {
   const db = await getDb();
-  const existing = await db.getFirstAsync<MetadataRow>(
+  const row = await db.getFirstAsync<CachedDocumentRow>(
     `SELECT
       id,
       document_json as documentJson,
+      text_json as textJson,
+      history_json as historyJson,
+      file_uri as fileUri,
+      cached_at as cachedAt,
+      last_viewed_at as lastViewedAt,
       created_at as createdAt,
       updated_at as updatedAt,
       status,
       review_status as reviewStatus,
+      correspondent_id as correspondentId,
+      correspondent_name as correspondentName,
       correspondent_slug as correspondentSlug,
+      document_type_id as documentTypeId,
+      document_type_name as documentTypeName,
+      document_type_slug as documentTypeSlug,
       search_text as searchText,
-      has_local_file as hasLocalFile,
-      is_pinned_offline as isPinnedOffline,
-      last_viewed_at as lastViewedAt,
-      synced_at as syncedAt
-     FROM offline_documents WHERE id = ?`,
+      file_storage_bytes as fileStorageBytes
+     FROM cached_documents WHERE id = ?`,
     documentId,
   );
-  if (!existing) {
-    return;
-  }
-
-  await db.runAsync(
-    `UPDATE offline_documents
-      SET has_local_file = ?,
-          is_pinned_offline = ?,
-          last_viewed_at = ?,
-          synced_at = ?
-      WHERE id = ?`,
-    values.hasLocalFile ?? existing.hasLocalFile,
-    values.isPinnedOffline ?? existing.isPinnedOffline,
-    values.lastViewedAt ?? existing.lastViewedAt,
-    values.syncedAt ?? existing.syncedAt,
-    documentId,
-  );
+  return row ? rowToRecord(row) : null;
 }
 
-export async function removeOfflineDocumentMetadata(documentId: string) {
-  const db = await getDb();
-  await db.runAsync("DELETE FROM offline_documents WHERE id = ?", documentId);
-}
-
-export async function getOfflineDocumentMetadata(documentId: string) {
-  const db = await getDb();
-  const row = await db.getFirstAsync<MetadataRow>(
-    `SELECT
-      id,
-      document_json as documentJson,
-      created_at as createdAt,
-      updated_at as updatedAt,
-      status,
-      review_status as reviewStatus,
-      correspondent_slug as correspondentSlug,
-      search_text as searchText,
-      has_local_file as hasLocalFile,
-      is_pinned_offline as isPinnedOffline,
-      last_viewed_at as lastViewedAt,
-      synced_at as syncedAt
-     FROM offline_documents WHERE id = ?`,
-    documentId,
-  );
-  if (!row) {
-    return null;
-  }
-
-  return {
-    document: rowToDocument(row),
-    hasLocalFile: Boolean(row.hasLocalFile),
-    isPinnedOffline: Boolean(row.isPinnedOffline),
-    lastViewedAt: row.lastViewedAt,
-    syncedAt: row.syncedAt,
-  };
-}
-
-export async function getOfflineDocumentsIndicatorMap(documentIds: string[]) {
-  if (documentIds.length === 0) {
-    return new Map<string, { hasLocalFile: boolean; isPinnedOffline: boolean }>();
-  }
-
-  const db = await getDb();
-  const placeholders = documentIds.map(() => "?").join(", ");
-  const rows = await db.getAllAsync<{
-    id: string;
-    hasLocalFile: number;
-    isPinnedOffline: number;
-  }>(
-    `SELECT id, has_local_file as hasLocalFile, is_pinned_offline as isPinnedOffline
-     FROM offline_documents
-     WHERE id IN (${placeholders})`,
-    ...documentIds,
-  );
-
-  return new Map(
-    rows.map((row) => [
-      row.id,
-      {
-        hasLocalFile: Boolean(row.hasLocalFile),
-        isPinnedOffline: Boolean(row.isPinnedOffline),
-      },
-    ]),
-  );
-}
-
-export async function queryOfflineDocuments(options?: LoadDocumentsOptions) {
+export async function queryCachedDocuments(options?: LoadDocumentsOptions) {
   const db = await getDb();
   const clauses = ["1 = 1"];
-  const params: Array<string> = [];
+  const params: string[] = [];
 
   if (options?.status && options.status !== "all") {
     clauses.push("status = ?");
@@ -278,100 +222,187 @@ export async function queryOfflineDocuments(options?: LoadDocumentsOptions) {
     params.push(`%${options.query.trim().toLowerCase()}%`);
   }
 
-  const rows = await db.getAllAsync<Pick<MetadataRow, "documentJson">>(
+  const rows = await db.getAllAsync<Pick<CachedDocumentRow, "documentJson">>(
     `SELECT document_json as documentJson
-     FROM offline_documents
+     FROM cached_documents
      WHERE ${clauses.join(" AND ")}
-     ORDER BY created_at DESC`,
+     ORDER BY last_viewed_at DESC, created_at DESC`,
     ...params,
   );
 
   return rows.map(rowToDocument);
 }
 
-export async function getOfflineDocumentStats() {
+export async function listCachedDocuments() {
+  return queryCachedDocuments();
+}
+
+export async function getCacheStats() {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ documentCount: number; localFileCount: number }>(
+  const row = await db.getFirstAsync<{ documentCount: number; fileStorageBytes: number }>(
     `SELECT COUNT(*) as documentCount,
-            SUM(CASE WHEN has_local_file = 1 THEN 1 ELSE 0 END) as localFileCount
-     FROM offline_documents`,
+            COALESCE(SUM(file_storage_bytes), 0) as fileStorageBytes
+     FROM cached_documents`,
   );
 
   return {
     documentCount: row?.documentCount ?? 0,
-    localFileCount: row?.localFileCount ?? 0,
+    fileStorageBytes: row?.fileStorageBytes ?? 0,
   };
 }
 
-export async function listOfflineFileCandidatesForCleanup() {
+export async function getCachedFileUris() {
   const db = await getDb();
-  return db.getAllAsync<{
-    id: string;
-    createdAt: string;
-    lastViewedAt: string | null;
-    isPinnedOffline: number;
-  }>(
-    `SELECT
-      id,
-      created_at as createdAt,
-      last_viewed_at as lastViewedAt,
-      is_pinned_offline as isPinnedOffline
-     FROM offline_documents
-     WHERE has_local_file = 1
-     ORDER BY created_at ASC`,
+  const rows = await db.getAllAsync<{ fileUri: string | null }>(
+    "SELECT file_uri as fileUri FROM cached_documents WHERE file_uri IS NOT NULL",
   );
+  return rows.map((row) => row.fileUri).filter(Boolean) as string[];
 }
 
-export async function listOfflineDocumentsForSummary() {
+export async function clearCachedDocumentRows() {
   const db = await getDb();
-  const rows = await db.getAllAsync<Pick<MetadataRow, "documentJson">>(
-    "SELECT document_json as documentJson FROM offline_documents ORDER BY created_at DESC",
-  );
-  return rows.map(rowToDocument);
+  await db.runAsync("DELETE FROM cached_documents");
 }
 
-export async function loadOfflineDashboardState() {
-  return getOfflineStateValue<DashboardInsights | null>("dashboard");
+export async function dropLegacyOfflineTables() {
+  const db = await getDb();
+  await db.execAsync(`
+    DROP TABLE IF EXISTS offline_documents;
+    DROP TABLE IF EXISTS offline_state;
+  `);
 }
 
-export async function saveOfflineDashboardState(value: DashboardInsights | null) {
-  await setOfflineStateValue("dashboard", value);
+export async function buildCachedFacets(): Promise<FacetsResponse> {
+  const documents = await listCachedDocuments();
+  const correspondents = new Map<string, { id: string; name: string; slug: string; count: number }>();
+  const documentTypes = new Map<string, { id: string; name: string; slug: string; count: number }>();
+  const tags = new Map<string, { id: string; name: string; slug: string; count: number }>();
+  const statuses = new Map<string, number>();
+  const years = new Map<number, number>();
+
+  for (const document of documents) {
+    statuses.set(document.status, (statuses.get(document.status) ?? 0) + 1);
+    const year = new Date(document.issueDate ?? document.createdAt).getFullYear();
+    if (Number.isFinite(year)) {
+      years.set(year, (years.get(year) ?? 0) + 1);
+    }
+    if (document.correspondent) {
+      const current = correspondents.get(document.correspondent.id);
+      correspondents.set(document.correspondent.id, {
+        ...document.correspondent,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+    if (document.documentType) {
+      const current = documentTypes.get(document.documentType.id);
+      documentTypes.set(document.documentType.id, {
+        id: document.documentType.id,
+        name: document.documentType.name,
+        slug: document.documentType.slug,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+    for (const tag of document.tags) {
+      const current = tags.get(tag.id);
+      tags.set(tag.id, {
+        ...tag,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+  }
+
+  return {
+    correspondents: [...correspondents.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    documentTypes: [...documentTypes.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    tags: [...tags.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    statuses: [...statuses.entries()].map(([status, count]) => ({ status, count })),
+    years: [...years.entries()]
+      .map(([year, count]) => ({ year, count }))
+      .sort((a, b) => b.year - a.year),
+  };
 }
 
-export async function loadOfflineFacetsState() {
-  return getOfflineStateValue<FacetsResponse | null>("facets");
-}
+export async function buildCachedDashboard(): Promise<DashboardInsights> {
+  const documents = await listCachedDocuments();
+  const facets = await buildCachedFacets();
+  const topCorrespondents = facets.correspondents.slice(0, 6).map((correspondent) => {
+    const docs = documents.filter((document) => document.correspondent?.id === correspondent.id);
+    const totals = docs.reduce<{ amount: number; currency: string | null }>(
+      (acc, document) => {
+        if (typeof document.amount === "number") {
+          acc.amount += document.amount;
+          acc.currency = acc.currency ?? document.currency;
+        }
+        return acc;
+      },
+      { amount: 0, currency: null },
+    );
+    const latestDocDate = docs
+      .map((document) => document.issueDate ?? document.createdAt)
+      .sort()
+      .at(-1) ?? null;
 
-export async function saveOfflineFacetsState(value: FacetsResponse | null) {
-  await setOfflineStateValue("facets", value);
-}
-
-export async function loadOfflineSummaryState() {
-  return getOfflineStateValue<{
-    lastSyncedAt: string | null;
-    retentionSettings: {
-      mode: "full_mirror" | "smart_cache";
-      maxFileStorageBytes: number | null;
-      keepFilesForYears: number | null;
+    return {
+      id: correspondent.id,
+      name: correspondent.name,
+      slug: correspondent.slug,
+      documentCount: correspondent.count,
+      totalAmount: totals.amount > 0 ? totals.amount : null,
+      currency: totals.currency,
+      latestDocDate,
     };
-  } | null>("summary");
-}
+  });
 
-export async function saveOfflineSummaryState(value: {
-  lastSyncedAt: string | null;
-  retentionSettings: {
-    mode: "full_mirror" | "smart_cache";
-    maxFileStorageBytes: number | null;
-    keepFilesForYears: number | null;
+  const now = new Date();
+  const deadlineItems = documents
+    .filter((document) => document.dueDate && !document.taskCompletedAt)
+    .map((document) => {
+      const due = new Date(document.dueDate!);
+      const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+      return {
+        documentId: document.id,
+        title: document.title,
+        referenceNumber: document.referenceNumber,
+        dueDate: document.dueDate!,
+        amount: document.amount,
+        currency: document.currency,
+        correspondentName: document.correspondent?.name ?? null,
+        documentTypeName: document.documentType?.name ?? null,
+        taskLabel: document.title,
+        daysUntilDue,
+        isOverdue: daysUntilDue < 0,
+      };
+    })
+    .sort((left, right) => new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime());
+
+  return {
+    stats: {
+      totalDocuments: documents.length,
+      pendingReview: documents.filter((document) => document.reviewStatus === "pending").length,
+      documentTypesCount: facets.documentTypes.length,
+      correspondentsCount: facets.correspondents.length,
+    },
+    recentDocuments: documents.slice(0, 5),
+    topCorrespondents,
+    upcomingDeadlines: deadlineItems.filter((item) => !item.isOverdue).slice(0, 6),
+    overdueItems: deadlineItems.filter((item) => item.isOverdue).slice(0, 6),
+    monthlyActivity: buildMonthlyActivity(documents),
   };
-}) {
-  await setOfflineStateValue("summary", value);
 }
 
-export async function hasCompletedOfflineMigration(migrationKey: string) {
-  return (await getOfflineStateValue<boolean>(`migration:${migrationKey}`)) === true;
-}
+function buildMonthlyActivity(documents: ArchiveDocument[]) {
+  const counts = new Map<string, number>();
+  for (const document of documents) {
+    const date = new Date(document.issueDate ?? document.createdAt);
+    if (!Number.isFinite(date.getTime())) {
+      continue;
+    }
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
 
-export async function markOfflineMigrationCompleted(migrationKey: string) {
-  await setOfflineStateValue(`migration:${migrationKey}`, true);
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-12)
+    .map(([month, count]) => ({ month, count }));
 }

@@ -9,6 +9,7 @@ import {
   makeDocument,
 } from "./fixtures";
 import { server } from "./msw-server";
+import { api, syncTokensFromStorage } from "@/lib/api";
 
 function mockDashboardData() {
   server.use(
@@ -144,5 +145,48 @@ describe("auth smoke", () => {
       expect(localStorage.getItem("openkeep.access-token")).toBeNull();
       expect(localStorage.getItem("openkeep.refresh-token")).toBeNull();
     });
+  });
+
+  it("retries token creation with the original request body after refreshing", async () => {
+    let createAttempts = 0;
+    server.use(
+      http.post(apiUrl("/api/auth/refresh"), () =>
+        HttpResponse.json({
+          accessToken: "new-access-token",
+          refreshToken: "new-refresh-token",
+        }),
+      ),
+      http.post(apiUrl("/api/auth/tokens"), async ({ request }) => {
+        createAttempts += 1;
+        if (createAttempts === 1) {
+          expect(request.headers.get("authorization")).toBe("Bearer expired-access-token");
+          return new HttpResponse(null, { status: 401 });
+        }
+
+        expect(request.headers.get("authorization")).toBe("Bearer new-access-token");
+        await expect(request.json()).resolves.toEqual({ name: "App" });
+        return HttpResponse.json(
+          {
+            id: "33333333-3333-3333-3333-333333333333",
+            token: "okp_test.secret",
+            name: "App",
+            expiresAt: null,
+          },
+          { status: 201 },
+        );
+      }),
+    );
+
+    localStorage.setItem("openkeep.access-token", "expired-access-token");
+    localStorage.setItem("openkeep.refresh-token", "saved-refresh-token");
+    syncTokensFromStorage();
+
+    const { data, error } = await api.POST("/api/auth/tokens", {
+      body: { name: "App" },
+    });
+
+    expect(error).toBeUndefined();
+    expect(data?.token).toBe("okp_test.secret");
+    expect(createAttempts).toBe(2);
   });
 });

@@ -3,6 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { Card, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
+import { useOfflineArchive } from "../offline-archive";
 import { colors, shadow } from "../theme";
 
 const APP_VERSION = "0.1.0";
@@ -128,6 +129,7 @@ const sectionStyles = StyleSheet.create({
 
 export function SettingsScreen() {
   const auth = useAuth();
+  const offline = useOfflineArchive();
   const { t } = useI18n();
 
   function labelForLanguage(language: "en" | "de") {
@@ -175,13 +177,39 @@ export function SettingsScreen() {
     ]);
   }
 
+  function formatBytes(bytes: number) {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  function handleClearCache() {
+    Alert.alert(t("settings.clearCacheTitle"), t("settings.clearCacheText"), [
+      { text: t("settings.cancel"), style: "cancel" },
+      {
+        text: t("settings.clearCache"),
+        style: "destructive",
+        onPress: () => void offline.clearCachedDocuments().catch((error) => {
+          Alert.alert(
+            t("settings.clearCacheFailed"),
+            error instanceof Error ? error.message : t("settings.clearCacheFailed"),
+          );
+        }),
+      },
+    ]);
+  }
+
   function handleLogout() {
     Alert.alert(t("settings.logOutConfirmTitle"), t("settings.logOutConfirmText"), [
       { text: t("settings.cancel"), style: "cancel" },
       {
         text: t("settings.logOut"),
         style: "destructive",
-        onPress: () => void auth.logout(),
+        onPress: () => void offline.clearCachedDocuments().finally(() => auth.logout()),
       },
     ]);
   }
@@ -237,6 +265,20 @@ export function SettingsScreen() {
           icon="server-network"
           label={t("settings.connectedArchive")}
           value={auth.apiUrl || t("settings.notConnected")}
+        />
+        <Divider />
+        <SettingsRow
+          icon="database-outline"
+          label={t("settings.cachedDocuments")}
+          value={`${offline.cacheSummary.documentCount} ${t("settings.documentsCached")} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
+        />
+        <Divider />
+        <SettingsRow
+          icon="trash-can-outline"
+          label={t("settings.clearCache")}
+          value={t("settings.clearCacheHint")}
+          onPress={handleClearCache}
+          tone="danger"
         />
       </Card>
 

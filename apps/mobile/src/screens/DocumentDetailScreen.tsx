@@ -68,27 +68,28 @@ export function DocumentDetailScreen() {
   const route = useRoute<RouteProp<AppStackParamList, "DocumentDetail">>();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const documentId = route.params.documentId;
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
+  const cacheOpenedDocument = offline.cacheOpenedDocument;
 
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
-  const offlineRecordQuery = useQuery({
-    queryKey: ["offline-document-record", documentId, offline.summary?.lastSyncedAt],
-    enabled: offline.shouldUseOffline,
+  const cachedRecordQuery = useQuery({
+    queryKey: ["cached-document-record", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      const record = await offline.loadDocumentRecord(documentId);
-      if (!record) {
+      const record = await offline.loadCachedDocument(documentId);
+      if (!record && shouldUseCache) {
         throw new Error(t("documentDetail.offlineNotCached"));
       }
-      return record;
+      return record ?? null;
     },
   });
 
   // ---- Core queries ----
   const documentQuery = useQuery({
-    queryKey: ["document", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["document", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        const record = await offline.loadDocumentRecord(documentId);
+      if (shouldUseCache) {
+        const record = await offline.loadCachedDocument(documentId);
         if (!record) throw new Error(t("documentDetail.loadOfflineFailed"));
         return record.document;
       }
@@ -97,17 +98,17 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error(t("documentDetail.loadDetailFailed"));
       return (await response.json()) as ArchiveDocument;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data),
   });
 
   const textQuery = useQuery({
-    queryKey: ["document-text", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["document-text", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        const record = offlineRecordQuery.data ?? (await offline.loadDocumentRecord(documentId));
+      if (shouldUseCache) {
+        const record = cachedRecordQuery.data ?? (await offline.loadCachedDocument(documentId));
         return record?.text ?? { documentId, blocks: [] };
       }
 
@@ -115,17 +116,17 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error(t("documentDetail.loadOcrFailed"));
       return (await response.json()) as DocumentTextResponse;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const historyQuery = useQuery({
-    queryKey: ["document-history", documentId, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["document-history", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        const record = offlineRecordQuery.data ?? (await offline.loadDocumentRecord(documentId));
+      if (shouldUseCache) {
+        const record = cachedRecordQuery.data ?? (await offline.loadCachedDocument(documentId));
         return record?.history ?? { documentId, items: [] };
       }
 
@@ -133,14 +134,14 @@ export function DocumentDetailScreen() {
       if (!response.ok) throw new Error(t("documentDetail.loadHistoryFailed"));
       return (await response.json()) as DocumentHistoryResponse;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
   const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
-    enabled: documentQuery.isSuccess && !offline.shouldUseOffline,
+    queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
+    enabled: documentQuery.isSuccess && !shouldUseCache,
     queryFn: async () => {
       const response = await auth.authFetch("/api/documents/facets");
       if (!response.ok) throw new Error(t("documentDetail.loadFacetsFailed"));
@@ -154,7 +155,7 @@ export function DocumentDetailScreen() {
 
   const providersQuery = useQuery({
     queryKey: ["health-providers", auth.apiUrl],
-    enabled: documentQuery.isSuccess && !offline.shouldUseOffline,
+    enabled: documentQuery.isSuccess && !shouldUseCache,
     queryFn: async () => {
       const response = await auth.authFetch("/api/health/providers");
       if (!response.ok) throw new Error(t("documentDetail.loadProvidersFailed"));
@@ -163,14 +164,27 @@ export function DocumentDetailScreen() {
   });
 
   const qaHistoryQuery = useQuery({
-    queryKey: ["document-qa-history", documentId, offline.shouldUseOffline],
-    enabled: documentQuery.isSuccess && activeTab === "insights" && !offline.shouldUseOffline,
+    queryKey: ["document-qa-history", documentId, shouldUseCache],
+    enabled: documentQuery.isSuccess && activeTab === "insights" && !shouldUseCache,
     queryFn: async () => {
       const response = await auth.authFetch(`/api/documents/${documentId}/qa-history`);
       if (!response.ok) throw new Error(t("documentDetail.loadQaHistoryFailed"));
       return (await response.json()) as QaHistoryEntry[];
     },
   });
+
+  useEffect(() => {
+    if (shouldUseCache) {
+      return;
+    }
+    void cacheOpenedDocument(auth.authFetch, documentId)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["cached-document-record", documentId] });
+      })
+      .catch(() => {
+        // Online document viewing should not fail because the local cache could not be refreshed.
+      });
+  }, [auth.authFetch, cacheOpenedDocument, documentId, queryClient, shouldUseCache]);
 
   // ---- Loading / error ----
   if (documentQuery.isLoading) {
@@ -220,9 +234,9 @@ export function DocumentDetailScreen() {
         <PreviewTab
           document={document}
           authFetch={auth.authFetch}
-          localFileUri={offlineRecordQuery.data?.fileUri ?? null}
-          hasLocalFile={offlineRecordQuery.data?.hasLocalFile ?? false}
-          offlineMode={offline.shouldUseOffline}
+          localFileUri={cachedRecordQuery.data?.fileUri ?? null}
+          hasLocalFile={Boolean(cachedRecordQuery.data?.fileUri)}
+          offlineMode={shouldUseCache}
           textBlocks={textQuery.data?.blocks}
         />
       )}
@@ -235,7 +249,7 @@ export function DocumentDetailScreen() {
           facets={facetsQuery.data ?? null}
           providers={providersQuery.data ?? null}
           navigation={navigation}
-          offlineReadOnly={offline.shouldUseOffline}
+          offlineReadOnly={shouldUseCache}
         />
       )}
       {activeTab === "insights" && (
@@ -246,7 +260,7 @@ export function DocumentDetailScreen() {
           authFetch={auth.authFetch}
           qaHistory={qaHistoryQuery.data ?? []}
           refetchQaHistory={() => qaHistoryQuery.refetch()}
-          offlineMode={offline.shouldUseOffline}
+          offlineMode={shouldUseCache}
         />
       )}
       {activeTab === "activity" && (
@@ -353,10 +367,10 @@ function PreviewTab({
   textBlocks?: Array<{ page: number; text: string }>;
 }) {
   const { t } = useI18n();
-  const { ensureDocumentFileAvailable, isConnected } = useOfflineArchive();
+  const { ensureCachedFile, isConnected } = useOfflineArchive();
   const persistOnlineFile = useCallback(
-    () => ensureDocumentFileAvailable(authFetch, document),
-    [authFetch, document, ensureDocumentFileAvailable],
+    () => ensureCachedFile(authFetch, document),
+    [authFetch, document, ensureCachedFile],
   );
 
   return (

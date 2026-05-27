@@ -1,4 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,6 +24,7 @@ import {
   linkifyCitations,
   titleForDocument,
   type AnswerCitation,
+  type ArchiveDocument,
 } from "../lib";
 import { useAnswerStream } from "../hooks/useAnswerStream";
 import { useRecentSearches } from "../hooks/useRecentSearches";
@@ -40,17 +42,24 @@ export function SearchScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [query, setQuery] = useState("");
   const inputRef = useRef<TextInput>(null);
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   const answerStream = useAnswerStream(auth.streamFetch);
   const { recentSearches, addSearch, removeSearch, clearAll } = useRecentSearches();
   const { suggestions, isLoading: suggestionsLoading } = useSuggestions(
     auth.authFetch,
-    !offline.shouldUseOffline,
+    !shouldUseCache,
   );
 
+  const cachedSearchQuery = useQuery({
+    queryKey: ["cached-search", query.trim(), offline.cacheSummary.updatedAt],
+    enabled: shouldUseCache && query.trim().length > 0,
+    queryFn: () => offline.queryCachedDocuments({ query }),
+  });
+
   const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
-  const hasAnswer = answerStream.status === "streaming" || answerStream.status === "done";
-  const hasQuery = answerStream.status !== "idle";
+  const hasAnswer = !shouldUseCache && (answerStream.status === "streaming" || answerStream.status === "done");
+  const hasQuery = shouldUseCache ? query.trim().length > 0 : answerStream.status !== "idle";
 
   const runSearch = useCallback(
     (searchQuery?: string) => {
@@ -58,28 +67,42 @@ export function SearchScreen() {
       if (!q) return;
       void addSearch(q);
       if (searchQuery) setQuery(searchQuery);
+      if (shouldUseCache) {
+        answerStream.reset();
+        return;
+      }
       answerStream.startStream(q);
     },
-    [query, addSearch, answerStream],
+    [query, addSearch, answerStream, shouldUseCache],
   );
 
   const handleSuggestionPress = useCallback(
     (suggestion: string) => {
       setQuery(suggestion);
       void addSearch(suggestion);
+      if (shouldUseCache) {
+        answerStream.reset();
+        inputRef.current?.blur();
+        return;
+      }
       answerStream.startStream(suggestion);
       inputRef.current?.blur();
     },
-    [addSearch, answerStream],
+    [addSearch, answerStream, shouldUseCache],
   );
 
   const handleRecentPress = useCallback(
     (recentQuery: string) => {
       setQuery(recentQuery);
+      if (shouldUseCache) {
+        answerStream.reset();
+        inputRef.current?.blur();
+        return;
+      }
       answerStream.startStream(recentQuery);
       inputRef.current?.blur();
     },
-    [answerStream],
+    [answerStream, shouldUseCache],
   );
 
   return (
@@ -135,7 +158,7 @@ export function SearchScreen() {
       </View>
 
       {/* ─── Error ─── */}
-      {answerStream.status === "error" && (
+      {!shouldUseCache && answerStream.status === "error" && (
         <ErrorCard
           message={answerStream.errorMessage ?? t("search.searchFailed")}
           onRetry={() => runSearch()}
@@ -143,7 +166,24 @@ export function SearchScreen() {
       )}
 
       {/* ─── Searching state ─── */}
-      {answerStream.status === "searching" && <SearchingSkeleton label={t("search.searching")} />}
+      {!shouldUseCache && answerStream.status === "searching" && <SearchingSkeleton label={t("search.searching")} />}
+
+      {shouldUseCache && query.trim().length > 0 ? (
+        <CachedSearchResults
+          loading={cachedSearchQuery.isLoading}
+          documents={cachedSearchQuery.data?.items ?? []}
+          loadingLabel={t("search.searchingCache")}
+          emptyLabel={t("search.noCachedResults")}
+          documentLabel={t("search.document")}
+          unfiledLabel={t("documents.unfiled")}
+          onOpen={(document) =>
+            navigation.navigate("DocumentDetail", {
+              documentId: document.id,
+              title: titleForDocument(document),
+            })
+          }
+        />
+      ) : null}
 
       {/* ─── AI Answer panel ─── */}
       {hasAnswer && (
@@ -196,6 +236,62 @@ export function SearchScreen() {
         />
       )}
     </Screen>
+  );
+}
+
+function CachedSearchResults({
+  loading,
+  documents,
+  loadingLabel,
+  emptyLabel,
+  documentLabel,
+  unfiledLabel,
+  onOpen,
+}: {
+  loading: boolean;
+  documents: ArchiveDocument[];
+  loadingLabel: string;
+  emptyLabel: string;
+  documentLabel: string;
+  unfiledLabel: string;
+  onOpen: (document: ArchiveDocument) => void;
+}) {
+  if (loading) {
+    return (
+      <Card>
+        <Text style={styles.mutedText}>{loadingLabel}</Text>
+      </Card>
+    );
+  }
+
+  if (documents.length === 0) {
+    return (
+      <Card>
+        <Text style={styles.mutedText}>{emptyLabel}</Text>
+      </Card>
+    );
+  }
+
+  return (
+    <View style={styles.cachedResults}>
+      {documents.map((document) => (
+        <Pressable
+          key={document.id}
+          onPress={() => onOpen(document)}
+          style={({ pressed }) => [styles.resultCard, pressed ? styles.resultCardPressed : null]}
+        >
+          <View style={styles.resultHeader}>
+            <Text style={styles.resultTitle}>{titleForDocument(document)}</Text>
+            <Pill label={document.status} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
+          </View>
+          <Text style={styles.resultMeta}>
+            {document.correspondent?.name ?? unfiledLabel} · {document.documentType?.name ?? documentLabel}
+          </Text>
+          <Text style={styles.resultMeta}>{formatDate(document.createdAt)}</Text>
+          <Text style={styles.resultMeta}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -811,6 +907,47 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800",
     letterSpacing: 0.2,
+  },
+  cachedResults: {
+    gap: 10,
+  },
+  mutedText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  resultCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    gap: 8,
+    ...shadow,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  resultCardPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.99 }],
+  },
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  resultTitle: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  resultMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 16,
   },
 
   // Searching skeleton

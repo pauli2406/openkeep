@@ -20,16 +20,13 @@ export function CorrespondentsScreen() {
   const { t } = useI18n();
   const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        const cached = await offline.loadFacets();
-        if (!cached) {
-          throw new Error(t("correspondents.loadError"));
-        }
-        return cached;
+      if (shouldUseCache) {
+        return offline.loadCachedFacets();
       }
 
       const response = await auth.authFetch("/api/documents/facets");

@@ -1,0 +1,62 @@
+name: Reindex Docs Search
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/docs/**
+      - docs/**
+      - scripts/docs/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/reindex-docs-search.yml
+  workflow_dispatch:
+
+jobs:
+  reindex:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
+      TYPESENSE_COLLECTION_NAME: ${{ vars.TYPESENSE_COLLECTION_NAME }}
+      TYPESENSE_PUBLIC_HOST: ${{ vars.TYPESENSE_HOST }}
+      TYPESENSE_PUBLIC_PORT: ${{ vars.TYPESENSE_PORT }}
+      TYPESENSE_PUBLIC_PROTOCOL: ${{ vars.TYPESENSE_PROTOCOL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for docs deployment
+        run: |
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error "${DOCS_SITE_URL%/}/sitemap.xml" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "Timed out waiting for ${DOCS_SITE_URL%/}/sitemap.xml"
+          exit 1
+
+      - name: Reindex Typesense docs search
+        env:
+          TYPESENSE_ADMIN_API_KEY: ${{ secrets.TYPESENSE_ADMIN_API_KEY }}
+          DOCSEARCH_START_URL: ${{ vars.DOCS_SITE_URL }}
+          DOCSEARCH_SITEMAP_URL: ${{ vars.DOCS_SITE_URL }}/sitemap.xml
+          DOCSEARCH_STOP_URL: ${{ vars.DOCS_SITE_URL }}/search
+        run: pnpm docs:search:index:remote

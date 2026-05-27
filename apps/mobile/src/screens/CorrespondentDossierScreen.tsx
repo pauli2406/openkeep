@@ -945,13 +945,14 @@ export function CorrespondentDossierScreen() {
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   const { slug, name } = route.params;
 
   // ── Primary query: insights (polls every 4s while pending) ──
   const insightsQuery = useQuery({
-    queryKey: ["correspondent", slug, "insights", auth.apiUrl, offline.shouldUseOffline],
-    enabled: !offline.shouldUseOffline,
+    queryKey: ["correspondent", slug, "insights", auth.apiUrl, shouldUseCache],
+    enabled: !shouldUseCache,
     queryFn: async () => {
       const response = await auth.authFetch(
         `/api/correspondents/${encodeURIComponent(slug)}/insights`,
@@ -979,12 +980,12 @@ export function CorrespondentDossierScreen() {
       "documents",
       correspondentId,
       auth.apiUrl,
-      offline.shouldUseOffline,
-      offline.summary?.lastSyncedAt,
+      shouldUseCache,
+      offline.cacheSummary.updatedAt,
     ],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        return offline.loadDocuments({ correspondentSlug: slug });
+      if (shouldUseCache) {
+        return offline.queryCachedDocuments({ correspondentSlug: slug });
       }
 
       const params = new URLSearchParams({
@@ -1002,14 +1003,14 @@ export function CorrespondentDossierScreen() {
       }
       return (await response.json()) as SearchDocumentsResponse;
     },
-    enabled: offline.shouldUseOffline || Boolean(correspondentId),
-    refetchInterval: offline.shouldUseOffline
+    enabled: shouldUseCache || Boolean(correspondentId),
+    refetchInterval: shouldUseCache
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   // ── Loading state ──
-  if (!offline.shouldUseOffline && insightsQuery.isLoading) {
+  if (!shouldUseCache && insightsQuery.isLoading) {
     return (
       <Screen
         title={name}
@@ -1027,7 +1028,7 @@ export function CorrespondentDossierScreen() {
   }
 
   // ── Error state ──
-  if (!offline.shouldUseOffline && (insightsQuery.isError || !insightsQuery.data)) {
+  if (!shouldUseCache && (insightsQuery.isError || !insightsQuery.data)) {
     return (
       <Screen
         title={name}

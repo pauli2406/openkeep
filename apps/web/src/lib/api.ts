@@ -53,6 +53,7 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let tokensInitialized = false;
 let onAuthFailure: (() => void) | null = null;
+const retryableRequests = new WeakMap<Request, Request>();
 
 function ensureTokensInitialized() {
   if (!tokensInitialized) {
@@ -188,6 +189,7 @@ client.use({
     if (accessToken) {
       request.headers.set("Authorization", `Bearer ${accessToken}`);
     }
+    retryableRequests.set(request, request.clone());
     return request;
   },
   async onResponse({ response, request }) {
@@ -208,7 +210,7 @@ client.use({
       if (await refreshAccessToken()) {
 
         // Retry the original request with new token
-        const retryRequest = new Request(request, {
+        const retryRequest = new Request(retryableRequests.get(request) ?? request, {
           headers: new Headers(request.headers),
         });
         retryRequest.headers.set("Authorization", `Bearer ${accessToken}`);

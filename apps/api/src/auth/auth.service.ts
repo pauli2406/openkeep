@@ -144,8 +144,6 @@ export class AuthService implements OnModuleInit {
     principal: AuthenticatedPrincipal,
     input: UpdateUserLanguagePreferences,
   ) {
-    this.assertInteractiveUser(principal);
-
     await this.databaseService.db
       .update(users)
       .set({

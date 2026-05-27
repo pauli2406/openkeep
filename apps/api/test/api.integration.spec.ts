@@ -46,6 +46,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let explorerService: ExplorerService;
   let accessToken = "";
   let apiToken = "";
+  let apiTokenId = "";
   let ownerUserId = "";
   let watchFolderPath = "";
   const originalFetch = global.fetch;
@@ -220,6 +221,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
         name: "Integration token",
       });
     apiToken = apiTokenResponse.body.token;
+    apiTokenId = apiTokenResponse.body.id;
   });
 
   afterAll(async () => {
@@ -248,12 +250,19 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     expect(documentsResponse.status).toBe(200);
     expect(Array.isArray(documentsResponse.body.items)).toBe(true);
+
+    const apiTokenMeResponse = await request(app.getHttpServer())
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${apiToken}`);
+
+    expect(apiTokenMeResponse.status).toBe(200);
+    expect(apiTokenMeResponse.body.email).toBe(process.env.OWNER_EMAIL);
   });
 
-  it("updates user language preferences via PATCH /api/auth/me/preferences", async () => {
+  it("updates user language preferences via PATCH /api/auth/me/preferences with an API token", async () => {
     const response = await request(app.getHttpServer())
       .patch("/api/auth/me/preferences")
-      .set("Authorization", `Bearer ${accessToken}`)
+      .set("Authorization", `Bearer ${apiToken}`)
       .send({
         uiLanguage: "de",
         aiProcessingLanguage: "de",
@@ -269,7 +278,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
 
     const meResponse = await request(app.getHttpServer())
       .get("/api/auth/me")
-      .set("Authorization", `Bearer ${accessToken}`);
+      .set("Authorization", `Bearer ${apiToken}`);
 
     expect(meResponse.status).toBe(200);
     expect(meResponse.body.preferences).toEqual({
@@ -277,6 +286,27 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       aiProcessingLanguage: "de",
       aiChatLanguage: "en",
     });
+  });
+
+  it("rejects API token management from API-token sessions", async () => {
+    const listResponse = await request(app.getHttpServer())
+      .get("/api/auth/tokens")
+      .set("Authorization", `Bearer ${apiToken}`);
+
+    expect(listResponse.status).toBe(401);
+
+    const createResponse = await request(app.getHttpServer())
+      .post("/api/auth/tokens")
+      .set("Authorization", `Bearer ${apiToken}`)
+      .send({ name: "Nested mobile token" });
+
+    expect(createResponse.status).toBe(401);
+
+    const deleteResponse = await request(app.getHttpServer())
+      .delete(`/api/auth/tokens/${apiTokenId}`)
+      .set("Authorization", `Bearer ${apiToken}`);
+
+    expect(deleteResponse.status).toBe(401);
   });
 
   it("rejects invalid date filters before querying the database", async () => {

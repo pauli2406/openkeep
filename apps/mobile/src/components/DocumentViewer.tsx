@@ -365,6 +365,10 @@ export function DocumentViewer({
         }
       }
 
+      if (!canFetchOnline) {
+        throw new Error(t("documentViewer.shareOfflineMissing"));
+      }
+
       // For PDFs, prefer searchable version when available
       const uri = onPersistOnlineFile
         ? await onPersistOnlineFile()
@@ -400,7 +404,7 @@ export function DocumentViewer({
           message: err instanceof Error ? err.message : t("documentViewer.downloadFailed"),
         });
       }
-  }, [authFetch, documentId, hasLocalFile, localFileUri, mimeType, offlineMode, onPersistOnlineFile, searchablePdfAvailable, t]);
+  }, [authFetch, canFetchOnline, documentId, hasLocalFile, localFileUri, mimeType, offlineMode, onPersistOnlineFile, searchablePdfAvailable, t]);
 
   // For text files, fetch as text
   const fetchText = useCallback(async () => {
@@ -419,6 +423,10 @@ export function DocumentViewer({
           setFileState({ status: "ready", uri: localFileUri });
           return;
         }
+      }
+
+      if (!canFetchOnline) {
+        throw new Error(t("documentViewer.shareOfflineMissing"));
       }
 
       if (onPersistOnlineFile) {
@@ -445,7 +453,7 @@ export function DocumentViewer({
           message: err instanceof Error ? err.message : t("documentViewer.loadTextFailed"),
         });
       }
-  }, [authFetch, documentId, hasLocalFile, localFileUri, offlineMode, onPersistOnlineFile, t]);
+  }, [authFetch, canFetchOnline, documentId, hasLocalFile, localFileUri, offlineMode, onPersistOnlineFile, t]);
 
   // Auto-load on mount when previewable
   useEffect(() => {

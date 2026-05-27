@@ -16,6 +16,7 @@
     "docs:build": "pnpm --filter @openkeep/docs build",
     "docs:search:up": "docker compose up -d typesense typesense-bootstrap docs",
     "docs:search:index": "node scripts/docs/run-typesense-indexer.mjs",
+    "docs:search:index:remote": "TYPESENSE_DOCSEARCH_RUNNER=docker node scripts/docs/run-typesense-indexer.mjs",
     "secrets:scan": "sh ./scripts/security/run-gitleaks.sh git",
     "secrets:scan:history": "sh ./scripts/security/run-gitleaks.sh git",
     "secrets:scan:local": "sh ./scripts/security/run-gitleaks.sh dir",

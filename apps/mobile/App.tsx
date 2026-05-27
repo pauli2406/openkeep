@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -137,14 +137,7 @@ function AppNavigator() {
   const { t } = useI18n();
   const offline = useOfflineArchive();
 
-  const hasOfflineSnapshot = Boolean(
-    offline.summary && (
-      offline.summary.lastSyncedAt ||
-      offline.summary.documentCount > 0 ||
-      offline.summary.dashboard ||
-      offline.summary.facets
-    ),
-  );
+  const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
 
   if (auth.isLoading || !offline.isReady) {
     return (
@@ -156,7 +149,7 @@ function AppNavigator() {
     );
   }
 
-  const canEnterApp = auth.isAuthenticated && (!auth.isOfflineSession || hasOfflineSnapshot);
+  const canEnterApp = auth.isAuthenticated && (!auth.isOfflineSession || hasCachedDocuments);
 
   if (!canEnterApp) {
     return (
@@ -180,7 +173,6 @@ function AppNavigator() {
 
   return (
     <>
-      <AutoSyncManager />
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.surface },
@@ -221,63 +213,6 @@ function AppNavigator() {
       </Stack.Navigator>
     </>
   );
-}
-
-function AutoSyncManager() {
-  const auth = useAuth();
-  const offline = useOfflineArchive();
-  const wasConnectedRef = useRef(offline.isConnected);
-  const lastAutoSyncAtRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const justReconnected = !wasConnectedRef.current && offline.isConnected;
-    wasConnectedRef.current = offline.isConnected;
-
-    if (!auth.isAuthenticated || !offline.isReady || !offline.isConnected || !auth.apiUrl || offline.isSyncing || !offline.summary || !justReconnected) {
-      return;
-    }
-
-    if (lastAutoSyncAtRef.current === offline.summary.lastSyncedAt) {
-      return;
-    }
-
-    lastAutoSyncAtRef.current = offline.summary.lastSyncedAt;
-    void Promise.resolve()
-      .then(async () => {
-        if (auth.isOfflineSession) {
-          const revalidated = await auth.revalidateSession();
-          if (!revalidated) {
-            throw new Error("Session could not be revalidated");
-          }
-        }
-
-        return offline.checkArchiveReachability(auth.probeServer, auth.apiUrl);
-      })
-      .then((isReachable) => {
-        if (!isReachable) {
-          throw new Error("Archive unreachable");
-        }
-        return offline.syncArchive(auth.authFetch);
-      })
-      .catch(() => {
-        lastAutoSyncAtRef.current = null;
-      });
-  }, [
-    auth.apiUrl,
-    auth.authFetch,
-    auth.isAuthenticated,
-    auth.isOfflineSession,
-    auth.probeServer,
-    auth.revalidateSession,
-    offline.checkArchiveReachability,
-    offline.isConnected,
-    offline.isReady,
-    offline.isSyncing,
-    offline.summary,
-    offline.syncArchive,
-  ]);
-
-  return null;
 }
 
 function Root() {

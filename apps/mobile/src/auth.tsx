@@ -13,6 +13,7 @@ import {
 } from "react";
 
 const API_URL_KEY = "openkeep.mobile.api-url";
+const API_TOKEN_KEY = "openkeep.mobile.api-token";
 const ACCESS_TOKEN_KEY = "openkeep.mobile.access-token";
 const REFRESH_TOKEN_KEY = "openkeep.mobile.refresh-token";
 const USER_KEY = "openkeep.mobile.user";
@@ -40,13 +41,7 @@ type AuthContextValue = {
   isOfflineSession: boolean;
   setApiUrl: (value: string) => Promise<void>;
   probeServer: (value: string) => Promise<void>;
-  login: (args: { apiUrl: string; email: string; password: string }) => Promise<void>;
-  setup: (args: {
-    apiUrl: string;
-    displayName: string;
-    email: string;
-    password: string;
-  }) => Promise<void>;
+  connect: (args: { apiUrl: string; apiToken: string }) => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   revalidateSession: () => Promise<boolean>;
@@ -123,7 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMode, setSessionMode] = useState<"none" | "online" | "offline">("none");
   const apiUrlRef = useRef("");
+  const apiTokenRef = useRef("");
   const tokensRef = useRef({ accessToken: "", refreshToken: "" });
+
+  const persistApiToken = useCallback(async (apiToken: string) => {
+    apiTokenRef.current = apiToken;
+    await SecureStore.setItemAsync(API_TOKEN_KEY, apiToken);
+  }, []);
+
+  const clearApiToken = useCallback(async () => {
+    apiTokenRef.current = "";
+    await SecureStore.deleteItemAsync(API_TOKEN_KEY);
+  }, []);
 
   const persistTokens = useCallback(async (accessToken: string, refreshToken: string) => {
     tokensRef.current = { accessToken, refreshToken };
@@ -148,10 +154,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
+    apiUrlRef.current = "";
+    setApiUrlState("");
+    await AsyncStorage.removeItem(API_URL_KEY);
+    await clearApiToken();
     await clearTokens();
     await persistUser(null);
     setSessionMode("none");
-  }, [clearTokens, persistUser]);
+  }, [clearApiToken, clearTokens, persistUser]);
 
   const setApiUrl = useCallback(async (value: string) => {
     const next = normalizeApiUrl(value);
@@ -226,8 +236,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const execute = async () => {
         const headers = new Headers(init?.headers ?? {});
-        if (tokensRef.current.accessToken) {
-          headers.set("Authorization", `Bearer ${tokensRef.current.accessToken}`);
+        const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
+        if (bearerToken) {
+          headers.set("Authorization", `Bearer ${bearerToken}`);
         }
 
         return fetch(resolveUrl(currentApiUrl, path), {
@@ -237,13 +248,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
 
       let response = await execute();
+      const isApiTokenSession = Boolean(apiTokenRef.current);
       const isAuthRequest = path.startsWith("/api/auth/");
-      const allowRefresh = !isAuthRequest || path === "/api/auth/me";
+      const allowRefresh = !isApiTokenSession && (!isAuthRequest || path === "/api/auth/me");
       if (response.status === 401 && allowRefresh && (await refreshAccessToken())) {
         response = await execute();
       }
 
-      if (response.status === 401 && allowRefresh) {
+      if (response.status === 401 && (allowRefresh || isApiTokenSession)) {
         await clearSession();
       }
 
@@ -279,8 +291,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (tokensRef.current.accessToken) {
-        headers["Authorization"] = `Bearer ${tokensRef.current.accessToken}`;
+      const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
+      if (bearerToken) {
+        headers["Authorization"] = `Bearer ${bearerToken}`;
       }
 
       return expoFetch(resolveUrl(currentApiUrl, path), {
@@ -313,7 +326,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [persistUser]);
 
   const revalidateSession = useCallback(async () => {
-    if (!apiUrlRef.current || !tokensRef.current.accessToken || !tokensRef.current.refreshToken) {
+    if (
+      !apiUrlRef.current ||
+      (!apiTokenRef.current && (!tokensRef.current.accessToken || !tokensRef.current.refreshToken))
+    ) {
       return false;
     }
 
@@ -330,8 +346,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       try {
-        const [storedApiUrl, accessToken, refreshToken, storedUserRaw] = await Promise.all([
+        const [storedApiUrl, apiToken, accessToken, refreshToken, storedUserRaw] = await Promise.all([
           AsyncStorage.getItem(API_URL_KEY),
+          SecureStore.getItemAsync(API_TOKEN_KEY),
           SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
           SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
           AsyncStorage.getItem(USER_KEY),
@@ -353,12 +370,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         apiUrlRef.current = nextApiUrl;
         setApiUrlState(nextApiUrl);
+        apiTokenRef.current = apiToken ?? "";
         tokensRef.current = {
           accessToken: accessToken ?? "",
           refreshToken: refreshToken ?? "",
         };
 
-        if (nextApiUrl && accessToken && refreshToken) {
+        if (nextApiUrl && apiToken) {
+          try {
+            const response = await withTimeout(
+              fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
+                headers: {
+                  Authorization: `Bearer ${apiToken}`,
+                },
+              }),
+              "Session restore",
+            );
+
+            if (response.ok) {
+              const payload = (await response.json()) as User;
+              if (!cancelled) {
+                await persistUser(payload);
+                setSessionMode("online");
+              }
+            } else if (response.status === 401) {
+              if (!cancelled) {
+                await clearSession();
+              }
+            } else if (!cancelled) {
+              await restoreCachedSession(storedUser);
+            }
+          } catch {
+            if (!cancelled) {
+              await restoreCachedSession(storedUser);
+            }
+          }
+        } else if (nextApiUrl && accessToken && refreshToken) {
           try {
             const response = await withTimeout(
               fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
@@ -414,61 +461,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [clearSession, loadCurrentUser, persistUser, refreshAccessToken, restoreCachedSession]);
 
-  const completeAuth = useCallback(
-    async (nextApiUrl: string, response: Response) => {
+  const connect = useCallback(
+    async ({ apiUrl: inputApiUrl, apiToken }: { apiUrl: string; apiToken: string }) => {
+      const nextApiUrl = normalizeApiUrl(inputApiUrl);
+      const nextApiToken = apiToken.trim();
+      if (!nextApiToken) {
+        throw new Error("Enter your OpenKeep API token.");
+      }
+
+      await probeServer(nextApiUrl);
+      const response = await withTimeout(
+        fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
+          headers: {
+            Authorization: `Bearer ${nextApiToken}`,
+          },
+        }),
+        "Token verification",
+      );
+
       if (!response.ok) {
         throw new Error(await readResponseMessage(response));
       }
 
-      const payload = (await response.json()) as {
-        accessToken: string;
-        refreshToken: string;
-      };
-
+      const payload = (await response.json()) as User;
       await setApiUrl(nextApiUrl);
-      await persistTokens(payload.accessToken, payload.refreshToken);
-      await loadCurrentUser();
+      await persistApiToken(nextApiToken);
+      await clearTokens();
+      await persistUser(payload);
+      setSessionMode("online");
     },
-    [loadCurrentUser, persistTokens, setApiUrl],
-  );
-
-  const login = useCallback(
-    async ({ apiUrl: inputApiUrl, email, password }: { apiUrl: string; email: string; password: string }) => {
-      const nextApiUrl = normalizeApiUrl(inputApiUrl);
-      await probeServer(nextApiUrl);
-      const response = await withTimeout(
-        fetch(resolveUrl(nextApiUrl, "/api/auth/login"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }),
-        "Login request",
-      );
-      await completeAuth(nextApiUrl, response);
-    },
-    [completeAuth, probeServer],
-  );
-
-  const setup = useCallback(
-    async ({ apiUrl: inputApiUrl, displayName, email, password }: {
-      apiUrl: string;
-      displayName: string;
-      email: string;
-      password: string;
-    }) => {
-      const nextApiUrl = normalizeApiUrl(inputApiUrl);
-      await probeServer(nextApiUrl);
-      const response = await withTimeout(
-        fetch(resolveUrl(nextApiUrl, "/api/auth/setup"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ displayName, email, password }),
-        }),
-        "Setup request",
-      );
-      await completeAuth(nextApiUrl, response);
-    },
-    [completeAuth, probeServer],
+    [clearTokens, persistApiToken, persistUser, probeServer, setApiUrl],
   );
 
   const updatePreferences = useCallback(
@@ -503,8 +525,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isOfflineSession: sessionMode === "offline",
       setApiUrl,
       probeServer,
-      login,
-      setup,
+      connect,
       updatePreferences,
       logout,
       revalidateSession,
@@ -514,14 +535,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       apiUrl,
       authFetch,
+      connect,
       isLoading,
-      login,
       logout,
       probeServer,
       revalidateSession,
       sessionMode,
       setApiUrl,
-      setup,
       streamFetch,
       updatePreferences,
       user,

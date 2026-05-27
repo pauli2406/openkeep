@@ -1,51 +1,43 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Button, Card, Field, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import { colors } from "../theme";
 
-type Mode = "login" | "setup";
-
 export function AuthScreen() {
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
-  const [mode, setMode] = useState<Mode>("login");
   const [apiUrl, setApiUrl] = useState(auth.apiUrl || "http://localhost:3000");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [apiToken, setApiToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const hasOfflineSnapshot = Boolean(
-    offline.summary && (
-      offline.summary.lastSyncedAt ||
-      offline.summary.documentCount > 0 ||
-      offline.summary.dashboard ||
-      offline.summary.facets
-    ),
-  );
+  const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
 
   async function handleSubmit() {
     setError("");
     setBusy(true);
     try {
-      if (mode === "setup") {
-        if (password.length < 12) {
-          throw new Error(t("auth.errorPasswordLength"));
-        }
-        if (password !== confirmPassword) {
-          throw new Error(t("auth.errorPasswordsMatch"));
-        }
-        await auth.setup({ apiUrl, displayName, email, password });
-      } else {
-        await auth.login({ apiUrl, email, password });
+      if (!apiToken.trim()) {
+        throw new Error(t("auth.errorApiTokenRequired"));
       }
+      await auth.connect({ apiUrl, apiToken });
     } catch (value) {
-      setError(value instanceof Error ? value.message : t("auth.errorGeneric"));
+      if (value instanceof Error) {
+        if (value.message === t("auth.errorApiTokenRequired")) {
+          setError(value.message);
+        } else if (/api token|bearer token|401|unauthorized|unknown token|invalid token|malformed/i.test(value.message)) {
+          setError(t("auth.errorInvalidToken"));
+        } else if (/reach|health check|network|timed out|connection/i.test(value.message)) {
+          setError(t("auth.errorConnection"));
+        } else {
+          setError(value.message);
+        }
+      } else {
+        setError(t("auth.errorGeneric"));
+      }
     } finally {
       setBusy(false);
     }
@@ -61,36 +53,12 @@ export function AuthScreen() {
       <Card>
         <View style={styles.introRow}>
           <View style={styles.introBadge}>
-            <Text style={styles.introBadgeText}>
-              {mode === "setup" ? t("auth.setupBadge") : t("auth.signInBadge")}
-            </Text>
+            <Text style={styles.introBadgeText}>{t("auth.connectBadge")}</Text>
           </View>
-          <Text style={styles.introText}>
-            {mode === "setup"
-              ? t("auth.setupIntro")
-              : t("auth.signInIntro")}
-          </Text>
-          {!hasOfflineSnapshot && auth.apiUrl ? (
+          <Text style={styles.introText}>{t("auth.connectIntro")}</Text>
+          {!hasCachedDocuments && auth.apiUrl ? (
             <Text style={styles.error}>{t("auth.offlineSnapshotRequired")}</Text>
           ) : null}
-        </View>
-
-        <View style={styles.segmentWrap}>
-          {(["login", "setup"] as const).map((value) => (
-            <Pressable
-              key={value}
-              onPress={() => setMode(value)}
-              style={({ pressed }) => [
-                styles.segment,
-                mode === value ? styles.segmentActive : null,
-                pressed ? styles.segmentPressed : null,
-              ]}
-            >
-              <Text style={[styles.segmentText, mode === value ? styles.segmentTextActive : null]}>
-                {value === "login" ? t("auth.signIn") : t("auth.setup")}
-              </Text>
-            </Pressable>
-          ))}
         </View>
 
         <Field
@@ -102,38 +70,19 @@ export function AuthScreen() {
           placeholder="https://archive.example.com"
         />
 
-        {mode === "setup" ? (
-          <Field label={t("auth.displayName")} value={displayName} onChangeText={setDisplayName} />
-        ) : null}
-
         <Field
-          label={t("auth.email")}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
+          label={t("auth.apiToken")}
+          value={apiToken}
+          onChangeText={setApiToken}
           autoCapitalize="none"
-          placeholder="you@example.com"
-        />
-        <Field
-          label={t("auth.password")}
-          value={password}
-          onChangeText={setPassword}
           secureTextEntry
-          placeholder={mode === "setup" ? t("auth.passwordMin") : t("auth.passwordPlaceholder")}
+          placeholder={t("auth.apiTokenPlaceholder")}
         />
-        {mode === "setup" ? (
-          <Field
-            label={t("auth.confirmPassword")}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
-        ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button
-          label={mode === "setup" ? t("auth.createOwner") : t("auth.signIn")}
+          label={t("auth.connectArchive")}
           onPress={handleSubmit}
           loading={busy}
         />
@@ -167,39 +116,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
-  },
-  segmentWrap: {
-    flexDirection: "row",
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 20,
-    padding: 5,
-    gap: 6,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-  },
-  segmentActive: {
-    backgroundColor: colors.surface,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
-  },
-  segmentPressed: {
-    opacity: 0.94,
-  },
-  segmentText: {
-    color: colors.muted,
-    fontWeight: "700",
-    fontSize: 15,
-  },
-  segmentTextActive: {
-    color: colors.text,
   },
   error: {
     color: colors.danger,

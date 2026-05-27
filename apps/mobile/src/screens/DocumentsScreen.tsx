@@ -20,6 +20,7 @@ export function DocumentsScreen() {
   const { t } = useI18n();
   const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<(typeof statuses)[number]>("all");
 
@@ -67,10 +68,10 @@ export function DocumentsScreen() {
   }, [query, status]);
 
   const documentsQuery = useQuery({
-    queryKey: ["documents", auth.apiUrl, params, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["documents", auth.apiUrl, params, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        return offline.loadDocuments({ query, status });
+      if (shouldUseCache) {
+        return offline.queryCachedDocuments({ query, status });
       }
 
         const response = await auth.authFetch(`/api/documents?${params}`);
@@ -79,7 +80,7 @@ export function DocumentsScreen() {
         }
         return (await response.json()) as SearchDocumentsResponse;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });

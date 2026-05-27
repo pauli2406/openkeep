@@ -43,6 +43,7 @@ Start here if you are deploying or operating OpenKeep.
 
 - [Operations Overview](./operations/README.md)
 - [Deployment Guide](./operations/deployment-guide.md)
+- [Cloudflare Pages and Oracle Typesense](./operations/cloudflare-pages-and-oracle-typesense.md)
 - [Configuration Reference](./operations/configuration-reference.md)
 - [Runbooks](./operations/runbooks.md)
 - [Backup, Restore, and Portability](./operations/backup-restore-and-portability.md)
@@ -76,7 +77,8 @@ Supporting reference material:
 
 1. [Operations Overview](./operations/README.md)
 2. [Deployment Guide](./operations/deployment-guide.md)
-3. [Configuration Reference](./operations/configuration-reference.md)
-4. [Runbooks](./operations/runbooks.md)
-5. [Backup, Restore, and Portability](./operations/backup-restore-and-portability.md)
-6. [Monitoring and Health](./operations/monitoring-and-health.md)
+3. [Cloudflare Pages and Oracle Typesense](./operations/cloudflare-pages-and-oracle-typesense.md)
+4. [Configuration Reference](./operations/configuration-reference.md)
+5. [Runbooks](./operations/runbooks.md)
+6. [Backup, Restore, and Portability](./operations/backup-restore-and-portability.md)
+7. [Monitoring and Health](./operations/monitoring-and-health.md)

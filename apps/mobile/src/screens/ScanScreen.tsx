@@ -58,6 +58,7 @@ export function ScanScreen() {
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
@@ -203,7 +204,7 @@ export function ScanScreen() {
           <Button label={t("scan.importImages")} variant="secondary" onPress={() => void handlePickImages()} />
           <Button label={t("scan.importPdf")} variant="secondary" onPress={() => void handlePickFile()} />
         </View>
-        {offline.shouldUseOffline ? <Text style={styles.helper}>{t("scan.uploadsPaused")}</Text> : null}
+        {shouldUseCache ? <Text style={styles.helper}>{t("scan.uploadsPaused")}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
@@ -213,7 +214,7 @@ export function ScanScreen() {
             <Text style={styles.fileText}>{pdfUri.split("/").pop() ?? pdfUri}</Text>
             <View style={styles.buttonStack}>
               <Button label={t("scan.shareCopy")} variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
-              <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={offline.shouldUseOffline} />
+              <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={shouldUseCache} />
             </View>
           </Card>
       ) : null}
@@ -231,7 +232,7 @@ export function ScanScreen() {
             </Card>
           ))}
           {uploadMutation.isError ? <ErrorCard message={uploadMutation.error instanceof Error ? uploadMutation.error.message : t("scan.uploadFailed")} /> : null}
-          <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={offline.shouldUseOffline} />
+          <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={shouldUseCache} />
         </>
       ) : null}
 

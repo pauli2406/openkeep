@@ -20,12 +20,13 @@ export function ReviewScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   const reviewQuery = useQuery({
-    queryKey: ["review", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["review", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        return offline.loadDocuments({ reviewOnly: true });
+      if (shouldUseCache) {
+        return offline.queryCachedDocuments({ reviewOnly: true });
       }
 
       const response = await auth.authFetch("/api/documents/review?page=1&pageSize=25");
@@ -34,7 +35,7 @@ export function ReviewScreen() {
       }
       return (await response.json()) as ReviewQueueResponse;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
@@ -86,7 +87,7 @@ export function ReviewScreen() {
                   label={t("review.resolve")}
                   variant="secondary"
                   loading={busyId === `${document.id}:resolve`}
-                  disabled={offline.shouldUseOffline}
+                  disabled={shouldUseCache}
                   onPress={() => {
                     setBusyId(`${document.id}:resolve`);
                     mutation.mutate({ id: document.id, action: "resolve" });
@@ -95,7 +96,7 @@ export function ReviewScreen() {
                 <Button
                   label={t("review.requeue")}
                   loading={busyId === `${document.id}:requeue`}
-                  disabled={offline.shouldUseOffline}
+                  disabled={shouldUseCache}
                   onPress={() => {
                     setBusyId(`${document.id}:requeue`);
                     mutation.mutate({ id: document.id, action: "requeue" });

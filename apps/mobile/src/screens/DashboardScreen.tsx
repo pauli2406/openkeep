@@ -617,16 +617,13 @@ export function DashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   const insightsQuery = useQuery({
-    queryKey: ["dashboard", auth.apiUrl, offline.shouldUseOffline, offline.summary?.lastSyncedAt],
+    queryKey: ["dashboard", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
     queryFn: async () => {
-      if (offline.shouldUseOffline) {
-        const cached = await offline.loadDashboard();
-        if (!cached) {
-          throw new Error(t("dashboard.screen.noSnapshot"));
-        }
-        return cached;
+      if (shouldUseCache) {
+        return offline.loadCachedDashboard();
       }
 
       const response = await auth.authFetch("/api/dashboard/insights");
@@ -635,7 +632,7 @@ export function DashboardScreen() {
       }
       return (await response.json()) as DashboardInsights;
     },
-    refetchInterval: offline.shouldUseOffline
+    refetchInterval: shouldUseCache
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
   });
@@ -742,7 +739,7 @@ export function DashboardScreen() {
             </View>
             <TaskList
               items={taskItems}
-              onComplete={offline.shouldUseOffline ? undefined : (id) => completeMutation.mutate(id)}
+              onComplete={shouldUseCache ? undefined : (id) => completeMutation.mutate(id)}
               busyId={busyTaskId}
             />
             {completeMutation.isError ? (

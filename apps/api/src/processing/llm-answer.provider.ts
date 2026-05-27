@@ -98,6 +98,10 @@ export class LlmAnswerProvider implements AnswerProvider {
 
     for await (const chunk of stream) {
       if (chunk.done) {
+        if (chunk.error) {
+          yield { text: "", done: true, error: chunk.error, citations: [] };
+          return;
+        }
         yield { text: "", done: true, citations: context.citations.slice(0, input.maxCitations) };
         return;
       }

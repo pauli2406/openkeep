@@ -1231,11 +1231,15 @@ export class DocumentsService {
 
     let fullAnswer = "";
     let citations: unknown[] = [];
+    let streamError: string | undefined;
 
     for await (const chunk of stream) {
       if (chunk.done) {
         if (chunk.citations) {
           citations = chunk.citations;
+        }
+        if (chunk.error) {
+          streamError = chunk.error;
         }
 
         break;
@@ -1243,6 +1247,11 @@ export class DocumentsService {
 
       fullAnswer += chunk.text;
       yield `event: answer-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    if (streamError) {
+      yield `event: error\ndata: ${JSON.stringify({ message: streamError })}\n\n`;
+      return;
     }
 
     yield `event: done\ndata: ${JSON.stringify({

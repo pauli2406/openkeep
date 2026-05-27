@@ -17,6 +17,7 @@ export interface LlmCompletionOptions {
 export interface LlmStreamChunk {
   text: string;
   done: boolean;
+  error?: string;
 }
 
 export type LlmProviderId = "openai" | "gemini" | "mistral";
@@ -126,7 +127,7 @@ export class LlmService {
       this.logger.warn(
         "No LLM provider configured (set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY)",
       );
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: "No LLM provider configured (set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY)" };
       return;
     }
 
@@ -328,13 +329,13 @@ export class LlmService {
       this.logger.warn(
         `OpenAI streaming completion failed with status ${response.status}: ${errorBody}`,
       );
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: `OpenAI request failed (HTTP ${response.status})` };
       return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: "OpenAI response stream unavailable" };
       return;
     }
 
@@ -420,13 +421,13 @@ export class LlmService {
       this.logger.warn(
         `Mistral streaming completion failed with status ${response.status}: ${errorBody}`,
       );
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: `Mistral request failed (HTTP ${response.status})` };
       return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: "Mistral response stream unavailable" };
       return;
     }
 
@@ -573,13 +574,13 @@ export class LlmService {
 
     if (!response.ok) {
       this.logger.warn(`Gemini streaming completion failed with status ${response.status}`);
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: `Gemini request failed (HTTP ${response.status})` };
       return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      yield { text: "", done: true };
+      yield { text: "", done: true, error: "Gemini response stream unavailable" };
       return;
     }
 
