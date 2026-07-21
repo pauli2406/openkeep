@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 
 import { ArchiveModule } from "./archive/archive.module";
 import { AuthModule } from "./auth/auth.module";
@@ -15,6 +17,16 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
 
 @Module({
   imports: [
+    // Global baseline rate limit: 300 requests / minute / IP — generous
+    // enough for normal app usage (dashboards firing many requests), while
+    // still bounding abuse. Auth endpoints override this with a much
+    // stricter limit (see AuthController).
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60_000,
+        limit: 300,
+      },
+    ]),
     AppConfigModule,
     DatabaseModule,
     MetricsModule,
@@ -28,5 +40,11 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
     TaxonomiesModule,
   ],
   controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

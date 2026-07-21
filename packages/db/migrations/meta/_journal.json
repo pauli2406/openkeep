@@ -85,6 +85,13 @@
       "when": 1774684800000,
       "tag": "0012_user_language_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1774771200000,
+      "tag": "0013_two_factor_and_sessions",
+      "breakpoints": true
     }
   ]
 }

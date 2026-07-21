@@ -19,6 +19,7 @@ export function makeUser(overrides: Partial<{
   email: string;
   displayName: string;
   isOwner: boolean;
+  twoFactorEnabled: boolean;
   preferences: {
     uiLanguage: "en" | "de";
     aiProcessingLanguage: "en" | "de";
@@ -30,6 +31,7 @@ export function makeUser(overrides: Partial<{
     email: "owner@example.com",
     displayName: "Owner",
     isOwner: true,
+    twoFactorEnabled: false,
     preferences: {
       uiLanguage: "en",
       aiProcessingLanguage: "en",

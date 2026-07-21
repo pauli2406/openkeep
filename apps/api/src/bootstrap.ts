@@ -16,8 +16,30 @@ export const createApp = async () => {
       logger: {
         level: config.LOG_LEVEL,
       },
+      // The API only ever receives traffic through the Traefik/Cloudflare
+      // reverse proxy, so we trust X-Forwarded-* to derive the real client
+      // IP. This is required for per-IP rate limiting to work correctly.
+      trustProxy: true,
     }),
   );
+
+  // Baseline security response headers. TLS is terminated by the reverse
+  // proxy; these harden the browser side (clickjacking, MIME sniffing,
+  // referrer leakage) and instruct browsers to stay on HTTPS.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook("onSend", (_request, reply, payload, done) => {
+      reply.header("X-Content-Type-Options", "nosniff");
+      reply.header("X-Frame-Options", "DENY");
+      reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+      reply.header("Content-Security-Policy", "frame-ancestors 'none'");
+      reply.header(
+        "Strict-Transport-Security",
+        "max-age=63072000; includeSubDomains",
+      );
+      done(null, payload);
+    });
 
   await app.register(cookie);
   await app.register(multipart, {
