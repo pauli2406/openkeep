@@ -14,6 +14,7 @@
     "docker:up:build": "sh ./scripts/docker/compose-with-worker-base.sh up --build",
     "docs:dev": "pnpm --filter @openkeep/docs dev",
     "docs:build": "pnpm --filter @openkeep/docs build",
+    "docs:build:sites": "pnpm --filter @openkeep/docs build:sites",
     "docs:search:up": "docker compose up -d typesense typesense-bootstrap docs",
     "docs:search:index": "node scripts/docs/run-typesense-indexer.mjs",
     "docs:search:index:remote": "TYPESENSE_DOCSEARCH_RUNNER=docker node scripts/docs/run-typesense-indexer.mjs",

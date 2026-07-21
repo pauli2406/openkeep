@@ -1,0 +1,121 @@
+# Produktions-Compose für openkeep.de (Dokploy auf Strato VPS)
+#
+# Unterschiede zur Entwicklungs-Compose:
+# - keine published Ports: Routing macht Dokploy/Traefik über das interne Docker-Netz
+#   (Domain openkeep.de -> Service "api", Container-Port 3000)
+# - Images kommen fertig gebaut aus GHCR (.github/workflows/build-images.yml)
+# - docs/typesense-Services entfernt (nur für die openkeep-Doku-Website nötig)
+# - Mistral-only: kein lokaler OCR-Fallback (FALLBACK_PARSE_PROVIDER bewusst leer)
+# - alle Secrets über Env-Vars (Dokploy Environment-Tab, siehe .env.production.example);
+#   ":?": Deploy schlägt fehl, wenn ein Secret fehlt – statt mit Defaults zu starten
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://openkeep:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}@postgres:5432/openkeep
+  MINIO_ENDPOINT: minio
+  MINIO_PORT: 9000
+  MINIO_USE_SSL: "false"
+  MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER fehlt}
+  MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD fehlt}
+  MINIO_BUCKET: documents
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET fehlt}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET fehlt}
+  OWNER_EMAIL: ${OWNER_EMAIL:?OWNER_EMAIL fehlt}
+  OWNER_PASSWORD: ${OWNER_PASSWORD:?OWNER_PASSWORD fehlt}
+  OWNER_NAME: ${OWNER_NAME:-OpenKeep Owner}
+  API_BASE_URL: https://openkeep.de
+  # --- Mistral-only ---
+  ACTIVE_PARSE_PROVIDER: mistral-ocr
+  FALLBACK_PARSE_PROVIDER: ""
+  ACTIVE_CHAT_PROVIDER: mistral
+  ACTIVE_EMBEDDING_PROVIDER: mistral
+  MISTRAL_API_KEY: ${MISTRAL_API_KEY:?MISTRAL_API_KEY fehlt}
+  MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}
+  MISTRAL_OCR_MODEL: ${MISTRAL_OCR_MODEL:-mistral-ocr-latest}
+  MISTRAL_EMBEDDING_MODEL: ${MISTRAL_EMBEDDING_MODEL:-mistral-embed}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: openkeep
+      POSTGRES_USER: openkeep
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openkeep -d openkeep"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2025-02-18T16-25-55Z
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER fehlt}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD fehlt}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: ghcr.io/pauli2406/openkeep-migrate:${IMAGE_TAG:-latest}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://openkeep:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}@postgres:5432/openkeep
+    command: ["pnpm", "db:migrate"]
+
+  api:
+    image: ghcr.io/pauli2406/openkeep-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      PORT: 3000
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/health').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    image: ghcr.io/pauli2406/openkeep-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+
+volumes:
+  postgres_data:
+  minio_data:

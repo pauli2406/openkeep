@@ -30,6 +30,7 @@ module.exports = {
         "technical/api-and-data-flows",
         "technical/agentic-document-intelligence",
         "technical/web-application",
+        "technical/mobile-offline-sync",
         "technical/testing-and-validation",
       ],
     },
