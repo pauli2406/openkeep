@@ -31,6 +31,8 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,13 +40,84 @@ function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await auth.login(email, password);
+      const result = await auth.login(email, password);
+      if (result.requiresTwoFactor) {
+        setTwoFactorToken(result.twoFactorToken);
+        return;
+      }
       await navigate({ to: "/" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleTwoFactorSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!twoFactorToken) return;
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await auth.completeTwoFactorLogin(twoFactorToken, code.trim());
+      await navigate({ to: "/" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid authentication code");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (twoFactorToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center">
+            <div className="mb-4 flex justify-center">
+              <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
+            </div>
+            <CardDescription>
+              Enter the 6-digit code from your authenticator app, or a recovery code.
+            </CardDescription>
+          </CardHeader>
+          <form onSubmit={handleTwoFactorSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="code">Authentication code</Label>
+                <Input
+                  id="code"
+                  inputMode="text"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  placeholder="123456"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </CardContent>
+            <CardFooter className="flex flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? t("login.signingIn") : "Verify"}
+              </Button>
+              <button
+                type="button"
+                className="text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
+                onClick={() => {
+                  setTwoFactorToken(null);
+                  setCode("");
+                  setError("");
+                }}
+              >
+                Back to login
+              </button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    );
   }
 
   return (

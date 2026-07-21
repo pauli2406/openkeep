@@ -103,6 +103,7 @@ export function renderAuthenticatedApp(
       email: "owner@example.com",
       displayName: "Owner",
       isOwner: true,
+      twoFactorEnabled: false,
       preferences: {
         uiLanguage: "en",
         aiProcessingLanguage: "en",
@@ -112,9 +113,11 @@ export function renderAuthenticatedApp(
     isAuthenticated: true,
     isLoading: false,
     needsSetup: false,
-    login: async () => {},
+    login: async () => ({ requiresTwoFactor: false }),
+    completeTwoFactorLogin: async () => {},
     setup: async () => {},
     updatePreferences: async () => {},
+    refreshUser: async () => {},
     logout: () => {},
     ...authState,
   };

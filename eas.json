@@ -5,23 +5,14 @@
   },
   "build": {
     "development": {
-      "node": "22.14.0",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
-      "node": "22.14.0",
       "distribution": "internal"
     },
     "production": {
-      "node": "22.14.0",
       "autoIncrement": true
-    },
-    "ios-simulator": {
-      "extends": "development",
-      "ios": {
-        "simulator": true
-      }
     }
   },
   "submit": {

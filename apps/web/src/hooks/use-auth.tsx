@@ -28,21 +28,28 @@ interface User {
   email: string;
   displayName: string;
   isOwner: boolean;
+  twoFactorEnabled: boolean;
   preferences: UserLanguagePreferences;
 }
+
+export type LoginResult =
+  | { requiresTwoFactor: false }
+  | { requiresTwoFactor: true; twoFactorToken: string };
 
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   needsSetup: boolean | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  completeTwoFactorLogin: (twoFactorToken: string, code: string) => Promise<void>;
   setup: (
     email: string,
     password: string,
     displayName: string,
   ) => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
+  refreshUser: () => Promise<void>;
   logout: () => void;
 }
 
@@ -98,27 +105,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkSetup();
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data, error, response } = await api.POST("/api/auth/login", {
-      body: { email, password },
-    });
+  const login = useCallback(
+    async (email: string, password: string): Promise<LoginResult> => {
+      const { data, error, response } = await api.POST("/api/auth/login", {
+        body: { email, password },
+      });
 
-    if (!response.ok || error) {
-      const err = error as unknown as { message?: string };
-      throw new Error(err?.message || "Login failed");
+      if (!response.ok || error) {
+        const err = error as unknown as { message?: string };
+        throw new Error(err?.message || "Login failed");
+      }
+
+      const result = data as unknown as {
+        accessToken?: string;
+        refreshToken?: string;
+        requiresTwoFactor?: boolean;
+        twoFactorToken?: string;
+      };
+
+      if (result.requiresTwoFactor && result.twoFactorToken) {
+        return { requiresTwoFactor: true, twoFactorToken: result.twoFactorToken };
+      }
+
+      setTokens(result.accessToken!, result.refreshToken!);
+
+      const { data: userData } = await api.GET("/api/auth/me");
+      if (userData) {
+        setUser(userData as unknown as User);
+      }
+      setNeedsSetup(false);
+      return { requiresTwoFactor: false };
+    },
+    [],
+  );
+
+  const completeTwoFactorLogin = useCallback(
+    async (twoFactorToken: string, code: string) => {
+      const response = await authFetch("/api/auth/login/2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ twoFactorToken, code }),
+      });
+
+      if (!response.ok) {
+        let message = "Invalid authentication code";
+        try {
+          const payload = (await response.json()) as { message?: string | string[] };
+          if (typeof payload.message === "string") {
+            message = payload.message;
+          } else if (Array.isArray(payload.message) && payload.message.length > 0) {
+            message = payload.message.join(", ");
+          }
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
+      }
+
+      const tokens = (await response.json()) as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      setTokens(tokens.accessToken, tokens.refreshToken);
+
+      const { data: userData } = await api.GET("/api/auth/me");
+      if (userData) {
+        setUser(userData as unknown as User);
+      }
+      setNeedsSetup(false);
+    },
+    [],
+  );
+
+  const refreshUser = useCallback(async () => {
+    const { data } = await api.GET("/api/auth/me");
+    if (data) {
+      setUser(data as unknown as User);
     }
-
-    const tokens = data as unknown as {
-      accessToken: string;
-      refreshToken: string;
-    };
-    setTokens(tokens.accessToken, tokens.refreshToken);
-
-    const { data: userData } = await api.GET("/api/auth/me");
-    if (userData) {
-      setUser(userData as unknown as User);
-    }
-    setNeedsSetup(false);
   }, []);
 
   const setup = useCallback(
@@ -181,8 +244,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         needsSetup,
         login,
+        completeTwoFactorLogin,
         setup,
         updatePreferences,
+        refreshUser,
         logout,
       }}
     >

@@ -46,6 +46,12 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     displayName: varchar("display_name", { length: 255 }).notNull(),
     isOwner: boolean("is_owner").notNull().default(true),
+    totpSecret: text("totp_secret"),
+    totpEnabled: boolean("totp_enabled").notNull().default(false),
+    totpRecoveryCodes: jsonb("totp_recovery_codes")
+      .$type<Array<{ hash: string; usedAt: string | null }>>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     uiLanguage: varchar("ui_language", { length: 8 }).notNull().default("en"),
     aiProcessingLanguage: varchar("ai_processing_language", { length: 8 })
       .notNull()
@@ -76,6 +82,27 @@ export const apiTokens = pgTable(
   (table) => ({
     prefixIdx: uniqueIndex("api_tokens_prefix_idx").on(table.tokenPrefix),
     userIdx: index("api_tokens_user_idx").on(table.userId),
+  }),
+);
+
+// Server-side refresh-token sessions. Each issued refresh token maps to a
+// row here (id = the token's `jti`). This enables rotation on use, single
+// logout, and full revocation — a stateless JWT alone cannot be revoked.
+export const refreshSessions = pgTable(
+  "refresh_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (table) => ({
+    userIdx: index("refresh_sessions_user_idx").on(table.userId),
   }),
 );
 

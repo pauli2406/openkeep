@@ -85,6 +85,8 @@ export const AppEnvSchema = z.object({
   OWNER_EMAIL: z.string().email().default("owner@example.com"),
   OWNER_PASSWORD: z.string().min(12).default("change-this-password"),
   OWNER_NAME: z.string().min(1).default("OpenKeep Owner"),
+  // Label shown in authenticator apps for TOTP-based 2FA.
+  TOTP_ISSUER: z.string().min(1).default("OpenKeep"),
   SKIP_EXTERNAL_INIT: BooleanFromEnv.default(false),
   PROVIDER_MODE: ProcessingModeSchema.default("hybrid"),
   ACTIVE_PARSE_PROVIDER: ParseProviderSchema.default("local-ocr"),

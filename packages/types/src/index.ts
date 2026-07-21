@@ -846,6 +846,7 @@ export const CurrentUserSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(1),
   isOwner: z.boolean(),
+  twoFactorEnabled: z.boolean().default(false),
   preferences: UserLanguagePreferencesSchema,
   createdAt: z.string().min(1),
 });
@@ -875,6 +876,47 @@ export const SuccessResponseSchema = z.object({
 export const AuthTokensSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1),
+});
+
+// --- Two-factor authentication (TOTP) ---
+
+// Login can either return tokens directly, or, if the account has 2FA
+// enabled, a short-lived challenge token that must be exchanged together
+// with a TOTP/recovery code via POST /auth/login/2fa.
+export const TwoFactorChallengeSchema = z.object({
+  requiresTwoFactor: z.literal(true),
+  twoFactorToken: z.string().min(1),
+});
+
+export const LoginResponseSchema = z.union([AuthTokensSchema, TwoFactorChallengeSchema]);
+
+export const TwoFactorLoginSchema = z.object({
+  twoFactorToken: z.string().min(1),
+  // 6-digit TOTP code or an 8+ char recovery code.
+  code: z.string().min(6).max(20),
+});
+
+export const TwoFactorSetupResponseSchema = z.object({
+  secret: z.string().min(1),
+  otpauthUrl: z.string().min(1),
+  qrDataUrl: z.string().min(1),
+  // Short-lived signed token that carries the pending secret until the
+  // user confirms enrollment with a valid code.
+  enrollmentToken: z.string().min(1),
+});
+
+export const EnableTwoFactorSchema = z.object({
+  enrollmentToken: z.string().min(1),
+  code: z.string().length(6),
+});
+
+export const EnableTwoFactorResponseSchema = z.object({
+  recoveryCodes: z.array(z.string().min(1)),
+});
+
+export const DisableTwoFactorSchema = z.object({
+  password: z.string().min(1),
+  code: z.string().min(6).max(20),
 });
 
 export const ProviderConfigSchema = z.object({
@@ -1424,6 +1466,13 @@ export type BatchReprocessDocumentsResponse = z.infer<
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type SetupOwnerInput = z.infer<typeof SetupOwnerSchema>;
 export type RefreshInput = z.infer<typeof RefreshSchema>;
+export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+export type TwoFactorChallenge = z.infer<typeof TwoFactorChallengeSchema>;
+export type TwoFactorLoginInput = z.infer<typeof TwoFactorLoginSchema>;
+export type TwoFactorSetupResponse = z.infer<typeof TwoFactorSetupResponseSchema>;
+export type EnableTwoFactorInput = z.infer<typeof EnableTwoFactorSchema>;
+export type EnableTwoFactorResponse = z.infer<typeof EnableTwoFactorResponseSchema>;
+export type DisableTwoFactorInput = z.infer<typeof DisableTwoFactorSchema>;
 export type AppLanguage = z.infer<typeof AppLanguageSchema>;
 export type CreateApiTokenInput = z.infer<typeof CreateApiTokenSchema>;
 export type CurrentUser = z.infer<typeof CurrentUserSchema>;
