@@ -2,3 +2,15 @@ packages:
   - "apps/*"
   - "packages/*"
 
+onlyBuiltDependencies:
+  - "@nestjs/core"
+  - "@scarf/scarf"
+  - "@swc/core"
+  - "core-js"
+  - "core-js-pure"
+  - "cpu-features"
+  - "esbuild"
+  - "msw"
+  - "protobufjs"
+  - "ssh2"
+  - "typesense-instantsearch-adapter"

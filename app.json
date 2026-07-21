@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "4c2a59fb-90dc-44d0-acd6-dfb66ff605f7"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.mpochert.openkeep",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
