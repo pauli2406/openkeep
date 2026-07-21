@@ -17,6 +17,8 @@ const API_TOKEN_KEY = "openkeep.mobile.api-token";
 const ACCESS_TOKEN_KEY = "openkeep.mobile.access-token";
 const REFRESH_TOKEN_KEY = "openkeep.mobile.refresh-token";
 const USER_KEY = "openkeep.mobile.user";
+const CF_ACCESS_ID_KEY = "openkeep.mobile.cf-access-client-id";
+const CF_ACCESS_SECRET_KEY = "openkeep.mobile.cf-access-client-secret";
 const AUTH_REQUEST_TIMEOUT_MS = 12000;
 
 type UserLanguagePreferences = {
@@ -41,7 +43,12 @@ type AuthContextValue = {
   isOfflineSession: boolean;
   setApiUrl: (value: string) => Promise<void>;
   probeServer: (value: string) => Promise<void>;
-  connect: (args: { apiUrl: string; apiToken: string }) => Promise<void>;
+  connect: (args: {
+    apiUrl: string;
+    apiToken: string;
+    cfAccessClientId?: string;
+    cfAccessClientSecret?: string;
+  }) => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   revalidateSession: () => Promise<boolean>;
@@ -70,6 +77,21 @@ function resolveUrl(apiUrl: string, path: string) {
   }
 
   return `${apiUrl}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+// Cloudflare Access service-token credentials. Single AuthProvider => module singleton.
+// Sent as CF-Access-Client-Id / CF-Access-Client-Secret so the native app can pass
+// through a Cloudflare Access "Service Auth" policy without an interactive login.
+let cfAccessCreds = { clientId: "", clientSecret: "" };
+
+function cfAccessHeaders(): Record<string, string> {
+  if (cfAccessCreds.clientId && cfAccessCreds.clientSecret) {
+    return {
+      "CF-Access-Client-Id": cfAccessCreds.clientId,
+      "CF-Access-Client-Secret": cfAccessCreds.clientSecret,
+    };
+  }
+  return {};
 }
 
 async function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = AUTH_REQUEST_TIMEOUT_MS) {
@@ -131,6 +153,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await SecureStore.deleteItemAsync(API_TOKEN_KEY);
   }, []);
 
+  const persistCfAccess = useCallback(async (clientId: string, clientSecret: string) => {
+    cfAccessCreds = { clientId, clientSecret };
+    if (clientId) {
+      await SecureStore.setItemAsync(CF_ACCESS_ID_KEY, clientId);
+    } else {
+      await SecureStore.deleteItemAsync(CF_ACCESS_ID_KEY);
+    }
+    if (clientSecret) {
+      await SecureStore.setItemAsync(CF_ACCESS_SECRET_KEY, clientSecret);
+    } else {
+      await SecureStore.deleteItemAsync(CF_ACCESS_SECRET_KEY);
+    }
+  }, []);
+
   const persistTokens = useCallback(async (accessToken: string, refreshToken: string) => {
     tokensRef.current = { accessToken, refreshToken };
     await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
@@ -159,9 +195,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(API_URL_KEY);
     await clearApiToken();
     await clearTokens();
+    await persistCfAccess("", "");
     await persistUser(null);
     setSessionMode("none");
-  }, [clearApiToken, clearTokens, persistUser]);
+  }, [clearApiToken, clearTokens, persistCfAccess, persistUser]);
 
   const setApiUrl = useCallback(async (value: string) => {
     const next = normalizeApiUrl(value);
@@ -182,7 +219,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let response: Response;
     try {
-      response = await withTimeout(fetch(resolveUrl(next, "/api/health")), "Server health check");
+      response = await withTimeout(
+        fetch(resolveUrl(next, "/api/health"), { headers: cfAccessHeaders() }),
+        "Server health check",
+      );
     } catch {
       throw new Error("Could not reach the OpenKeep server.");
     }
@@ -201,7 +241,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await withTimeout(
       fetch(resolveUrl(currentApiUrl, "/api/auth/refresh"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...cfAccessHeaders() },
         body: JSON.stringify({ refreshToken: tokensRef.current.refreshToken }),
       }),
       "Session refresh",
@@ -239,6 +279,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
         if (bearerToken) {
           headers.set("Authorization", `Bearer ${bearerToken}`);
+        }
+        for (const [key, value] of Object.entries(cfAccessHeaders())) {
+          headers.set(key, value);
         }
 
         return fetch(resolveUrl(currentApiUrl, path), {
@@ -295,6 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (bearerToken) {
         headers["Authorization"] = `Bearer ${bearerToken}`;
       }
+      Object.assign(headers, cfAccessHeaders());
 
       return expoFetch(resolveUrl(currentApiUrl, path), {
         ...init,
@@ -346,17 +390,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       try {
-        const [storedApiUrl, apiToken, accessToken, refreshToken, storedUserRaw] = await Promise.all([
+        const [
+          storedApiUrl,
+          apiToken,
+          accessToken,
+          refreshToken,
+          storedUserRaw,
+          cfClientId,
+          cfClientSecret,
+        ] = await Promise.all([
           AsyncStorage.getItem(API_URL_KEY),
           SecureStore.getItemAsync(API_TOKEN_KEY),
           SecureStore.getItemAsync(ACCESS_TOKEN_KEY),
           SecureStore.getItemAsync(REFRESH_TOKEN_KEY),
           AsyncStorage.getItem(USER_KEY),
+          SecureStore.getItemAsync(CF_ACCESS_ID_KEY),
+          SecureStore.getItemAsync(CF_ACCESS_SECRET_KEY),
         ]);
 
         if (cancelled) {
           return;
         }
+
+        // Restore CF Access service-token creds first so session-restore
+        // requests below can pass through Cloudflare Access.
+        cfAccessCreds = {
+          clientId: cfClientId ?? "",
+          clientSecret: cfClientSecret ?? "",
+        };
 
         const nextApiUrl = normalizeApiUrl(storedApiUrl ?? "");
         let storedUser: User | null = null;
@@ -382,6 +443,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
                 headers: {
                   Authorization: `Bearer ${apiToken}`,
+                  ...cfAccessHeaders(),
                 },
               }),
               "Session restore",
@@ -411,6 +473,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
+                  ...cfAccessHeaders(),
                 },
               }),
               "Session restore",
@@ -462,18 +525,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession, loadCurrentUser, persistUser, refreshAccessToken, restoreCachedSession]);
 
   const connect = useCallback(
-    async ({ apiUrl: inputApiUrl, apiToken }: { apiUrl: string; apiToken: string }) => {
+    async ({
+      apiUrl: inputApiUrl,
+      apiToken,
+      cfAccessClientId,
+      cfAccessClientSecret,
+    }: {
+      apiUrl: string;
+      apiToken: string;
+      cfAccessClientId?: string;
+      cfAccessClientSecret?: string;
+    }) => {
       const nextApiUrl = normalizeApiUrl(inputApiUrl);
       const nextApiToken = apiToken.trim();
       if (!nextApiToken) {
         throw new Error("Enter your OpenKeep API token.");
       }
 
+      // Apply CF Access service-token creds in-memory *before* probing, so the
+      // health check + token verification pass through Cloudflare Access.
+      cfAccessCreds = {
+        clientId: (cfAccessClientId ?? "").trim(),
+        clientSecret: (cfAccessClientSecret ?? "").trim(),
+      };
+
       await probeServer(nextApiUrl);
       const response = await withTimeout(
         fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
           headers: {
             Authorization: `Bearer ${nextApiToken}`,
+            ...cfAccessHeaders(),
           },
         }),
         "Token verification",
@@ -486,11 +567,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const payload = (await response.json()) as User;
       await setApiUrl(nextApiUrl);
       await persistApiToken(nextApiToken);
+      await persistCfAccess(cfAccessCreds.clientId, cfAccessCreds.clientSecret);
       await clearTokens();
       await persistUser(payload);
       setSessionMode("online");
     },
-    [clearTokens, persistApiToken, persistUser, probeServer, setApiUrl],
+    [clearTokens, persistApiToken, persistCfAccess, persistUser, probeServer, setApiUrl],
   );
 
   const updatePreferences = useCallback(
