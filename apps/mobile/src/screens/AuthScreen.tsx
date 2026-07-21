@@ -12,6 +12,8 @@ export function AuthScreen() {
   const offline = useOfflineArchive();
   const [apiUrl, setApiUrl] = useState(auth.apiUrl || "http://localhost:3000");
   const [apiToken, setApiToken] = useState("");
+  const [cfAccessClientId, setCfAccessClientId] = useState("");
+  const [cfAccessClientSecret, setCfAccessClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
@@ -23,7 +25,7 @@ export function AuthScreen() {
       if (!apiToken.trim()) {
         throw new Error(t("auth.errorApiTokenRequired"));
       }
-      await auth.connect({ apiUrl, apiToken });
+      await auth.connect({ apiUrl, apiToken, cfAccessClientId, cfAccessClientSecret });
     } catch (value) {
       if (value instanceof Error) {
         if (value.message === t("auth.errorApiTokenRequired")) {
@@ -79,6 +81,28 @@ export function AuthScreen() {
           placeholder={t("auth.apiTokenPlaceholder")}
         />
 
+        <Text style={styles.sectionHint}>
+          Cloudflare Access (optional) — only if your server is protected by a
+          Cloudflare Access service token.
+        </Text>
+
+        <Field
+          label="CF Access Client ID (optional)"
+          value={cfAccessClientId}
+          onChangeText={setCfAccessClientId}
+          autoCapitalize="none"
+          placeholder="xxxxxxxx.access"
+        />
+
+        <Field
+          label="CF Access Client Secret (optional)"
+          value={cfAccessClientSecret}
+          onChangeText={setCfAccessClientSecret}
+          autoCapitalize="none"
+          secureTextEntry
+          placeholder="Client secret"
+        />
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button
@@ -116,6 +140,11 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 21,
+  },
+  sectionHint: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
   },
   error: {
     color: colors.danger,
