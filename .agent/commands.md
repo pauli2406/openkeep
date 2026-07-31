@@ -15,6 +15,12 @@
 - `pnpm --filter @openkeep/web dev`
 - `pnpm docs:dev`
 
+## Mobile
+
+- `pnpm --filter @openkeep/mobile dev` (Expo dev client)
+- `pnpm --filter @openkeep/mobile ios` / `android` (native runs)
+- `pnpm --filter @openkeep/mobile build:dev` / `build:prod` (EAS builds)
+
 ## Verification
 
 - `pnpm typecheck`
