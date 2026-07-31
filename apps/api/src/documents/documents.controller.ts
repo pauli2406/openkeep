@@ -284,7 +284,14 @@ export class DocumentsController {
   }
 
   @Post(":id/qa-history")
-  @ApiOperation({ summary: "Save a Q&A entry for a document" })
+  @ApiOperation({
+    summary: "Save a Q&A entry for a document",
+    deprecated: true,
+    description:
+      "Deprecated: entries are persisted server-side at the end of POST :id/ask/stream " +
+      "(the done event carries historyEntryId). This endpoint accepted arbitrary answer " +
+      "text and remains only for one release of backwards compatibility.",
+  })
   @ApiCreatedResponse({ description: "Saved Q&A entry" })
   async saveQaEntry(
     @Param("id") id: string,

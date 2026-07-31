@@ -164,6 +164,15 @@ Relevant document-level endpoints:
 
 This supports document-local AI workflows separate from archive-wide search answers.
 
+Q&A history and multi-turn:
+
+- `POST /api/documents/:id/ask/stream` persists the finished answer server-side; the
+  `done` event carries `historyEntryId`. Clients no longer write history themselves —
+  `POST /api/documents/:id/qa-history` is deprecated (it accepted arbitrary answer text
+  and lost entries when a tab closed mid-stream) and remains for one release.
+- the last 4 Q&A pairs for the document are replayed as user/assistant turns in the
+  prompt, so follow-up questions resolve against prior answers.
+
 Per-document Q&A context selection:
 
 - documents whose assembled context fits ~12k chars are answered in full-text mode

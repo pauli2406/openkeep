@@ -2905,7 +2905,8 @@ function DocumentQaSection({
                   setQa((s) => {
                     const finalAnswer = parsed.answer ?? s.answerText;
                     const finalCitations = parsed.citations ?? s.citations;
-                    // Add to local history
+                    // Add to local history — the server persists the entry at
+                    // stream end (done carries historyEntryId), no client write.
                     if (finalAnswer) {
                       setQaHistory((h) => [
                         ...h,
@@ -2915,16 +2916,6 @@ function DocumentQaSection({
                           citations: finalCitations,
                         },
                       ]);
-                      // Persist to backend (fire-and-forget)
-                      authFetch(`/api/documents/${documentId}/qa-history`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          question: q,
-                          answer: finalAnswer,
-                          citations: finalCitations,
-                        }),
-                      }).catch(() => {});
                     }
                     // Reset to idle so the answer only shows in the history list
                     return {
