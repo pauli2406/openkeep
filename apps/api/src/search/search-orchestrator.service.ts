@@ -54,7 +54,23 @@ export class SearchOrchestratorService {
       return this.documentsService.answerQuery(request, principal);
     }
 
-    return this.answerStructuredQuery(route, principal, request.maxDocuments, request.query);
+    const structured = await this.answerStructuredQuery(
+      route,
+      principal,
+      request.maxDocuments,
+      request.query,
+    );
+
+    if (this.shouldFallThroughToSemantic(structured, request.query)) {
+      try {
+        return await this.documentsService.answerQuery(request, principal);
+      } catch {
+        // semantic answering unavailable (e.g. embeddings not configured) —
+        // the structured empty answer is still the best we have
+      }
+    }
+
+    return structured;
   }
 
   async *streamAnswer(
@@ -70,6 +86,23 @@ export class SearchOrchestratorService {
     }
 
     const response = await this.answerStructuredQuery(route, principal, request.maxDocuments, request.query);
+
+    if (this.shouldFallThroughToSemantic(response, request.query)) {
+      const semanticStream = this.documentsService.streamAnswer(request, principal);
+      try {
+        const first = await semanticStream.next();
+        if (!first.done) {
+          yield first.value;
+          for await (const chunk of semanticStream) {
+            yield chunk;
+          }
+          return;
+        }
+      } catch {
+        // semantic answering unavailable — fall back to the structured empty answer
+      }
+    }
+
     yield `event: search-results\ndata: ${JSON.stringify({ results: [] })}\n\n`;
     yield `event: done\ndata: ${JSON.stringify({
       status: response.status,
@@ -78,6 +111,22 @@ export class SearchOrchestratorService {
       citations: response.citations,
       structuredData: response.structuredData,
     })}\n\n`;
+  }
+
+  /**
+   * A structured route with zero hits is often a misrouted content question
+   * ("what does my contract say about..."). When the query carries substance beyond
+   * the trigger phrase, retry it on the semantic RAG path instead of answering
+   * "nothing found" from the wrong data.
+   */
+  private shouldFallThroughToSemantic(response: AnswerQueryResponse, query: string): boolean {
+    const structuredData = response.structuredData as { items?: unknown[] } | null | undefined;
+    const isEmpty = Array.isArray(structuredData?.items) && structuredData.items.length === 0;
+    if (!isEmpty) {
+      return false;
+    }
+
+    return normalizeQuery(query).trim().split(/\s+/).length > 8;
   }
 
   private async answerStructuredQuery(
@@ -550,15 +599,31 @@ function summarizeAmounts(items: DashboardDeadlineItem[]): {
 }
 
 function isPendingReviewQuery(query: string): boolean {
-  return /(pending review|review queue|needs review|under review|ausstehender prufung|prufung ausstehend|zu prufen|zu pruefen|gepruft|gepruft werden|review)/.test(
+  // Anchored phrases only. A bare "review" (or "gepruft") hijacked every semantic
+  // question that merely mentioned reviewing something ("please review my contract...").
+  return /(pending review|review queue|needs? review|needing review|under review|open reviews?|ausstehender? prufung|prufung ausstehend|ausstehende prufungen?|zu prufende|prufungswarteschlange|review offen|offene reviews?)/.test(
     query,
   );
 }
 
 function isExpiringContractQuery(query: string): boolean {
-  return /(contract|vertrage|vertrag|agreement).*(expir|lauf|end|renew|renewal|verlanger|verlaenger)/.test(
-    query,
-  ) || /(which|welche).*(contract|vertrag|agreement).*(expir|endet|ablauf|laufzeit)/.test(query);
+  // Require the expiry term near the contract term (an unbounded `.*` matched
+  // "does my contract say anything about ... at year end") and a listing/interrogative
+  // shape or a short query, so content questions about a contract stay on the RAG path.
+  const proximity =
+    /(contract|vertrage|vertrag|agreement)[^.?!]{0,40}?(expir\w*|ablauf\w*|lauft ab|laufen ab|laufen aus|lauft aus|auslauf\w*|endet|enden|\bends?\b|ending|renew\w*|verlanger\w*|kundigungsfrist\w*|laufzeit\w*)/.test(
+      query,
+    );
+  if (!proximity) {
+    return false;
+  }
+
+  const listingShape =
+    /\b(which|what|show|list|any|are there|do i have|when|welche|welcher|zeige?|liste|gibt es|habe ich|wann)\b/.test(
+      query,
+    );
+  const isShortQuery = query.trim().split(/\s+/).length <= 8;
+  return listingShape || isShortQuery;
 }
 
 function formatCurrency(amount: number, currency: string, language: "en" | "de"): string {
