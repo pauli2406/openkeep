@@ -18,6 +18,19 @@ export const LOW_CONFIDENCE_TOP_N = 3;
 /** Minimum score for a chunk to be surfaced as a citation. */
 export const CITATION_MIN_SCORE = 0.4;
 
+/**
+ * Per-document Q&A: when the whole document fits this budget (precedent: the
+ * summary path truncates at 12k chars), retrieval is skipped and the model sees
+ * ALL chunks with page labels — a retrieval miss cannot hide the answer in a
+ * short letter/invoice. Larger documents keep vector top-k retrieval.
+ */
+export const DOCUMENT_QA_FULL_TEXT_MAX_CHARS = 12_000;
+
+export const shouldUseFullDocumentContext = (
+  totalChars: number,
+  chunkCount: number,
+): boolean => chunkCount > 0 && totalChars <= DOCUMENT_QA_FULL_TEXT_MAX_CHARS;
+
 export const buildInsufficientEvidenceMessage = (
   language?: AppLanguage | null,
 ): string =>

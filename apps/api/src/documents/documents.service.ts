@@ -67,7 +67,10 @@ import { LlmAnswerProvider } from "../processing/llm-answer.provider";
 import { LlmService } from "../processing/llm.service";
 import { dateToIso, normalizeCurrencyCode, parseDateOnly } from "../processing/normalization.util";
 import { ProcessingService } from "../processing/processing.service";
-import { CITATION_MIN_SCORE } from "../processing/relevance.constants";
+import {
+  CITATION_MIN_SCORE,
+  shouldUseFullDocumentContext,
+} from "../processing/relevance.constants";
 import { rankHybridResults } from "../search/semantic-ranking.util";
 
 interface UploadDocumentInput {
@@ -1504,10 +1507,39 @@ export class DocumentsService {
       return;
     }
 
-    // Try vector-based chunk retrieval first
     let contextChunks: Array<{ text: string; heading: string | null; pageFrom: number | null; pageTo: number | null; score: number }> = [];
 
-    if (
+    // Full-text mode: most archive items are short letters/invoices. When the whole
+    // document fits the context budget, skip vector retrieval and give the model ALL
+    // chunks with their page labels — no retrieval miss can hide the answer, page-cited
+    // answers are preserved, and it works with every provider (the provider-agnostic
+    // equivalent of Mistral's Document QnA).
+    const allChunkRows = await this.databaseService.pool.query<{
+      chunk_index: number;
+      heading: string | null;
+      text: string;
+      page_from: number | null;
+      page_to: number | null;
+    }>(
+      `SELECT chunk_index, heading, text, page_from, page_to
+       FROM document_chunks
+       WHERE document_id = $1
+       ORDER BY chunk_index ASC`,
+      [documentId],
+    );
+
+    const totalChunkChars = allChunkRows.rows.reduce((sum, row) => sum + row.text.length, 0);
+    const fullTextMode = shouldUseFullDocumentContext(totalChunkChars, allChunkRows.rows.length);
+
+    if (fullTextMode) {
+      contextChunks = allChunkRows.rows.map((row) => ({
+        text: row.text,
+        heading: row.heading,
+        pageFrom: row.page_from,
+        pageTo: row.page_to,
+        score: 0,
+      }));
+    } else if (
       this.processingService.isSemanticIndexingConfigured() &&
       document.embeddingStatus === "ready"
     ) {
@@ -1548,27 +1580,13 @@ export class DocumentsService {
       }
     }
 
-    // Fallback: load raw chunks by position. These carry no relevance signal, so
-    // they must not surface as scored citations.
+    // Fallback for large documents without usable embeddings: first chunks by
+    // position. These carry no relevance signal, so they must not surface as
+    // scored citations.
     let positionalFallback = false;
-    if (contextChunks.length === 0) {
-      const chunks = await this.databaseService.pool.query<{
-        chunk_index: number;
-        heading: string | null;
-        text: string;
-        page_from: number | null;
-        page_to: number | null;
-      }>(
-        `SELECT chunk_index, heading, text, page_from, page_to
-         FROM document_chunks
-         WHERE document_id = $1
-         ORDER BY chunk_index ASC
-         LIMIT 8`,
-        [documentId],
-      );
-
+    if (!fullTextMode && contextChunks.length === 0) {
       positionalFallback = true;
-      contextChunks = chunks.rows.map((row) => ({
+      contextChunks = allChunkRows.rows.slice(0, 8).map((row) => ({
         text: row.text,
         heading: row.heading,
         pageFrom: row.page_from,
@@ -1603,6 +1621,9 @@ export class DocumentsService {
             "Base your answer ONLY on the provided excerpts.",
             "If the excerpts don't contain enough information, say so clearly.",
             "Cite specific pages when referencing information (e.g., 'On page 3...').",
+            ...(fullTextMode
+              ? ["Note: the excerpts cover the COMPLETE document text in order."]
+              : []),
             ...(positionalFallback
               ? [
                   "Note: the excerpts are the beginning of the document, not passages selected for relevance to the question.",
@@ -1623,9 +1644,10 @@ export class DocumentsService {
       signal,
     });
 
-    // Send citations first. Positional-fallback chunks carry no relevance signal
-    // and previously surfaced with a fabricated score of 0.5 — emit none instead.
-    const citations = positionalFallback
+    // Send citations first. Full-text and positional chunks carry no relevance
+    // signal (the model cites pages inline instead); only vector-retrieved chunks
+    // surface as scored citations.
+    const citations = positionalFallback || fullTextMode
       ? []
       : contextChunks
           .filter((c) => c.score >= CITATION_MIN_SCORE)
