@@ -2104,10 +2104,15 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       })
       .returning();
 
+    // Clamp to the end of the CURRENT month: capping at a fixed day (28) puts the
+    // due date in the past when the test runs on the 29th-31st, emptying the
+    // structured "this month" window.
+    const now = new Date();
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const openDueDate = new Date();
-    openDueDate.setDate(Math.min(openDueDate.getDate() + 7, 28));
+    openDueDate.setDate(Math.min(openDueDate.getDate() + 7, lastDayOfMonth));
     const completedDueDate = new Date(openDueDate);
-    completedDueDate.setDate(Math.min(openDueDate.getDate() + 3, 28));
+    completedDueDate.setDate(Math.min(openDueDate.getDate() + 3, lastDayOfMonth));
 
     const [openFile, completedFile, staleFile] = await databaseService.db
       .insert(documentFiles)
@@ -2284,8 +2289,16 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       })
       .returning();
 
+    // Clamp to the end of the CURRENT month (a fixed day-28 cap lands in the past
+    // when the test runs at month end, emptying the expiry window).
+    const expiryNow = new Date();
+    const expiryMonthEnd = new Date(
+      expiryNow.getFullYear(),
+      expiryNow.getMonth() + 1,
+      0,
+    ).getDate();
     const expiryDate = new Date();
-    expiryDate.setDate(Math.min(expiryDate.getDate() + 10, 28));
+    expiryDate.setDate(Math.min(expiryDate.getDate() + 10, expiryMonthEnd));
 
     await databaseService.db.insert(documents).values({
       ownerUserId,

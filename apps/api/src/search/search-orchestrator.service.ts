@@ -601,7 +601,7 @@ function summarizeAmounts(items: DashboardDeadlineItem[]): {
 function isPendingReviewQuery(query: string): boolean {
   // Anchored phrases only. A bare "review" (or "gepruft") hijacked every semantic
   // question that merely mentioned reviewing something ("please review my contract...").
-  return /(pending review|review queue|needs? review|needing review|under review|open reviews?|ausstehender? prufung|prufung ausstehend|ausstehende prufungen?|zu prufende|prufungswarteschlange|review offen|offene reviews?)/.test(
+  return /(pending review|review queue|needs? review|needing review|under review|open reviews?|ausstehender? prufung|prufung ausstehend|ausstehende prufungen?|zu prufende|gepruft werden|noch zu prufen|zu prufen sind|prufungswarteschlange|review offen|offene reviews?)/.test(
     query,
   );
 }

@@ -235,6 +235,40 @@ describe("SearchOrchestratorService", () => {
     expect(response.answer).toContain("contract documents expiring");
   });
 
+  it("routes German passive review questions (gepruft werden) to structured data", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn().mockResolvedValue({
+        items: [makeDocument({ reviewStatus: "pending", reviewReasons: ["low_confidence"] })],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+      listExpiringDocuments: vi.fn(),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("de") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Welche Dokumente müssen noch geprüft werden?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listReviewDocuments).toHaveBeenCalledOnce();
+    expect(response.structuredData?.kind).toBe("pending_review_documents");
+  });
+
   it("keeps content questions that merely mention 'review' on the semantic path", async () => {
     const semanticResponse = {
       status: "answered" as const,
