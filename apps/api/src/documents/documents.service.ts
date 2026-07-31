@@ -1088,34 +1088,48 @@ export class DocumentsService {
     const embeddingLiteral = serializeHalfVector(padEmbedding(semanticEmbedding.embeddings[0]!));
     const { whereSql, params } = this.buildDocumentFilterQuery(filters);
 
+    // Filter and ranking must use the SAME language-aware regconfig: filtering with
+    // 'simple' while ranking with 'german'/'english' meant a stemmed German query
+    // ("Rechnungen") never matched a document containing only "Rechnung" — the
+    // unstemmed filter silently capped recall before ranking ever ran.
+    const langRegconfig = `CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END`;
     const keywordRows = await this.databaseService.pool.query<{
       id: string;
       rank: string;
     }>(
       `SELECT d.id, ts_rank_cd(
-          to_tsvector(CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END, coalesce(d.full_text, '')),
-          websearch_to_tsquery('simple', $${params.length + 1})
+          to_tsvector(${langRegconfig}, coalesce(d.full_text, '')),
+          websearch_to_tsquery(${langRegconfig}, $${params.length + 1})
        ) AS rank
        FROM documents d
        WHERE ${whereSql}
-         AND to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', $${params.length + 1})
-       ORDER BY rank DESC, d.id DESC`,
+         AND to_tsvector(${langRegconfig}, coalesce(d.full_text, '')) @@ websearch_to_tsquery(${langRegconfig}, $${params.length + 1})
+       ORDER BY rank DESC, d.id DESC
+       LIMIT 50`,
       [...params, queryText],
     );
 
+    // Top-K over the embedding table first (HNSW-shaped: ORDER BY distance LIMIT n),
+    // then aggregate per document. The previous MIN(...) GROUP BY over every embedding
+    // row materialized the full candidate set on each query and could never use the
+    // vector index as the archive grows.
     const semanticRows = await this.databaseService.pool.query<{
       id: string;
       distance: string;
     }>(
-      `SELECT d.id, MIN(e.embedding <=> $${params.length + 1}::halfvec)::text AS distance
-       FROM documents d
-       INNER JOIN document_chunk_embeddings e
-         ON e.document_id = d.id
-        AND e.provider = $${params.length + 2}::embedding_provider
-        AND e.model = $${params.length + 3}
+      `SELECT t.document_id AS id, MIN(t.distance)::text AS distance
+       FROM (
+         SELECT e.document_id, (e.embedding <=> $${params.length + 1}::halfvec) AS distance
+         FROM document_chunk_embeddings e
+         WHERE e.provider = $${params.length + 2}::embedding_provider
+           AND e.model = $${params.length + 3}
+         ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+         LIMIT 200
+       ) t
+       INNER JOIN documents d ON d.id = t.document_id
        WHERE ${whereSql}
-       GROUP BY d.id
-       ORDER BY MIN(e.embedding <=> $${params.length + 1}::halfvec) ASC, d.id DESC`,
+       GROUP BY t.document_id
+       ORDER BY MIN(t.distance) ASC, t.document_id DESC`,
       [...params, embeddingLiteral, provider, model],
     );
 

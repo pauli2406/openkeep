@@ -946,6 +946,49 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(metricsResponse.text).toContain('openkeep_document_processing_queue_depth{queue="document.embed"}');
   });
 
+  it("matches stemmed German keyword queries (Rechnungen finds Rechnung)", async () => {
+    const [germanFile] = await databaseService.db
+      .insert(documentFiles)
+      .values({
+        checksum: randomUUID().replace(/-/g, "").slice(0, 32).padEnd(64, "a"),
+        storageKey: `fixtures/${randomUUID()}/stadtwerke.pdf`,
+        originalFilename: "stadtwerke-rechnung.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1024,
+      })
+      .returning();
+
+    const [germanDocument] = await databaseService.db
+      .insert(documents)
+      .values({
+        ownerUserId,
+        fileId: germanFile.id,
+        title: "Stadtwerke Rechnung März",
+        mimeType: "application/pdf",
+        status: "ready",
+        parseProvider: "local-ocr",
+        language: "de",
+        chunkCount: 0,
+        fullText: "Ihre Rechnung der Stadtwerke über 89 Euro ist beigefügt.",
+        processedAt: new Date(),
+      })
+      .returning();
+
+    // Plural query, singular document text: only german-regconfig stemming in the
+    // keyword FILTER makes this match — the previous 'simple' filter missed it.
+    const response = await request(app.getHttpServer())
+      .post("/api/search/semantic")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ query: "Rechnungen Stadtwerke" });
+
+    expect(response.status).toBe(201);
+    const match = response.body.items.find(
+      (item: { document: { id: string } }) => item.document.id === germanDocument.id,
+    );
+    expect(match).toBeDefined();
+    expect(match.keywordScore).not.toBeNull();
+  });
+
   it("preserves manual overrides across reprocessing and exposes document history", async () => {
     const uploadResponse = await request(app.getHttpServer())
       .post("/api/documents")

@@ -99,6 +99,18 @@ Current model:
   - `structuredData` when applicable
 - streaming answers are delivered via server-sent events
 
+Retrieval notes:
+
+- the keyword arm filters AND ranks with the same language-aware regconfig
+  (`german`/`english`/`simple` per document language) so stemmed queries match
+  ("Rechnungen" finds "Rechnung"); it is capped at 50 candidates
+- the vector arm selects the top 200 chunk embeddings by cosine distance first
+  (HNSW-friendly `ORDER BY distance LIMIT`), then aggregates per document
+- deliberately deferred until the archive approaches ~50k chunks: per-provider partial
+  HNSW indexes, a generated tsvector column with a language-aware GIN index, and
+  rerankers — at that size revisit `semanticSearch` in
+  `apps/api/src/documents/documents.service.ts`
+
 Current search SSE event flow:
 
 - `search-results`
