@@ -124,7 +124,7 @@ Status: complete
 
 ### Phase 2.5: AI Search and Retrieval
 
-Status: implemented for semantic retrieval, answer generation still pending
+Status: implemented — semantic retrieval and streamed answer generation are live
 
 - Add pgvector-backed embeddings storage for chunk-level semantic document search.
 - Add real embedding providers for OpenAI, Gemini, Voyage, and Mistral behind a registry.
@@ -215,9 +215,20 @@ Status: planned
 
 ### Not implemented yet
 
-- Answer generation.
 - Azure live-provider validation is still pending because the root `.env` does not yet include Azure credentials.
-- Mobile or desktop client code beyond placeholders.
+- Desktop client code beyond placeholders.
+
+### Shipped since this plan was written (see epic #21)
+
+- Answer generation and chat-style document Q&A are live: archive-wide RAG answers
+  (`POST /api/search/answer/stream`, hybrid FTS+vector retrieval with honest refusals)
+  and per-document Q&A with full-text mode for small documents, server-persisted
+  history, and multi-turn follow-ups.
+- Mistral Document AI adoption: real OCR response mapping, blocks/tables/confidence
+  parameters, Files API upload strategy, and optional document annotations as an
+  extraction hint (`MISTRAL_OCR_DOCUMENT_ANNOTATIONS`).
+- Mobile client is a working Expo app (scan/upload, search with streamed answers,
+  offline cache), not a placeholder.
 
 ## Next Steps
 
@@ -226,15 +237,14 @@ Status: planned
 1. Keep `apps/web` smoke tests and `docs/phase-3-smoke.md` as the required regression gate for Phase 3 surfaces.
 2. Keep the Docker/OCR and provider E2E commands as part of the standard backend verification workflow.
 3. Return to backend and retrieval work for:
-   answer generation,
    richer non-invoice extraction,
    deeper operational dashboards,
    Azure provider validation.
 
 ### After web app stabilization
 
-1. Add answer generation and retrieval UX on top of the existing semantic retrieval layer.
-2. Build chat-style document Q&A in the web app.
+1. Done: answer generation and retrieval UX ship on top of the semantic retrieval layer.
+2. Done: chat-style document Q&A in the web app (with server-side history + multi-turn).
 3. Add operator dashboards with richer processing metrics.
 
 ### Mobile and desktop sequencing
@@ -259,7 +269,7 @@ Status: planned
 
 ## Current Recommendation
 
-Phase 3 is feature-complete, but it should not be considered done until web tests, OpenAPI parity, and repeatable smoke verification are in place. The next priority is finishing that stabilization work, then moving to answer generation.
+Phase 3 is feature-complete, but it should not be considered done until web tests, OpenAPI parity, and repeatable smoke verification are in place. The next priority is finishing that stabilization work. Answer generation has since shipped (epic #21).
 
 What is already strong enough:
 
@@ -278,7 +288,6 @@ What remains is real, but not blocking for day-to-day archive use:
 - web app tests
 - OpenAPI parity for the remaining review and health endpoints used by the web app
 - repeatable Phase 3 smoke verification after frontend/backend changes
-- answer generation
 - broader extraction heuristics beyond invoice-heavy logic
 - deeper operator dashboards
 - Azure live-provider validation once credentials are added

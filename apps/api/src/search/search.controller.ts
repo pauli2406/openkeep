@@ -33,29 +33,38 @@ export class SearchController {
 
   @Get("documents")
   @ApiOkResponse({ description: "Paginated search results" })
-  async searchDocuments(@Query() query: SearchDocumentsQueryDto) {
-    return this.documentsService.listDocuments({
-      query: query.query,
-      filters: {
-        year: query.year,
-        dateFrom: query.dateFrom,
-        dateTo: query.dateTo,
-        correspondentId: query.correspondentId,
-        documentTypeId: query.documentTypeId,
-        status: query.status,
-        tags: query.tags,
+  async searchDocuments(
+    @Query() query: SearchDocumentsQueryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.listDocuments(
+      {
+        query: query.query,
+        filters: {
+          year: query.year,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          correspondentId: query.correspondentId,
+          documentTypeId: query.documentTypeId,
+          status: query.status,
+          tags: query.tags,
+        },
+        sort: query.sort,
+        direction: query.direction,
+        page: query.page,
+        pageSize: query.pageSize,
       },
-      sort: query.sort,
-      direction: query.direction,
-      page: query.page,
-      pageSize: query.pageSize,
-    });
+      principal.userId,
+    );
   }
 
   @Post("semantic")
   @ApiCreatedResponse({ description: "Semantic search results" })
-  async semanticSearch(@Body() body: SemanticSearchDto) {
-    return this.documentsService.semanticSearch(body);
+  async semanticSearch(
+    @Body() body: SemanticSearchDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.semanticSearch(body, principal.userId);
   }
 
   @Post("answer")
