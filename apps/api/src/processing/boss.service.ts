@@ -72,18 +72,32 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     queueName: string,
     handler: (payload: T, bossJobId: string, retryCount: number) => Promise<void>,
   ): Promise<void> {
-    await this.boss.work<T>(queueName, async (job) => {
-      const item = Array.isArray(job) ? job[0] : job;
+    await this.boss.work<T>(queueName, { includeMetadata: true }, async (jobs) => {
+      const item: PgBoss.JobWithMetadata<T> | undefined = Array.isArray(jobs) ? jobs[0] : jobs;
       if (!item) {
         return;
       }
 
-      await handler(
-        item.data,
-        item.id,
-        Number((item as { retrycount?: number }).retrycount ?? 0),
-      );
+      await handler(item.data, item.id, item.retryCount);
     });
+  }
+
+  async hasActiveJobForDocument(queueName: string, documentId: string): Promise<boolean> {
+    if (this.skipExternalInit) {
+      return false;
+    }
+
+    const schema = this.assertSafeSchema(this.schema);
+    const query = `
+      SELECT 1
+      FROM "${schema}".job
+      WHERE name = $1
+        AND state IN ('created', 'retry', 'active')
+        AND data->>'documentId' = $2
+      LIMIT 1
+    `;
+    const result = await this.databaseService.pool.query(query, [queueName, documentId]);
+    return (result.rowCount ?? 0) > 0;
   }
 
   async ensureReady(): Promise<void> {

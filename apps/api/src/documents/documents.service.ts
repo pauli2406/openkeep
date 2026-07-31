@@ -860,7 +860,10 @@ export class DocumentsService {
   ): Promise<{ queued: true; documentId: string; processingJobId: string }> {
     const document = await this.getDocument(documentId);
     if (document.status === "processing") {
-      throw new BadRequestException("Document is already processing");
+      const stale = await this.processingService.isDocumentProcessingStale(documentId);
+      if (!stale) {
+        throw new BadRequestException("Document is already processing");
+      }
     }
 
     await this.databaseService.db
@@ -896,7 +899,10 @@ export class DocumentsService {
   ) {
     const document = await this.getDocument(documentId);
     if (document.status === "processing") {
-      throw new BadRequestException("Document is already processing");
+      const stale = await this.processingService.isDocumentProcessingStale(documentId);
+      if (!stale) {
+        throw new BadRequestException("Document is already processing");
+      }
     }
 
     const queued = await this.processingService.enqueueDocumentProcessing(
