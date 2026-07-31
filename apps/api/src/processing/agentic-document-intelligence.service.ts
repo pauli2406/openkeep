@@ -1,8 +1,19 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import type { ReviewEvidenceField, ReviewReason } from "@openkeep/types";
+import type { ZodType } from "zod";
 
 import { AppConfigService } from "../common/config/app-config.service";
+import {
+  buildRoutingJsonSchema,
+  buildTaggingJsonSchema,
+  buildTitleSummaryJsonSchema,
+  buildTypedExtractionJsonSchema,
+  RoutingResponseSchema,
+  TaggingResponseSchema,
+  TitleSummaryResponseSchema,
+  TypedExtractionResponseSchema,
+} from "./agent-schemas";
 import { CorrespondentResolutionService } from "./correspondent-resolution.service";
 import {
   DOCUMENT_TYPE_DEFINITIONS,
@@ -427,11 +438,12 @@ export class AgenticDocumentIntelligenceService {
         temperature: 0,
         maxTokens: 250,
         jsonMode: true,
+        jsonSchema: buildRoutingJsonSchema(Object.keys(DOCUMENT_TYPE_DEFINITIONS)),
       },
       DEFAULT_PROVIDER_ORDER,
     );
 
-    const parsed = this.parseJsonObject(providerResult.text);
+    const parsed = this.parseWithSchema(providerResult.text, RoutingResponseSchema);
     const documentType = this.toSupportedDocumentType(parsed?.documentType);
     if (!parsed || !documentType) {
       return fallback;
@@ -475,11 +487,12 @@ export class AgenticDocumentIntelligenceService {
         temperature: 0.1,
         maxTokens: 300,
         jsonMode: true,
+        jsonSchema: buildTitleSummaryJsonSchema(),
       },
       DEFAULT_PROVIDER_ORDER,
     );
 
-    const parsed = this.parseJsonObject(providerResult.text);
+    const parsed = this.parseWithSchema(providerResult.text, TitleSummaryResponseSchema);
     if (!parsed) {
       return fallback;
     }
@@ -531,38 +544,85 @@ export class AgenticDocumentIntelligenceService {
         temperature: 0,
         maxTokens: 500,
         jsonMode: true,
+        jsonSchema: buildTypedExtractionJsonSchema(getRelevantFieldNames(routing.documentType)),
       },
       DEFAULT_PROVIDER_ORDER,
     );
 
-    const parsed = this.parseJsonObject(providerResult.text);
-    if (!parsed || typeof parsed.fields !== "object" || parsed.fields === null) {
+    const parsed = this.parseWithSchema(providerResult.text, TypedExtractionResponseSchema);
+    if (!parsed) {
       return fallback;
     }
 
-    const fields = {
-      ...fallback.fields,
-      ...(parsed.fields as Record<string, unknown>),
-    };
-    const refinedFields = typeSpecificExtractor.refineFields?.(input, fields) ?? fields;
-    const fieldConfidence = {
-      ...fallback.fieldConfidence,
-      ...this.normalizeFieldConfidenceMap(parsed.fieldConfidence),
-    };
+    // Confidence-aware merge: the previous unconditional spread let any LLM value
+    // clobber a deterministic regex hit that carried provenance — a hallucinated
+    // amount beat a verified one. The LLM value only wins when the deterministic
+    // slot is empty or the LLM reported at least the deterministic confidence.
+    const merged = this.mergeExtractedFields(
+      { fields: fallback.fields, fieldConfidence: fallback.fieldConfidence },
+      {
+        fields: parsed.fields,
+        fieldConfidence: this.normalizeFieldConfidenceMap(parsed.fieldConfidence),
+      },
+    );
+    const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
+
+    // Only keys the LLM actually won get LLM provenance; deterministic winners keep
+    // their deterministic_parse provenance (page/line/snippet).
+    const llmWonFields = Object.fromEntries(
+      merged.llmWonKeys
+        .filter((key) => refinedFields[key] !== undefined)
+        .map((key) => [key, refinedFields[key]]),
+    );
 
     return {
       ...fallback,
       fields: refinedFields,
-      fieldConfidence,
+      fieldConfidence: merged.fieldConfidence,
       fieldProvenance: this.buildFieldProvenance(
         input,
-        refinedFields,
+        llmWonFields,
         providerResult.provider ?? fallback.provider,
         fallback.fieldProvenance,
       ),
       provider: providerResult.provider ?? fallback.provider,
       model: providerResult.model,
     };
+  }
+
+  private mergeExtractedFields(
+    deterministic: { fields: Record<string, unknown>; fieldConfidence: Record<string, number> },
+    llm: { fields: Record<string, unknown>; fieldConfidence: Record<string, number> },
+  ): {
+    fields: Record<string, unknown>;
+    fieldConfidence: Record<string, number>;
+    llmWonKeys: string[];
+  } {
+    const fields: Record<string, unknown> = { ...deterministic.fields };
+    const fieldConfidence: Record<string, number> = { ...deterministic.fieldConfidence };
+    const llmWonKeys: string[] = [];
+
+    for (const [key, llmValue] of Object.entries(llm.fields)) {
+      if (llmValue === null || llmValue === undefined || llmValue === "") {
+        continue;
+      }
+
+      const deterministicValue = deterministic.fields[key];
+      const deterministicEmpty =
+        deterministicValue === null || deterministicValue === undefined || deterministicValue === "";
+      const deterministicConfidence = deterministic.fieldConfidence[key] ?? 0;
+      // An unscored LLM value defaults below the deterministic 0.7 so it never
+      // silently beats a regex hit with provenance.
+      const llmConfidence = llm.fieldConfidence[key] ?? 0.5;
+
+      if (deterministicEmpty || llmConfidence >= deterministicConfidence) {
+        fields[key] = llmValue;
+        fieldConfidence[key] = llmConfidence;
+        llmWonKeys.push(key);
+      }
+    }
+
+    return { fields, fieldConfidence, llmWonKeys };
   }
 
   private async generateTags(
@@ -628,11 +688,12 @@ export class AgenticDocumentIntelligenceService {
         temperature: 0.1,
         maxTokens: 200,
         jsonMode: true,
+        jsonSchema: buildTaggingJsonSchema(),
       },
       DEFAULT_PROVIDER_ORDER,
     );
 
-    const parsed = this.parseJsonObject(providerResult.text);
+    const parsed = this.parseWithSchema(providerResult.text, TaggingResponseSchema);
     if (!parsed) {
       return fallback;
     }
@@ -653,6 +714,7 @@ export class AgenticDocumentIntelligenceService {
     tagging: TaggingResult,
     correspondentResolution: Awaited<ReturnType<CorrespondentResolutionService["resolve"]>>,
   ): Promise<ValidationResult> {
+    const warnings: string[] = [];
     const fields = extraction.fields;
     const normalizedIssueDate = this.normalizeDateField(fields.issueDate);
     const normalizedDueDate = this.normalizeDateField(fields.dueDate);
@@ -662,6 +724,12 @@ export class AgenticDocumentIntelligenceService {
     if (routing.documentType === "insurance_document") {
       const insuranceAmount = this.resolveInsurancePremiumAmount(input.parsed.text);
       if (insuranceAmount === null) {
+        // Insurance letters list many amounts (totals, employer shares, taxes).
+        // When amounts exist but none matches an active-premium pattern, the value
+        // is discarded rather than persisted as the premium — surface that.
+        if (normalizedAmount !== null || /\d+[.,]\d{2}\s*(EUR|€)/i.test(input.parsed.text)) {
+          warnings.push("insurance_amount_ambiguous");
+        }
         normalizedAmount = null;
         normalizedCurrency = null;
       } else {
@@ -696,7 +764,6 @@ export class AgenticDocumentIntelligenceService {
       tags: tagging.tags,
     } satisfies Record<string, unknown>;
 
-    const warnings: string[] = [];
     const errors: string[] = [];
     if (normalizedAmount !== null && !normalizedCurrency) {
       warnings.push("amount_without_currency");
@@ -974,6 +1041,22 @@ export class AgenticDocumentIntelligenceService {
     return null;
   }
 
+  /**
+   * Parses a provider response and validates it against the expected shape.
+   * parseJsonObject keeps the brace-slice heuristic as the last-ditch fallback for
+   * providers that wrap JSON in prose despite json mode; the Zod pass replaces the
+   * previous unchecked casts.
+   */
+  private parseWithSchema<T>(raw: string | null, schema: ZodType<T>): T | null {
+    const parsed = this.parseJsonObject(raw);
+    if (!parsed) {
+      return null;
+    }
+
+    const result = schema.safeParse(parsed);
+    return result.success ? result.data : null;
+  }
+
   private toSupportedDocumentType(value: unknown): SupportedDocumentType | null {
     if (typeof value !== "string") {
       return null;
@@ -1206,10 +1289,9 @@ export class AgenticDocumentIntelligenceService {
       };
     }
 
-    const hasTotalsOnly = /(gesamtbeitrag in\s+20\d{2}|arbeitgeberzuschuss|vorsorgebeitrag|steuer|elstam)/i.test(
-      normalized,
-    );
-    return hasTotalsOnly ? null : null;
+    // No active-premium pattern matched: the letter only lists totals, employer
+    // shares, or tax figures — there is no reliable premium to extract.
+    return null;
   }
 
   private buildFieldProvenance(

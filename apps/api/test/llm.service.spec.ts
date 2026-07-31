@@ -355,6 +355,70 @@ describe("LlmService", () => {
     }
   });
 
+  it("sends a json_schema response_format to Mistral when a schema is provided", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: "{}" } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    await service.complete({
+      messages: [{ role: "user", content: "Classify" }],
+      jsonMode: true,
+      jsonSchema: {
+        name: "routing",
+        schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.response_format).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "routing",
+        schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+        strict: true,
+      },
+    });
+  });
+
+  it("falls back to plain JSON mode on Gemini when a schema is provided", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: "{}" }] } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+      }),
+    );
+
+    await service.complete({
+      messages: [{ role: "user", content: "Classify" }],
+      jsonSchema: {
+        name: "routing",
+        schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+      },
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.generationConfig.responseMimeType).toBe("application/json");
+    expect(body.generationConfig.responseSchema).toBeUndefined();
+  });
+
   it("retries a non-streaming completion once on 429 before giving up", async () => {
     const fetchSpy = vi.spyOn(global, "fetch")
       .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
