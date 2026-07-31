@@ -26,12 +26,12 @@ OpenKeep is a self-hosted, AI-assisted document archive: NestJS API, async proce
 ```sh
 cp .env.example .env   # replace JWT secrets and owner password
 pnpm install
+docker compose up -d postgres minio
 pnpm db:migrate
-docker compose up postgres minio
 pnpm --filter @openkeep/api dev      # likewise: worker, web
 ```
 
-Full containerized stack: `pnpm docker:up` (web on :3000, docs on :3001).
+Full containerized stack: `pnpm docker:up` (API on :3000, docs on :3001). The compose stack has no web service — run the web client separately with `pnpm --filter @openkeep/web dev`.
 
 ## Verify
 

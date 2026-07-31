@@ -77,8 +77,8 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 
 1. Copy `.env.example` to `.env` and replace the JWT secrets and owner password.
 2. Install dependencies with `pnpm install`.
-3. Apply database migrations with `pnpm db:migrate`.
-4. Start infrastructure with `docker compose up postgres minio`.
+3. Start infrastructure with `docker compose up postgres minio`.
+4. Apply database migrations with `pnpm db:migrate`.
 5. Run the API with `pnpm --filter @openkeep/api dev`.
 6. Run the worker with `pnpm --filter @openkeep/worker dev`.
 7. Run the web app with `pnpm --filter @openkeep/web dev`.
