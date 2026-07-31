@@ -48,6 +48,10 @@ Environment-dependent suites — run only when the environment supports them:
 - `pnpm test:api:ocr` — requires `ocrmypdf`, `tesseract` (deu + eng data), Poppler, ImageMagick
 - `pnpm test:e2e:*` — make live cloud provider calls and need real credentials in `.env`; never run unprompted
 
+## How to work
+
+Feature planning and story delivery follow a defined process — read `.agent/workflow.md` before splitting a feature into user stories or implementing one. Short version: stories become GitHub issues; implementation runs end-to-end on its own branch (small commits → PR → resolve automated review comments in a loop → hand off for manual review, never merge yourself).
+
 ## Working rules
 
 - Docs are part of the product. If a change affects user behavior, architecture, operations, setup, or verification, update `docs/user/*`, `docs/technical/*`, or `docs/operations/*` in the same piece of work. Canonical markdown lives in the root `docs/` directory; `apps/docs` only renders it. Full trigger list: `.agent/docs.md`.
@@ -57,6 +61,7 @@ Environment-dependent suites — run only when the environment supports them:
 
 ## Deeper context (read only what you need)
 
+- `.agent/workflow.md` — feature planning and story implementation process
 - `.agent/repo.md` — repo overview and working rules
 - `.agent/backend.md` — processing pipeline, review model, provider IDs
 - `.agent/commands.md` — full command and environment reference
