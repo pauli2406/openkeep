@@ -6,14 +6,22 @@
 
 ## Local Backend
 
+- `docker compose up -d postgres minio` (start infrastructure first)
 - `pnpm db:migrate`
-- `docker compose up postgres minio`
 - `pnpm docker:up`
 - `pnpm docker:up:build`
 - `pnpm --filter @openkeep/api dev`
 - `pnpm --filter @openkeep/worker dev`
 - `pnpm --filter @openkeep/web dev`
 - `pnpm docs:dev`
+
+## Mobile
+
+- `pnpm --filter @openkeep/mobile dev` (Expo dev client)
+- `pnpm --filter @openkeep/mobile ios` / `android` (native runs)
+- `pnpm --filter @openkeep/mobile build:dev` / `build:prod` (EAS builds)
+
+EAS builds require the `eas-cli` and an authenticated Expo account; it is not a workspace dependency. Install it with pnpm (`pnpm add -g eas-cli`) or run it ad hoc via `pnpm dlx eas-cli`.
 
 ## Verification
 

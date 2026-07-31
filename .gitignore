@@ -16,3 +16,6 @@ apps/docs/build
 apps/mobile/ios
 apps/mobile/android
 .expo/
+*.ipa
+*.apk
+*.aab

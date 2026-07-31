@@ -2,7 +2,8 @@
 
 ## Current State
 
-- API, worker, and web app are implemented and connected.
+- API, worker, web app, and mobile app are implemented and connected.
+- The mobile app is an Expo/React Native client with offline archive support (see `docs/technical/mobile-offline-sync.md`).
 - Agentic document intelligence, semantic search, review workflows, and settings/admin tooling are in place.
 - User, technical, and operational documentation now exist under `docs/`.
 - The product should be treated as a documented full-stack system, not a backend-only prototype.
@@ -15,5 +16,4 @@
 
 ## Deferred
 
-- Mobile app
 - Desktop app
