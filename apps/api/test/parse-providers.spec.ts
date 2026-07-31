@@ -165,20 +165,66 @@ describe("Parse provider mappers", () => {
     expect(result.pages[0]?.lines).toHaveLength(1);
   });
 
-  it("maps Mistral OCR into the normalized parse model", () => {
+  it("maps the real Mistral OCR response shape (markdown pages + dimensions)", () => {
     const result = mapMistralOcrResponse({
+      model: "mistral-ocr-latest",
       pages: [
         {
-          page_number: 1,
-          text: "Hello world",
-          lines: [{ text: "Hello world", bbox: [0, 0, 100, 0, 100, 10, 0, 10] }],
+          index: 0,
+          markdown: "# Rechnung Nr. 2024-001\n\nGesamtbetrag: 119,00 EUR",
+          dimensions: { dpi: 200, width: 1654, height: 2339 },
+          images: [],
+        },
+        {
+          index: 1,
+          markdown: "Zahlbar bis 31.08.2026",
+          dimensions: { dpi: 200, width: 1654, height: 2339 },
+          images: [],
         },
       ],
-      chunks: [{ heading: "Intro", text: "Hello world", page: 1 }],
+      usage_info: { pages_processed: 2, doc_size_bytes: 12345 },
     });
 
     expect(result.provider).toBe("mistral-ocr");
-    expect(result.pages[0]?.lines[0]?.text).toBe("Hello world");
-    expect(result.chunkHints[0]?.heading).toBe("Intro");
+    expect(result.text).toContain("Rechnung Nr. 2024-001");
+    expect(result.text).toContain("Zahlbar bis 31.08.2026");
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[0]?.pageNumber).toBe(1);
+    expect(result.pages[0]?.width).toBe(1654);
+    expect(result.pages[0]?.height).toBe(2339);
+    expect(result.pages[1]?.pageNumber).toBe(2);
+    expect(result.pages[0]?.lines[0]?.text).toBe("# Rechnung Nr. 2024-001");
+  });
+
+  it("never fabricates bounding boxes for Mistral lines", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "Line one\nLine two\nLine three",
+        },
+      ],
+    });
+
+    for (const line of result.pages[0]?.lines ?? []) {
+      expect(line.boundingBox).toBeNull();
+    }
+    expect(result.pages[0]?.width).toBeNull();
+    expect(result.pages[0]?.height).toBeNull();
+  });
+
+  it("summarizes Mistral provider metadata instead of persisting the raw response", () => {
+    const result = mapMistralOcrResponse({
+      model: "mistral-ocr-latest",
+      pages: [{ index: 0, markdown: "Hello" }],
+      usage_info: { pages_processed: 1, doc_size_bytes: 999 },
+    });
+
+    expect(result.providerMetadata).not.toHaveProperty("raw");
+    expect(result.providerMetadata).toMatchObject({
+      model: "mistral-ocr-latest",
+      pagesProcessed: 1,
+      docSizeBytes: 999,
+    });
   });
 });

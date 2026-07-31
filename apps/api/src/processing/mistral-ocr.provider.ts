@@ -3,105 +3,71 @@ import type { ParsedDocument } from "@openkeep/types";
 import { readFile } from "fs/promises";
 
 import { AppConfigService } from "../common/config/app-config.service";
+import { fetchWithTimeout } from "./http.util";
+import { MistralOcrResponseSchema } from "./mistral-ocr.schema";
 import type { DocumentParseInput, DocumentParseProvider } from "./provider.types";
 
-const parseMistralBoundingBox = (box: any) => {
-  if (!box) {
-    return null;
-  }
+const PROVIDER_METADATA_MAX_BYTES = 16_384;
 
-  if (Array.isArray(box) && box.length >= 4) {
-    const xs = box.filter((_: unknown, index: number) => index % 2 === 0).map(Number);
-    const ys = box.filter((_: unknown, index: number) => index % 2 === 1).map(Number);
+/**
+ * Maps the real Mistral OCR response (`pages[].markdown` + `dimensions`) into the
+ * normalized parse model. Mistral returns no per-line geometry, so lines carry
+ * `boundingBox: null` — boxes are never fabricated. The raw response is summarized
+ * instead of persisted wholesale (it previously bloated `documents.metadata`).
+ */
+export const mapMistralOcrResponse = (rawResponse: unknown): ParsedDocument => {
+  const response = MistralOcrResponseSchema.parse(rawResponse);
+  const warnings: string[] = [];
+
+  const pages = response.pages.map((page, arrayIndex) => {
+    const lines = page.markdown
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line, lineIndex) => ({
+        lineIndex,
+        text: line,
+        boundingBox: null,
+      }));
+
     return {
-      x: Math.min(...xs),
-      y: Math.min(...ys),
-      width: Math.max(...xs) - Math.min(...xs),
-      height: Math.max(...ys) - Math.min(...ys),
+      pageNumber: (typeof page.index === "number" ? page.index : arrayIndex) + 1,
+      width: typeof page.dimensions?.width === "number" ? page.dimensions.width : null,
+      height: typeof page.dimensions?.height === "number" ? page.dimensions.height : null,
+      lines,
+      blocks: [],
+      markdown: page.markdown,
     };
+  });
+
+  const text = pages
+    .map((page) => page.markdown)
+    .join("\n\n")
+    .trim();
+
+  const providerMetadata: Record<string, unknown> = {
+    model: response.model ?? null,
+    pagesProcessed: response.usage_info?.pages_processed ?? response.pages.length,
+    docSizeBytes: response.usage_info?.doc_size_bytes ?? null,
+  };
+
+  if (JSON.stringify(providerMetadata).length > PROVIDER_METADATA_MAX_BYTES) {
+    warnings.push("provider_metadata_truncated");
   }
 
-  if (typeof box === "object") {
-    return {
-      x: Number(box.x ?? 0),
-      y: Number(box.y ?? 0),
-      width: Number(box.width ?? 0),
-      height: Number(box.height ?? 0),
-    };
-  }
-
-  return null;
-};
-
-export const mapMistralOcrResponse = (response: any): ParsedDocument => {
-  const pages = Array.isArray(response.pages) ? response.pages : [];
   return {
     provider: "mistral-ocr",
     parseStrategy: "mistral-ocr-api",
-    text:
-      response.text ??
-      pages
-        .map((page: any) => page.text ?? page.markdown ?? "")
-        .join("\n")
-        .trim(),
-    language: response.language ?? null,
-    pages: pages.map((page: any, pageIndex: number) => {
-      const lines = Array.isArray(page.lines)
-        ? page.lines.map((line: any, lineIndex: number) => ({
-            lineIndex,
-            text: line.text ?? "",
-            boundingBox: parseMistralBoundingBox(line.bbox) ?? {
-              x: 0,
-              y: 0,
-              width: 0,
-              height: 0,
-            },
-          }))
-        : (String(page.text ?? page.markdown ?? "")
-            .split("\n")
-            .map((line: string) => line.trim())
-            .filter(Boolean)
-            .map((line: string, lineIndex: number) => ({
-              lineIndex,
-              text: line,
-              boundingBox: { x: 0, y: lineIndex * 12, width: line.length * 7, height: 10 },
-            })));
-
-      return {
-        pageNumber: Number(page.page_number ?? page.pageNumber ?? pageIndex + 1),
-        width: Number(page.width ?? 0) || null,
-        height: Number(page.height ?? 0) || null,
-        lines,
-        blocks: lines.map((line: any, blockIndex: number) => ({
-          blockIndex,
-          role: blockIndex === 0 && line.text.length < 160 ? "heading" : "paragraph",
-          text: line.text,
-          boundingBox: line.boundingBox,
-          lineIndices: [line.lineIndex],
-          metadata: {},
-        })),
-      };
-    }),
+    text,
+    language: null,
+    pages: pages.map(({ markdown: _markdown, ...page }) => page),
     tables: [],
     keyValues: [],
-    chunkHints: Array.isArray(response.chunks)
-      ? response.chunks.map((chunk: any, index: number) => ({
-          chunkIndex: index,
-          heading: chunk.heading ?? null,
-          text: chunk.text ?? chunk.content ?? "",
-          pageFrom: chunk.pageFrom ?? chunk.page ?? null,
-          pageTo: chunk.pageTo ?? chunk.page ?? null,
-          metadata: {
-            source: "mistral-chunk",
-          },
-        }))
-      : [],
+    chunkHints: [],
     searchablePdfPath: undefined,
     reviewReasons: [],
-    warnings: [],
-    providerMetadata: {
-      raw: response,
-    },
+    warnings,
+    providerMetadata,
     temporaryPaths: [],
   };
 };
@@ -129,17 +95,23 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
           type: "image_url",
           image_url: `data:${input.mimeType};base64,${bytes.toString("base64")}`,
         };
-    const response = await fetch(`${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/ocr`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+
+    const timeoutMs = this.configService.get("PARSE_PROVIDER_TIMEOUT_SECONDS") * 1000;
+    const response = await fetchWithTimeout(
+      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/ocr`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: this.configService.get("MISTRAL_OCR_MODEL"),
+          document,
+        }),
       },
-      body: JSON.stringify({
-        model: this.configService.get("MISTRAL_OCR_MODEL"),
-        document,
-      }),
-    });
+      timeoutMs,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");

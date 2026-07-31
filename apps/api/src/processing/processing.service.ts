@@ -1717,7 +1717,7 @@ export class ProcessingService {
         keyValueCount: input.parsed.keyValues.length,
         tableCount: input.parsed.tables.length,
         providerMetadata: {
-          ...input.parsed.providerMetadata,
+          ...this.sanitizeProviderMetadata(input.parsed.providerMetadata),
           fallbackProvider: input.fallbackProvider,
         },
       },
@@ -1735,6 +1735,25 @@ export class ProcessingService {
       reviewReasons: input.reviewReasons,
       reviewEvidence,
     };
+  }
+
+  /**
+   * documents.metadata is a jsonb column read on every document fetch — raw provider
+   * responses (full OCR payloads, base64 images) must never be persisted there.
+   */
+  private sanitizeProviderMetadata(
+    providerMetadata: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const { raw: _raw, ...rest } = providerMetadata;
+    const serialized = JSON.stringify(rest);
+    if (serialized.length <= 16_384) {
+      return rest;
+    }
+
+    this.logStructured("warn", "document.provider_metadata_truncated", {
+      providerMetadataBytes: serialized.length,
+    });
+    return { truncated: true, providerMetadataBytes: serialized.length };
   }
 
   private readCorrespondentExtraction(metadata: Record<string, unknown>) {

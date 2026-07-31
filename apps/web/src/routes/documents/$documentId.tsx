@@ -253,7 +253,7 @@ interface TextBlock {
   documentId: string;
   page: number;
   lineIndex: number;
-  boundingBox: { x: number; y: number; width: number; height: number };
+  boundingBox: { x: number; y: number; width: number; height: number } | null;
   text: string;
 }
 
