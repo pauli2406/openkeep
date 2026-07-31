@@ -1,0 +1,145 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { SemanticSearchResult } from "@openkeep/types";
+import { LlmAnswerProvider } from "../src/processing/llm-answer.provider";
+
+const makeResult = (
+  chunkScores: number[],
+  overrides: Partial<SemanticSearchResult["document"]> = {},
+): SemanticSearchResult =>
+  ({
+    document: {
+      id: "11111111-1111-1111-1111-111111111111",
+      title: "Stromvertrag 2026",
+      issueDate: "2026-01-15",
+      correspondent: { id: "c1", name: "Hamburg Energie", slug: "hamburg-energie" },
+      documentType: { id: "t1", name: "Contract", slug: "contract" },
+      ...overrides,
+    },
+    score: chunkScores[0] ?? 0,
+    matchedChunks: chunkScores.map((score, index) => ({
+      chunkIndex: index,
+      heading: null,
+      text: `Chunk ${index} text about the contract terms.`,
+      pageFrom: index + 1,
+      pageTo: index + 1,
+      score,
+    })),
+  }) as unknown as SemanticSearchResult;
+
+const makeLlmService = (overrides: Partial<Record<string, unknown>> = {}) =>
+  ({
+    isConfigured: vi.fn().mockReturnValue(true),
+    getProviderInfo: vi.fn().mockReturnValue({ provider: "mistral" }),
+    complete: vi.fn().mockResolvedValue("The contract ends in December."),
+    stream: vi.fn(),
+    ...overrides,
+  }) as never;
+
+const extractiveStub = { answer: vi.fn() } as never;
+
+const configStub = (minScore = 0.4) =>
+  ({
+    get: vi.fn((key: string) => (key === "ANSWER_MIN_CHUNK_SCORE" ? minScore : undefined)),
+  }) as never;
+
+describe("LlmAnswerProvider", () => {
+  it("refuses with a localized message and zero citations when nothing is relevant", async () => {
+    const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "Wann endet mein Vertrag?",
+      results: [makeResult([0.1, 0.05])],
+      maxCitations: 6,
+      responseLanguage: "de",
+    });
+
+    expect(result.status).toBe("insufficient_evidence");
+    expect(result.citations).toEqual([]);
+    expect(result.answer).toContain("keine ausreichenden Belege");
+  });
+
+  it("streams the refusal with an explicit insufficient_evidence status", async () => {
+    const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub());
+
+    const chunks = [];
+    for await (const chunk of provider.streamAnswer({
+      question: "When does my contract end?",
+      results: [makeResult([0.05])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks[0]?.text).toContain("sufficient evidence");
+    const done = chunks.at(-1);
+    expect(done?.done).toBe(true);
+    expect(done?.status).toBe("insufficient_evidence");
+    expect(done?.citations).toEqual([]);
+  });
+
+  it("answers low-confidence from the top chunks on a near miss", async () => {
+    const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.35, 0.33, 0.31, 0.3])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.status).toBe("answered");
+    expect(result.citations).toHaveLength(3);
+    expect(result.reasoning).toContain("low retrieval confidence");
+  });
+
+  it("answers normally when chunks pass the threshold", async () => {
+    const llmService = makeLlmService();
+    const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.8, 0.6])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.status).toBe("answered");
+    expect(result.citations).toHaveLength(2);
+    expect(result.reasoning).not.toContain("low retrieval confidence");
+  });
+
+  it("adds a document metadata line to the prompt context", async () => {
+    const llmService = makeLlmService();
+    const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
+
+    await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.8])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    const completeMock = (llmService as { complete: ReturnType<typeof vi.fn> }).complete;
+    const messages = completeMock.mock.calls[0][0].messages;
+    const userMessage = messages.find((m: { role: string }) => m.role === "user");
+    expect(userMessage.content).toContain(
+      "[Correspondent: Hamburg Energie | Type: Contract | Issue date: 2026-01-15]",
+    );
+  });
+
+  it("respects an env-overridden threshold", async () => {
+    const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub(0.2));
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.25])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.status).toBe("answered");
+    expect(result.citations).toHaveLength(1);
+  });
+});

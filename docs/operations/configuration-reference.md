@@ -121,6 +121,7 @@ These determine practical upper bounds and timeout behavior for document parsing
 - `PROCESSING_RETRY_LIMIT`
 - `PROCESSING_RETRY_DELAY_SECONDS`
 - `PROCESSING_STALE_MINUTES` (default `30`)
+- `ANSWER_MIN_CHUNK_SCORE` (default `0.4`)
 
 These values affect:
 
@@ -132,6 +133,10 @@ These values affect:
   `PROCESSING_STALE_MINUTES` without an active queue job are marked `failed`
   (`lastProcessingError = "stale_processing_reaped"`) by a periodic worker reaper and can
   then be reprocessed
+- RAG answer relevance: chunks below `ANSWER_MIN_CHUNK_SCORE` are not fed to the LLM;
+  a near miss (within 0.1 below the threshold) answers low-confidence from the top 3
+  chunks, anything worse returns an honest, localized "insufficient evidence" refusal.
+  Cosine-score distributions differ per embedding provider, so tune this per provider.
 
 ## API Limits
 

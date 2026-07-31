@@ -1,5 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
 
+import { AppConfigService } from "../common/config/app-config.service";
 import { ExplorerModule } from "../explorer/explorer.module";
 
 import {
@@ -119,14 +120,18 @@ import { VoyageEmbeddingProvider } from "./voyage-embedding.provider";
     },
     {
       provide: ANSWER_PROVIDER,
-      useFactory: (llmService: LlmService, extractive: ExtractiveAnswerProvider) => {
+      useFactory: (
+        llmService: LlmService,
+        extractive: ExtractiveAnswerProvider,
+        configService: AppConfigService,
+      ) => {
         if (llmService.isConfigured()) {
-          return new LlmAnswerProvider(llmService, extractive);
+          return new LlmAnswerProvider(llmService, extractive, configService);
         }
 
         return extractive;
       },
-      inject: [LlmService, ExtractiveAnswerProvider],
+      inject: [LlmService, ExtractiveAnswerProvider, AppConfigService],
     },
   ],
   exports: [
