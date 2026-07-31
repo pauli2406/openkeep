@@ -88,6 +88,72 @@ describe("search smoke", () => {
     expect(screen.getByText(/Amount: €89.00/i)).toBeInTheDocument();
   });
 
+  it("renders index-based citations as exact document links without extra retrieval calls", async () => {
+    const originalFetch = globalThis.fetch;
+    let streamRequests = 0;
+    let semanticRequests = 0;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url === apiUrl("/api/search/semantic")) {
+        semanticRequests += 1;
+      }
+
+      if (url === apiUrl("/api/search/answer/stream")) {
+        streamRequests += 1;
+        return Promise.resolve(
+          new Response(
+            [
+              "event: search-results\n",
+              `data: ${JSON.stringify({ results: [] })}\n\n`,
+              "event: done\n",
+              `data: ${JSON.stringify({
+                status: "answered",
+                route: "semantic",
+                fullAnswer: "Der Vertrag endet am 31.12.2026 [1].",
+                citations: [
+                  {
+                    documentId: "22222222-2222-2222-2222-222222222222",
+                    documentTitle: "Stromvertrag 2026",
+                    chunkIndex: 0,
+                    pageFrom: 2,
+                    pageTo: 2,
+                    quote: "Der Vertrag endet am 31.12.2026.",
+                    score: 0.82,
+                    index: 1,
+                  },
+                ],
+                structuredData: null,
+              })}\n\n`,
+            ].join(""),
+            { headers: { "Content-Type": "text/event-stream" } },
+          ),
+        );
+      }
+
+      return originalFetch(input, init);
+    });
+
+    renderAuthenticatedApp({ route: "/search?q=Wann%20endet%20mein%20Vertrag%3F" });
+
+    expect(await screen.findByText("Answer ready", {}, { timeout: 3000 })).toBeInTheDocument();
+    // The [1] marker resolves exactly against the citation's index field.
+    const citationLink = await screen.findByRole("link", { name: /\[1, p\.2\]/ });
+    expect(citationLink).toHaveAttribute(
+      "href",
+      "/documents/22222222-2222-2222-2222-222222222222",
+    );
+    // Exactly one answer stream, and no separate semantic retrieval request.
+    expect(streamRequests).toBe(1);
+    expect(semanticRequests).toBe(0);
+  });
+
   it("shows insufficient evidence fallback for unanswerable semantic queries", async () => {
     const originalFetch = globalThis.fetch;
 

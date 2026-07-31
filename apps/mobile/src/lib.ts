@@ -413,6 +413,8 @@ export type AnswerCitation = {
   quote: string;
   pageFrom: number | null;
   pageTo: number | null;
+  /** 1-based excerpt number matching the [n] markers the model cites inline. */
+  index?: number;
 };
 
 export type AnswerQueryResponse = {
@@ -732,111 +734,55 @@ export async function saveDownloadToFile(response: Response, filename: string) {
 // ---------------------------------------------------------------------------
 
 /**
- * Matches LLM-generated inline citations like:
- *   [Document: "Title", Page: 2]
- *   [Document: "Title", Page: 2; Document: "Title2", Page: 3]
+ * Rewrites inline citation markers into /documents/{id} links.
  *
- * Replaces them with compact numbered superscript-style markdown links
- * pointing to /documents/{id}. Uses fuzzy title matching so minor LLM
- * paraphrasing or truncation still resolves to the correct document.
+ * Primary format: numbered markers ([1], [2][4]) resolved EXACTLY against the
+ * citation payload's `index` — the previous fuzzy title matching could link
+ * the wrong document. The legacy [Document: "Title", Page: N] format stays
+ * supported for one release (exact/substring title matches only).
+ *
+ * Kept as a local copy: the mobile app deliberately has no workspace package
+ * dependencies (see mobile-offline-sync docs), so it cannot import the shared
+ * SDK helper.
  */
 export function linkifyCitations(
   text: string,
   citations: AnswerCitation[],
-  searchResults: Array<{ document: { id: string; title: string } }>,
+  _searchResults: Array<{ document: { id: string; title: string } }>,
 ): string {
-  if (citations.length === 0 && searchResults.length === 0) return text;
+  if (citations.length === 0) return text;
 
-  type DocRef = { documentId: string; title: string };
-  const allDocs: DocRef[] = [];
-
-  for (const cit of citations) {
-    allDocs.push({ documentId: cit.documentId, title: cit.documentTitle });
-  }
-  for (const sr of searchResults) {
-    if (!allDocs.some((d) => d.documentId === sr.document.id)) {
-      allDocs.push({ documentId: sr.document.id, title: sr.document.title });
+  const byIndex = new Map<number, AnswerCitation>();
+  for (const citation of citations) {
+    if (typeof citation.index === "number" && !byIndex.has(citation.index)) {
+      byIndex.set(citation.index, citation);
     }
   }
 
-  function findDoc(title: string): DocRef | undefined {
-    const lower = title.toLowerCase();
-
-    const exact = allDocs.find((d) => d.title.toLowerCase() === lower);
-    if (exact) return exact;
-
-    const substring = allDocs.find((d) => {
-      const dt = d.title.toLowerCase();
-      return dt.includes(lower) || lower.includes(dt);
-    });
-    if (substring) return substring;
-
-    const titleTokens = new Set(
-      lower
-        .replace(/[^a-z0-9äöüß]+/gi, " ")
-        .split(/\s+/)
-        .filter(Boolean),
-    );
-    if (titleTokens.size === 0) return undefined;
-
-    let best: DocRef | undefined;
-    let bestScore = 0;
-    for (const doc of allDocs) {
-      const docTokens = new Set(
-        doc.title
-          .toLowerCase()
-          .replace(/[^a-z0-9äöüß]+/gi, " ")
-          .split(/\s+/)
-          .filter(Boolean),
-      );
-      let overlap = 0;
-      for (const t of titleTokens) {
-        if (docTokens.has(t)) overlap++;
-      }
-      const score = overlap / Math.max(titleTokens.size, docTokens.size);
-      if (score > bestScore) {
-        bestScore = score;
-        best = doc;
-      }
+  let result = text.replace(/\[(\d{1,2})\]/g, (marker, digits: string) => {
+    const citation = byIndex.get(Number(digits));
+    if (!citation) {
+      return marker;
     }
-
-    return bestScore >= 0.5 ? best : undefined;
-  }
-
-  const docNumbers = new Map<string, number>();
-  let nextNumber = 1;
-
-  const getNumber = (docId: string): number => {
-    const existing = docNumbers.get(docId);
-    if (existing !== undefined) return existing;
-    const n = nextNumber++;
-    docNumbers.set(docId, n);
-    return n;
-  };
-
-  const citationBlockRe =
-    /\[(?:Document:\s*"[^"]*"(?:,\s*Page:\s*\d+)?(?:;\s*)?)+\]/g;
-  const singleRefRe = /Document:\s*"([^"]*)"(?:,\s*Page:\s*(\d+))?/g;
-
-  return text.replace(citationBlockRe, (block) => {
-    const parts: string[] = [];
-
-    let m: RegExpExecArray | null;
-    singleRefRe.lastIndex = 0;
-    while ((m = singleRefRe.exec(block)) !== null) {
-      const title = m[1]!;
-      const page = m[2] ? parseInt(m[2], 10) : null;
-      const doc = findDoc(title);
-
-      if (doc) {
-        const num = getNumber(doc.documentId);
-        const pageLabel = page ? `, p.${page}` : "";
-        parts.push(`[\\[${num}${pageLabel}\\]](/documents/${doc.documentId})`);
-      } else {
-        parts.push(`[Document: "${title}"${page ? `, Page: ${page}` : ""}]`);
-      }
-    }
-
-    return parts.length > 0 ? parts.join(" ") : block;
+    const pageSuffix = citation.pageFrom ? `, p.${citation.pageFrom}` : "";
+    return `[[${digits}${pageSuffix}]](/documents/${citation.documentId})`;
   });
+
+  result = result.replace(
+    /\[Document:\s*"([^"]+)"(?:,\s*Page:\s*(\d+))?\]/g,
+    (marker, title: string, page: string | undefined) => {
+      const normalizedTitle = title.trim().toLowerCase();
+      const citation =
+        citations.find((c) => c.documentTitle.trim().toLowerCase() === normalizedTitle) ??
+        citations.find((c) => c.documentTitle.trim().toLowerCase().includes(normalizedTitle));
+      if (!citation) {
+        return marker;
+      }
+      const pageSuffix = page ? `, p.${page}` : "";
+      const ordinal = citation.index ?? citations.indexOf(citation) + 1;
+      return `[[${ordinal}${pageSuffix}]](/documents/${citation.documentId})`;
+    },
+  );
+
+  return result;
 }

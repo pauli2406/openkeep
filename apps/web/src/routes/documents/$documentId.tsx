@@ -11,6 +11,8 @@ import type {
   ParseProvider,
   Tag as TaxonomyTag,
 } from "@openkeep/types";
+import { createSseParser } from "@openkeep/sdk";
+
 import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
@@ -2871,23 +2873,11 @@ function DocumentQaSection({
         if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
-        let buffer = "";
-        let currentEvent = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              currentEvent = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
+        const parser = createSseParser((currentEvent, data) => {
+          {
+            {
               try {
-                const parsed = JSON.parse(line.slice(6));
+                const parsed = JSON.parse(data);
 
                 if (currentEvent === "citations") {
                   setQa((s) => ({
@@ -2949,10 +2939,16 @@ function DocumentQaSection({
               } catch {
                 // skip malformed
               }
-              currentEvent = "";
             }
           }
+        });
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parser.push(decoder.decode(value, { stream: true }));
         }
+        parser.flush();
       } catch (err: unknown) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setQa((s) => ({

@@ -119,11 +119,6 @@ export function useAnswerStream(
                     answerText: s.answerText + (parsed.text ?? ""),
                   }));
                 } else if (currentEvent === "done") {
-                  console.log("[useAnswerStream] done event received", {
-                    citationsCount: parsed.citations?.length ?? 0,
-                    hasFullAnswer: !!parsed.fullAnswer,
-                    parsedKeys: Object.keys(parsed),
-                  });
                   setState((s) => ({
                     ...s,
                     status: "done",
@@ -173,10 +168,8 @@ export function useAnswerStream(
         // force the status to "done" so the UI stops showing the loading state
         setState((s) => {
           if (s.status === "streaming" || s.status === "searching") {
-            console.log("[useAnswerStream] safety fallback: forcing done from", s.status, "citations:", s.citations.length);
             return { ...s, status: "done" };
           }
-          console.log("[useAnswerStream] safety fallback: no-op, status already", s.status, "citations:", s.citations.length);
           return s;
         });
       } catch (err: unknown) {

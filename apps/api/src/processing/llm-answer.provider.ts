@@ -210,14 +210,27 @@ export class LlmAnswerProvider implements AnswerProvider {
       }
     }
 
-    // Build citations and sections grouped by document
+    // Dedupe up front so excerpt numbers in the prompt and citation indices stay
+    // aligned: [n] in the model's answer resolves to citations[index === n] exactly.
+    const deduped = selected.filter(
+      (entry, position, all) =>
+        position ===
+        all.findIndex(
+          (candidate) =>
+            candidate.document.id === entry.document.id &&
+            candidate.chunk.chunkIndex === entry.chunk.chunkIndex,
+        ),
+    );
+
+    // Build numbered citations and sections grouped by document
     const citations: AnswerCitation[] = [];
     const docSectionsMap = new Map<
       string,
       { title: string; metadataLine: string | null; sections: string[] }
     >();
 
-    for (const { chunk, document } of selected) {
+    deduped.forEach(({ chunk, document }, position) => {
+      const excerptIndex = position + 1;
       const pageLabel =
         chunk.pageFrom && chunk.pageTo && chunk.pageFrom !== chunk.pageTo
           ? `Pages ${chunk.pageFrom}-${chunk.pageTo}`
@@ -233,7 +246,7 @@ export class LlmAnswerProvider implements AnswerProvider {
         sections: [],
       };
       entry.sections.push(
-        `[Chunk ${chunk.chunkIndex}, ${pageLabel}, Relevance: ${Math.round(chunk.score * 100)}%]\n${headingPrefix}${chunk.text}`,
+        `[Excerpt ${excerptIndex}, ${pageLabel}, Relevance: ${Math.round(chunk.score * 100)}%]\n${headingPrefix}${chunk.text}`,
       );
       docSectionsMap.set(document.id, entry);
 
@@ -245,8 +258,9 @@ export class LlmAnswerProvider implements AnswerProvider {
         pageTo: chunk.pageTo,
         quote: chunk.text.replace(/\s+/g, " ").trim().slice(0, 280),
         score: chunk.score,
+        index: excerptIndex,
       });
-    }
+    });
 
     const sections: string[] = [];
     for (const [, doc] of docSectionsMap) {
@@ -256,12 +270,7 @@ export class LlmAnswerProvider implements AnswerProvider {
 
     return {
       prompt: sections.join("\n\n---\n\n"),
-      citations: citations
-        .sort((a, b) => b.score - a.score)
-        .filter(
-          (citation, index, all) =>
-            index === all.findIndex((c) => c.documentId === citation.documentId && c.chunkIndex === citation.chunkIndex),
-        ),
+      citations,
       lowConfidence,
     };
   }
@@ -283,7 +292,7 @@ export class LlmAnswerProvider implements AnswerProvider {
           "Rules:",
           "- Base your answer exclusively on the provided excerpts. Never fabricate information.",
           "- If the excerpts do not contain enough information, clearly state that.",
-          '- Cite sources inline using the format [Document: "Title", Page: N] when referencing specific information.',
+          "- Cite sources inline with the bracketed excerpt number, e.g. [1] or [2][4]. Every excerpt is labeled with its number.",
           "- Be concise and direct. Avoid unnecessary preamble.",
           targetLanguageInstruction,
           "- When multiple documents corroborate the same fact, mention the agreement.",

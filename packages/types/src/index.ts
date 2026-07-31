@@ -1120,6 +1120,9 @@ export const AnswerCitationSchema = z.object({
   pageTo: z.number().int().positive().nullable(),
   quote: z.string().min(1),
   score: z.number().nonnegative(),
+  // 1-based excerpt number matching the [n] markers the model cites inline.
+  // Clients resolve [n] to this citation exactly instead of fuzzy title matching.
+  index: z.number().int().positive().optional(),
 });
 
 export const AnswerQueryRequestSchema = z.object({

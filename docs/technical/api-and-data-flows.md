@@ -118,6 +118,19 @@ Retrieval notes:
   rerankers — at that size revisit `semanticSearch` in
   `apps/api/src/documents/documents.service.ts`
 
+Citations:
+
+- the model cites inline by excerpt number ([1], [2][4]); each citation in the payload
+  carries a matching `index`, so clients resolve markers to documents exactly — the
+  previous fuzzy title matching could link the wrong document
+- the legacy `[Document: "Title", Page: N]` format is still rendered for one release
+  (exact/substring title matches only)
+- web clients share one SSE line parser and the citation linkifier via `@openkeep/sdk`
+  (`createSseParser`, `linkifyAnswerCitations`); the mobile app keeps local copies
+  because it deliberately has no workspace package dependencies
+- the omnibar renders document results from the answer stream's `search-results` event
+  instead of issuing a second `POST /api/search/semantic` per question
+
 Current search SSE event flow:
 
 - `search-results`

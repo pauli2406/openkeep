@@ -188,6 +188,33 @@ describe("LlmAnswerProvider", () => {
     );
   });
 
+  it("numbers excerpts in the prompt and mirrors the index on citations", async () => {
+    const llmService = makeLlmService();
+    const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.8, 0.6])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.citations.map((c) => c.index)).toEqual([1, 2]);
+
+    const completeMock = (
+      llmService as { completeWithFallback: ReturnType<typeof vi.fn> }
+    ).completeWithFallback;
+    const userMessage = completeMock.mock.calls[0][0].messages.find(
+      (m: { role: string }) => m.role === "user",
+    );
+    expect(userMessage.content).toContain("[Excerpt 1,");
+    expect(userMessage.content).toContain("[Excerpt 2,");
+    const systemMessage = completeMock.mock.calls[0][0].messages.find(
+      (m: { role: string }) => m.role === "system",
+    );
+    expect(systemMessage.content).toContain("bracketed excerpt number");
+  });
+
   it("respects an env-overridden threshold", async () => {
     const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub(0.2));
 
