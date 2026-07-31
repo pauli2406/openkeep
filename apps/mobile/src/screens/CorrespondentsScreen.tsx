@@ -9,7 +9,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
-import type { FacetsResponse } from "../lib";
+import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
 
 // ---------------------------------------------------------------------------
 // Correspondents Screen
@@ -37,13 +37,34 @@ export function CorrespondentsScreen() {
     },
   });
 
-  const correspondents = facetsQuery.data?.correspondents ?? [];
+  // The facets only cover correspondents that already have documents. Online we additionally read
+  // the taxonomy table so freshly created ones show up too, with a count of zero. The offline
+  // mirror has no taxonomy table, so there the facets stay the only source.
+  const taxonomyQuery = useQuery({
+    queryKey: taxonomyQueryKey(auth.apiUrl, "correspondents"),
+    enabled: !shouldUseCache,
+    queryFn: () => fetchTaxonomy(auth.authFetch, "correspondents", t("correspondents.loadError")),
+  });
+
+  const counts = new Map(
+    (facetsQuery.data?.correspondents ?? []).map((item) => [item.id, item.count]),
+  );
+  const correspondents = shouldUseCache
+    ? (facetsQuery.data?.correspondents ?? [])
+    : (taxonomyQuery.data ?? []).map((item) => ({
+        ...item,
+        count: counts.get(item.id) ?? 0,
+      }));
 
   // Sort by doc count descending, then alphabetically
   const sorted = [...correspondents].sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
     return a.name.localeCompare(b.name);
   });
+
+  const isLoading = facetsQuery.isLoading || (!shouldUseCache && taxonomyQuery.isLoading);
+  const isError = facetsQuery.isError || taxonomyQuery.isError;
+  const hasData = shouldUseCache ? Boolean(facetsQuery.data) : Boolean(taxonomyQuery.data);
 
   return (
     <Screen
@@ -53,20 +74,23 @@ export function CorrespondentsScreen() {
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
     >
-      {facetsQuery.isLoading ? (
+      {isLoading ? (
         <Card>
           <Text style={styles.loadingText}>{t("correspondents.loading")}</Text>
         </Card>
       ) : null}
 
-      {facetsQuery.isError ? (
+      {isError ? (
         <ErrorCard
           message={t("correspondents.loadError")}
-          onRetry={() => facetsQuery.refetch()}
+          onRetry={() => {
+            void facetsQuery.refetch();
+            void taxonomyQuery.refetch();
+          }}
         />
       ) : null}
 
-      {facetsQuery.data && sorted.length === 0 ? (
+      {hasData && sorted.length === 0 ? (
         <EmptyState
           title={t("correspondents.emptyTitle")}
           body={t("correspondents.emptyBody")}
