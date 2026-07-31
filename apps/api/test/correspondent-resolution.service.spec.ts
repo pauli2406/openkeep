@@ -14,6 +14,9 @@ const createService = () =>
     {
       get: vi.fn(() => undefined),
     } as any,
+    {
+      getDefaultProviderOrder: vi.fn(() => ["openai", "gemini", "mistral"]),
+    } as any,
   );
 
 const buildInput = (lines: string[]) => ({

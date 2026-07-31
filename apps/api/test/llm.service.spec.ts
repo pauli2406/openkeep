@@ -23,7 +23,7 @@ describe("LlmService", () => {
         GEMINI_MODEL: "gemini-2.0-flash",
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -31,6 +31,27 @@ describe("LlmService", () => {
       provider: "openai",
       model: "gpt-4.1-mini",
     });
+  });
+
+  it("keeps the remaining providers as failover candidates behind the pinned provider", () => {
+    const service = new LlmService(
+      createConfigService({
+        ACTIVE_CHAT_PROVIDER: "mistral",
+        OPENAI_API_KEY: "openai-key",
+        OPENAI_MODEL: "gpt-4.1-mini",
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+      }),
+    );
+
+    expect(service.getDefaultProviderOrder()).toEqual(["mistral", "openai", "gemini"]);
+    expect(service.getAvailableProviderInfos().map((info) => info.provider)).toEqual([
+      "mistral",
+      "openai",
+      "gemini",
+    ]);
   });
 
   it("uses ACTIVE_CHAT_PROVIDER when multiple providers are configured", () => {
@@ -43,7 +64,7 @@ describe("LlmService", () => {
         GEMINI_MODEL: "gemini-2.0-flash",
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -67,7 +88,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -122,7 +143,7 @@ describe("LlmService", () => {
         GEMINI_MODEL: "gemini-2.0-flash",
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -158,7 +179,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -188,7 +209,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -207,7 +228,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -231,7 +252,7 @@ describe("LlmService", () => {
         GEMINI_MODEL: "gemini-2.0-flash",
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -277,7 +298,7 @@ describe("LlmService", () => {
         GEMINI_MODEL: "gemini-2.0-flash",
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -305,7 +326,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -367,7 +388,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 
@@ -433,7 +454,7 @@ describe("LlmService", () => {
       createConfigService({
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
-        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
       }),
     );
 

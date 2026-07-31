@@ -162,7 +162,10 @@ These control upload size and search pagination limits.
 - `MISTRAL_API_KEY`
 - `MISTRAL_MODEL`
 - `MISTRAL_EMBEDDING_MODEL`
-- `MISTRAL_OCR_BASE_URL`
+- `MISTRAL_API_BASE_URL` (default `https://api.mistral.ai`): base URL for all Mistral
+  surfaces — chat, embeddings, files, OCR
+- `MISTRAL_OCR_BASE_URL` (deprecated): OCR-only override; falls back to
+  `MISTRAL_API_BASE_URL` when unset. Chat and embeddings no longer read this variable.
 - `MISTRAL_OCR_MODEL`
 - `MISTRAL_OCR_INCLUDE_BLOCKS` (default `true`): paragraph blocks with real bounding boxes
 - `MISTRAL_OCR_TABLE_FORMAT` (`markdown` | `none`, default `markdown`)
@@ -188,7 +191,10 @@ Timeouts and resilience:
 
 Operational notes:
 
-- chat uses the configured `ACTIVE_CHAT_PROVIDER` when set; otherwise it falls back in this order: `openai` -> `gemini` -> `mistral`
+- chat uses the configured `ACTIVE_CHAT_PROVIDER` first when set; the remaining
+  configured providers stay available as failover candidates (order:
+  `openai` -> `gemini` -> `mistral`). The agentic extraction pipeline and
+  correspondent resolution derive from the same order instead of hardcoding their own.
 - semantic indexing is effectively off until `ACTIVE_EMBEDDING_PROVIDER` and the matching provider config are set
 - agentic document intelligence becomes available when at least one supported LLM provider is configured
 

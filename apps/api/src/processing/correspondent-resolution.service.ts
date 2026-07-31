@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
+import { LlmService } from "./llm.service";
 import type { MetadataExtractionInput, MetadataExtractionResult } from "./provider.types";
 import { normalizeCorrespondentName } from "./normalization.util";
 
@@ -79,6 +80,7 @@ export class CorrespondentResolutionService {
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(AppConfigService) private readonly configService: AppConfigService,
+    @Inject(LlmService) private readonly llmService: LlmService,
   ) {}
 
   async resolve(
@@ -594,31 +596,25 @@ export class CorrespondentResolutionService {
         model: string;
       }
     | null {
-    const openAiKey = this.configService.get("OPENAI_API_KEY");
-    if (openAiKey) {
-      return {
-        provider: "openai",
-        apiKey: openAiKey,
-        model: this.configService.get("OPENAI_MODEL"),
-      };
-    }
-
-    const geminiKey = this.configService.get("GEMINI_API_KEY");
-    if (geminiKey) {
-      return {
-        provider: "gemini",
-        apiKey: geminiKey,
-        model: this.configService.get("GEMINI_MODEL"),
-      };
-    }
-
-    const mistralKey = this.configService.get("MISTRAL_API_KEY");
-    if (mistralKey) {
-      return {
-        provider: "mistral",
-        apiKey: mistralKey,
-        model: this.configService.get("MISTRAL_MODEL"),
-      };
+    // Derive from the central chat-provider order (ACTIVE_CHAT_PROVIDER first) —
+    // this previously hardcoded openai -> gemini -> mistral and ignored the env pin.
+    for (const provider of this.llmService.getDefaultProviderOrder()) {
+      if (provider === "openai") {
+        const apiKey = this.configService.get("OPENAI_API_KEY");
+        if (apiKey) {
+          return { provider, apiKey, model: this.configService.get("OPENAI_MODEL") };
+        }
+      } else if (provider === "gemini") {
+        const apiKey = this.configService.get("GEMINI_API_KEY");
+        if (apiKey) {
+          return { provider, apiKey, model: this.configService.get("GEMINI_MODEL") };
+        }
+      } else {
+        const apiKey = this.configService.get("MISTRAL_API_KEY");
+        if (apiKey) {
+          return { provider, apiKey, model: this.configService.get("MISTRAL_MODEL") };
+        }
+      }
     }
 
     return null;
@@ -910,7 +906,7 @@ export class CorrespondentResolutionService {
     prompt: string,
   ): Promise<string | null> {
     const response = await fetch(
-      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
+      `${this.configService.get("MISTRAL_API_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
         headers: {

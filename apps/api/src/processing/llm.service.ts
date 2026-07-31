@@ -319,9 +319,20 @@ export class LlmService {
     return this.getProviderConfigs(providerOrder ?? this.getDefaultProviderOrder())[0] ?? null;
   }
 
-  private getDefaultProviderOrder(): LlmProviderId[] {
+  /**
+   * The single source of truth for chat-provider ordering: the pinned
+   * ACTIVE_CHAT_PROVIDER first (when set), then the remaining providers as
+   * failover candidates. Callers that previously hardcoded their own orders
+   * (agentic pipeline, correspondent resolution) derive from this instead.
+   */
+  getDefaultProviderOrder(): LlmProviderId[] {
+    const base: LlmProviderId[] = ["openai", "gemini", "mistral"];
     const activeProvider = this.configService?.get("ACTIVE_CHAT_PROVIDER");
-    return activeProvider ? [activeProvider] : ["openai", "gemini", "mistral"];
+    if (!activeProvider) {
+      return base;
+    }
+
+    return [activeProvider, ...base.filter((provider) => provider !== activeProvider)];
   }
 
   private getProviderConfigs(providerOrder: LlmProviderId[]): LlmProviderConfig[] {
@@ -464,7 +475,7 @@ export class LlmService {
     }
 
     const response = await this.postJsonWithRetry(
-      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
+      `${this.configService.get("MISTRAL_API_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
         headers: {
@@ -604,7 +615,7 @@ export class LlmService {
     }
 
     const response = await fetchWithTimeout(
-      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
+      `${this.configService.get("MISTRAL_API_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
         headers: {

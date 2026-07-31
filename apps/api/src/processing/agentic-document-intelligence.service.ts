@@ -133,7 +133,7 @@ type WorkflowStateValue = typeof WorkflowState.State;
 
 const AGENT_FRAMEWORK = "langgraph-ready";
 const AGENT_VERSION = "v1";
-const DEFAULT_PROVIDER_ORDER: LlmProviderId[] = ["mistral", "gemini", "openai"];
+
 
 
 @Injectable()
@@ -287,7 +287,7 @@ export class AgenticDocumentIntelligenceService {
             framework: AGENT_FRAMEWORK,
             runId: `${input.documentId}:${Date.now()}`,
             status: validation.errors.length > 0 ? "completed_with_errors" : "completed",
-            providerOrder: DEFAULT_PROVIDER_ORDER,
+            providerOrder: this.llmService.getDefaultProviderOrder(),
             durationsMs,
             agentVersions: {
               routing: AGENT_VERSION,
@@ -411,7 +411,7 @@ export class AgenticDocumentIntelligenceService {
 
   private async routeDocument(input: MetadataExtractionInput): Promise<RoutingResult> {
     const fallback = this.routeDeterministically(input);
-    const providerInfos = this.llmService.getAvailableProviderInfos(DEFAULT_PROVIDER_ORDER);
+    const providerInfos = this.llmService.getAvailableProviderInfos();
     if (providerInfos.length === 0) {
       return fallback;
     }
@@ -440,7 +440,7 @@ export class AgenticDocumentIntelligenceService {
         jsonMode: true,
         jsonSchema: buildRoutingJsonSchema(Object.keys(DOCUMENT_TYPE_DEFINITIONS)),
       },
-      DEFAULT_PROVIDER_ORDER,
+
     );
 
     const parsed = this.parseWithSchema(providerResult.text, RoutingResponseSchema);
@@ -489,7 +489,7 @@ export class AgenticDocumentIntelligenceService {
         jsonMode: true,
         jsonSchema: buildTitleSummaryJsonSchema(),
       },
-      DEFAULT_PROVIDER_ORDER,
+
     );
 
     const parsed = this.parseWithSchema(providerResult.text, TitleSummaryResponseSchema);
@@ -546,7 +546,7 @@ export class AgenticDocumentIntelligenceService {
         jsonMode: true,
         jsonSchema: buildTypedExtractionJsonSchema(getRelevantFieldNames(routing.documentType)),
       },
-      DEFAULT_PROVIDER_ORDER,
+
     );
 
     const parsed = this.parseWithSchema(providerResult.text, TypedExtractionResponseSchema);
@@ -701,7 +701,7 @@ export class AgenticDocumentIntelligenceService {
         jsonMode: true,
         jsonSchema: buildTaggingJsonSchema(),
       },
-      DEFAULT_PROVIDER_ORDER,
+
     );
 
     const parsed = this.parseWithSchema(providerResult.text, TaggingResponseSchema);
