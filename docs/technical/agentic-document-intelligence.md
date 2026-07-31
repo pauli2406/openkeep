@@ -70,6 +70,32 @@ JSON schema from `apps/api/src/processing/agent-schemas.ts`:
   hit when the deterministic slot is empty or the LLM reported at least the deterministic
   confidence, and field provenance follows the winner
 
+## Parse-Provider Annotation Hints
+
+When `MISTRAL_OCR_DOCUMENT_ANNOTATIONS=true` (default off), the Mistral OCR request
+additionally asks for a document annotation: a vision-capable model extracts a generic
+metadata schema (document type from the registry enum, title, summary, the union of
+relevant fields, each with confidence) inside the same OCR call. The validated result
+lands on `parsed.preExtracted` — a capability of the parse output, not a new interface,
+so other providers are unaffected.
+
+The graph shape is unchanged; nodes consume the hint conditionally:
+
+- routing skips its LLM call when the annotated type is valid and its confidence is at
+  least 0.7 (provider recorded as `mistral-annotation`)
+- title/summary skips its LLM call when the annotation carries a title
+- typed extraction seeds from the annotation fields via the same confidence-aware merge
+  used for LLM values (provenance `provider_annotation`) and only calls the LLM when
+  required fields for the routed type are still missing
+- correspondent resolution, tagging, and validation are unchanged — they need archive
+  context (candidate lists, deterministic seeds) the annotation cannot provide
+
+Cost is roughly neutral (annotations ~+$1/1000 pages vs. up to three saved chat calls
+per document); latency drops because up to three sequential round-trips disappear.
+Documents longer than ~8 pages get the warning `annotation_hint_partial_document`
+because annotations only consider the leading pages. Every node keeps its LLM and
+deterministic fallback, so the flag can be toggled per environment and compared.
+
 ## Routing Stage
 
 The routing stage determines the likely document type and stores:

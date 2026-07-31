@@ -34,7 +34,10 @@ import {
 import type { MetadataExtractionInput, MetadataExtractionResult } from "./provider.types";
 import { getTypeSpecificExtractor } from "./type-specific-extractors";
 
-type AgentProvider = LlmProviderId | "deterministic";
+type AgentProvider = LlmProviderId | "deterministic" | "mistral-annotation";
+
+/** Minimum annotation classification confidence to skip the routing LLM call. */
+const ANNOTATION_ROUTE_MIN_CONFIDENCE = 0.7;
 
 interface RoutingResult {
   documentType: SupportedDocumentType;
@@ -411,6 +414,25 @@ export class AgenticDocumentIntelligenceService {
 
   private async routeDocument(input: MetadataExtractionInput): Promise<RoutingResult> {
     const fallback = this.routeDeterministically(input);
+
+    // A confident classification from the parse provider's document annotation
+    // (which saw layout and images) skips the routing LLM round-trip entirely.
+    const preExtracted = input.parsed.preExtracted;
+    if (preExtracted?.documentType) {
+      const annotatedType = this.toSupportedDocumentType(preExtracted.documentType);
+      const confidence = preExtracted.documentTypeConfidence ?? 0;
+      if (annotatedType && confidence >= ANNOTATION_ROUTE_MIN_CONFIDENCE) {
+        return {
+          documentType: annotatedType,
+          subtype: null,
+          confidence: this.normalizeConfidence(confidence, fallback.confidence),
+          reasoningHints: [`annotation:${preExtracted.source}`],
+          provider: "mistral-annotation",
+          model: preExtracted.model,
+        };
+      }
+    }
+
     const providerInfos = this.llmService.getAvailableProviderInfos();
     if (providerInfos.length === 0) {
       return fallback;
@@ -464,6 +486,19 @@ export class AgenticDocumentIntelligenceService {
     routing: RoutingResult,
   ): Promise<TitleSummaryResult> {
     const fallback = this.buildDeterministicTitleSummary(input, routing);
+
+    // An annotation-provided title skips the title/summary LLM round-trip.
+    const preExtracted = input.parsed.preExtracted;
+    if (preExtracted?.title) {
+      return {
+        title: preExtracted.title,
+        titleConfidence: null,
+        summary: preExtracted.summary ?? fallback.summary,
+        summaryConfidence: null,
+        provider: "mistral-annotation",
+        model: preExtracted.model,
+      };
+    }
     const providerResult = await this.llmService.completeWithFallback(
       {
         messages: [
@@ -514,8 +549,20 @@ export class AgenticDocumentIntelligenceService {
     input: MetadataExtractionInput,
     routing: RoutingResult,
   ): Promise<ExtractionResult> {
-    const fallback = await this.extractTypedMetadataDeterministically(input, routing);
+    const deterministic = await this.extractTypedMetadataDeterministically(input, routing);
     const typeSpecificExtractor = getTypeSpecificExtractor(routing.documentType);
+
+    // Seed with the parse provider's annotation hint (confidence-aware merge, same
+    // rules as the LLM merge). When the annotation already covers every required
+    // field for the routed type, the extraction LLM round-trip is skipped.
+    const fallback = this.seedWithAnnotationHint(input, deterministic);
+    if (
+      input.parsed.preExtracted &&
+      this.missingRequiredFields(routing, fallback.fields).length === 0
+    ) {
+      return fallback;
+    }
+
     const providerResult = await this.llmService.completeWithFallback(
       {
         messages: [
@@ -599,6 +646,56 @@ export class AgenticDocumentIntelligenceService {
       provider: providerResult.provider ?? fallback.provider,
       model: providerResult.model,
     };
+  }
+
+  private seedWithAnnotationHint(
+    input: MetadataExtractionInput,
+    deterministic: ExtractionResult,
+  ): ExtractionResult {
+    const preExtracted = input.parsed.preExtracted;
+    if (!preExtracted || Object.keys(preExtracted.fields).length === 0) {
+      return deterministic;
+    }
+
+    const merged = this.mergeExtractedFields(
+      { fields: deterministic.fields, fieldConfidence: deterministic.fieldConfidence },
+      { fields: preExtracted.fields, fieldConfidence: preExtracted.fieldConfidence },
+    );
+
+    const annotationWonFields = Object.fromEntries(
+      merged.llmWonKeys
+        .filter((key) => merged.fields[key] !== undefined)
+        .map((key) => [key, merged.fields[key]]),
+    );
+
+    return {
+      ...deterministic,
+      fields: merged.fields,
+      fieldConfidence: merged.fieldConfidence,
+      fieldProvenance: this.buildFieldProvenance(
+        input,
+        annotationWonFields,
+        "mistral-annotation",
+        deterministic.fieldProvenance,
+      ),
+      provider: "mistral-annotation",
+      model: preExtracted.model,
+    };
+  }
+
+  private missingRequiredFields(
+    routing: RoutingResult,
+    fields: Record<string, unknown>,
+  ): string[] {
+    return getDocumentTypeDefinition(routing.documentType).requiredFields.filter(
+      (requiredField) => {
+        // Registry required fields use "correspondent"; extraction fields carry
+        // the resolved name under "correspondentName".
+        const fieldKey = requiredField === "correspondent" ? "correspondentName" : requiredField;
+        const value = fields[fieldKey];
+        return value === null || value === undefined || value === "";
+      },
+    );
   }
 
   private mergeExtractedFields(
@@ -1319,7 +1416,12 @@ export class AgenticDocumentIntelligenceService {
 
       const evidence = this.findEvidenceMatch(input, value);
       next[key] = {
-        source: provider === "deterministic" ? "deterministic_parse" : "llm_structured_extraction",
+        source:
+          provider === "deterministic"
+            ? "deterministic_parse"
+            : provider === "mistral-annotation"
+              ? "provider_annotation"
+              : "llm_structured_extraction",
         provider,
         page: evidence.page,
         lineIndex: evidence.lineIndex,

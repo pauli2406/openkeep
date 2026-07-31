@@ -382,6 +382,113 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(intelligence?.validation?.warnings).toContain("insurance_amount_ambiguous");
   });
 
+  it("skips routing/title/extraction LLM calls when a confident annotation hint is present", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput(
+      ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.93,
+      title: "Stromrechnung Mai 2026",
+      summary: "Rechnung der Stadtwerke über 89 EUR.",
+      fields: {
+        issueDate: "03.05.2026",
+        dueDate: "17.05.2026",
+        amount: "89,00",
+        currency: "EUR",
+        referenceNumber: "R-2026-042",
+        correspondentName: "Stadtwerke",
+      },
+      fieldConfidence: { amount: 0.9, currency: 0.9, issueDate: 0.9, dueDate: 0.9 },
+    };
+
+    const result = await service.extract(input);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    // Only the tagging node needed an LLM call — routing, title/summary, and
+    // extraction were served by the annotation hint.
+    expect(completeMock).toHaveBeenCalledTimes(1);
+    expect(intelligence?.routing?.provider).toBe("mistral-annotation");
+    expect(result.title).toBe("Stromrechnung Mai 2026");
+    expect(result.amount).toBe(89);
+    expect(result.referenceNumber).toBe("R-2026-042");
+  });
+
+  it("still calls the extraction LLM when the annotation hint misses required fields", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        fields: { issueDate: "03.05.2026", amount: "89,00 EUR", currency: "EUR" },
+        fieldConfidence: { issueDate: 0.9, amount: 0.9, currency: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput("Unleserlicher Scan ohne verwertbare Labels", "scan.pdf");
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.9,
+      title: "Rechnung",
+      summary: null,
+      // Missing required invoice fields (issueDate, amount, currency, ...).
+      fields: { correspondentName: "Stadtwerke" },
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // Routing + title/summary were skipped, but extraction (and tagging) still ran.
+    expect(completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores low-confidence annotation classifications for routing", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+
+    const input = createInput(
+      ["Rechnung", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "contract",
+      documentTypeConfidence: 0.3,
+      title: null,
+      summary: null,
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    const result = await service.extract(input);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    // The 0.3-confidence "contract" hint must not beat deterministic invoice routing.
+    expect(intelligence?.routing?.provider).not.toBe("mistral-annotation");
+    expect(result.documentTypeName).toBe("Invoice");
+  });
+
   it("adds review reasons for unresolved correspondents and validation issues", async () => {
     const service = createService({ correspondentName: null });
 

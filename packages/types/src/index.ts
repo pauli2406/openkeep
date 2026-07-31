@@ -143,6 +143,24 @@ export const ParsedDocumentPageSchema = z.object({
   blocks: z.array(ParsedDocumentBlockSchema).default([]),
 });
 
+/**
+ * Structured metadata a parse provider extracted alongside OCR (e.g. Mistral's
+ * document annotations). A capability of the parse output, not a new interface:
+ * the extraction pipeline reads it as a hint and keeps its own fallbacks, so
+ * providers without this capability are unaffected.
+ */
+export const ParsedDocumentPreExtractedSchema = z.object({
+  source: z.string().min(1),
+  model: z.string().nullable(),
+  schemaVersion: z.string().min(1),
+  documentType: z.string().nullable(),
+  documentTypeConfidence: z.number().min(0).max(1).nullable(),
+  title: z.string().nullable(),
+  summary: z.string().nullable(),
+  fields: z.record(z.string(), z.unknown()),
+  fieldConfidence: z.record(z.string(), z.number()).default({}),
+});
+
 export const ParsedDocumentSchema = z.object({
   provider: ParseProviderSchema,
   parseStrategy: z.string().min(1),
@@ -156,6 +174,7 @@ export const ParsedDocumentSchema = z.object({
   reviewReasons: z.array(ReviewReasonSchema),
   warnings: z.array(z.string()).default([]),
   providerMetadata: z.record(z.string(), z.unknown()).default({}),
+  preExtracted: ParsedDocumentPreExtractedSchema.optional(),
   temporaryPaths: z.array(z.string()).optional(),
 });
 
