@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 
 import { AppConfigService } from "../common/config/app-config.service";
+import { fetchWithTimeout, isAbortError } from "./http.util";
 
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -12,6 +13,8 @@ export interface LlmCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  /** Caller abort signal (e.g. SSE client disconnect); composed with the timeout. */
+  signal?: AbortSignal;
 }
 
 export interface LlmStreamChunk {
@@ -69,14 +72,24 @@ export class LlmService {
       return null;
     }
 
-    return this.completeWithConfig(config, options);
+    try {
+      return await this.completeWithConfig(config, options);
+    } catch (error) {
+      if (options.signal?.aborted) {
+        return null;
+      }
+      this.logger.warn(
+        `${config.provider} completion failed: ${error instanceof Error ? error.message : error}`,
+      );
+      return null;
+    }
   }
 
   async completeWithFallback(
     options: LlmCompletionOptions,
-    providerOrder: LlmProviderId[],
+    providerOrder?: LlmProviderId[],
   ): Promise<LlmCompletionResult> {
-    const providers = this.getProviderConfigs(providerOrder);
+    const providers = this.getProviderConfigs(providerOrder ?? this.getDefaultProviderOrder());
     if (providers.length === 0) {
       this.logger.warn(
         "No LLM provider configured (set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY)",
@@ -89,7 +102,19 @@ export class LlmService {
     }
 
     for (const provider of providers) {
-      const text = await this.completeWithConfig(provider, options);
+      let text: string | null = null;
+      try {
+        text = await this.completeWithConfig(provider, options);
+      } catch (error) {
+        if (options.signal?.aborted) {
+          break;
+        }
+        this.logger.warn(
+          `${provider.provider} completion failed (${error instanceof Error ? error.message : error}) — trying next provider`,
+        );
+        continue;
+      }
+
       if (text && text.trim().length > 0) {
         return {
           text,
@@ -122,8 +147,21 @@ export class LlmService {
   }
 
   async *stream(options: LlmCompletionOptions): AsyncGenerator<LlmStreamChunk> {
-    const config = this.getProviderConfig();
-    if (!config) {
+    yield* this.streamWithFallback(options);
+  }
+
+  /**
+   * Streams from the first configured provider and fails over to the next one
+   * when a provider fails BEFORE emitting its first token. After the first token
+   * the error is propagated — silently restarting mid-answer would duplicate or
+   * contradict already-streamed text.
+   */
+  async *streamWithFallback(
+    options: LlmCompletionOptions,
+    providerOrder?: LlmProviderId[],
+  ): AsyncGenerator<LlmStreamChunk> {
+    const providers = this.getProviderConfigs(providerOrder ?? this.getDefaultProviderOrder());
+    if (providers.length === 0) {
       this.logger.warn(
         "No LLM provider configured (set OPENAI_API_KEY, GEMINI_API_KEY, or MISTRAL_API_KEY)",
       );
@@ -131,13 +169,110 @@ export class LlmService {
       return;
     }
 
-    if (config.provider === "openai") {
-      yield* this.streamOpenAi(config, options);
-    } else if (config.provider === "gemini") {
-      yield* this.streamGemini(config, options);
-    } else {
-      yield* this.streamMistral(config, options);
+    for (let index = 0; index < providers.length; index += 1) {
+      const config = providers[index]!;
+      const hasNextProvider = index < providers.length - 1;
+      let firstTokenSeen = false;
+
+      try {
+        for await (const chunk of this.streamWithConfig(config, options)) {
+          if (chunk.done && chunk.error) {
+            if (!firstTokenSeen && hasNextProvider && !options.signal?.aborted) {
+              this.logger.warn(
+                `${config.provider} stream failed before first token (${chunk.error}) — failing over to ${providers[index + 1]!.provider}`,
+              );
+              break;
+            }
+            yield chunk;
+            return;
+          }
+
+          if (!chunk.done && chunk.text.length > 0) {
+            firstTokenSeen = true;
+          }
+          yield chunk;
+          if (chunk.done) {
+            return;
+          }
+        }
+      } catch (error) {
+        if (options.signal?.aborted) {
+          // Client disconnected — stop silently, nothing is listening anymore.
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Unknown streaming error";
+        if (!firstTokenSeen && hasNextProvider) {
+          this.logger.warn(
+            `${config.provider} stream threw before first token (${message}) — failing over to ${providers[index + 1]!.provider}`,
+          );
+          continue;
+        }
+
+        const label = isAbortError(error) ? `${config.provider} request timed out` : message;
+        yield { text: "", done: true, error: label };
+        return;
+      }
     }
+
+    yield { text: "", done: true, error: "All configured LLM providers failed before streaming" };
+  }
+
+  private streamWithConfig(
+    config: LlmProviderConfig,
+    options: LlmCompletionOptions,
+  ): AsyncGenerator<LlmStreamChunk> {
+    if (config.provider === "openai") {
+      return this.streamOpenAi(config, options);
+    }
+    if (config.provider === "gemini") {
+      return this.streamGemini(config, options);
+    }
+    return this.streamMistral(config, options);
+  }
+
+  private streamTimeoutMs(): number {
+    return (this.configService.get("LLM_STREAM_TIMEOUT_SECONDS") ?? 120) * 1000;
+  }
+
+  private completionTimeoutMs(): number {
+    return (this.configService.get("LLM_TIMEOUT_SECONDS") ?? 45) * 1000;
+  }
+
+  /**
+   * POST with timeout + caller signal, retrying once on 429/5xx or transient
+   * network errors. Used by non-streaming completions only — streams handle
+   * failure via provider failover instead.
+   */
+  private async postJsonWithRetry(
+    url: string,
+    init: RequestInit,
+    options: LlmCompletionOptions,
+  ): Promise<Response> {
+    const timeoutMs = this.completionTimeoutMs();
+    const attempt = () => fetchWithTimeout(url, init, timeoutMs, options.signal);
+
+    let response: Response;
+    try {
+      response = await attempt();
+    } catch (error) {
+      if (options.signal?.aborted || isAbortError(error)) {
+        throw error;
+      }
+      await delay(500);
+      return attempt();
+    }
+
+    if (response.status === 429 || response.status >= 500) {
+      await delay(500);
+      try {
+        return await attempt();
+      } catch {
+        return response;
+      }
+    }
+
+    return response;
   }
 
   // ---------------------------------------------------------------------------
@@ -214,14 +349,18 @@ export class LlmService {
       body.response_format = { type: "json_object" };
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
+    const response = await this.postJsonWithRetry(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      options,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
@@ -270,7 +409,7 @@ export class LlmService {
       body.response_format = { type: "json_object" };
     }
 
-    const response = await fetch(
+    const response = await this.postJsonWithRetry(
       `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
@@ -280,6 +419,7 @@ export class LlmService {
         },
         body: JSON.stringify(body),
       },
+      options,
     );
 
     if (!response.ok) {
@@ -315,14 +455,19 @@ export class LlmService {
       body.max_completion_tokens = options.maxTokens;
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
+    const response = await fetchWithTimeout(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+      this.streamTimeoutMs(),
+      options.signal,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "");
@@ -404,7 +549,7 @@ export class LlmService {
       body.max_tokens = options.maxTokens;
     }
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
@@ -414,6 +559,8 @@ export class LlmService {
         },
         body: JSON.stringify(body),
       },
+      this.streamTimeoutMs(),
+      options.signal,
     );
 
     if (!response.ok) {
@@ -508,13 +655,14 @@ export class LlmService {
       body.systemInstruction = systemInstruction;
     }
 
-    const response = await fetch(
+    const response = await this.postJsonWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       },
+      options,
     );
 
     if (!response.ok) {
@@ -563,13 +711,15 @@ export class LlmService {
       body.systemInstruction = systemInstruction;
     }
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       },
+      this.streamTimeoutMs(),
+      options.signal,
     );
 
     if (!response.ok) {
@@ -673,3 +823,5 @@ export class LlmService {
     return null;
   }
 }
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

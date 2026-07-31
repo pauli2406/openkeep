@@ -1221,6 +1221,7 @@ export class DocumentsService {
   async *streamAnswer(
     request: AnswerQueryRequest,
     principal: AuthenticatedPrincipal,
+    signal?: AbortSignal,
   ): AsyncGenerator<string> {
     const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
     const results = await this.semanticSearch({
@@ -1240,6 +1241,7 @@ export class DocumentsService {
       results: results.items,
       maxCitations: request.maxCitations,
       responseLanguage,
+      signal,
     });
 
     let fullAnswer = "";
@@ -1293,6 +1295,7 @@ export class DocumentsService {
     documentId: string,
     principal: AuthenticatedPrincipal,
     force = false,
+    signal?: AbortSignal,
   ): AsyncGenerator<string> {
     const document = await this.getDocument(documentId);
     const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
@@ -1337,7 +1340,7 @@ export class DocumentsService {
       .filter(Boolean)
       .join(" | ");
 
-    const stream = this.llmService.stream({
+    const stream = this.llmService.streamWithFallback({
       messages: [
         {
           role: "system",
@@ -1363,6 +1366,7 @@ export class DocumentsService {
       ],
       temperature: 0.1,
       maxTokens: 800,
+      signal,
     });
 
     let fullSummary = "";
@@ -1425,6 +1429,7 @@ export class DocumentsService {
     documentId: string,
     question: string,
     principal: AuthenticatedPrincipal,
+    signal?: AbortSignal,
   ): AsyncGenerator<string> {
     const document = await this.getDocument(documentId);
     const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
@@ -1524,7 +1529,7 @@ export class DocumentsService {
       return `[Excerpt ${i + 1}, ${pageLabel}${chunk.heading ? `, Section: ${chunk.heading}` : ""}]\n${chunk.text}`;
     });
 
-    const stream = this.llmService.stream({
+    const stream = this.llmService.streamWithFallback({
       messages: [
         {
           role: "system",
@@ -1550,6 +1555,7 @@ export class DocumentsService {
       ],
       temperature: 0.1,
       maxTokens: 1024,
+      signal,
     });
 
     // Send citations first. Positional-fallback chunks carry no relevance signal

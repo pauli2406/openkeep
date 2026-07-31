@@ -175,4 +175,173 @@ describe("LlmService", () => {
       { text: "", done: true },
     ]);
   });
+
+  it("attaches an abort signal (timeout) to provider requests", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    await service.complete({ messages: [{ role: "user", content: "Hello" }] });
+
+    const init = fetchSpy.mock.calls[0]?.[1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("returns null from complete when the provider request times out", async () => {
+    const timeoutError = new Error("The operation was aborted due to timeout");
+    timeoutError.name = "TimeoutError";
+    vi.spyOn(global, "fetch").mockRejectedValue(timeoutError);
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const result = await service.complete({ messages: [{ role: "user", content: "Hello" }] });
+    expect(result).toBeNull();
+  });
+
+  it("fails over to the next provider when streaming fails before the first token", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response("upstream error", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          ['data: {"choices":[{"delta":{"content":"Hello"}}]}\n', "data: [DONE]\n"].join(""),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        ),
+      );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const chunks: Array<{ text: string; done: boolean; error?: string }> = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "Stream please" }],
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(chunks).toEqual([
+      { text: "Hello", done: false },
+      { text: "", done: true },
+    ]);
+  });
+
+  it("propagates errors after the first token instead of silently restarting", async () => {
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls === 1) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]}}]}\n',
+            ),
+          );
+          return;
+        }
+        controller.error(new Error("connection reset"));
+      },
+    });
+
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } }),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const chunks: Array<{ text: string; done: boolean; error?: string }> = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "Stream please" }],
+    })) {
+      chunks.push(chunk);
+    }
+
+    // Only the failing provider was called — no silent mid-answer restart on Mistral.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(chunks[0]).toEqual({ text: "Hi", done: false });
+    const last = chunks.at(-1);
+    expect(last?.done).toBe(true);
+    expect(last?.error).toContain("connection reset");
+  });
+
+  it("stops streaming silently when the caller aborts", async () => {
+    const abortError = new Error("This operation was aborted");
+    abortError.name = "AbortError";
+    vi.spyOn(global, "fetch").mockRejectedValue(abortError);
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const chunks: unknown[] = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "Stream please" }],
+      signal: controller.signal,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([]);
+  });
+
+  it("retries a non-streaming completion once on 429 before giving up", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ choices: [{ message: { content: "recovered" } }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_OCR_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const result = await service.complete({ messages: [{ role: "user", content: "Hello" }] });
+    expect(result).toBe("recovered");
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });

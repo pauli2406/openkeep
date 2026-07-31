@@ -27,6 +27,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentPrincipal } from "../auth/current-principal.decorator";
 import { AccessAuthGuard } from "../auth/access-auth.guard";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
+import { streamSseResponse } from "../common/sse.util";
 import {
   BatchReprocessDocumentsDto,
   BatchReprocessDocumentsResponseDto,
@@ -253,23 +254,9 @@ export class DocumentsController {
     @Res() reply: FastifyReply,
   ) {
     const forceRegenerate = force === "true" || force === "1";
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    try {
-      for await (const chunk of this.documentsService.streamDocumentSummary(id, principal, forceRegenerate)) {
-        reply.raw.write(chunk);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Internal error";
-      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
-    }
-
-    reply.raw.end();
+    await streamSseResponse(reply, (signal) =>
+      this.documentsService.streamDocumentSummary(id, principal, forceRegenerate, signal),
+    );
   }
 
   @Post(":id/ask/stream")
@@ -281,23 +268,9 @@ export class DocumentsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res() reply: FastifyReply,
   ) {
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    try {
-      for await (const chunk of this.documentsService.streamDocumentAnswer(id, body.question, principal)) {
-        reply.raw.write(chunk);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Internal error";
-      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
-    }
-
-    reply.raw.end();
+    await streamSseResponse(reply, (signal) =>
+      this.documentsService.streamDocumentAnswer(id, body.question, principal, signal),
+    );
   }
 
   @Get(":id/qa-history")

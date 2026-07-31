@@ -32,7 +32,13 @@ const makeLlmService = (overrides: Partial<Record<string, unknown>> = {}) =>
     isConfigured: vi.fn().mockReturnValue(true),
     getProviderInfo: vi.fn().mockReturnValue({ provider: "mistral" }),
     complete: vi.fn().mockResolvedValue("The contract ends in December."),
+    completeWithFallback: vi.fn().mockResolvedValue({
+      text: "The contract ends in December.",
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }),
     stream: vi.fn(),
+    streamWithFallback: vi.fn(),
     ...overrides,
   }) as never;
 
@@ -168,7 +174,9 @@ describe("LlmAnswerProvider", () => {
       responseLanguage: "en",
     });
 
-    const completeMock = (llmService as { complete: ReturnType<typeof vi.fn> }).complete;
+    const completeMock = (
+      llmService as { completeWithFallback: ReturnType<typeof vi.fn> }
+    ).completeWithFallback;
     const messages = completeMock.mock.calls[0][0].messages;
     const userMessage = messages.find((m: { role: string }) => m.role === "user");
     expect(userMessage.content).toContain(
