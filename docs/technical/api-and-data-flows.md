@@ -41,6 +41,16 @@ Flow:
 6. worker queues embeddings when semantic indexing is configured
 7. document becomes available for explorer, search, review, and detail views
 
+Text block geometry:
+
+- `document_text_blocks.bounding_box` is nullable; parse providers that return no line
+  geometry (Mistral OCR returns markdown per page) store `null` instead of fabricated boxes
+- migration `0014` nulled out all previously stored Mistral bounding boxes because they were
+  fabricated by the old response mapper and never reflected real page geometry; real boxes
+  return only when a document is reprocessed with a geometry-capable provider
+- `documents.metadata.parse.providerMetadata` holds a bounded summary of the provider
+  response (model, pages processed, document size), never the raw OCR payload
+
 ## Document Read and Update Surface
 
 Relevant endpoints:

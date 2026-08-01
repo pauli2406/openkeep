@@ -295,9 +295,12 @@ export const documentTextBlocks = pgTable(
       .references(() => documents.id, { onDelete: "cascade" }),
     pageNumber: integer("page_number").notNull(),
     lineIndex: integer("line_index").notNull(),
-    boundingBox: jsonb("bounding_box")
-      .$type<{ x: number; y: number; width: number; height: number }>()
-      .notNull(),
+    boundingBox: jsonb("bounding_box").$type<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null>(),
     text: text("text").notNull(),
   },
   (table) => ({

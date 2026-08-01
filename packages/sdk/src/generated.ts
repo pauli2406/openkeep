@@ -186,6 +186,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/login/2fa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a two-factor login challenge */
+        post: operations["AuthController_loginTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/refresh": {
         parameters: {
             query?: never;
@@ -203,6 +220,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a refresh session */
+        post: operations["AuthController_logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/me": {
         parameters: {
             query?: never;
@@ -213,6 +247,70 @@ export interface paths {
         get: operations["AuthController_me"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AuthController_updatePreferences"];
+        trace?: never;
+    };
+    "/api/auth/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_setupTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_enableTwoFactor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_disableTwoFactor"];
         delete?: never;
         options?: never;
         head?: never;
@@ -822,8 +920,28 @@ export interface components {
             email: string;
             password: string;
         };
+        TwoFactorLoginDto: {
+            twoFactorToken: string;
+            code: string;
+        };
         RefreshDto: {
             refreshToken: string;
+        };
+        UpdateUserLanguagePreferencesDto: {
+            /** @enum {string} */
+            uiLanguage: "en" | "de";
+            /** @enum {string} */
+            aiProcessingLanguage: "en" | "de";
+            /** @enum {string} */
+            aiChatLanguage: "en" | "de";
+        };
+        EnableTwoFactorDto: {
+            enrollmentToken: string;
+            code: string;
+        };
+        DisableTwoFactorDto: {
+            password: string;
+            code: string;
         };
         CreateApiTokenDto: {
             name: string;
@@ -1004,6 +1122,8 @@ export interface components {
                 /** @enum {string|null} */
                 fallbackParseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
                 /** @enum {string|null} */
+                activeChatProvider?: "openai" | "gemini" | "mistral" | null;
+                /** @enum {string|null} */
                 activeEmbeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
                 openaiModel?: string;
                 geminiModel?: string;
@@ -1037,6 +1157,8 @@ export interface components {
             activeParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
             /** @enum {string|null} */
             fallbackParseProvider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+            /** @enum {string|null} */
+            activeChatProvider: "openai" | "gemini" | "mistral" | null;
             /** @enum {string|null} */
             activeEmbeddingProvider: "openai" | "google-gemini" | "voyage" | "mistral" | null;
             parseProviders: {
@@ -1106,6 +1228,16 @@ export interface components {
             email: string;
             displayName: string;
             isOwner: boolean;
+            /** @default false */
+            twoFactorEnabled: boolean;
+            preferences: {
+                /** @enum {string} */
+                uiLanguage: "en" | "de";
+                /** @enum {string} */
+                aiProcessingLanguage: "en" | "de";
+                /** @enum {string} */
+                aiChatLanguage: "en" | "de";
+            };
             createdAt: string;
         };
         ApiTokenList: {
@@ -1331,14 +1463,23 @@ export interface components {
                         requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
+                            /** @default false */
                             correspondent: boolean;
+                            /** @default false */
                             issueDate: boolean;
+                            /** @default false */
                             dueDate: boolean;
+                            /** @default false */
                             amount: boolean;
+                            /** @default false */
                             currency: boolean;
+                            /** @default false */
                             referenceNumber: boolean;
+                            /** @default false */
                             expiryDate: boolean;
+                            /** @default false */
                             holderName: boolean;
+                            /** @default false */
                             issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -1478,7 +1619,7 @@ export interface components {
                         y: number;
                         width: number;
                         height: number;
-                    };
+                    } | null;
                     text: string;
                 }[];
             }[];
@@ -1735,14 +1876,23 @@ export interface components {
                         requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
+                            /** @default false */
                             correspondent: boolean;
+                            /** @default false */
                             issueDate: boolean;
+                            /** @default false */
                             dueDate: boolean;
+                            /** @default false */
                             amount: boolean;
+                            /** @default false */
                             currency: boolean;
+                            /** @default false */
                             referenceNumber: boolean;
+                            /** @default false */
                             expiryDate: boolean;
+                            /** @default false */
                             holderName: boolean;
+                            /** @default false */
                             issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -1882,7 +2032,7 @@ export interface components {
                         y: number;
                         width: number;
                         height: number;
-                    };
+                    } | null;
                     text: string;
                 }[];
             }[];
@@ -2055,14 +2205,23 @@ export interface components {
                         requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
+                            /** @default false */
                             correspondent: boolean;
+                            /** @default false */
                             issueDate: boolean;
+                            /** @default false */
                             dueDate: boolean;
+                            /** @default false */
                             amount: boolean;
+                            /** @default false */
                             currency: boolean;
+                            /** @default false */
                             referenceNumber: boolean;
+                            /** @default false */
                             expiryDate: boolean;
+                            /** @default false */
                             holderName: boolean;
+                            /** @default false */
                             issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -2202,7 +2361,7 @@ export interface components {
                         y: number;
                         width: number;
                         height: number;
-                    };
+                    } | null;
                     text: string;
                 }[];
             }[];
@@ -2414,14 +2573,23 @@ export interface components {
                     requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                     extracted: {
+                        /** @default false */
                         correspondent: boolean;
+                        /** @default false */
                         issueDate: boolean;
+                        /** @default false */
                         dueDate: boolean;
+                        /** @default false */
                         amount: boolean;
+                        /** @default false */
                         currency: boolean;
+                        /** @default false */
                         referenceNumber: boolean;
+                        /** @default false */
                         expiryDate: boolean;
+                        /** @default false */
                         holderName: boolean;
+                        /** @default false */
                         issuingAuthority: boolean;
                     };
                     activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -2561,7 +2729,7 @@ export interface components {
                     y: number;
                     width: number;
                     height: number;
-                };
+                } | null;
                 text: string;
             }[];
         };
@@ -2601,7 +2769,7 @@ export interface components {
                     y: number;
                     width: number;
                     height: number;
-                };
+                } | null;
                 text: string;
             }[];
         };
@@ -2799,14 +2967,23 @@ export interface components {
                             requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
+                                /** @default false */
                                 correspondent: boolean;
+                                /** @default false */
                                 issueDate: boolean;
+                                /** @default false */
                                 dueDate: boolean;
+                                /** @default false */
                                 amount: boolean;
+                                /** @default false */
                                 currency: boolean;
+                                /** @default false */
                                 referenceNumber: boolean;
+                                /** @default false */
                                 expiryDate: boolean;
+                                /** @default false */
                                 holderName: boolean;
+                                /** @default false */
                                 issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -2946,7 +3123,7 @@ export interface components {
                             y: number;
                             width: number;
                             height: number;
-                        };
+                        } | null;
                         text: string;
                     }[];
                 };
@@ -2988,6 +3165,11 @@ export interface components {
         AnswerQueryResponse: {
             /** @enum {string} */
             status: "answered" | "insufficient_evidence";
+            /**
+             * @default semantic
+             * @enum {string}
+             */
+            route: "semantic" | "structured" | "hybrid";
             answer: string | null;
             reasoning?: string | null;
             citations: {
@@ -3152,14 +3334,23 @@ export interface components {
                             requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
+                                /** @default false */
                                 correspondent: boolean;
+                                /** @default false */
                                 issueDate: boolean;
+                                /** @default false */
                                 dueDate: boolean;
+                                /** @default false */
                                 amount: boolean;
+                                /** @default false */
                                 currency: boolean;
+                                /** @default false */
                                 referenceNumber: boolean;
+                                /** @default false */
                                 expiryDate: boolean;
+                                /** @default false */
                                 holderName: boolean;
+                                /** @default false */
                                 issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -3299,7 +3490,7 @@ export interface components {
                             y: number;
                             width: number;
                             height: number;
-                        };
+                        } | null;
                         text: string;
                     }[];
                 };
@@ -3316,6 +3507,352 @@ export interface components {
                     distance: number | null;
                 }[];
             }[];
+            structuredData?: ({
+                /** @enum {string} */
+                kind: "deadline_items";
+                title: string;
+                description: string | null;
+                items: {
+                    /** Format: uuid */
+                    documentId: string;
+                    title: string;
+                    referenceNumber?: string | null;
+                    dueDate: string;
+                    amount: number | null;
+                    currency: string | null;
+                    correspondentName: string | null;
+                    documentTypeName?: string | null;
+                    taskLabel: string;
+                    daysUntilDue: number;
+                    isOverdue: boolean;
+                    /** Format: date-time */
+                    taskCompletedAt: string | null;
+                }[];
+                totalOpenCount: number;
+                totalAmount: number | null;
+                currency: string | null;
+                windowStart: string | null;
+                windowEnd: string | null;
+            } | {
+                /** @enum {string} */
+                kind: "pending_review_documents" | "expiring_contracts";
+                title: string;
+                description: string | null;
+                items: {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    /** @enum {string} */
+                    source: "upload" | "watch-folder" | "email" | "api";
+                    mimeType: string;
+                    checksum: string;
+                    storageKey: string;
+                    /** @enum {string} */
+                    status: "pending" | "processing" | "ready" | "failed";
+                    language: string | null;
+                    issueDate: string | null;
+                    dueDate: string | null;
+                    /** Format: date-time */
+                    taskCompletedAt: string | null;
+                    expiryDate: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    referenceNumber: string | null;
+                    holderName: string | null;
+                    issuingAuthority: string | null;
+                    correspondent: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                        summary?: string | null;
+                    } | null;
+                    documentType: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                        description?: string | null;
+                        /** @default [] */
+                        requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                    } | null;
+                    tags: {
+                        /** Format: uuid */
+                        id: string;
+                        name: string;
+                        slug: string;
+                    }[];
+                    confidence: number | null;
+                    /** @enum {string} */
+                    reviewStatus: "not_required" | "pending" | "resolved";
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewedAt: string | null;
+                    reviewNote: string | null;
+                    searchablePdfAvailable: boolean;
+                    /** @enum {string|null} */
+                    parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr" | null;
+                    /** @default 0 */
+                    chunkCount: number;
+                    /**
+                     * @default not_configured
+                     * @enum {string}
+                     */
+                    embeddingStatus: "not_configured" | "queued" | "indexing" | "ready" | "stale" | "failed";
+                    /** @enum {string|null} */
+                    embeddingProvider?: "openai" | "google-gemini" | "voyage" | "mistral" | null;
+                    embeddingModel?: string | null;
+                    /** @default false */
+                    embeddingsStale: boolean;
+                    lastProcessingError: string | null;
+                    latestProcessingJob: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    latestEmbeddingJob?: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "completed" | "failed";
+                        attempts: number;
+                        lastError: string | null;
+                        startedAt: string | null;
+                        finishedAt: string | null;
+                        createdAt: string;
+                        updatedAt: string;
+                    } | null;
+                    metadata: {
+                        extractionStrategy?: string;
+                        normalizationStrategy?: string;
+                        /** @enum {string} */
+                        parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                        parseStrategy?: string;
+                        documentTypeName?: string | null;
+                        detectedKeywords?: string[];
+                        pageCount?: number;
+                        chunkCount?: number;
+                        searchablePdfGenerated?: boolean;
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        parse?: {
+                            /** @enum {string} */
+                            provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+                            strategy: string;
+                            fallbackUsed?: boolean;
+                            warnings?: string[];
+                            keyValueCount?: number;
+                            tableCount?: number;
+                            providerMetadata?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                        chunking?: {
+                            strategy: string;
+                            chunkCount: number;
+                            usedProviderHints?: boolean;
+                        };
+                        embedding?: {
+                            /** @enum {string} */
+                            provider?: "openai" | "google-gemini" | "voyage" | "mistral";
+                            model?: string;
+                            configured?: boolean;
+                            chunkCount?: number;
+                        };
+                        correspondentExtraction?: {
+                            rawName?: string | null;
+                            rawNameNormalized?: string | null;
+                            resolvedName?: string | null;
+                            /** @enum {string} */
+                            matchStrategy?: "exact" | "alias" | "fuzzy" | "llm_choice" | "new" | "review" | "blocked" | "none";
+                            confidence?: number | null;
+                            evidenceLines?: string[];
+                            candidateCorrespondents?: {
+                                /** Format: uuid */
+                                id?: string;
+                                name: string;
+                                reason?: string;
+                                score?: number;
+                            }[];
+                            blockedReason?: string | null;
+                            /** @enum {string} */
+                            provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                        };
+                        reviewEvidence?: {
+                            /** @enum {string} */
+                            documentClass: "invoice" | "generic";
+                            requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                            missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+                            extracted: {
+                                /** @default false */
+                                correspondent: boolean;
+                                /** @default false */
+                                issueDate: boolean;
+                                /** @default false */
+                                dueDate: boolean;
+                                /** @default false */
+                                amount: boolean;
+                                /** @default false */
+                                currency: boolean;
+                                /** @default false */
+                                referenceNumber: boolean;
+                                /** @default false */
+                                expiryDate: boolean;
+                                /** @default false */
+                                holderName: boolean;
+                                /** @default false */
+                                issuingAuthority: boolean;
+                            };
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                            confidence?: number | null;
+                            confidenceThreshold?: number;
+                            ocrTextLength?: number;
+                            ocrEmptyThreshold?: number;
+                        };
+                        manual?: {
+                            /** @default [] */
+                            lockedFields: ("issueDate" | "dueDate" | "expiryDate" | "amount" | "currency" | "referenceNumber" | "holderName" | "issuingAuthority" | "correspondentId" | "documentTypeId" | "tagIds")[];
+                            /** @default {} */
+                            values: {
+                                issueDate?: string | null;
+                                dueDate?: string | null;
+                                expiryDate?: string | null;
+                                amount?: number | null;
+                                currency?: string | null;
+                                referenceNumber?: string | null;
+                                holderName?: string | null;
+                                issuingAuthority?: string | null;
+                                /** Format: uuid */
+                                correspondentId?: string | null;
+                                /** Format: uuid */
+                                documentTypeId?: string | null;
+                                tagIds?: string[];
+                            };
+                            updatedAt?: string | null;
+                            /** Format: uuid */
+                            updatedByUserId?: string | null;
+                        };
+                        intelligence?: {
+                            routing?: {
+                                documentType: string | null;
+                                subtype?: string | null;
+                                confidence?: number | null;
+                                reasoningHints?: string[];
+                                agentVersion?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            title?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            summary?: {
+                                value: string | null;
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            extraction?: {
+                                documentType?: string | null;
+                                /** @default {} */
+                                fields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default {} */
+                                fieldConfidence: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                fieldProvenance: {
+                                    [key: string]: {
+                                        source: string;
+                                        provider?: string;
+                                        page?: number | null;
+                                        lineIndex?: number | null;
+                                        snippet?: string | null;
+                                    };
+                                };
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            tagging?: {
+                                /** @default [] */
+                                tags: string[];
+                                confidence?: number | null;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            correspondentResolution?: {
+                                resolvedName: string | null;
+                                confidence?: number | null;
+                                strategy?: string;
+                                /** @enum {string} */
+                                provider?: "openai" | "gemini" | "mistral" | "deterministic";
+                                model?: string;
+                            };
+                            validation?: {
+                                /** @default {} */
+                                normalizedFields: {
+                                    [key: string]: unknown;
+                                };
+                                /** @default [] */
+                                errors: string[];
+                                /** @default [] */
+                                warnings: string[];
+                                /** @default {} */
+                                duplicateSignals: {
+                                    [key: string]: unknown;
+                                };
+                            };
+                            pipeline?: {
+                                framework?: string;
+                                runId?: string;
+                                status?: string;
+                                providerOrder?: ("mistral" | "gemini" | "openai")[];
+                                /** @default {} */
+                                durationsMs: {
+                                    [key: string]: number;
+                                };
+                                /** @default {} */
+                                agentVersions: {
+                                    [key: string]: string;
+                                };
+                            };
+                        };
+                    };
+                    createdAt: string;
+                    processedAt: string | null;
+                    snippets?: string[];
+                    matchingLines?: {
+                        /** Format: uuid */
+                        documentId: string;
+                        page: number;
+                        lineIndex: number;
+                        boundingBox: {
+                            x: number;
+                            y: number;
+                            width: number;
+                            height: number;
+                        } | null;
+                        text: string;
+                    }[];
+                }[];
+                totalCount: number;
+                windowStart?: string | null;
+                windowEnd?: string | null;
+            }) | null;
         };
         TagList: {
             /** Format: uuid */
@@ -3495,13 +4032,19 @@ export interface components {
                 pageCount: number;
                 issueDate: string | null;
                 dueDate: string | null;
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @default null
+                 */
                 taskCompletedAt: string | null;
+                /** @default null */
                 expiryDate: string | null;
                 amount: number | null;
                 currency: string | null;
                 referenceNumber: string | null;
+                /** @default null */
                 holderName: string | null;
+                /** @default null */
                 issuingAuthority: string | null;
                 confidence: number | null;
                 /** @enum {string} */
@@ -3585,14 +4128,23 @@ export interface components {
                         requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                         extracted: {
+                            /** @default false */
                             correspondent: boolean;
+                            /** @default false */
                             issueDate: boolean;
+                            /** @default false */
                             dueDate: boolean;
+                            /** @default false */
                             amount: boolean;
+                            /** @default false */
                             currency: boolean;
+                            /** @default false */
                             referenceNumber: boolean;
+                            /** @default false */
                             expiryDate: boolean;
+                            /** @default false */
                             holderName: boolean;
+                            /** @default false */
                             issuingAuthority: boolean;
                         };
                         activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -3755,7 +4307,7 @@ export interface components {
                     y: number;
                     width: number;
                     height: number;
-                };
+                } | null;
                 text: string;
             }[];
             documentChunks: {
@@ -3972,13 +4524,19 @@ export interface components {
                     pageCount: number;
                     issueDate: string | null;
                     dueDate: string | null;
-                    /** Format: date-time */
+                    /**
+                     * Format: date-time
+                     * @default null
+                     */
                     taskCompletedAt: string | null;
+                    /** @default null */
                     expiryDate: string | null;
                     amount: number | null;
                     currency: string | null;
                     referenceNumber: string | null;
+                    /** @default null */
                     holderName: string | null;
+                    /** @default null */
                     issuingAuthority: string | null;
                     confidence: number | null;
                     /** @enum {string} */
@@ -4062,14 +4620,23 @@ export interface components {
                             requiredFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             missingFields: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
                             extracted: {
+                                /** @default false */
                                 correspondent: boolean;
+                                /** @default false */
                                 issueDate: boolean;
+                                /** @default false */
                                 dueDate: boolean;
+                                /** @default false */
                                 amount: boolean;
+                                /** @default false */
                                 currency: boolean;
+                                /** @default false */
                                 referenceNumber: boolean;
+                                /** @default false */
                                 expiryDate: boolean;
+                                /** @default false */
                                 holderName: boolean;
+                                /** @default false */
                                 issuingAuthority: boolean;
                             };
                             activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
@@ -4232,7 +4799,7 @@ export interface components {
                         y: number;
                         width: number;
                         height: number;
-                    };
+                    } | null;
                     text: string;
                 }[];
                 documentChunks: {
@@ -4604,6 +5171,28 @@ export interface operations {
             };
         };
     };
+    AuthController_loginTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorLoginDto"];
+            };
+        };
+        responses: {
+            /** @description Login response with tokens */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_refresh: {
         parameters: {
             query?: never;
@@ -4628,6 +5217,28 @@ export interface operations {
             };
         };
     };
+    AuthController_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshDto"];
+            };
+        };
+        responses: {
+            /** @description Session revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_me: {
         parameters: {
             query?: never;
@@ -4645,6 +5256,90 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CurrentUser"];
                 };
+            };
+        };
+    };
+    AuthController_updatePreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserLanguagePreferencesDto"];
+            };
+        };
+        responses: {
+            /** @description Updated current user preferences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_setupTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending TOTP secret, otpauth URL and QR code */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_enableTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnableTwoFactorDto"];
+            };
+        };
+        responses: {
+            /** @description Two-factor enabled; returns recovery codes */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_disableTwoFactor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableTwoFactorDto"];
+            };
+        };
+        responses: {
+            /** @description Two-factor disabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

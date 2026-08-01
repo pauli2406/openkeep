@@ -82,7 +82,9 @@ export const BoundingBoxSchema = z.object({
 export const ParsedDocumentLineSchema = z.object({
   lineIndex: z.number().int().nonnegative(),
   text: z.string(),
-  boundingBox: BoundingBoxSchema,
+  // Null when the parse provider does not return geometry (e.g. Mistral OCR emits
+  // markdown per page, not line boxes). Never fabricate boxes to satisfy the schema.
+  boundingBox: BoundingBoxSchema.nullable(),
 });
 
 export const ParsedDocumentBlockSchema = z.object({
@@ -282,7 +284,7 @@ export const DocumentTextBlockSchema = z.object({
   documentId: z.string().uuid(),
   page: z.number().int().positive(),
   lineIndex: z.number().int().nonnegative(),
-  boundingBox: BoundingBoxSchema,
+  boundingBox: BoundingBoxSchema.nullable(),
   text: z.string().min(1),
 });
 
@@ -1262,7 +1264,7 @@ export const ArchiveDocumentTextBlockSchema = z.object({
   documentId: z.string().uuid(),
   pageNumber: z.number().int().positive(),
   lineIndex: z.number().int().nonnegative(),
-  boundingBox: BoundingBoxSchema,
+  boundingBox: BoundingBoxSchema.nullable(),
   text: z.string().min(1),
 });
 
