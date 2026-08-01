@@ -33,6 +33,9 @@ x-app-env: &app-env
   MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}
   MISTRAL_OCR_MODEL: ${MISTRAL_OCR_MODEL:-mistral-ocr-latest}
   MISTRAL_EMBEDDING_MODEL: ${MISTRAL_EMBEDDING_MODEL:-mistral-embed}
+  # Hard timeouts for LLM requests (seconds).
+  LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+  LLM_STREAM_TIMEOUT_SECONDS: ${LLM_STREAM_TIMEOUT_SECONDS:-120}
   # RAG answer relevance threshold (cosine similarity); tune per embedding provider.
   ANSWER_MIN_CHUNK_SCORE: ${ANSWER_MIN_CHUNK_SCORE:-0.4}
   LOG_LEVEL: ${LOG_LEVEL:-info}

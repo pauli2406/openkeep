@@ -169,7 +169,8 @@ Timeouts and resilience:
 
 - `LLM_TIMEOUT_SECONDS` (default `45`): hard timeout for non-streaming LLM completions;
   429/5xx responses are retried once before giving up
-- `LLM_STREAM_TIMEOUT_SECONDS` (default `120`): hard timeout for streaming completions
+- `LLM_STREAM_TIMEOUT_SECONDS` (default `120`): hard timeout for streaming completions,
+  applied once across the whole provider fallback chain (not per provider)
 - streaming answers fail over to the next configured provider when a provider fails
   before its first token; after the first token the error is surfaced instead (no silent
   mid-answer restarts)

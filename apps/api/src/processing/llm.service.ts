@@ -172,15 +172,31 @@ export class LlmService {
       return;
     }
 
+    // ONE deadline for the whole fallback chain: a per-provider timeout would let
+    // three hanging providers hold the SSE request open for 3x the configured
+    // limit instead of the documented hard timeout.
+    const deadline = AbortSignal.timeout(this.streamTimeoutMs());
+    const streamOptions: LlmCompletionOptions = {
+      ...options,
+      signal: options.signal
+        ? AbortSignal.any([options.signal, deadline])
+        : deadline,
+    };
+
     for (let index = 0; index < providers.length; index += 1) {
       const config = providers[index]!;
       const hasNextProvider = index < providers.length - 1;
       let firstTokenSeen = false;
 
       try {
-        for await (const chunk of this.streamWithConfig(config, options)) {
+        for await (const chunk of this.streamWithConfig(config, streamOptions)) {
           if (chunk.done && chunk.error) {
-            if (!firstTokenSeen && hasNextProvider && !options.signal?.aborted) {
+            if (
+              !firstTokenSeen &&
+              hasNextProvider &&
+              !options.signal?.aborted &&
+              !deadline.aborted
+            ) {
               this.logger.warn(
                 `${config.provider} stream failed before first token (${chunk.error}) — failing over to ${providers[index + 1]!.provider}`,
               );
@@ -208,7 +224,7 @@ export class LlmService {
         }
 
         const message = error instanceof Error ? error.message : "Unknown streaming error";
-        if (!firstTokenSeen && hasNextProvider) {
+        if (!firstTokenSeen && hasNextProvider && !deadline.aborted) {
           this.logger.warn(
             `${config.provider} stream threw before first token (${message}) — failing over to ${providers[index + 1]!.provider}`,
           );

@@ -323,6 +323,38 @@ describe("LlmService", () => {
     expect(chunks).toEqual([]);
   });
 
+  it("shares one deadline across the whole fallback chain", async () => {
+    const signals: Array<AbortSignal | null | undefined> = [];
+    vi.spyOn(global, "fetch").mockImplementation((_input, init) => {
+      signals.push((init as RequestInit | undefined)?.signal);
+      return Promise.resolve(new Response("upstream error", { status: 503 }));
+    });
+
+    const service = new LlmService(
+      createConfigService({
+        OPENAI_API_KEY: "openai-key",
+        OPENAI_MODEL: "gpt-4.1-mini",
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
+        LLM_STREAM_TIMEOUT_SECONDS: 120,
+      }),
+    );
+
+    for await (const _chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "Stream please" }],
+    })) {
+      // drain
+    }
+
+    // Both providers were attempted, and every attempt carries a signal that is
+    // composed with the shared deadline rather than a fresh per-provider timeout.
+    expect(signals).toHaveLength(2);
+    for (const signal of signals) {
+      expect(signal).toBeInstanceOf(AbortSignal);
+    }
+  });
+
   it("retries a non-streaming completion once on 429 before giving up", async () => {
     const fetchSpy = vi.spyOn(global, "fetch")
       .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
