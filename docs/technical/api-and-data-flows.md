@@ -108,6 +108,16 @@ Current search SSE event flow:
 
 For structured routes, the stream currently emits an empty `search-results` payload followed by an immediate `done` payload containing `route` and `structuredData`.
 
+Routing guardrails:
+
+- structured intents match anchored phrases only (for example `pending review`, not a bare
+  `review`), and contract-expiry routing requires the expiry term near the contract term plus
+  a listing/interrogative shape or a short query
+- when a structured route returns zero items and the query carries substance beyond the
+  trigger phrase, the orchestrator falls through to the semantic RAG path instead of
+  answering "nothing found" from the wrong data; if semantic answering is unavailable the
+  structured empty answer is kept
+
 ## Explorer Surface
 
 Relevant endpoints:

@@ -1,3 +1,4 @@
+import { ConflictException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DashboardDeadlineItem, Document } from "@openkeep/types";
@@ -233,5 +234,358 @@ describe("SearchOrchestratorService", () => {
     expect(response.structuredData?.kind).toBe("expiring_contracts");
     expect(response.structuredData?.items).toHaveLength(1);
     expect(response.answer).toContain("contract documents expiring");
+  });
+
+  it("routes German passive review questions (gepruft werden) to structured data", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn().mockResolvedValue({
+        items: [makeDocument({ reviewStatus: "pending", reviewReasons: ["low_confidence"] })],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+      listExpiringDocuments: vi.fn(),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("de") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Welche Dokumente müssen noch geprüft werden?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listReviewDocuments).toHaveBeenCalledOnce();
+    expect(response.structuredData?.kind).toBe("pending_review_documents");
+  });
+
+  it("keeps count questions on the structured path even when the result is empty", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+    const explorerService = { listDeadlineItems: vi.fn().mockResolvedValue([]) };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      explorerService as never,
+    );
+
+    for (const query of [
+      "How many overdue invoices still need to be paid before the end of this month?",
+      "Wie viele Rechnungen sind in diesem Monat noch offen und zu bezahlen?",
+    ]) {
+      const response = await service.answerQuery(
+        { query, maxDocuments: 5, maxCitations: 6, maxChunkMatches: 6 },
+        { userId: "user-1" } as never,
+      );
+
+      // Zero IS the authoritative answer for a count question.
+      expect(response.route).toBe("structured");
+    }
+    expect(documentsService.answerQuery).not.toHaveBeenCalled();
+  });
+
+  it("keeps content questions that merely mention 'review' on the semantic path", async () => {
+    const semanticResponse = {
+      status: "answered" as const,
+      route: "semantic" as const,
+      answer: "The notice period is three months.",
+      reasoning: null,
+      citations: [],
+      results: [],
+      structuredData: null,
+    };
+    const documentsService = {
+      answerQuery: vi.fn().mockResolvedValue(semanticResponse),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Please review my rental contract for the notice period",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listReviewDocuments).not.toHaveBeenCalled();
+    expect(response).toEqual(semanticResponse);
+  });
+
+  it("keeps contract content questions with distant expiry words on the semantic path", async () => {
+    const semanticResponse = {
+      status: "answered" as const,
+      route: "semantic" as const,
+      answer: "Your contract caps consumption at year end.",
+      reasoning: null,
+      citations: [],
+      results: [],
+      structuredData: null,
+    };
+    const documentsService = {
+      answerQuery: vi.fn().mockResolvedValue(semanticResponse),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Does my contract say anything about my energy consumption at year end?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listExpiringDocuments).not.toHaveBeenCalled();
+    expect(response).toEqual(semanticResponse);
+  });
+
+  it("still routes short German expiry questions to structured data", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn().mockResolvedValue({
+        items: [makeDocument({ expiryDate: "2026-08-15" })],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("de") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      { query: "Welche Verträge enden dieses Jahr?", maxDocuments: 5, maxCitations: 6, maxChunkMatches: 6 },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listExpiringDocuments).toHaveBeenCalledOnce();
+    expect(response.structuredData?.kind).toBe("expiring_contracts");
+  });
+
+  it("falls through to semantic answering when the structured result is empty and the query has substance", async () => {
+    const semanticResponse = {
+      status: "answered" as const,
+      route: "semantic" as const,
+      answer: "Your gym contract expires on 2026-12-31 according to the confirmation letter.",
+      reasoning: null,
+      citations: [],
+      results: [],
+      structuredData: null,
+    };
+    const documentsService = {
+      answerQuery: vi.fn().mockResolvedValue(semanticResponse),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn().mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Which of my contracts are expiring soon according to the letters I received last spring?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listExpiringDocuments).toHaveBeenCalledOnce();
+    expect(documentsService.answerQuery).toHaveBeenCalledOnce();
+    expect(response).toEqual(semanticResponse);
+  });
+
+  it("keeps the structured empty answer for short queries and unconfigured semantic search", async () => {
+    const documentsService = {
+      answerQuery: vi
+        .fn()
+        .mockRejectedValue(new ConflictException("Semantic indexing is not configured")),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn().mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const shortQuery = await service.answerQuery(
+      { query: "Which contracts expire soon?", maxDocuments: 5, maxCitations: 6, maxChunkMatches: 6 },
+      { userId: "user-1" } as never,
+    );
+    expect(documentsService.answerQuery).not.toHaveBeenCalled();
+    expect(shortQuery.route).toBe("structured");
+
+    const longQuery = await service.answerQuery(
+      {
+        query: "Which of my contracts are expiring soon according to the letters I received last spring?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+    expect(documentsService.answerQuery).toHaveBeenCalledOnce();
+    expect(longQuery.route).toBe("structured");
+  });
+
+  it("keeps verbose but unambiguous operational queries on the structured route", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+    const explorerService = {
+      listDeadlineItems: vi.fn().mockResolvedValue([]),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      explorerService as never,
+    );
+
+    // 14 tokens, empty structured result — but no content-question signal, so the
+    // authoritative empty operational answer stands instead of a RAG guess.
+    const response = await service.answerQuery(
+      {
+        query: "Which invoices are overdue and still need to be paid before the end of this month?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.answerQuery).not.toHaveBeenCalled();
+    expect(response.route).toBe("structured");
+  });
+
+  it("propagates transient semantic failures instead of masking them as empty answers", async () => {
+    const documentsService = {
+      answerQuery: vi.fn().mockRejectedValue(new Error("connection refused")),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn().mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    await expect(
+      service.answerQuery(
+        {
+          query: "Which of my contracts are expiring soon according to the letters I received last spring?",
+          maxDocuments: 5,
+          maxCitations: 6,
+          maxChunkMatches: 6,
+        },
+        { userId: "user-1" } as never,
+      ),
+    ).rejects.toThrow("connection refused");
+  });
+
+  it("recognizes verbose imperative listing requests as structured queries", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn().mockResolvedValue({
+        items: [makeDocument({ expiryDate: "2026-12-01" })],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        appliedFilters: {},
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Tell me all contracts that will expire before the end of the next calendar year",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    expect(documentsService.listExpiringDocuments).toHaveBeenCalledOnce();
+    expect(response.structuredData?.kind).toBe("expiring_contracts");
   });
 });

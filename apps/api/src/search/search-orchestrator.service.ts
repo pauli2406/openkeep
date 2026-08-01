@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import { users } from "@openkeep/db";
 import type {
   AnswerQueryRequest,
@@ -54,7 +54,27 @@ export class SearchOrchestratorService {
       return this.documentsService.answerQuery(request, principal);
     }
 
-    return this.answerStructuredQuery(route, principal, request.maxDocuments, request.query);
+    const structured = await this.answerStructuredQuery(
+      route,
+      principal,
+      request.maxDocuments,
+      request.query,
+    );
+
+    if (this.shouldFallThroughToSemantic(structured, request.query)) {
+      try {
+        return await this.documentsService.answerQuery(request, principal);
+      } catch (error) {
+        // Only "semantic indexing is not configured" (ConflictException) falls back
+        // to the structured empty answer; transient DB/provider failures propagate —
+        // otherwise an outage masquerades as a confident "nothing found".
+        if (!(error instanceof ConflictException)) {
+          throw error;
+        }
+      }
+    }
+
+    return structured;
   }
 
   async *streamAnswer(
@@ -70,6 +90,28 @@ export class SearchOrchestratorService {
     }
 
     const response = await this.answerStructuredQuery(route, principal, request.maxDocuments, request.query);
+
+    if (this.shouldFallThroughToSemantic(response, request.query)) {
+      const semanticStream = this.documentsService.streamAnswer(request, principal);
+      let yieldedSemanticEvent = false;
+      try {
+        for await (const chunk of semanticStream) {
+          yieldedSemanticEvent = true;
+          yield chunk;
+        }
+        if (yieldedSemanticEvent) {
+          return;
+        }
+      } catch (error) {
+        // Once semantic events have been emitted, appending a structured answer
+        // would overwrite the partial response client-side — propagate instead.
+        // Before the first event, only the not-configured case falls back.
+        if (yieldedSemanticEvent || !(error instanceof ConflictException)) {
+          throw error;
+        }
+      }
+    }
+
     yield `event: search-results\ndata: ${JSON.stringify({ results: [] })}\n\n`;
     yield `event: done\ndata: ${JSON.stringify({
       status: response.status,
@@ -78,6 +120,38 @@ export class SearchOrchestratorService {
       citations: response.citations,
       structuredData: response.structuredData,
     })}\n\n`;
+  }
+
+  /**
+   * A structured route with zero hits is often a misrouted content question
+   * ("what does my contract say about..."). Only such content-shaped questions retry
+   * on the semantic RAG path — verbose but unambiguous operational queries keep the
+   * authoritative empty answer instead of re-answering from stale document text.
+   */
+  private shouldFallThroughToSemantic(response: AnswerQueryResponse, query: string): boolean {
+    const structuredData = response.structuredData as { items?: unknown[] } | null | undefined;
+    const isEmpty = Array.isArray(structuredData?.items) && structuredData.items.length === 0;
+    if (!isEmpty) {
+      return false;
+    }
+
+    const normalized = normalizeQuery(query);
+    if (normalized.trim().split(/\s+/).length <= 8) {
+      return false;
+    }
+
+    // A count question wants the authoritative operational number, and an empty
+    // structured result IS that answer ("zero"). Routing it to RAG would let
+    // stale document text override the definitive state, so count phrasing is
+    // excluded before the content-question signal is evaluated (it would
+    // otherwise match on "how"/"wie").
+    if (/\b(how many|how much|wie viele?|wieviele?|anzahl|count of|number of)\b/.test(normalized)) {
+      return false;
+    }
+
+    return /\b(say|says|sagen|sagt|steht|schreibt|about|uber|regarding|bezuglich|why|warum|how|wie|contains?|enthalt|enthalten|mentions?|erwahnt|according)\b/.test(
+      normalized,
+    );
   }
 
   private async answerStructuredQuery(
@@ -550,15 +624,31 @@ function summarizeAmounts(items: DashboardDeadlineItem[]): {
 }
 
 function isPendingReviewQuery(query: string): boolean {
-  return /(pending review|review queue|needs review|under review|ausstehender prufung|prufung ausstehend|zu prufen|zu pruefen|gepruft|gepruft werden|review)/.test(
+  // Anchored phrases only. A bare "review" (or "gepruft") hijacked every semantic
+  // question that merely mentioned reviewing something ("please review my contract...").
+  return /(pending review|review queue|needs? review|needing review|under review|open reviews?|ausstehender? prufung|prufung ausstehend|ausstehende prufungen?|zu prufende|gepruft werden|noch zu prufen|zu prufen sind|prufungswarteschlange|review offen|offene reviews?)/.test(
     query,
   );
 }
 
 function isExpiringContractQuery(query: string): boolean {
-  return /(contract|vertrage|vertrag|agreement).*(expir|lauf|end|renew|renewal|verlanger|verlaenger)/.test(
-    query,
-  ) || /(which|welche).*(contract|vertrag|agreement).*(expir|endet|ablauf|laufzeit)/.test(query);
+  // Require the expiry term near the contract term (an unbounded `.*` matched
+  // "does my contract say anything about ... at year end") and a listing/interrogative
+  // shape or a short query, so content questions about a contract stay on the RAG path.
+  const proximity =
+    /(contract|vertrage|vertrag|agreement)[^.?!]{0,40}?(expir\w*|ablauf\w*|lauft ab|laufen ab|laufen aus|lauft aus|auslauf\w*|endet|enden|\bends?\b|ending|renew\w*|verlanger\w*|kundigungsfrist\w*|laufzeit\w*)/.test(
+      query,
+    );
+  if (!proximity) {
+    return false;
+  }
+
+  const listingShape =
+    /\b(which|what|show|list|any|all|every|are there|do i have|when|tell me|give me|find|how many|welche|welcher|zeige?|liste|alle|gibt es|habe ich|wann|wie viele|nenne)\b/.test(
+      query,
+    );
+  const isShortQuery = query.trim().split(/\s+/).length <= 8;
+  return listingShape || isShortQuery;
 }
 
 function formatCurrency(amount: number, currency: string, language: "en" | "de"): string {
