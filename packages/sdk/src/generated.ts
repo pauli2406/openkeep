@@ -607,7 +607,11 @@ export interface paths {
         /** Get Q&A history for a document */
         get: operations["DocumentsController_getQaHistory"];
         put?: never;
-        /** Save a Q&A entry for a document */
+        /**
+         * Save a Q&A entry for a document
+         * @deprecated
+         * @description Deprecated: entries are persisted server-side at the end of POST :id/ask/stream (the done event carries historyEntryId). This endpoint accepted arbitrary answer text and remains only for one release of backwards compatibility.
+         */
         post: operations["DocumentsController_saveQaEntry"];
         /** Clear Q&A history for a document */
         delete: operations["DocumentsController_clearQaHistory"];

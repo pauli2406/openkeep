@@ -69,6 +69,7 @@ import { dateToIso, normalizeCurrencyCode, parseDateOnly } from "../processing/n
 import { ProcessingService } from "../processing/processing.service";
 import {
   CITATION_MIN_SCORE,
+  DOCUMENT_QA_HISTORY_TURNS,
   shouldUseFullDocumentContext,
 } from "../processing/relevance.constants";
 import { rankHybridResults } from "../search/semantic-ranking.util";
@@ -1650,6 +1651,15 @@ export class DocumentsService {
       return `[Excerpt ${i + 1}, ${pageLabel}${chunk.heading ? `, Section: ${chunk.heading}` : ""}]\n${chunk.text}`;
     });
 
+    // Multi-turn: replay the last few Q&A pairs so follow-ups ("and what about
+    // the notice period I asked about?") resolve against prior turns. The table
+    // already holds everything; no migration needed.
+    const history = await this.getDocumentQaHistory(documentId, principal.userId);
+    const historyMessages = history.slice(-DOCUMENT_QA_HISTORY_TURNS).flatMap((entry) => [
+      { role: "user" as const, content: entry.question },
+      { role: "assistant" as const, content: entry.answer },
+    ]);
+
     const stream = this.llmService.streamWithFallback({
       messages: [
         {
@@ -1667,11 +1677,15 @@ export class DocumentsService {
                   "Note: the excerpts are the beginning of the document, not passages selected for relevance to the question.",
                 ]
               : []),
+            ...(historyMessages.length > 0
+              ? ["Earlier questions and answers about this document precede the current question."]
+              : []),
             responseLanguage === "de"
               ? "Be concise and direct. Answer in German."
               : "Be concise and direct. Answer in English.",
           ].join("\n"),
         },
+        ...historyMessages,
         {
           role: "user",
           content: `## Document Excerpts\n\n${contextSections.join("\n\n---\n\n")}\n\n---\n\n## Question\n${question}`,
@@ -1714,16 +1728,43 @@ export class DocumentsService {
     }
 
     // A provider failure mid-answer must not present the truncated text as a
-    // successfully completed answer.
+    // successfully completed answer — and must not be persisted as history, or
+    // later turns would replay the partial answer as an authoritative response.
     if (streamError) {
       yield `event: error\ndata: ${JSON.stringify({ message: streamError })}\n\n`;
       return;
     }
 
+    // Persist server-side with the server-accumulated answer. The previous
+    // client-side write was lost when the tab closed mid-stream and let clients
+    // store arbitrary answer text.
+    let historyEntryId: string | null = null;
+    const normalizedAnswer = fullAnswer.trim();
+    if (normalizedAnswer.length > 0 && !signal?.aborted) {
+      try {
+        const saved = await this.saveDocumentQaEntry(
+          documentId,
+          principal.userId,
+          question,
+          normalizedAnswer,
+          citations,
+        );
+        historyEntryId = saved.id;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to persist QA history entry for document ${documentId}: ${error instanceof Error ? error.message : error}`,
+        );
+      }
+    }
+
     yield `event: done\ndata: ${JSON.stringify({
-      status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
-      answer: fullAnswer || null,
+      // Report the SAME normalized answer that was persisted: a legacy client
+      // posts this value back verbatim, and an untrimmed copy would miss the
+      // exact-match dedup and create the duplicate row it is meant to prevent.
+      status: normalizedAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      answer: normalizedAnswer || null,
       citations,
+      historyEntryId,
     })}\n\n`;
   }
 
@@ -1756,6 +1797,54 @@ export class DocumentsService {
   }
 
   async saveDocumentQaEntry(
+    documentId: string,
+    userId: string,
+    question: string,
+    answer: string,
+    citations: Array<{
+      chunkIndex: number;
+      pageFrom: number | null;
+      pageTo: number | null;
+      quote: string;
+      score: number;
+    }>,
+    // Deduplication applies ONLY to the deprecated compatibility endpoint: a
+    // legacy client posts the answer the server already persisted at stream end.
+    // Server-generated completions always create a turn, so a user deliberately
+    // repeating a question keeps both turns in the conversation.
+    options: { deduplicateRecent?: boolean } = {},
+  ) {
+    if (!options.deduplicateRecent) {
+      return this.insertDocumentQaEntry(documentId, userId, question, answer, citations);
+    }
+
+    const existing = await this.databaseService.pool.query<{ id: string; created_at: string }>(
+      `SELECT id, created_at
+       FROM document_qa_history
+       WHERE document_id = $1
+         AND user_id = $2
+         AND question = $3
+         AND answer = $4
+         AND created_at > now() - interval '10 minutes'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [documentId, userId, question, answer],
+    );
+
+    if (existing.rows[0]) {
+      return {
+        id: existing.rows[0].id,
+        question,
+        answer,
+        citations,
+        createdAt: existing.rows[0].created_at,
+      };
+    }
+
+    return this.insertDocumentQaEntry(documentId, userId, question, answer, citations);
+  }
+
+  private async insertDocumentQaEntry(
     documentId: string,
     userId: string,
     question: string,

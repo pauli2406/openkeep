@@ -50,6 +50,9 @@ export const shouldUseFullDocumentContext = (
   return serializedChars <= DOCUMENT_QA_FULL_TEXT_MAX_CHARS;
 };
 
+/** Number of prior Q&A pairs replayed into the per-document chat prompt. */
+export const DOCUMENT_QA_HISTORY_TURNS = 4;
+
 export const buildInsufficientEvidenceMessage = (
   language?: AppLanguage | null,
 ): string =>

@@ -861,7 +861,6 @@ function InsightsTab({
   document,
   documentId,
   streamFetch,
-  authFetch,
   qaHistory,
   refetchQaHistory,
   offlineMode,
@@ -869,7 +868,7 @@ function InsightsTab({
   document: ArchiveDocument;
   documentId: string;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+  authFetch?: (path: string, init?: RequestInit) => Promise<Response>;
   qaHistory: QaHistoryEntry[];
   refetchQaHistory: () => void;
   offlineMode: boolean;
@@ -888,23 +887,14 @@ function InsightsTab({
     qa.ask(q);
   }, [offlineMode, qaQuestion, qa]);
 
-  const saveQaEntry = useCallback(async () => {
-    if (qa.status !== "done" || !qa.answerText) return;
-    try {
-      await authFetch(`/api/documents/${documentId}/qa-history`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: qaQuestion,
-          answer: qa.answerText,
-          citations: qa.citations,
-        }),
-      });
+  // The server persists the Q&A entry at stream end (the done event carries
+  // historyEntryId) — refresh the history list instead of writing client-side.
+  useEffect(() => {
+    if (qa.status === "done" && qa.answerText) {
       refetchQaHistory();
-    } catch {
-      // silent failure
     }
-  }, [qa, qaQuestion, authFetch, documentId, refetchQaHistory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qa.status]);
 
   return (
     <>
@@ -1116,7 +1106,6 @@ function InsightsTab({
                 ))}
               </View>
             )}
-            <Button label={t("documentDetail.insights.saveToHistory")} variant="secondary" onPress={() => void saveQaEntry()} />
           </View>
         )}
 
