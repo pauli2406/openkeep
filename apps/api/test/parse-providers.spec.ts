@@ -196,6 +196,26 @@ describe("Parse provider mappers", () => {
     expect(result.pages[0]?.lines[0]?.text).toBe("# Rechnung Nr. 2024-001");
   });
 
+  it("derives heading blocks from Mistral markdown so chunks keep headings", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "# Rechnung Nr. 2024-001\n\nBetrag: 119,00 EUR\n\n## Zahlungshinweise\n\nZahlbar sofort",
+        },
+      ],
+    });
+
+    const blocks = result.pages[0]?.blocks ?? [];
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
+      role: "heading",
+      text: "Rechnung Nr. 2024-001",
+      boundingBox: null,
+    });
+    expect(blocks[1]).toMatchObject({ role: "heading", text: "Zahlungshinweise" });
+  });
+
   it("never fabricates bounding boxes for Mistral lines", () => {
     const result = mapMistralOcrResponse({
       pages: [

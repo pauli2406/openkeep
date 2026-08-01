@@ -12,3 +12,12 @@ SET "bounding_box" = NULL
 FROM "documents" d
 WHERE b."document_id" = d."id"
   AND d."parse_provider" = 'mistral-ocr';
+
+-- The mapper no longer stores the full OCR response, but documents processed
+-- before this deployment still carry it at metadata.parse.providerMetadata.raw.
+-- The sanitizer only runs on reprocess, so strip that path here to reclaim the
+-- jsonb bloat immediately.
+UPDATE "documents"
+SET "metadata" = "metadata" #- '{parse,providerMetadata,raw}'
+WHERE "parse_provider" = 'mistral-ocr'
+  AND "metadata" #> '{parse,providerMetadata,raw}' IS NOT NULL;

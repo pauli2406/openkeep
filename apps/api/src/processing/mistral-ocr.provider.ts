@@ -35,7 +35,7 @@ export const mapMistralOcrResponse = (rawResponse: unknown): ParsedDocument => {
       width: typeof page.dimensions?.width === "number" ? page.dimensions.width : null,
       height: typeof page.dimensions?.height === "number" ? page.dimensions.height : null,
       lines,
-      blocks: [],
+      blocks: buildHeadingBlocks(lines),
       markdown: page.markdown,
     };
   });
@@ -123,3 +123,25 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
     return mapMistralOcrResponse(await response.json());
   }
 }
+
+/**
+ * Derives heading blocks from markdown heading lines (`# …`).
+ *
+ * DeterministicChunker takes each chunk's heading exclusively from
+ * `page.blocks` with `role: "heading"`, so emitting no blocks would leave every
+ * Mistral chunk headingless and degrade chunk context for search and citations.
+ * Bounding boxes stay null — Mistral markdown carries no geometry.
+ */
+const buildHeadingBlocks = (
+  lines: Array<{ lineIndex: number; text: string }>,
+): NonNullable<ParsedDocument["pages"][number]["blocks"]> =>
+  lines
+    .filter((line) => /^#{1,6}\s+\S/.test(line.text))
+    .map((line, blockIndex) => ({
+      blockIndex,
+      role: "heading" as const,
+      text: line.text.replace(/^#{1,6}\s+/, "").trim(),
+      boundingBox: null,
+      lineIndices: [line.lineIndex],
+      metadata: { source: "mistral-markdown-heading" },
+    }));
