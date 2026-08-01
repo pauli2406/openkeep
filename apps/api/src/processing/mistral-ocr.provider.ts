@@ -63,8 +63,15 @@ export const mapMistralOcrResponse = (
     const blocks = mapPageBlocks(page, pageNumber);
 
     for (const table of page.tables ?? []) {
+      // With MISTRAL_OCR_TABLE_FORMAT=html the payload only carries `html`, so
+      // reading markdown alone would silently drop those tables entirely.
       const markdownTable = table.markdown ?? table.content ?? null;
-      const parsed = markdownTable ? parseMarkdownTable(markdownTable) : [];
+      const htmlTable = table.html ?? null;
+      const parsed = markdownTable
+        ? parseMarkdownTable(markdownTable)
+        : htmlTable
+          ? parseHtmlTable(htmlTable)
+          : [];
       if (parsed.length > 0) {
         tables.push({
           tableIndex: tables.length,
@@ -72,7 +79,10 @@ export const mapMistralOcrResponse = (
           title: null,
           boundingBox: null,
           cells: parsed,
-          metadata: { markdown: markdownTable, source: "mistral-table" },
+          metadata: {
+            source: "mistral-table",
+            ...(markdownTable ? { markdown: markdownTable } : { html: htmlTable }),
+          },
         });
       }
     }
@@ -295,7 +305,7 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
     timeoutMs: number,
   ): Promise<void> {
     try {
-      await fetchWithTimeout(
+      const response = await fetchWithTimeout(
         `${baseUrl}/v1/files/${fileId}`,
         {
           method: "DELETE",
@@ -303,6 +313,15 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
         },
         timeoutMs,
       );
+
+      // A non-2xx DELETE leaves the document retained upstream; fetch resolves
+      // normally for those, so the status has to be inspected explicitly.
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => "");
+        this.logger.warn(
+          `Mistral file ${fileId} was not deleted (HTTP ${response.status})${errorBody ? `: ${errorBody}` : ""} — it remains stored upstream`,
+        );
+      }
     } catch (error) {
       this.logger.warn(
         `Failed to delete uploaded Mistral file ${fileId}: ${error instanceof Error ? error.message : error}`,
@@ -498,6 +517,45 @@ export const parseMarkdownTable = (
       });
     });
   }
+
+  return cells;
+};
+
+/**
+ * Parses an HTML table (`table_format: "html"`) into normalized cells.
+ *
+ * Deliberately regex-based rather than pulling in an HTML parser: Mistral emits
+ * simple generated markup, and the normalized model only needs row/column text.
+ * Row and column spans are not honoured (every cell stays 1x1).
+ */
+export const parseHtmlTable = (html: string): ParsedDocumentTable["cells"] => {
+  const cells: ParsedDocumentTable["cells"] = [];
+  const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+
+  rowMatches.forEach((row, rowIndex) => {
+    const cellMatches = row.match(/<(t[dh])[^>]*>([\s\S]*?)<\/\1>/gi) ?? [];
+    cellMatches.forEach((cell, columnIndex) => {
+      const isHeaderCell = /^<th/i.test(cell);
+      const text = cell
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      cells.push({
+        row: rowIndex + 1,
+        column: columnIndex + 1,
+        text,
+        rowSpan: 1,
+        columnSpan: 1,
+        boundingBox: null,
+        kind: isHeaderCell || rowIndex === 0 ? "header" : "body",
+      });
+    });
+  });
 
   return cells;
 };

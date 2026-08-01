@@ -312,6 +312,28 @@ describe("Parse provider mappers", () => {
     expect(cells[3]).toMatchObject({ row: 2, column: 2, text: "89,00 EUR", kind: "body" });
   });
 
+  it("parses HTML tables when table_format=html is configured", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "Details siehe Tabelle.",
+          tables: [
+            {
+              html: "<table><tr><th>Position</th><th>Betrag</th></tr><tr><td>Strom</td><td>89,00&nbsp;EUR</td></tr></table>",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.tables).toHaveLength(1);
+    const cells = result.tables[0]!.cells;
+    expect(cells).toHaveLength(4);
+    expect(cells[0]).toMatchObject({ row: 1, column: 1, text: "Position", kind: "header" });
+    expect(cells[3]).toMatchObject({ row: 2, column: 2, text: "89,00 EUR", kind: "body" });
+  });
+
   it("derives keyValues from Mistral markdown so deterministic extractors keep working", () => {
     const result = mapMistralOcrResponse({
       pages: [
