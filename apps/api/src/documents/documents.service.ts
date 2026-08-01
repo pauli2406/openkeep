@@ -190,25 +190,40 @@ export class DocumentsService {
     const title = input.metadata?.title?.trim() || input.filename;
     const source = input.metadata?.source ?? "upload";
 
+    // Atomic checksum dedup: concurrent uploads of identical content (the web
+    // client uploads several files at once) would otherwise race between the
+    // lookup and the unique insert — one request hitting the constraint, or one
+    // enqueueing processing before the other stored the object.
     const existingFile = await this.findFileByChecksum(checksum);
-    const fileRecord =
-      existingFile ??
-      (
-        await this.databaseService.db
-          .insert(documentFiles)
-          .values({
-            checksum,
-            storageKey: `documents/${checksum}`,
-            originalFilename: input.filename,
-            mimeType,
-            sizeBytes: input.buffer.length,
-          })
-          .returning()
-      )[0];
+    let insertedFile = existingFile;
+    if (!insertedFile) {
+      const [inserted] = await this.databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum,
+          storageKey: `documents/${checksum}`,
+          originalFilename: input.filename,
+          mimeType,
+          sizeBytes: input.buffer.length,
+        })
+        .onConflictDoNothing({ target: documentFiles.checksum })
+        .returning();
 
-    if (!existingFile) {
-      await this.storageService.uploadBuffer(fileRecord.storageKey, input.buffer, mimeType);
+      if (inserted) {
+        // This request created the row, so it owns storing the binary. Callers
+        // that lost the race wait for the object below instead.
+        await this.storageService.uploadBuffer(inserted.storageKey, input.buffer, mimeType);
+        insertedFile = inserted;
+      } else {
+        insertedFile = await this.findFileByChecksum(checksum);
+      }
     }
+
+    if (!insertedFile) {
+      throw new ConflictException("Failed to resolve document file for this upload");
+    }
+
+    const fileRecord = insertedFile;
 
     const [document] = await this.databaseService.db
       .insert(documents)
@@ -237,13 +252,16 @@ export class DocumentsService {
     return this.getDocument(document.id);
   }
 
-  async listDocuments(request: SearchDocumentsRequest): Promise<SearchDocumentsResponse> {
+  async listDocuments(
+    request: SearchDocumentsRequest,
+    ownerUserId?: string,
+  ): Promise<SearchDocumentsResponse> {
     const filters = request.filters ?? {};
     const sort = request.sort ?? "createdAt";
     const direction = request.direction === "asc" ? "asc" : "desc";
     const page = request.page ?? 1;
     const pageSize = request.pageSize ?? 20;
-    const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    const { whereSql, params } = this.buildDocumentFilterQuery(filters, ownerUserId);
     const hasTextQuery = Boolean(request.query?.trim());
 
     const langRegconfig = `CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END`;
@@ -1090,7 +1108,10 @@ export class DocumentsService {
     };
   }
 
-  async semanticSearch(request: SemanticSearchRequest): Promise<SemanticSearchResponse> {
+  async semanticSearch(
+    request: SemanticSearchRequest,
+    ownerUserId?: string,
+  ): Promise<SemanticSearchResponse> {
     if (!this.processingService.isSemanticIndexingConfigured()) {
       throw new ConflictException("Semantic indexing is not configured");
     }
@@ -1108,7 +1129,7 @@ export class DocumentsService {
     const startedAt = Date.now();
     const semanticEmbedding = await this.processingService.embedQuery(queryText);
     const embeddingLiteral = serializeHalfVector(padEmbedding(semanticEmbedding.embeddings[0]!));
-    const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    const { whereSql, params } = this.buildDocumentFilterQuery(filters, ownerUserId);
     // Cover the requested result window: a fixed cap would truncate candidates
     // before pagination, understating `total` and making later pages unreachable
     // for requests with a large pageSize.
@@ -1240,13 +1261,16 @@ export class DocumentsService {
     principal: AuthenticatedPrincipal,
   ): Promise<AnswerQueryResponse> {
     const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
-    const results = await this.semanticSearch({
-      query: request.query,
-      filters: request.filters,
-      page: 1,
-      pageSize: request.maxDocuments,
-      maxChunkMatches: request.maxChunkMatches,
-    });
+    const results = await this.semanticSearch(
+      {
+        query: request.query,
+        filters: request.filters,
+        page: 1,
+        pageSize: request.maxDocuments,
+        maxChunkMatches: request.maxChunkMatches,
+      },
+      principal.userId,
+    );
 
     const answered = await this.processingService.answerQuestion({
       question: request.query,
@@ -1273,13 +1297,16 @@ export class DocumentsService {
     signal?: AbortSignal,
   ): AsyncGenerator<string> {
     const responseLanguage = await this.getUserAiChatLanguage(principal.userId);
-    const results = await this.semanticSearch({
-      query: request.query,
-      filters: request.filters,
-      page: 1,
-      pageSize: request.maxDocuments,
-      maxChunkMatches: request.maxChunkMatches,
-    });
+    const results = await this.semanticSearch(
+      {
+        query: request.query,
+        filters: request.filters,
+        page: 1,
+        pageSize: request.maxDocuments,
+        maxChunkMatches: request.maxChunkMatches,
+      },
+      principal.userId,
+    );
 
     // Send search results first
     yield `event: search-results\ndata: ${JSON.stringify({ results: results.items })}\n\n`;
@@ -1521,12 +1548,13 @@ export class DocumentsService {
       heading_chars: string;
       chunk_count: string;
     }>(
-      `SELECT COALESCE(SUM(LENGTH(text)), 0)::text AS total_chars,
-              COALESCE(SUM(LENGTH(COALESCE(heading, ''))), 0)::text AS heading_chars,
+      `SELECT COALESCE(SUM(LENGTH(dc.text)), 0)::text AS total_chars,
+              COALESCE(SUM(LENGTH(COALESCE(dc.heading, ''))), 0)::text AS heading_chars,
               COUNT(*)::text AS chunk_count
-       FROM document_chunks
-       WHERE document_id = $1`,
-      [documentId],
+       FROM document_chunks dc
+       INNER JOIN documents d ON d.id = dc.document_id AND d.owner_user_id = $2
+       WHERE dc.document_id = $1`,
+      [documentId, principal.userId],
     );
     const totalChunkChars = Number(chunkStats.rows[0]?.total_chars ?? 0);
     const headingChars = Number(chunkStats.rows[0]?.heading_chars ?? 0);
@@ -1545,12 +1573,13 @@ export class DocumentsService {
         page_from: number | null;
         page_to: number | null;
       }>(
-        `SELECT chunk_index, heading, text, page_from, page_to
-         FROM document_chunks
-         WHERE document_id = $1
-         ORDER BY chunk_index ASC
+        `SELECT dc.chunk_index, dc.heading, dc.text, dc.page_from, dc.page_to
+         FROM document_chunks dc
+         INNER JOIN documents d ON d.id = dc.document_id AND d.owner_user_id = $2
+         WHERE dc.document_id = $1
+         ORDER BY dc.chunk_index ASC
          ${limit ? `LIMIT ${limit}` : ""}`,
-        [documentId],
+        [documentId, principal.userId],
       );
       return rows.rows.map((row) => ({
         text: row.text,
@@ -1604,6 +1633,9 @@ export class DocumentsService {
           `SELECT dc.chunk_index, dc.heading, dc.text, dc.page_from, dc.page_to,
                   (e.embedding <=> $1::halfvec)::float8 AS distance
            FROM document_chunks dc
+           INNER JOIN documents d
+             ON d.id = dc.document_id
+            AND d.owner_user_id = $5
            INNER JOIN document_chunk_embeddings e
              ON e.document_id = dc.document_id
             AND e.chunk_index = dc.chunk_index
@@ -1612,7 +1644,7 @@ export class DocumentsService {
            WHERE dc.document_id = $2
            ORDER BY e.embedding <=> $1::halfvec ASC
            LIMIT 6`,
-          [embeddingLiteral, documentId, provider, model],
+          [embeddingLiteral, documentId, provider, model, principal.userId],
         );
 
         contextChunks = result.rows.map((row) => ({
@@ -1967,7 +1999,17 @@ export class DocumentsService {
     return staleIds.length;
   }
 
-  buildDocumentFilterQuery(filters: SearchDocumentsRequest["filters"] = {}) {
+  /**
+   * ownerUserId scopes results to one user's documents. User-facing surfaces
+   * (list, search, chat) pass the authenticated principal; background jobs
+   * (explorer aggregation, correspondent intelligence) operate on the whole
+   * single-owner archive and pass none. Fine today with one user — mandatory
+   * before a second user ever exists.
+   */
+  buildDocumentFilterQuery(
+    filters: SearchDocumentsRequest["filters"] = {},
+    ownerUserId?: string,
+  ) {
     const clauses: string[] = ["1=1"];
     const params: unknown[] = [];
 
@@ -1975,6 +2017,11 @@ export class DocumentsService {
       params.push(value);
       return `$${params.length}`;
     };
+
+    if (ownerUserId) {
+      const placeholder = push(ownerUserId);
+      clauses.push(`d.owner_user_id = ${placeholder}`);
+    }
 
     if (filters?.year) {
       const placeholder = push(filters.year);

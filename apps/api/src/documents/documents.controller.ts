@@ -98,28 +98,34 @@ export class DocumentsController {
 
   @Get()
   @ApiOkResponse({ description: "List documents with structured and full-text filters" })
-  async listDocuments(@Query() query: SearchDocumentsQueryDto) {
-    return this.documentsService.listDocuments({
-      query: query.query,
-      filters: {
-        year: query.year,
-        dateFrom: query.dateFrom,
-        dateTo: query.dateTo,
-        correspondentId: query.correspondentId,
-        correspondentIds: query.correspondentIds,
-        documentTypeId: query.documentTypeId,
-        documentTypeIds: query.documentTypeIds,
-        status: query.status,
-        statuses: query.statuses,
-        tags: query.tags,
-        amountMin: query.amountMin,
-        amountMax: query.amountMax,
+  async listDocuments(
+    @Query() query: SearchDocumentsQueryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.listDocuments(
+      {
+        query: query.query,
+        filters: {
+          year: query.year,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          correspondentId: query.correspondentId,
+          correspondentIds: query.correspondentIds,
+          documentTypeId: query.documentTypeId,
+          documentTypeIds: query.documentTypeIds,
+          status: query.status,
+          statuses: query.statuses,
+          tags: query.tags,
+          amountMin: query.amountMin,
+          amountMax: query.amountMax,
+        },
+        sort: query.sort,
+        direction: query.direction,
+        page: query.page,
+        pageSize: query.pageSize,
       },
-      sort: query.sort,
-      direction: query.direction,
-      page: query.page,
-      pageSize: query.pageSize,
-    });
+      principal.userId,
+    );
   }
 
   @Get("facets")

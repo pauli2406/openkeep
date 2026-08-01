@@ -24,7 +24,7 @@ describe("upload smoke", () => {
     );
 
     vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
-      if (typeof input === "string" && input === "/api/documents") {
+      if (typeof input === "string" && input.endsWith("/api/documents")) {
         const headers = new Headers(init?.headers);
         const body = init?.body;
         const formData = body instanceof FormData ? body : null;

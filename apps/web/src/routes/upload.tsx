@@ -19,7 +19,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { getAccessToken } from "@/lib/api";
+import { authFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/upload")({
@@ -111,9 +111,7 @@ function UploadPage() {
       const pendingFiles = queue.filter((f) => f.status === "pending");
       if (pendingFiles.length === 0) return;
 
-      const token = getAccessToken();
-
-      for (const item of pendingFiles) {
+      const uploadOne = async (item: (typeof pendingFiles)[number]) => {
         updateFileStatus(item.id, "uploading");
 
         try {
@@ -123,14 +121,11 @@ function UploadPage() {
             formData.append("title", item.titleOverride.trim());
           }
 
-          const headers: Record<string, string> = {};
-          if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
-          }
-
-          const response = await fetch("/api/documents", {
+          // authFetch handles auth headers and token refresh; the generated SDK
+          // client is not used here because openapi-fetch has no ergonomic
+          // multipart support for this endpoint.
+          const response = await authFetch("/api/documents", {
             method: "POST",
-            headers,
             body: formData,
           });
 
@@ -158,7 +153,20 @@ function UploadPage() {
             err instanceof Error ? err.message : "Upload failed",
           );
         }
-      }
+      };
+
+      // Bounded concurrency: three uploads in flight instead of strictly
+      // sequential (large batches were needlessly slow) or unbounded (which
+      // would stampede the 64MiB multipart endpoint).
+      const CONCURRENCY = 3;
+      const work = [...pendingFiles];
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, work.length) }, async () => {
+          for (let item = work.shift(); item; item = work.shift()) {
+            await uploadOne(item);
+          }
+        }),
+      );
 
       setAllDone(true);
     },

@@ -397,6 +397,38 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(Number(processingJobCount.rows[0]?.count ?? 0)).toBe(2);
   });
 
+  it("deduplicates concurrent uploads of identical content atomically", async () => {
+    const buffer = Buffer.from(`concurrent-${randomUUID()}`);
+
+    // The web client uploads several files at once; identical content must not
+    // collide on the unique checksum constraint or enqueue processing before the
+    // object is stored.
+    const responses = await Promise.all(
+      [1, 2, 3].map((index) =>
+        request(app.getHttpServer())
+          .post("/api/documents")
+          .set("Authorization", `Bearer ${accessToken}`)
+          .attach("file", buffer, `concurrent-${index}.pdf`),
+      ),
+    );
+
+    for (const response of responses) {
+      expect(response.status).toBe(201);
+    }
+
+    const fileIds = new Set<string>();
+    for (const response of responses) {
+      const detail = await request(app.getHttpServer())
+        .get(`/api/documents/${response.body.id}`)
+        .set("Authorization", `Bearer ${accessToken}`);
+      expect(detail.status).toBe(200);
+      fileIds.add(detail.body.checksum);
+    }
+
+    // All three documents share one deduplicated binary.
+    expect(fileIds.size).toBe(1);
+  });
+
   it("deletes documents and only removes shared file metadata after the last reference", async () => {
     const originalKey = `fixtures/${randomUUID()}`;
     const searchableKey = `derived/${randomUUID()}.pdf`;

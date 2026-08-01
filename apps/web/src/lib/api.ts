@@ -122,7 +122,22 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-async function refreshAccessToken(): Promise<boolean> {
+// The API rotates refresh tokens and treats reuse as theft. Concurrent 401s
+// (e.g. parallel uploads with an expired access token) must therefore share ONE
+// refresh attempt — independent refreshes with the same token would revoke every
+// session and log the user out mid-batch.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function refreshAccessToken(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function doRefreshAccessToken(): Promise<boolean> {
   ensureTokensInitialized();
   if (!refreshToken) {
     return false;
