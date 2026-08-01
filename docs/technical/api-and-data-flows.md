@@ -103,8 +103,11 @@ Retrieval notes:
 
 - the keyword arm filters AND ranks with the same language-aware regconfig
   (`german`/`english`/`simple` per document language) so stemmed queries match
-  ("Rechnungen" finds "Rechnung"); it is capped at 50 candidates
-- the vector arm selects the top 200 chunk embeddings by cosine distance first
+  ("Rechnungen" finds "Rechnung"); its candidate cap covers the requested result
+  window (`page * pageSize`, at least 50) so pagination stays reachable
+- the vector arm scans a larger index pool, caps how many chunks a single document
+  may contribute (so one multi-hundred-page document cannot crowd out every other
+  match), and then keeps the top 200 candidates by cosine distance
   (HNSW-friendly `ORDER BY distance LIMIT`, with the document filters applied inside
   that candidate selection), then aggregates per document. The statement raises
   `hnsw.ef_search` to 400 and enables iterative scanning where available, because

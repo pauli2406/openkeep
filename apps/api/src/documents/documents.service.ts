@@ -125,8 +125,18 @@ interface DocumentRow {
     : null;
 }
 
-/** Chunk-embedding candidates pulled from the vector index per query. */
+/** Chunk-embedding candidates kept per query after the per-document cap. */
 const VECTOR_CANDIDATE_LIMIT = 200;
+/**
+ * Raw index pool scanned before capping. A single multi-hundred-page document can
+ * otherwise supply every nearest chunk, and the GROUP BY then collapses the result
+ * to that one document — hiding every other relevant match.
+ */
+const VECTOR_CANDIDATE_POOL = 600;
+/** Chunks a single document may contribute to the candidate set. */
+const VECTOR_CANDIDATE_CHUNKS_PER_DOCUMENT = 5;
+/** Lower bound for keyword candidates when the caller requests a small page. */
+const KEYWORD_CANDIDATE_MIN_LIMIT = 50;
 /**
  * HNSW search breadth for that candidate query. Must exceed the candidate limit
  * because the index scan happens before the provider/model and document filters.
@@ -1095,6 +1105,10 @@ export class DocumentsService {
     const semanticEmbedding = await this.processingService.embedQuery(queryText);
     const embeddingLiteral = serializeHalfVector(padEmbedding(semanticEmbedding.embeddings[0]!));
     const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    // Cover the requested result window: a fixed cap would truncate candidates
+    // before pagination, understating `total` and making later pages unreachable
+    // for requests with a large pageSize.
+    const keywordCandidateLimit = Math.max(KEYWORD_CANDIDATE_MIN_LIMIT, page * pageSize);
 
     // Filter and ranking must use the SAME language-aware regconfig: filtering with
     // 'simple' while ranking with 'german'/'english' meant a stemmed German query
@@ -1113,7 +1127,7 @@ export class DocumentsService {
        WHERE ${whereSql}
          AND to_tsvector(${langRegconfig}, coalesce(d.full_text, '')) @@ websearch_to_tsquery(${langRegconfig}, $${params.length + 1})
        ORDER BY rank DESC, d.id DESC
-       LIMIT 50`,
+       LIMIT ${keywordCandidateLimit}`,
       [...params, queryText],
     );
 
@@ -1125,13 +1139,24 @@ export class DocumentsService {
     const semanticRows = await this.runVectorCandidateQuery(
       `SELECT t.document_id AS id, MIN(t.distance)::text AS distance
        FROM (
-         SELECT e.document_id, (e.embedding <=> $${params.length + 1}::halfvec) AS distance
-         FROM document_chunk_embeddings e
-         INNER JOIN documents d ON d.id = e.document_id
-         WHERE e.provider = $${params.length + 2}::embedding_provider
-           AND e.model = $${params.length + 3}
-           AND ${whereSql}
-         ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+         SELECT ranked.document_id, ranked.distance
+         FROM (
+           SELECT e.document_id,
+                  (e.embedding <=> $${params.length + 1}::halfvec) AS distance,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.document_id
+                    ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+                  ) AS chunk_rank
+           FROM document_chunk_embeddings e
+           INNER JOIN documents d ON d.id = e.document_id
+           WHERE e.provider = $${params.length + 2}::embedding_provider
+             AND e.model = $${params.length + 3}
+             AND ${whereSql}
+           ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+           LIMIT ${VECTOR_CANDIDATE_POOL}
+         ) ranked
+         WHERE ranked.chunk_rank <= ${VECTOR_CANDIDATE_CHUNKS_PER_DOCUMENT}
+         ORDER BY ranked.distance ASC
          LIMIT ${VECTOR_CANDIDATE_LIMIT}
        ) t
        GROUP BY t.document_id
