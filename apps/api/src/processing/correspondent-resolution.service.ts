@@ -117,12 +117,24 @@ export class CorrespondentResolutionService {
     let llmDecision: LlmResolution | null = null;
     if (evidenceLines.length > 0) {
       for (const candidateProvider of providers) {
-        const decision = await this.resolveWithLlm(
-          candidateProvider,
-          input,
-          evidenceLines,
-          lexicalCandidates,
-        );
+        let decision: LlmResolution | null = null;
+        try {
+          decision = await this.resolveWithLlm(
+            candidateProvider,
+            input,
+            evidenceLines,
+            lexicalCandidates,
+          );
+        } catch (error) {
+          // resolveWithLlm issues a raw fetch and parses JSON, so DNS/TCP errors
+          // and malformed payloads throw. Without catching here the first broken
+          // provider aborted resolution (and document processing) entirely.
+          this.logger.warn(
+            `Correspondent resolution via ${candidateProvider.provider} failed (${error instanceof Error ? error.message : error}) — trying next provider`,
+          );
+          continue;
+        }
+
         if (decision) {
           provider = candidateProvider;
           llmDecision = decision;

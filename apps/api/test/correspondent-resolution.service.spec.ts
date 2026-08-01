@@ -316,10 +316,13 @@ describe("CorrespondentResolutionService", () => {
     (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([]);
     (service as any).resolveWithLlm = vi.fn(async (provider: { provider: string }) => {
       attempts.push(provider.provider);
-      // The pinned provider is unreachable; the next one answers.
-      return provider.provider === "mistral"
-        ? null
-        : {
+      // The pinned provider is unreachable (a thrown fetch/JSON error, not just
+      // an empty result); the next one answers.
+      if (provider.provider === "mistral") {
+        throw new Error("getaddrinfo ENOTFOUND api.mistral.invalid");
+      }
+      return provider.provider === "openai"
+        ? {
             rawName: "Stadtwerke Musterstadt",
             cleanDisplayName: "Stadtwerke Musterstadt",
             confidence: 0.9,
@@ -327,7 +330,8 @@ describe("CorrespondentResolutionService", () => {
             isLikelyOrganizationOrPerson: true,
             shouldCreateNew: true,
             selectedCandidateId: null,
-          };
+          }
+        : null;
     });
 
     const result = await service.resolve(
