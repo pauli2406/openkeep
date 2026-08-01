@@ -1513,32 +1513,47 @@ export class DocumentsService {
     // document fits the context budget, skip vector retrieval and give the model ALL
     // chunks with their page labels — no retrieval miss can hide the answer, page-cited
     // answers are preserved, and it works with every provider (the provider-agnostic
-    // equivalent of Mistral's Document QnA).
-    const allChunkRows = await this.databaseService.pool.query<{
-      chunk_index: number;
-      heading: string | null;
-      text: string;
-      page_from: number | null;
-      page_to: number | null;
+    // equivalent of Mistral's Document QnA). Mode selection uses an aggregate query
+    // so large documents never transfer their entire OCR text just to be measured.
+    const chunkStats = await this.databaseService.pool.query<{
+      total_chars: string;
+      chunk_count: string;
     }>(
-      `SELECT chunk_index, heading, text, page_from, page_to
+      `SELECT COALESCE(SUM(LENGTH(text)), 0)::text AS total_chars, COUNT(*)::text AS chunk_count
        FROM document_chunks
-       WHERE document_id = $1
-       ORDER BY chunk_index ASC`,
+       WHERE document_id = $1`,
       [documentId],
     );
+    const totalChunkChars = Number(chunkStats.rows[0]?.total_chars ?? 0);
+    const chunkCount = Number(chunkStats.rows[0]?.chunk_count ?? 0);
+    const fullTextMode = shouldUseFullDocumentContext(totalChunkChars, chunkCount);
 
-    const totalChunkChars = allChunkRows.rows.reduce((sum, row) => sum + row.text.length, 0);
-    const fullTextMode = shouldUseFullDocumentContext(totalChunkChars, allChunkRows.rows.length);
-
-    if (fullTextMode) {
-      contextChunks = allChunkRows.rows.map((row) => ({
+    const loadChunksByPosition = async (limit?: number) => {
+      const rows = await this.databaseService.pool.query<{
+        chunk_index: number;
+        heading: string | null;
+        text: string;
+        page_from: number | null;
+        page_to: number | null;
+      }>(
+        `SELECT chunk_index, heading, text, page_from, page_to
+         FROM document_chunks
+         WHERE document_id = $1
+         ORDER BY chunk_index ASC
+         ${limit ? `LIMIT ${limit}` : ""}`,
+        [documentId],
+      );
+      return rows.rows.map((row) => ({
         text: row.text,
         heading: row.heading,
         pageFrom: row.page_from,
         pageTo: row.page_to,
         score: 0,
       }));
+    };
+
+    if (fullTextMode) {
+      contextChunks = await loadChunksByPosition();
     } else if (
       this.processingService.isSemanticIndexingConfigured() &&
       document.embeddingStatus === "ready"
@@ -1584,15 +1599,9 @@ export class DocumentsService {
     // position. These carry no relevance signal, so they must not surface as
     // scored citations.
     let positionalFallback = false;
-    if (!fullTextMode && contextChunks.length === 0) {
+    if (!fullTextMode && contextChunks.length === 0 && chunkCount > 0) {
       positionalFallback = true;
-      contextChunks = allChunkRows.rows.slice(0, 8).map((row) => ({
-        text: row.text,
-        heading: row.heading,
-        pageFrom: row.page_from,
-        pageTo: row.page_to,
-        score: 0,
-      }));
+      contextChunks = await loadChunksByPosition(8);
     }
 
     if (contextChunks.length === 0) {
