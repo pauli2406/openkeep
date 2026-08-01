@@ -9,6 +9,9 @@ export type StreamStatus = "idle" | "searching" | "streaming" | "done" | "error"
 
 export type StreamState = {
   status: StreamStatus;
+  /** Semantic outcome from the server's `done` event (a refusal streams text). */
+  answerStatus: "answered" | "insufficient_evidence" | null;
+  lowConfidence: boolean;
   route: AnswerQueryResponse["route"] | null;
   answerText: string;
   citations: AnswerCitation[];
@@ -22,6 +25,8 @@ export type StreamState = {
 
 const INITIAL_STATE: StreamState = {
   status: "idle",
+  answerStatus: null,
+  lowConfidence: false,
   route: null,
   answerText: "",
   citations: [],
@@ -53,6 +58,8 @@ export function useAnswerStream(
 
       setState({
         status: "searching",
+        answerStatus: null,
+        lowConfidence: false,
         route: null,
         answerText: "",
         citations: [],
@@ -120,6 +127,8 @@ export function useAnswerStream(
                   setState((s) => ({
                     ...s,
                     status: "done",
+                    answerStatus: parsed.status ?? s.answerStatus,
+                    lowConfidence: parsed.lowConfidence ?? s.lowConfidence,
                     route: parsed.route ?? s.route,
                     citations: parsed.citations ?? s.citations,
                     answerText: parsed.fullAnswer ?? s.answerText,
