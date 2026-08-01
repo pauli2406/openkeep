@@ -30,10 +30,19 @@ export const linkifyAnswerCitations = (
     return `[[${digits}${pageSuffix}]](${buildHref(citation.documentId)})`;
   });
 
-  // Legacy inline format fallback (exact/substring title match only).
-  result = result.replace(
-    /\[Document:\s*"([^"]+)"(?:,\s*Page:\s*(\d+))?\]/g,
-    (marker, title: string, page: string | undefined) => {
+  // Legacy inline format fallback (exact/substring title match only). Blocks may
+  // contain multiple semicolon-separated references:
+  //   [Document: "A", Page: 1; Document: "B", Page: 2]
+  const legacyBlock = /\[(?:Document:\s*"[^"]*"(?:,\s*Page:\s*\d+)?(?:;\s*)?)+\]/g;
+  const legacyRef = /Document:\s*"([^"]*)"(?:,\s*Page:\s*(\d+))?/g;
+
+  result = result.replace(legacyBlock, (block) => {
+    const parts: string[] = [];
+    let match: RegExpExecArray | null;
+    legacyRef.lastIndex = 0;
+    while ((match = legacyRef.exec(block)) !== null) {
+      const title = match[1] ?? "";
+      const page = match[2];
       const normalizedTitle = title.trim().toLowerCase();
       const citation =
         citations.find((c) => c.documentTitle.trim().toLowerCase() === normalizedTitle) ??
@@ -41,13 +50,15 @@ export const linkifyAnswerCitations = (
           c.documentTitle.trim().toLowerCase().includes(normalizedTitle),
         );
       if (!citation) {
-        return marker;
+        parts.push(`[Document: "${title}"${page ? `, Page: ${page}` : ""}]`);
+        continue;
       }
       const pageSuffix = page ? `, p.${page}` : "";
       const ordinal = citation.index ?? citations.indexOf(citation) + 1;
-      return `[[${ordinal}${pageSuffix}]](${buildHref(citation.documentId)})`;
-    },
-  );
+      parts.push(`[[${ordinal}${pageSuffix}]](${buildHref(citation.documentId)})`);
+    }
+    return parts.length > 0 ? parts.join(" ") : block;
+  });
 
   return result;
 };

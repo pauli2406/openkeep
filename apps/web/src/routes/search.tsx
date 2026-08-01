@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import {
   Search as SearchIcon,
   Loader2,
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   BrainCircuit,
@@ -352,6 +353,13 @@ function SearchPage() {
                       <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
                     )}
                   </div>
+                  )}
+
+                  {answerStream.lowConfidence && answerStream.status === "done" && (
+                    <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      This answer is based on weak evidence — verify it against the cited sources.
+                    </p>
                   )}
 
                   {answerStream.structuredData && (

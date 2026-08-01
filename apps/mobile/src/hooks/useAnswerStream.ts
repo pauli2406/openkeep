@@ -20,6 +20,8 @@ export type StreamState = {
     score: number;
   }>;
   structuredData: AnswerQueryResponse["structuredData"];
+  /** True when the answer was generated from sub-threshold (near-miss) evidence. */
+  lowConfidence: boolean;
   errorMessage: string | null;
 };
 
@@ -32,6 +34,7 @@ const INITIAL_STATE: StreamState = {
   citations: [],
   searchResults: [],
   structuredData: null,
+  lowConfidence: false,
   errorMessage: null,
 };
 
@@ -65,6 +68,7 @@ export function useAnswerStream(
         citations: [],
         searchResults: [],
         structuredData: null,
+        lowConfidence: false,
         errorMessage: null,
       });
 
@@ -128,6 +132,7 @@ export function useAnswerStream(
                     citations: parsed.citations ?? s.citations,
                     answerText: parsed.fullAnswer ?? s.answerText,
                     structuredData: parsed.structuredData ?? s.structuredData,
+                    lowConfidence: parsed.lowConfidence ?? false,
                   }));
                 } else if (currentEvent === "error") {
                   setState((s) => ({

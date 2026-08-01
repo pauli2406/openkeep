@@ -450,6 +450,11 @@ function AIAnswerPanel({
               {answerStream.status === "streaming" && (
                 <View style={styles.streamingCursor} />
               )}
+              {answerStream.lowConfidence && answerStream.status === "done" && (
+                <Text style={styles.lowConfidenceHint}>
+                  ⚠ This answer is based on weak evidence — verify it against the cited sources.
+                </Text>
+              )}
             </View>
           )}
 
@@ -1074,6 +1079,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  lowConfidenceHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#b45309",
   },
   insufficientText: {
     fontSize: 14,
