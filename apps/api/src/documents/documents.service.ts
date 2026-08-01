@@ -1739,13 +1739,14 @@ export class DocumentsService {
     // client-side write was lost when the tab closed mid-stream and let clients
     // store arbitrary answer text.
     let historyEntryId: string | null = null;
-    if (fullAnswer.trim().length > 0 && !signal?.aborted) {
+    const normalizedAnswer = fullAnswer.trim();
+    if (normalizedAnswer.length > 0 && !signal?.aborted) {
       try {
         const saved = await this.saveDocumentQaEntry(
           documentId,
           principal.userId,
           question,
-          fullAnswer.trim(),
+          normalizedAnswer,
           citations,
         );
         historyEntryId = saved.id;
@@ -1757,8 +1758,11 @@ export class DocumentsService {
     }
 
     yield `event: done\ndata: ${JSON.stringify({
-      status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
-      answer: fullAnswer || null,
+      // Report the SAME normalized answer that was persisted: a legacy client
+      // posts this value back verbatim, and an untrimmed copy would miss the
+      // exact-match dedup and create the duplicate row it is meant to prevent.
+      status: normalizedAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      answer: normalizedAnswer || null,
       citations,
       historyEntryId,
     })}\n\n`;
@@ -1804,11 +1808,16 @@ export class DocumentsService {
       quote: string;
       score: number;
     }>,
+    // Deduplication applies ONLY to the deprecated compatibility endpoint: a
+    // legacy client posts the answer the server already persisted at stream end.
+    // Server-generated completions always create a turn, so a user deliberately
+    // repeating a question keeps both turns in the conversation.
+    options: { deduplicateRecent?: boolean } = {},
   ) {
-    // Legacy clients still POST the finished answer via the deprecated
-    // /:id/qa-history endpoint AFTER the server already persisted it at stream
-    // end. Deduplicate identical recent turns so mixed-version deployments do
-    // not create and replay duplicate rows.
+    if (!options.deduplicateRecent) {
+      return this.insertDocumentQaEntry(documentId, userId, question, answer, citations);
+    }
+
     const existing = await this.databaseService.pool.query<{ id: string; created_at: string }>(
       `SELECT id, created_at
        FROM document_qa_history
@@ -1832,6 +1841,22 @@ export class DocumentsService {
       };
     }
 
+    return this.insertDocumentQaEntry(documentId, userId, question, answer, citations);
+  }
+
+  private async insertDocumentQaEntry(
+    documentId: string,
+    userId: string,
+    question: string,
+    answer: string,
+    citations: Array<{
+      chunkIndex: number;
+      pageFrom: number | null;
+      pageTo: number | null;
+      quote: string;
+      score: number;
+    }>,
+  ) {
     const result = await this.databaseService.pool.query<{ id: string; created_at: string }>(
       `INSERT INTO document_qa_history (document_id, user_id, question, answer, citations)
        VALUES ($1, $2, $3, $4, $5::jsonb)

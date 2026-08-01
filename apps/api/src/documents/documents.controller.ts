@@ -310,6 +310,9 @@ export class DocumentsController {
       body.question,
       body.answer,
       body.citations,
+      // Legacy clients re-post an answer the server already persisted at stream
+      // end; only this path deduplicates.
+      { deduplicateRecent: true },
     );
   }
 
