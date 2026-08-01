@@ -1370,14 +1370,36 @@ export class DocumentsService {
     });
 
     let fullSummary = "";
+    let streamError: string | undefined;
+    // Default to the first configured provider; overwritten by the terminal chunk
+    // with the provider that actually streamed (differs after a failover).
+    let streamedProvider = providerInfo.provider;
+    let streamedModel = providerInfo.model;
 
     for await (const chunk of stream) {
       if (chunk.done) {
+        streamError = chunk.error;
+        if (chunk.provider) {
+          streamedProvider = chunk.provider;
+        }
+        if (chunk.model) {
+          streamedModel = chunk.model;
+        }
         break;
       }
 
       fullSummary += chunk.text;
       yield `event: summary-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    // A truncated summary (client abort or provider failure mid-stream) must not
+    // be cached — future requests would keep serving the partial text.
+    if (signal?.aborted) {
+      return;
+    }
+    if (streamError) {
+      yield `event: error\ndata: ${JSON.stringify({ message: streamError })}\n\n`;
+      return;
     }
 
     // If the LLM returned nothing (e.g. API error, empty response), surface it
@@ -1387,36 +1409,34 @@ export class DocumentsService {
     }
 
     // Persist summary to metadata
-    if (fullSummary.trim().length > 0) {
-      const now = new Date().toISOString();
-      await this.databaseService.pool.query(
-        `UPDATE documents SET metadata = jsonb_set(
+    const now = new Date().toISOString();
+    await this.databaseService.pool.query(
+      `UPDATE documents SET metadata = jsonb_set(
+        jsonb_set(
           jsonb_set(
             jsonb_set(
-              jsonb_set(
-                coalesce(metadata, '{}'::jsonb),
-                '{summary}', $2::jsonb
-              ),
-              '{summaryProvider}', $3::jsonb
+              coalesce(metadata, '{}'::jsonb),
+              '{summary}', $2::jsonb
             ),
-            '{summaryModel}', $4::jsonb
+            '{summaryProvider}', $3::jsonb
           ),
-          '{summaryGeneratedAt}', $5::jsonb
-        ) WHERE id = $1`,
-        [
-          documentId,
-          JSON.stringify(fullSummary.trim()),
-          JSON.stringify(providerInfo.provider),
-          JSON.stringify(providerInfo.model),
-          JSON.stringify(now),
-        ],
-      );
-    }
+          '{summaryModel}', $4::jsonb
+        ),
+        '{summaryGeneratedAt}', $5::jsonb
+      ) WHERE id = $1`,
+      [
+        documentId,
+        JSON.stringify(fullSummary.trim()),
+        JSON.stringify(streamedProvider),
+        JSON.stringify(streamedModel),
+        JSON.stringify(now),
+      ],
+    );
 
     yield `event: done\ndata: ${JSON.stringify({
       summary: fullSummary.trim(),
-      provider: providerInfo.provider,
-      model: providerInfo.model,
+      provider: streamedProvider,
+      model: streamedModel,
       generatedAt: new Date().toISOString(),
     })}\n\n`;
   }
@@ -1576,14 +1596,23 @@ export class DocumentsService {
     yield `event: citations\ndata: ${JSON.stringify({ citations })}\n\n`;
 
     let fullAnswer = "";
+    let streamError: string | undefined;
 
     for await (const chunk of stream) {
       if (chunk.done) {
+        streamError = chunk.error;
         break;
       }
 
       fullAnswer += chunk.text;
       yield `event: answer-token\ndata: ${JSON.stringify({ text: chunk.text })}\n\n`;
+    }
+
+    // A provider failure mid-answer must not present the truncated text as a
+    // successfully completed answer.
+    if (streamError) {
+      yield `event: error\ndata: ${JSON.stringify({ message: streamError })}\n\n`;
+      return;
     }
 
     yield `event: done\ndata: ${JSON.stringify({

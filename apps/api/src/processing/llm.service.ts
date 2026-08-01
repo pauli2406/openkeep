@@ -21,6 +21,9 @@ export interface LlmStreamChunk {
   text: string;
   done: boolean;
   error?: string;
+  /** Set on the terminal chunk by streamWithFallback: the provider that actually streamed. */
+  provider?: LlmProviderId;
+  model?: string;
 }
 
 export type LlmProviderId = "openai" | "gemini" | "mistral";
@@ -183,17 +186,20 @@ export class LlmService {
               );
               break;
             }
-            yield chunk;
+            yield { ...chunk, provider: config.provider, model: config.model };
             return;
           }
 
           if (!chunk.done && chunk.text.length > 0) {
             firstTokenSeen = true;
           }
-          yield chunk;
           if (chunk.done) {
+            // Attribute the terminal chunk to the provider that actually streamed —
+            // after a failover this differs from getProviderInfo()'s first pick.
+            yield { ...chunk, provider: config.provider, model: config.model };
             return;
           }
+          yield chunk;
         }
       } catch (error) {
         if (options.signal?.aborted) {
@@ -264,6 +270,9 @@ export class LlmService {
     }
 
     if (response.status === 429 || response.status >= 500) {
+      // Release the failed response's connection before retrying — otherwise
+      // abandoned bodies hold sockets open until timeout/GC under load.
+      await response.body?.cancel().catch(() => undefined);
       await delay(500);
       try {
         return await attempt();
