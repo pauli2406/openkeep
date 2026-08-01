@@ -43,7 +43,7 @@ export class LlmAnswerProvider implements AnswerProvider {
       return this.extractiveProvider.answer(input);
     }
 
-    const context = this.buildContext(input.results);
+    const context = this.buildContext(input.results, input.maxCitations);
 
     if (context.citations.length === 0) {
       this.logger.warn("No chunks passed score threshold — all results filtered out");
@@ -99,7 +99,7 @@ export class LlmAnswerProvider implements AnswerProvider {
       return;
     }
 
-    const context = this.buildContext(input.results);
+    const context = this.buildContext(input.results, input.maxCitations);
 
     if (context.citations.length === 0) {
       this.logger.warn("No chunks passed score threshold for streaming — all results filtered out");
@@ -157,7 +157,10 @@ export class LlmAnswerProvider implements AnswerProvider {
   // Internals
   // ---------------------------------------------------------------------------
 
-  private buildContext(results: SemanticSearchResult[]): {
+  private buildContext(
+    results: SemanticSearchResult[],
+    maxCitations: number,
+  ): {
     prompt: string;
     citations: AnswerCitation[];
     lowConfidence: boolean;
@@ -212,15 +215,20 @@ export class LlmAnswerProvider implements AnswerProvider {
 
     // Dedupe up front so excerpt numbers in the prompt and citation indices stay
     // aligned: [n] in the model's answer resolves to citations[index === n] exactly.
-    const deduped = selected.filter(
-      (entry, position, all) =>
-        position ===
-        all.findIndex(
-          (candidate) =>
-            candidate.document.id === entry.document.id &&
-            candidate.chunk.chunkIndex === entry.chunk.chunkIndex,
-        ),
-    );
+    const deduped = selected
+      .filter(
+        (entry, position, all) =>
+          position ===
+          all.findIndex(
+            (candidate) =>
+              candidate.document.id === entry.document.id &&
+              candidate.chunk.chunkIndex === entry.chunk.chunkIndex,
+          ),
+      )
+      // Number at most maxCitations excerpts: every index the model can cite must
+      // be resolvable in the returned citation payload, otherwise clients render a
+      // raw, unauditable marker such as [7] for a request that returns 6 citations.
+      .slice(0, Math.max(1, maxCitations));
 
     // Build numbered citations and sections grouped by document
     const citations: AnswerCitation[] = [];

@@ -21,7 +21,7 @@ export const linkifyAnswerCitations = (
     }
   }
 
-  let result = text.replace(/\[(\d{1,2})\]/g, (marker, digits: string) => {
+  let result = text.replace(/\[(\d+)\]/g, (marker, digits: string) => {
     const citation = byIndex.get(Number(digits));
     if (!citation) {
       return marker;
