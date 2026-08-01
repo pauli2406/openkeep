@@ -553,14 +553,19 @@ export class AgenticDocumentIntelligenceService {
     const typeSpecificExtractor = getTypeSpecificExtractor(routing.documentType);
 
     // Seed with the parse provider's annotation hint (confidence-aware merge, same
-    // rules as the LLM merge). When the annotation already covers every required
+    // rules as the LLM merge). When the annotation confidently covers every required
     // field for the routed type, the extraction LLM round-trip is skipped.
     const fallback = this.seedWithAnnotationHint(input, deterministic);
     if (
       input.parsed.preExtracted &&
-      this.missingRequiredFields(routing, fallback.fields).length === 0
+      this.missingRequiredFields(routing, fallback.fields, fallback.fieldConfidence).length === 0
     ) {
-      return fallback;
+      // The type-specific refiner must still run: for giftcards, portfolio
+      // statements, trade confirmations, and tax statements it replaces generic
+      // amounts with the preferred value (available balance, net settlement, ...).
+      const refinedFields =
+        typeSpecificExtractor.refineFields?.(input, fallback.fields) ?? fallback.fields;
+      return { ...fallback, fields: refinedFields };
     }
 
     const providerResult = await this.llmService.completeWithFallback(
@@ -686,6 +691,7 @@ export class AgenticDocumentIntelligenceService {
   private missingRequiredFields(
     routing: RoutingResult,
     fields: Record<string, unknown>,
+    fieldConfidence: Record<string, number> = {},
   ): string[] {
     return getDocumentTypeDefinition(routing.documentType).requiredFields.filter(
       (requiredField) => {
@@ -693,7 +699,14 @@ export class AgenticDocumentIntelligenceService {
         // the resolved name under "correspondentName".
         const fieldKey = requiredField === "correspondent" ? "correspondentName" : requiredField;
         const value = fields[fieldKey];
-        return value === null || value === undefined || value === "";
+        if (value === null || value === undefined || value === "") {
+          return true;
+        }
+        // A value the provider itself scored as unreliable must not make the
+        // annotation look complete — it would suppress the extraction fallback
+        // and persist a fact the provider flagged as uncertain.
+        const confidence = fieldConfidence[fieldKey];
+        return typeof confidence === "number" && confidence < 0.5;
       },
     );
   }
