@@ -124,6 +124,23 @@ Use it to ask focused questions about one document, for example:
 - What obligations are described in this contract?
 
 OpenKeep streams the answer and stores a persisted Q&A history for that document.
+Each question is answered on its own — ask complete questions rather than referring back
+to a previous answer.
+
+### When source excerpts are shown
+
+For long documents OpenKeep selects the passages most relevant to your question and
+lists them as source cards you can open.
+
+No source cards appear in two cases, which the answer text itself distinguishes:
+
+- **Short documents** (most letters and invoices): the complete document text is sent to
+  the model, so separate excerpts would just repeat it. The answer references pages
+  inline, for example "on page 2".
+- **Long documents without a usable search index**: only the beginning of the document is
+  used. The answer says so explicitly. Treat such answers with care — a fact further back
+  in the document may have been missed. Configuring an embedding provider and letting the
+  document finish indexing restores full retrieval.
 
 ## Clearing Q&A History
 

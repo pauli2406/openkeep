@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SemanticSearchResult } from "@openkeep/types";
 import { LlmAnswerProvider } from "../src/processing/llm-answer.provider";
+import {
+  DOCUMENT_QA_FULL_TEXT_MAX_CHARS,
+  shouldUseFullDocumentContext,
+} from "../src/processing/relevance.constants";
 
 const makeResult = (
   chunkScores: number[],
@@ -196,5 +200,29 @@ describe("LlmAnswerProvider", () => {
 
     expect(result.status).toBe("answered");
     expect(result.citations).toHaveLength(1);
+  });
+});
+
+describe("shouldUseFullDocumentContext", () => {
+  it("uses full-text mode for documents within the budget", () => {
+    expect(shouldUseFullDocumentContext(3_000, 4)).toBe(true);
+  });
+
+  it("keeps retrieval for large documents and rejects empty documents", () => {
+    expect(shouldUseFullDocumentContext(DOCUMENT_QA_FULL_TEXT_MAX_CHARS + 1, 15)).toBe(false);
+    expect(shouldUseFullDocumentContext(0, 0)).toBe(false);
+  });
+
+  it("counts per-chunk serialization overhead and heading length", () => {
+    // Raw text alone fits, but 50 chunks add labels/separators on top.
+    expect(shouldUseFullDocumentContext(DOCUMENT_QA_FULL_TEXT_MAX_CHARS - 500, 50)).toBe(false);
+    // Long headings also count toward the assembled prompt.
+    expect(shouldUseFullDocumentContext(DOCUMENT_QA_FULL_TEXT_MAX_CHARS - 400, 4, 2_000)).toBe(
+      false,
+    );
+  });
+
+  it("caps full-text mode by chunk count regardless of length", () => {
+    expect(shouldUseFullDocumentContext(500, 200)).toBe(false);
   });
 });

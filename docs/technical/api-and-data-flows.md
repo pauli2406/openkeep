@@ -164,6 +164,19 @@ Relevant document-level endpoints:
 
 This supports document-local AI workflows separate from archive-wide search answers.
 
+Per-document Q&A context selection:
+
+- documents whose assembled context fits ~12k chars are answered in full-text mode
+  (the budget counts chunk text, heading length, and per-chunk excerpt labels and
+  separators, and caps the chunk count, so many short chunks cannot slip past it): ALL
+  chunks with page labels go into the prompt and vector retrieval is skipped, so a
+  retrieval miss cannot hide the answer in a short letter or invoice (the
+  provider-agnostic equivalent of Mistral's Document QnA)
+- larger documents use vector top-6 chunk retrieval; without usable embeddings they
+  fall back to the first chunks by position (clearly labeled in the prompt)
+- only vector-retrieved chunks surface as scored citations; full-text and positional
+  answers cite pages inline instead
+
 ## Taxonomy Surface
 
 Relevant endpoints:
