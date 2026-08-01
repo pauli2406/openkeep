@@ -462,6 +462,71 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(completeMock).toHaveBeenCalledTimes(2);
   });
 
+  it("still calls the extraction LLM when required fields came from deterministic parsing", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        fields: { referenceNumber: "R-2026-042" },
+        fieldConfidence: { referenceNumber: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput(
+      ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    // Valid annotation, but it contributes no fields of its own.
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.93,
+      title: "Stromrechnung",
+      summary: null,
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // Extraction must not be skipped just because deterministic parsing filled in.
+    expect(completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops annotation fields that are irrelevant for the routed document type", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["letter"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+
+    const input = createInput("Ein einfaches Anschreiben ohne Betraege.", "brief.pdf");
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "generic_letter",
+      documentTypeConfidence: 0.95,
+      title: "Anschreiben",
+      summary: null,
+      // expiryDate is in the generic annotation schema but not relevant here.
+      fields: { expiryDate: "31.12.2030", correspondentName: "Stadtwerke" },
+      fieldConfidence: { expiryDate: 0.9, correspondentName: 0.9 },
+    };
+
+    const result = await service.extract(input);
+    expect(result.expiryDate).toBeNull();
+  });
+
   it("ignores low-confidence annotation classifications for routing", async () => {
     const service = createService({ correspondentName: "Stadtwerke" });
 

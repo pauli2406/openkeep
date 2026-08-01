@@ -38,6 +38,8 @@ type AgentProvider = LlmProviderId | "deterministic" | "mistral-annotation";
 
 /** Minimum annotation classification confidence to skip the routing LLM call. */
 const ANNOTATION_ROUTE_MIN_CONFIDENCE = 0.7;
+/** Confidence attached to values produced by deterministic parsing/refinement. */
+const DETERMINISTIC_FIELD_CONFIDENCE = 0.7;
 
 interface RoutingResult {
   documentType: SupportedDocumentType;
@@ -555,9 +557,20 @@ export class AgenticDocumentIntelligenceService {
     // Seed with the parse provider's annotation hint (confidence-aware merge, same
     // rules as the LLM merge). When the annotation confidently covers every required
     // field for the routed type, the extraction LLM round-trip is skipped.
-    const fallback = this.seedWithAnnotationHint(input, deterministic);
+    const { result: fallback, annotationKeys } = this.seedWithAnnotationHint(
+      input,
+      deterministic,
+      routing,
+    );
+    // Skip the extraction call only when the ANNOTATION supplied every required
+    // field. Judging by the merged result would also skip when deterministic
+    // parsing happened to fill the slots and the annotation contributed nothing,
+    // keeping a first-match value the typed pass would have corrected.
+    const requiredKeys = this.requiredFieldKeys(routing);
+    const annotationCoversRequired =
+      requiredKeys.length > 0 && requiredKeys.every((key) => annotationKeys.includes(key));
     if (
-      input.parsed.preExtracted &&
+      annotationCoversRequired &&
       this.missingRequiredFields(routing, fallback.fields, fallback.fieldConfidence).length === 0
     ) {
       // The type-specific refiner must still run: for giftcards, portfolio
@@ -565,7 +578,7 @@ export class AgenticDocumentIntelligenceService {
       // amounts with the preferred value (available balance, net settlement, ...).
       const refinedFields =
         typeSpecificExtractor.refineFields?.(input, fallback.fields) ?? fallback.fields;
-      return { ...fallback, fields: refinedFields };
+      return this.applyFieldRefinement(input, fallback, refinedFields);
     }
 
     const providerResult = await this.llmService.completeWithFallback(
@@ -628,19 +641,17 @@ export class AgenticDocumentIntelligenceService {
       { fields: fallback.fields, fieldConfidence: fallback.fieldConfidence },
       { fields: parsedFields, fieldConfidence: parsedFieldConfidence },
     );
-    const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
-
     // Only keys the LLM actually won get LLM provenance; deterministic winners keep
     // their deterministic_parse provenance (page/line/snippet).
     const llmWonFields = Object.fromEntries(
       merged.llmWonKeys
-        .filter((key) => refinedFields[key] !== undefined)
-        .map((key) => [key, refinedFields[key]]),
+        .filter((key) => merged.fields[key] !== undefined)
+        .map((key) => [key, merged.fields[key]]),
     );
 
-    return {
+    const mergedResult: ExtractionResult = {
       ...fallback,
-      fields: refinedFields,
+      fields: merged.fields,
       fieldConfidence: merged.fieldConfidence,
       fieldProvenance: this.buildFieldProvenance(
         input,
@@ -651,20 +662,43 @@ export class AgenticDocumentIntelligenceService {
       provider: providerResult.provider ?? fallback.provider,
       model: providerResult.model,
     };
+
+    const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
+    return this.applyFieldRefinement(input, mergedResult, refinedFields);
+  }
+
+  /** Required registry fields mapped to the keys used in extraction results. */
+  private requiredFieldKeys(routing: RoutingResult): string[] {
+    return getDocumentTypeDefinition(routing.documentType).requiredFields.map((field) =>
+      field === "correspondent" ? "correspondentName" : field,
+    );
   }
 
   private seedWithAnnotationHint(
     input: MetadataExtractionInput,
     deterministic: ExtractionResult,
-  ): ExtractionResult {
+    routing: RoutingResult,
+  ): { result: ExtractionResult; annotationKeys: string[] } {
     const preExtracted = input.parsed.preExtracted;
     if (!preExtracted || Object.keys(preExtracted.fields).length === 0) {
-      return deterministic;
+      return { result: deterministic, annotationKeys: [] };
+    }
+
+    // The annotation schema is generic (the union of every type's fields), so a
+    // generic letter can come back with an expiry date or holder name. Restrict
+    // the seed to what the routed type actually declares as relevant, matching
+    // what the type-specific extraction schema could have produced.
+    const relevantFields = new Set(getRelevantFieldNames(routing.documentType));
+    const annotationFields = Object.fromEntries(
+      Object.entries(preExtracted.fields).filter(([key]) => relevantFields.has(key)),
+    );
+    if (Object.keys(annotationFields).length === 0) {
+      return { result: deterministic, annotationKeys: [] };
     }
 
     const merged = this.mergeExtractedFields(
       { fields: deterministic.fields, fieldConfidence: deterministic.fieldConfidence },
-      { fields: preExtracted.fields, fieldConfidence: preExtracted.fieldConfidence },
+      { fields: annotationFields, fieldConfidence: preExtracted.fieldConfidence },
     );
 
     const annotationWonFields = Object.fromEntries(
@@ -674,17 +708,64 @@ export class AgenticDocumentIntelligenceService {
     );
 
     return {
-      ...deterministic,
-      fields: merged.fields,
-      fieldConfidence: merged.fieldConfidence,
+      result: {
+        ...deterministic,
+        fields: merged.fields,
+        fieldConfidence: merged.fieldConfidence,
+        fieldProvenance: this.buildFieldProvenance(
+          input,
+          annotationWonFields,
+          "mistral-annotation",
+          deterministic.fieldProvenance,
+        ),
+        provider: "mistral-annotation",
+        model: preExtracted.model,
+      },
+      // Keys the annotation actually supplied a value for — not merely the ones
+      // that won the merge. A field the annotation provided but that lost to an
+      // equally good deterministic value is still covered by the annotation.
+      annotationKeys: Object.entries(annotationFields)
+        .filter(([, value]) => value !== null && value !== undefined && value !== "")
+        .map(([key]) => key),
+    };
+  }
+
+  /**
+   * Applies a type-specific refiner and rebuilds metadata for the values it
+   * changed. Without this the persisted confidence and provenance would still
+   * describe the pre-refinement value (a giftcard's face value instead of the
+   * available balance, for example).
+   */
+  private applyFieldRefinement(
+    input: MetadataExtractionInput,
+    extraction: ExtractionResult,
+    refinedFields: Record<string, unknown>,
+  ): ExtractionResult {
+    const changedKeys = Object.keys(refinedFields).filter(
+      (key) => refinedFields[key] !== extraction.fields[key],
+    );
+    if (changedKeys.length === 0) {
+      return { ...extraction, fields: refinedFields };
+    }
+
+    const changedValues = Object.fromEntries(changedKeys.map((key) => [key, refinedFields[key]]));
+    const fieldConfidence = { ...extraction.fieldConfidence };
+    for (const key of changedKeys) {
+      // Refined values come from deterministic document-text rules, so they carry
+      // the deterministic confidence rather than the replaced value's score.
+      fieldConfidence[key] = DETERMINISTIC_FIELD_CONFIDENCE;
+    }
+
+    return {
+      ...extraction,
+      fields: refinedFields,
+      fieldConfidence,
       fieldProvenance: this.buildFieldProvenance(
         input,
-        annotationWonFields,
-        "mistral-annotation",
-        deterministic.fieldProvenance,
+        changedValues,
+        "deterministic",
+        extraction.fieldProvenance,
       ),
-      provider: "mistral-annotation",
-      model: preExtracted.model,
     };
   }
 
@@ -986,7 +1067,7 @@ export class AgenticDocumentIntelligenceService {
         continue;
       }
       const evidence = this.findEvidenceMatch(input, value);
-      fieldConfidence[key] = 0.7;
+      fieldConfidence[key] = DETERMINISTIC_FIELD_CONFIDENCE;
       fieldProvenance[key] = {
         source: "deterministic_parse",
         provider: input.parsed.provider,

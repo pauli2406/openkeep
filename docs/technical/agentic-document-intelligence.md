@@ -85,8 +85,12 @@ The graph shape is unchanged; nodes consume the hint conditionally:
   least 0.7 (provider recorded as `mistral-annotation`)
 - title/summary skips its LLM call when the annotation carries a title
 - typed extraction seeds from the annotation fields via the same confidence-aware merge
-  used for LLM values (provenance `provider_annotation`) and only calls the LLM when
-  required fields for the routed type are still missing
+  used for LLM values (provenance `provider_annotation`). The seed is filtered to the
+  routed type's relevant fields, so the generic annotation schema cannot inject values
+  that type could never produce. The LLM call is skipped only when the annotation
+  itself supplied every required field with sufficient confidence — deterministic
+  parsing filling the gaps does not count. Type-specific refiners still run afterwards,
+  and confidence/provenance are rebuilt for the values they replace
 - correspondent resolution, tagging, and validation are unchanged — they need archive
   context (candidate lists, deterministic seeds) the annotation cannot provide
 
