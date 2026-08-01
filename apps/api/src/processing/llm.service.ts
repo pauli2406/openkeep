@@ -270,14 +270,19 @@ export class LlmService {
     }
 
     if (response.status === 429 || response.status >= 500) {
-      // Release the failed response's connection before retrying — otherwise
-      // abandoned bodies hold sockets open until timeout/GC under load.
-      await response.body?.cancel().catch(() => undefined);
+      // Consume the failed response before retrying — otherwise abandoned
+      // bodies hold sockets open until timeout/GC under load. The text is kept
+      // so a failed retry can still surface the original error detail (the
+      // caller reads response.text() for its log message).
+      const failedBody = await response.text().catch(() => "");
       await delay(500);
       try {
         return await attempt();
       } catch {
-        return response;
+        return new Response(failedBody, {
+          status: response.status,
+          statusText: response.statusText,
+        });
       }
     }
 
