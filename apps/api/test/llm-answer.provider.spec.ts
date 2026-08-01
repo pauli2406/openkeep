@@ -188,6 +188,33 @@ describe("LlmAnswerProvider", () => {
     );
   });
 
+  it("numbers excerpts in the prompt and mirrors the index on citations", async () => {
+    const llmService = makeLlmService();
+    const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.8, 0.6])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.citations.map((c) => c.index)).toEqual([1, 2]);
+
+    const completeMock = (
+      llmService as { completeWithFallback: ReturnType<typeof vi.fn> }
+    ).completeWithFallback;
+    const userMessage = completeMock.mock.calls[0][0].messages.find(
+      (m: { role: string }) => m.role === "user",
+    );
+    expect(userMessage.content).toContain("[Excerpt 1,");
+    expect(userMessage.content).toContain("[Excerpt 2,");
+    const systemMessage = completeMock.mock.calls[0][0].messages.find(
+      (m: { role: string }) => m.role === "system",
+    );
+    expect(systemMessage.content).toContain("bracketed excerpt number");
+  });
+
   it("respects an env-overridden threshold", async () => {
     const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub(0.2));
 
@@ -200,6 +227,33 @@ describe("LlmAnswerProvider", () => {
 
     expect(result.status).toBe("answered");
     expect(result.citations).toHaveLength(1);
+  });
+});
+
+describe("LlmAnswerProvider citation limits", () => {
+  it("numbers at most maxCitations excerpts so every cited index resolves", async () => {
+    const llmService = makeLlmService();
+    const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      results: [makeResult([0.9, 0.85, 0.8, 0.75, 0.7])],
+      maxCitations: 2,
+      responseLanguage: "en",
+    });
+
+    expect(result.citations).toHaveLength(2);
+    expect(result.citations.map((c) => c.index)).toEqual([1, 2]);
+
+    const completeMock = (
+      llmService as { completeWithFallback: ReturnType<typeof vi.fn> }
+    ).completeWithFallback;
+    const messages = completeMock.mock.calls[0][0].messages;
+    const userMessage = messages.find((m: { role: string }) => m.role === "user");
+    // The prompt must not contain excerpt numbers the client cannot resolve.
+    expect(userMessage.content).toContain("[Excerpt 1,");
+    expect(userMessage.content).toContain("[Excerpt 2,");
+    expect(userMessage.content).not.toContain("[Excerpt 3,");
   });
 });
 

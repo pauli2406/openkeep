@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import {
   Search as SearchIcon,
   Loader2,
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   BrainCircuit,
@@ -43,13 +44,21 @@ function SearchPage() {
   const lastStreamedQuery = useRef<string>("");
   const [panelExpanded, setPanelExpanded] = useState(true);
 
-  // Auto-trigger AI answer whenever the search term changes
+  // Auto-trigger AI answer whenever the search term changes. Debounced so rapid
+  // URL-param changes (e.g. future typeahead navigation) cannot fire one paid
+  // LLM call per keystroke; identical consecutive queries are skipped.
   useEffect(() => {
-    if (searchTerm.length > 0 && lastStreamedQuery.current !== searchTerm) {
+    if (searchTerm.length === 0 || lastStreamedQuery.current === searchTerm) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
       lastStreamedQuery.current = searchTerm;
       setPanelExpanded(true);
       answerStream.startStream(searchTerm);
-    }
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [searchTerm, answerStream.startStream]);
 
   function handleSearchSubmit(e: React.FormEvent) {
@@ -344,6 +353,13 @@ function SearchPage() {
                       <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
                     )}
                   </div>
+                  )}
+
+                  {answerStream.lowConfidence && answerStream.status === "done" && (
+                    <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      This answer is based on weak evidence — verify it against the cited sources.
+                    </p>
                   )}
 
                   {answerStream.structuredData && (

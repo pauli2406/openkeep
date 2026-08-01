@@ -34,7 +34,6 @@ import {
 } from "@/lib/explorer";
 import type {
   DashboardInsightsResponse,
-  SemanticSearchResponse,
   SemanticSearchResult,
 } from "@openkeep/types";
 
@@ -169,23 +168,10 @@ export function Omnibar() {
     [facetsQuery.data, insightsQuery.data],
   );
 
-  // Semantic search for document results
-  const searchQuery = useQuery({
-    queryKey: ["omnibar", "search", query],
-    queryFn: async () => {
-      const { data, error } = await api.POST("/api/search/semantic", {
-        body: {
-          query,
-          page: 1,
-          pageSize: 6,
-          maxChunkMatches: 3,
-        },
-      });
-      if (error) throw new Error("Search failed");
-      return data as unknown as SemanticSearchResponse;
-    },
-    enabled: query.length > 0 && (screen === "searching" || screen === "results"),
-  });
+  // Document results come from the answer stream's search-results SSE event —
+  // the previous separate POST /api/search/semantic embedded and retrieved the
+  // same query a second time on every submit.
+  const streamedResults = answerStream.searchResults;
 
   // ─── Open / Close ───
 
@@ -346,7 +332,7 @@ export function Omnibar() {
               <CitationPreviewPane
                 citation={citation}
                 answerStream={answerStream}
-                searchResults={searchQuery.data?.items ?? []}
+                searchResults={streamedResults}
                 onClose={() => {
                   setCitation(null);
                   setScreen("results");
@@ -405,8 +391,8 @@ export function Omnibar() {
                     <ResultsPane
                       query={query}
                       answerStream={answerStream}
-                      searchResults={searchQuery.data?.items ?? []}
-                      searchLoading={searchQuery.isLoading}
+                      searchResults={streamedResults}
+                      searchLoading={answerStream.status === "searching"}
                       onCitationClick={openCitation}
                       onFollowUp={submitQuery}
                       onRetry={() => answerStream.startStream(query)}

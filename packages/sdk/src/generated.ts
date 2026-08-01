@@ -3185,6 +3185,7 @@ export interface components {
                 pageTo: number | null;
                 quote: string;
                 score: number;
+                index?: number;
             }[];
             results: {
                 document: {
