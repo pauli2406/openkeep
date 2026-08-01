@@ -1805,6 +1805,33 @@ export class DocumentsService {
       score: number;
     }>,
   ) {
+    // Legacy clients still POST the finished answer via the deprecated
+    // /:id/qa-history endpoint AFTER the server already persisted it at stream
+    // end. Deduplicate identical recent turns so mixed-version deployments do
+    // not create and replay duplicate rows.
+    const existing = await this.databaseService.pool.query<{ id: string; created_at: string }>(
+      `SELECT id, created_at
+       FROM document_qa_history
+       WHERE document_id = $1
+         AND user_id = $2
+         AND question = $3
+         AND answer = $4
+         AND created_at > now() - interval '10 minutes'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [documentId, userId, question, answer],
+    );
+
+    if (existing.rows[0]) {
+      return {
+        id: existing.rows[0].id,
+        question,
+        answer,
+        citations,
+        createdAt: existing.rows[0].created_at,
+      };
+    }
+
     const result = await this.databaseService.pool.query<{ id: string; created_at: string }>(
       `INSERT INTO document_qa_history (document_id, user_id, question, answer, citations)
        VALUES ($1, $2, $3, $4, $5::jsonb)
