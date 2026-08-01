@@ -1530,7 +1530,7 @@ export class DocumentsService {
     const totalChunkChars = Number(chunkStats.rows[0]?.total_chars ?? 0);
     const headingChars = Number(chunkStats.rows[0]?.heading_chars ?? 0);
     const chunkCount = Number(chunkStats.rows[0]?.chunk_count ?? 0);
-    const fullTextMode = shouldUseFullDocumentContext(
+    let fullTextMode = shouldUseFullDocumentContext(
       totalChunkChars,
       chunkCount,
       headingChars,
@@ -1561,8 +1561,29 @@ export class DocumentsService {
     };
 
     if (fullTextMode) {
-      contextChunks = await loadChunksByPosition();
-    } else if (
+      // The aggregate above and this load are separate statements, so a reprocess
+      // in between can swap a small chunk set for a large one. Revalidate the
+      // rows we actually loaded and fall back to bounded retrieval when they no
+      // longer fit the budget.
+      const loaded = await loadChunksByPosition();
+      const loadedChars = loaded.reduce((total, chunk) => total + chunk.text.length, 0);
+      const loadedHeadingChars = loaded.reduce(
+        (total, chunk) => total + (chunk.heading?.length ?? 0),
+        0,
+      );
+
+      if (shouldUseFullDocumentContext(loadedChars, loaded.length, loadedHeadingChars)) {
+        contextChunks = loaded;
+      } else {
+        this.logger.warn(
+          `Document ${documentId} changed between context sizing and loading; using bounded retrieval`,
+        );
+        fullTextMode = false;
+      }
+    }
+
+    if (
+      !fullTextMode &&
       this.processingService.isSemanticIndexingConfigured() &&
       document.embeddingStatus === "ready"
     ) {
