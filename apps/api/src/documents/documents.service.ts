@@ -1109,10 +1109,11 @@ export class DocumentsService {
       [...params, queryText],
     );
 
-    // Top-K over the embedding table first (HNSW-shaped: ORDER BY distance LIMIT n),
-    // then aggregate per document. The previous MIN(...) GROUP BY over every embedding
-    // row materialized the full candidate set on each query and could never use the
-    // vector index as the archive grows.
+    // Top-K over the embedding table (bounded ORDER BY distance LIMIT n instead of
+    // aggregating every embedding row), then aggregate per document. Document
+    // filters apply INSIDE the candidate selection: filtering after the limit would
+    // discard eligible documents whenever 200 closer chunks belong to excluded
+    // documents (e.g. a selective year/correspondent filter).
     const semanticRows = await this.databaseService.pool.query<{
       id: string;
       distance: string;
@@ -1121,13 +1122,13 @@ export class DocumentsService {
        FROM (
          SELECT e.document_id, (e.embedding <=> $${params.length + 1}::halfvec) AS distance
          FROM document_chunk_embeddings e
+         INNER JOIN documents d ON d.id = e.document_id
          WHERE e.provider = $${params.length + 2}::embedding_provider
            AND e.model = $${params.length + 3}
+           AND ${whereSql}
          ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
          LIMIT 200
        ) t
-       INNER JOIN documents d ON d.id = t.document_id
-       WHERE ${whereSql}
        GROUP BY t.document_id
        ORDER BY MIN(t.distance) ASC, t.document_id DESC`,
       [...params, embeddingLiteral, provider, model],
