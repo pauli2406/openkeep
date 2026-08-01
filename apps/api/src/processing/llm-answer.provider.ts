@@ -17,6 +17,9 @@ import {
   buildInsufficientEvidenceMessage,
 } from "./relevance.constants";
 
+/** Fallback when a caller omits the citation limit (matches the API schema default). */
+const DEFAULT_MAX_CITATIONS = 6;
+
 @Injectable()
 export class LlmAnswerProvider implements AnswerProvider {
   private readonly logger = new Logger(LlmAnswerProvider.name);
@@ -159,7 +162,7 @@ export class LlmAnswerProvider implements AnswerProvider {
 
   private buildContext(
     results: SemanticSearchResult[],
-    maxCitations: number,
+    maxCitations: number | undefined,
   ): {
     prompt: string;
     citations: AnswerCitation[];
@@ -228,7 +231,14 @@ export class LlmAnswerProvider implements AnswerProvider {
       // Number at most maxCitations excerpts: every index the model can cite must
       // be resolvable in the returned citation payload, otherwise clients render a
       // raw, unauditable marker such as [7] for a request that returns 6 citations.
-      .slice(0, Math.max(1, maxCitations));
+      // Callers that omit the limit keep the default rather than losing every
+      // excerpt to a NaN slice.
+      .slice(
+        0,
+        typeof maxCitations === "number" && Number.isFinite(maxCitations) && maxCitations > 0
+          ? Math.floor(maxCitations)
+          : DEFAULT_MAX_CITATIONS,
+      );
 
     // Build numbered citations and sections grouped by document
     const citations: AnswerCitation[] = [];
