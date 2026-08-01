@@ -412,7 +412,16 @@ describe("AgenticDocumentIntelligenceService", () => {
         referenceNumber: "R-2026-042",
         correspondentName: "Stadtwerke",
       },
-      fieldConfidence: { amount: 0.9, currency: 0.9, issueDate: 0.9, dueDate: 0.9 },
+      // The annotation schema requires a confidence per field; unscored values no
+      // longer count as coverage.
+      fieldConfidence: {
+        amount: 0.9,
+        currency: 0.9,
+        issueDate: 0.9,
+        dueDate: 0.9,
+        referenceNumber: 0.9,
+        correspondentName: 0.9,
+      },
     };
 
     const result = await service.extract(input);
@@ -542,6 +551,37 @@ describe("AgenticDocumentIntelligenceService", () => {
     // be persisted in the wrong language, so the LLM path must run.
     (input as any).preferredLanguage = "en";
     (input.parsed as any).language = "de";
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.95,
+      title: "Stromrechnung Mai 2026",
+      summary: "Rechnung der Stadtwerke.",
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // title/summary + extraction + tagging — the annotation title was not reused.
+    expect(completeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("regenerates title and summary when the parse provider reports no language", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput("Rechnung der Stadtwerke", "rechnung.pdf");
+    // Mistral OCR never reports a language, so an unknown value must not be
+    // treated as a confirmed match for the configured processing language.
+    (input.parsed as any).language = null;
     (input.parsed as any).preExtracted = {
       source: "mistral-document-annotation",
       model: "mistral-ocr-latest",

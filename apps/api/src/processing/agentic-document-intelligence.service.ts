@@ -735,8 +735,11 @@ export class AgenticDocumentIntelligenceService {
           if (value === null || value === undefined || value === "") {
             return false;
           }
+          // An explicit score is required: the annotation schema permits null
+          // confidences (dropped during parsing), and treating those as usable
+          // would skip typed extraction for values the provider never rated.
           const confidence = preExtracted.fieldConfidence[key];
-          return confidence === undefined || confidence >= ANNOTATION_FIELD_MIN_CONFIDENCE;
+          return typeof confidence === "number" && confidence >= ANNOTATION_FIELD_MIN_CONFIDENCE;
         })
         .map(([key]) => key),
     };
@@ -1249,7 +1252,10 @@ export class AgenticDocumentIntelligenceService {
   private annotationMatchesPreferredLanguage(input: MetadataExtractionInput): boolean {
     const documentLanguage = input.parsed.language?.slice(0, 2).toLowerCase();
     if (!documentLanguage) {
-      return true;
+      // Mistral OCR never reports a language, so an unknown value must NOT count
+      // as a confirmed match — otherwise every real annotation would bypass the
+      // language-aware path and persist provider-language titles.
+      return false;
     }
 
     const preferred = input.preferredLanguage === "de" ? "de" : "en";
