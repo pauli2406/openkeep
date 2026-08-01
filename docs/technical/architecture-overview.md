@@ -131,6 +131,26 @@ The active entry point is `HybridMetadataExtractor`, which routes to the agentic
 - `gemini`
 - `mistral`
 
+## Ownership Model
+
+OpenKeep is a single-owner system today, and the ownership boundary reflects that:
+
+- every document row carries `owner_user_id` (indexed; no migration was needed to
+  introduce scoping)
+- all **user-facing** query surfaces are owner-scoped via
+  `buildDocumentFilterQuery(filters, ownerUserId)` in
+  `apps/api/src/documents/documents.service.ts`: document listing, keyword search,
+  semantic search, archive answer/stream paths, and the per-document Q&A chunk queries
+  (joined against `documents`)
+- **background jobs** (explorer aggregation, correspondent intelligence) deliberately
+  run unscoped: they operate on the whole single-owner archive and execute without an
+  authenticated principal
+
+Limitation: this is a defense-in-depth measure for the current single-owner design,
+not a complete multi-tenancy model. Before a second user can ever exist, the unscoped
+background surfaces (and taxonomy/facet queries) must be made owner-aware as well —
+do not treat the current state as sufficient isolation for multi-user deployments.
+
 ## Review Model
 
 OpenKeep separates processing from review.
