@@ -112,11 +112,16 @@ describe("LlmAnswerProvider", () => {
   });
 
   it("reports insufficient evidence when the stream completes without any token", async () => {
-    const emptyStream = (async function* () {
+    // Fresh generator per call; mocked for both stream entry points so the test
+    // holds on layers where the provider uses streamWithFallback.
+    const makeEmptyStream = async function* () {
       yield { text: "", done: true };
-    })();
+    };
     const provider = new LlmAnswerProvider(
-      makeLlmService({ stream: vi.fn().mockReturnValue(emptyStream) }),
+      makeLlmService({
+        stream: vi.fn(makeEmptyStream),
+        streamWithFallback: vi.fn(makeEmptyStream),
+      }),
       extractiveStub,
       configStub(),
     );
