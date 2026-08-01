@@ -259,25 +259,33 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
       throw new Error("Mistral file upload returned no file id");
     }
 
-    const urlResponse = await fetchWithTimeout(
-      `${baseUrl}/v1/files/${uploaded.id}/url`,
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${apiKey}` },
-      },
-      timeoutMs,
-    );
+    // From here on the file exists at Mistral. If acquiring the signed URL fails,
+    // the caller never learns the file id — delete it here so transient failures
+    // do not leave potentially sensitive documents retained upstream.
+    try {
+      const urlResponse = await fetchWithTimeout(
+        `${baseUrl}/v1/files/${uploaded.id}/url`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${apiKey}` },
+        },
+        timeoutMs,
+      );
 
-    if (!urlResponse.ok) {
-      throw new Error(`Mistral signed-url request failed with status ${urlResponse.status}`);
+      if (!urlResponse.ok) {
+        throw new Error(`Mistral signed-url request failed with status ${urlResponse.status}`);
+      }
+
+      const signed = (await urlResponse.json()) as { url?: string };
+      if (!signed.url) {
+        throw new Error("Mistral signed-url response contained no url");
+      }
+
+      return { fileId: uploaded.id, url: signed.url };
+    } catch (error) {
+      await this.deleteUploadedFile(uploaded.id, apiKey, baseUrl, timeoutMs);
+      throw error;
     }
-
-    const signed = (await urlResponse.json()) as { url?: string };
-    if (!signed.url) {
-      throw new Error("Mistral signed-url response contained no url");
-    }
-
-    return { fileId: uploaded.id, url: signed.url };
   }
 
   private async deleteUploadedFile(
@@ -559,4 +567,3 @@ const readPageConfidence = (page: MistralOcrPage): number | null => {
 
   return null;
 };
->>>>>>> 3401592 (feat(ocr): adopt Mistral OCR parameters — blocks, tables, confidence, Files API)

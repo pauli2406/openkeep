@@ -165,7 +165,7 @@ These control upload size and search pagination limits.
 - `MISTRAL_OCR_BASE_URL`
 - `MISTRAL_OCR_MODEL`
 - `MISTRAL_OCR_INCLUDE_BLOCKS` (default `true`): paragraph blocks with real bounding boxes
-- `MISTRAL_OCR_TABLE_FORMAT` (`markdown` | `html` | `none`, default `markdown`)
+- `MISTRAL_OCR_TABLE_FORMAT` (`markdown` | `none`, default `markdown`)
 - `MISTRAL_OCR_CONFIDENCE_GRANULARITY` (`page` | `word` | `none`, default `page`); pages
   below the confidence threshold flag the document for review (`ocr_low_confidence`)
 - `MISTRAL_OCR_EXTRACT_HEADER_FOOTER` (default `true`): headers/footers become blocks
