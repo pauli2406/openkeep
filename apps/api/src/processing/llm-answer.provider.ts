@@ -113,6 +113,11 @@ export class LlmAnswerProvider implements AnswerProvider {
       maxTokens: 1024,
     });
 
+    // A provider can complete "successfully" without emitting a single token
+    // (e.g. Gemini returning no candidate parts) — that must not surface as an
+    // answered response with a null answer.
+    let emittedText = false;
+
     for await (const chunk of stream) {
       if (chunk.done) {
         if (chunk.error) {
@@ -122,21 +127,24 @@ export class LlmAnswerProvider implements AnswerProvider {
         yield {
           text: "",
           done: true,
-          citations: context.citations.slice(0, input.maxCitations),
-          status: "answered",
+          citations: emittedText ? context.citations.slice(0, input.maxCitations) : [],
+          status: emittedText ? "answered" : "insufficient_evidence",
           lowConfidence: context.lowConfidence,
         };
         return;
       }
 
+      if (chunk.text.length > 0) {
+        emittedText = true;
+      }
       yield { text: chunk.text, done: false };
     }
 
     yield {
       text: "",
       done: true,
-      citations: context.citations.slice(0, input.maxCitations),
-      status: "answered",
+      citations: emittedText ? context.citations.slice(0, input.maxCitations) : [],
+      status: emittedText ? "answered" : "insufficient_evidence",
       lowConfidence: context.lowConfidence,
     };
   }
@@ -182,7 +190,12 @@ export class LlmAnswerProvider implements AnswerProvider {
           `All ${allChunks.length} chunks scored below ANSWER_MIN_CHUNK_SCORE=${minScore}; ` +
             `best=${bestScore.toFixed(3)} is a near miss — answering low-confidence from top ${LOW_CONFIDENCE_TOP_N}.`,
         );
-        selected = allChunks.slice(0, LOW_CONFIDENCE_TOP_N);
+        // Every fallback chunk must itself be within the near-miss margin —
+        // otherwise scores like 0.35/0.05/0.01 would feed two unrelated excerpts
+        // to the model, recreating the confident-wrong-document behavior.
+        selected = allChunks
+          .filter((c) => c.chunk.score >= minScore - LOW_CONFIDENCE_MARGIN)
+          .slice(0, LOW_CONFIDENCE_TOP_N);
         lowConfidence = true;
       } else {
         this.logger.warn(

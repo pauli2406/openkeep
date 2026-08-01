@@ -94,6 +94,48 @@ describe("LlmAnswerProvider", () => {
     expect(result.reasoning).toContain("low retrieval confidence");
   });
 
+  it("keeps only chunks within the near-miss margin in the low-confidence fallback", async () => {
+    const provider = new LlmAnswerProvider(makeLlmService(), extractiveStub, configStub());
+
+    const result = await provider.answer({
+      question: "When does my contract end?",
+      // Only the best chunk is a near miss; 0.05/0.01 are unrelated noise and
+      // must not be fed to the model or surfaced as citations.
+      results: [makeResult([0.35, 0.05, 0.01])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    });
+
+    expect(result.status).toBe("answered");
+    expect(result.citations).toHaveLength(1);
+    expect(result.citations[0]?.score).toBe(0.35);
+  });
+
+  it("reports insufficient evidence when the stream completes without any token", async () => {
+    const emptyStream = (async function* () {
+      yield { text: "", done: true };
+    })();
+    const provider = new LlmAnswerProvider(
+      makeLlmService({ stream: vi.fn().mockReturnValue(emptyStream) }),
+      extractiveStub,
+      configStub(),
+    );
+
+    const chunks = [];
+    for await (const chunk of provider.streamAnswer({
+      question: "When does my contract end?",
+      results: [makeResult([0.8])],
+      maxCitations: 6,
+      responseLanguage: "en",
+    })) {
+      chunks.push(chunk);
+    }
+
+    const done = chunks.at(-1);
+    expect(done?.status).toBe("insufficient_evidence");
+    expect(done?.citations).toEqual([]);
+  });
+
   it("answers normally when chunks pass the threshold", async () => {
     const llmService = makeLlmService();
     const provider = new LlmAnswerProvider(llmService, extractiveStub, configStub());
