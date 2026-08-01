@@ -67,6 +67,7 @@ import { LlmAnswerProvider } from "../processing/llm-answer.provider";
 import { LlmService } from "../processing/llm.service";
 import { dateToIso, normalizeCurrencyCode, parseDateOnly } from "../processing/normalization.util";
 import { ProcessingService } from "../processing/processing.service";
+import { CITATION_MIN_SCORE } from "../processing/relevance.constants";
 import { rankHybridResults } from "../search/semantic-ranking.util";
 
 interface UploadDocumentInput {
@@ -1244,6 +1245,8 @@ export class DocumentsService {
     let fullAnswer = "";
     let citations: unknown[] = [];
     let streamError: string | undefined;
+    let streamStatus: "answered" | "insufficient_evidence" | undefined;
+    let lowConfidence = false;
 
     for await (const chunk of stream) {
       if (chunk.done) {
@@ -1252,6 +1255,12 @@ export class DocumentsService {
         }
         if (chunk.error) {
           streamError = chunk.error;
+        }
+        if (chunk.status) {
+          streamStatus = chunk.status;
+        }
+        if (chunk.lowConfidence) {
+          lowConfidence = true;
         }
 
         break;
@@ -1267,10 +1276,11 @@ export class DocumentsService {
     }
 
     yield `event: done\ndata: ${JSON.stringify({
-      status: fullAnswer.length > 0 ? "answered" : "insufficient_evidence",
+      status: streamStatus ?? (fullAnswer.length > 0 ? "answered" : "insufficient_evidence"),
       route: "semantic",
       fullAnswer: fullAnswer || null,
       citations,
+      lowConfidence,
       structuredData: null,
     })}\n\n`;
   }
@@ -1468,7 +1478,9 @@ export class DocumentsService {
       }
     }
 
-    // Fallback: load raw chunks by position
+    // Fallback: load raw chunks by position. These carry no relevance signal, so
+    // they must not surface as scored citations.
+    let positionalFallback = false;
     if (contextChunks.length === 0) {
       const chunks = await this.databaseService.pool.query<{
         chunk_index: number;
@@ -1485,12 +1497,13 @@ export class DocumentsService {
         [documentId],
       );
 
+      positionalFallback = true;
       contextChunks = chunks.rows.map((row) => ({
         text: row.text,
         heading: row.heading,
         pageFrom: row.page_from,
         pageTo: row.page_to,
-        score: 0.5,
+        score: 0,
       }));
     }
 
@@ -1520,6 +1533,11 @@ export class DocumentsService {
             "Base your answer ONLY on the provided excerpts.",
             "If the excerpts don't contain enough information, say so clearly.",
             "Cite specific pages when referencing information (e.g., 'On page 3...').",
+            ...(positionalFallback
+              ? [
+                  "Note: the excerpts are the beginning of the document, not passages selected for relevance to the question.",
+                ]
+              : []),
             responseLanguage === "de"
               ? "Be concise and direct. Answer in German."
               : "Be concise and direct. Answer in English.",
@@ -1534,17 +1552,20 @@ export class DocumentsService {
       maxTokens: 1024,
     });
 
-    // Send citations first
-    const citations = contextChunks
-      .filter((c) => c.score >= 0.4)
-      .slice(0, 4)
-      .map((chunk, i) => ({
-        chunkIndex: i,
-        pageFrom: chunk.pageFrom,
-        pageTo: chunk.pageTo,
-        quote: chunk.text.replace(/\s+/g, " ").trim().slice(0, 280),
-        score: chunk.score,
-      }));
+    // Send citations first. Positional-fallback chunks carry no relevance signal
+    // and previously surfaced with a fabricated score of 0.5 — emit none instead.
+    const citations = positionalFallback
+      ? []
+      : contextChunks
+          .filter((c) => c.score >= CITATION_MIN_SCORE)
+          .slice(0, 4)
+          .map((chunk, i) => ({
+            chunkIndex: i,
+            pageFrom: chunk.pageFrom,
+            pageTo: chunk.pageTo,
+            quote: chunk.text.replace(/\s+/g, " ").trim().slice(0, 280),
+            score: chunk.score,
+          }));
 
     yield `event: citations\ndata: ${JSON.stringify({ citations })}\n\n`;
 

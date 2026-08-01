@@ -69,6 +69,7 @@ function SearchPage() {
 
   const isStreaming =
     answerStream.status === "searching" || answerStream.status === "streaming";
+  const isInsufficient = answerStream.answerStatus === "insufficient_evidence";
   const hasAnswer =
     answerStream.status === "streaming" || answerStream.status === "done";
   const hasStructuredItems = (answerStream.structuredData?.items.length ?? 0) > 0;
@@ -275,7 +276,9 @@ function SearchPage() {
               {/* Streaming / done answer */}
               {hasAnswer && (
                 <div className="space-y-5">
-                  {/* Answer body — rendered as GFM markdown */}
+                  {/* Answer body — rendered as GFM markdown. Suppressed for
+                      refusals so the amber panel below is the single message. */}
+                  {!isInsufficient && (
                   <div
                     className={cn(
                       "prose prose-sm max-w-none text-foreground",
@@ -341,6 +344,7 @@ function SearchPage() {
                       <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
                     )}
                   </div>
+                  )}
 
                   {answerStream.structuredData && (
                     <div className="space-y-3 rounded-xl border border-[var(--explorer-border)] bg-[var(--explorer-paper)] px-4 py-4">
@@ -502,10 +506,13 @@ function SearchPage() {
 
                   {/* Insufficient evidence */}
                   {answerStream.status === "done" &&
-                    !answerStream.answerText &&
+                    (answerStream.answerStatus === "insufficient_evidence" ||
+                      !answerStream.answerText) &&
                     !hasStructuredItems && (
                       <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
-                        {copy.insufficient}
+                        {isInsufficient && answerStream.answerText
+                          ? answerStream.answerText
+                          : copy.insufficient}
                       </div>
                     )}
                 </div>

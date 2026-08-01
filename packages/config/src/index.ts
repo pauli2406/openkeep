@@ -126,6 +126,7 @@ export const AppEnvSchema = z.object({
   PARSE_PROVIDER_MAX_PAGES: NumberFromEnv.default(300),
   PARSE_PROVIDER_MAX_BYTES: NumberFromEnv.default(52_428_800),
   REVIEW_CONFIDENCE_THRESHOLD: DecimalFromEnv.default(0.65),
+  ANSWER_MIN_CHUNK_SCORE: DecimalFromEnv.default(0.4),
   OCR_EMPTY_TEXT_THRESHOLD: NumberFromEnv.default(20),
   PROCESSING_RETRY_LIMIT: NumberFromEnv.default(2),
   PROCESSING_RETRY_DELAY_SECONDS: NumberFromEnv.default(30),

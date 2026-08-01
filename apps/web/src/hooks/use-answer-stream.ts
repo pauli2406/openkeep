@@ -167,6 +167,13 @@ export function linkifyCitations(
 
 export type StreamState = {
   status: "idle" | "searching" | "streaming" | "done" | "error";
+  /**
+   * Semantic outcome from the server's `done` event, independent of the transport
+   * status above. A refusal streams real text, so answerText alone cannot tell an
+   * answer apart from an "insufficient evidence" response.
+   */
+  answerStatus: "answered" | "insufficient_evidence" | null;
+  lowConfidence: boolean;
   route: AnswerRoute | null;
   answerText: string;
   citations: AnswerCitation[];
@@ -178,6 +185,8 @@ export type StreamState = {
 export function useAnswerStream() {
   const [state, setState] = useState<StreamState>({
     status: "idle",
+    answerStatus: null,
+    lowConfidence: false,
     route: null,
     answerText: "",
     citations: [],
@@ -196,6 +205,8 @@ export function useAnswerStream() {
 
     setState({
       status: "searching",
+      answerStatus: null,
+      lowConfidence: false,
       route: null,
       answerText: "",
       citations: [],
@@ -258,6 +269,8 @@ export function useAnswerStream() {
                 setState((s) => ({
                   ...s,
                   status: "done",
+                  answerStatus: parsed.status ?? s.answerStatus,
+                  lowConfidence: parsed.lowConfidence ?? s.lowConfidence,
                   route: parsed.route ?? s.route,
                   citations: parsed.citations ?? s.citations,
                   answerText: parsed.fullAnswer ?? s.answerText,
@@ -320,6 +333,8 @@ export function useAnswerStream() {
     abortRef.current?.abort();
     setState({
       status: "idle",
+      answerStatus: null,
+      lowConfidence: false,
       route: null,
       answerText: "",
       citations: [],

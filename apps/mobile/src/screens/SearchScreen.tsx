@@ -423,7 +423,8 @@ function AIAnswerPanel({
       {expanded && (
         <View style={styles.aiPanelContent}>
           {/* Answer text */}
-          {answerStream.answerText.length > 0 && (
+          {answerStream.answerText.length > 0 &&
+            answerStream.answerStatus !== "insufficient_evidence" && (
             <View style={styles.answerTextContainer}>
               <Markdown
                 style={markdownStyles}
@@ -453,10 +454,15 @@ function AIAnswerPanel({
           )}
 
           {/* Insufficient evidence */}
-          {answerStream.status === "done" && !answerStream.answerText && (
+          {answerStream.status === "done" &&
+            (answerStream.answerStatus === "insufficient_evidence" ||
+              !answerStream.answerText) && (
             <View style={styles.insufficientBox}>
               <Text style={styles.insufficientText}>
-                {insufficientLabel}
+                {answerStream.answerStatus === "insufficient_evidence" &&
+                answerStream.answerText
+                  ? answerStream.answerText
+                  : insufficientLabel}
               </Text>
             </View>
           )}
