@@ -6,6 +6,7 @@ const createInput = (text: string, title = "document.pdf") => ({
   documentId: "11111111-1111-1111-1111-111111111111",
   title,
   mimeType: "application/pdf",
+  preferredLanguage: "de" as const,
   parsed: {
     provider: "local-ocr" as const,
     parseStrategy: "fixture",
@@ -380,6 +381,303 @@ describe("AgenticDocumentIntelligenceService", () => {
     const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
     expect(result.amount).toBeNull();
     expect(intelligence?.validation?.warnings).toContain("insurance_amount_ambiguous");
+  });
+
+  it("skips routing/title/extraction LLM calls when a confident annotation hint is present", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput(
+      ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.93,
+      title: "Stromrechnung Mai 2026",
+      summary: "Rechnung der Stadtwerke über 89 EUR.",
+      fields: {
+        issueDate: "03.05.2026",
+        dueDate: "17.05.2026",
+        amount: "89,00",
+        currency: "EUR",
+        referenceNumber: "R-2026-042",
+        correspondentName: "Stadtwerke",
+      },
+      // The annotation schema requires a confidence per field; unscored values no
+      // longer count as coverage.
+      fieldConfidence: {
+        amount: 0.9,
+        currency: 0.9,
+        issueDate: 0.9,
+        dueDate: 0.9,
+        referenceNumber: 0.9,
+        correspondentName: 0.9,
+      },
+    };
+
+    const result = await service.extract(input);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    // Only the tagging node needed an LLM call — routing, title/summary, and
+    // extraction were served by the annotation hint.
+    expect(completeMock).toHaveBeenCalledTimes(1);
+    expect(intelligence?.routing?.provider).toBe("mistral-annotation");
+    expect(result.title).toBe("Stromrechnung Mai 2026");
+    expect(result.amount).toBe(89);
+    expect(result.referenceNumber).toBe("R-2026-042");
+  });
+
+  it("still calls the extraction LLM when the annotation hint misses required fields", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        fields: { issueDate: "03.05.2026", amount: "89,00 EUR", currency: "EUR" },
+        fieldConfidence: { issueDate: 0.9, amount: 0.9, currency: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput("Unleserlicher Scan ohne verwertbare Labels", "scan.pdf");
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.9,
+      title: "Rechnung",
+      summary: null,
+      // Missing required invoice fields (issueDate, amount, currency, ...).
+      fields: { correspondentName: "Stadtwerke" },
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // Routing + title/summary were skipped, but extraction (and tagging) still ran.
+    expect(completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("still calls the extraction LLM when required fields came from deterministic parsing", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        fields: { referenceNumber: "R-2026-042" },
+        fieldConfidence: { referenceNumber: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput(
+      ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    // Valid annotation, but it contributes no fields of its own.
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.93,
+      title: "Stromrechnung",
+      summary: null,
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // Extraction must not be skipped just because deterministic parsing filled in.
+    expect(completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops annotation fields that are irrelevant for the routed document type", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["letter"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+
+    const input = createInput("Ein einfaches Anschreiben ohne Betraege.", "brief.pdf");
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "generic_letter",
+      documentTypeConfidence: 0.95,
+      title: "Anschreiben",
+      summary: null,
+      // expiryDate is in the generic annotation schema but not relevant here.
+      fields: { expiryDate: "31.12.2030", correspondentName: "Stadtwerke" },
+      fieldConfidence: { expiryDate: 0.9, correspondentName: 0.9 },
+    };
+
+    const result = await service.extract(input);
+    expect(result.expiryDate).toBeNull();
+  });
+
+  it("regenerates title and summary when the document language differs from the preference", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput("Invoice from Stadtwerke", "invoice.pdf");
+    // German document, English processing language: the annotation title would
+    // be persisted in the wrong language, so the LLM path must run.
+    (input as any).preferredLanguage = "en";
+    (input.parsed as any).language = "de";
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.95,
+      title: "Stromrechnung Mai 2026",
+      summary: "Rechnung der Stadtwerke.",
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // title/summary + extraction + tagging — the annotation title was not reused.
+    expect(completeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("regenerates title and summary when the parse provider reports no language", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput("Rechnung der Stadtwerke", "rechnung.pdf");
+    // Mistral OCR never reports a language, so an unknown value must not be
+    // treated as a confirmed match for the configured processing language.
+    (input.parsed as any).language = null;
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.95,
+      title: "Stromrechnung Mai 2026",
+      summary: "Rechnung der Stadtwerke.",
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    await service.extract(input);
+
+    // title/summary + extraction + tagging — the annotation title was not reused.
+    expect(completeMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores annotation fields the provider scored as unreliable", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        fields: { referenceNumber: "R-2026-042" },
+        fieldConfidence: { referenceNumber: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+    const service = createService({ correspondentName: "Stadtwerke" });
+    const completeMock = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral" as const,
+      model: "mistral-small-latest",
+    }));
+    (service as any).llmService.completeWithFallback = completeMock;
+
+    const input = createInput(
+      ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "invoice",
+      documentTypeConfidence: 0.93,
+      title: "Stromrechnung",
+      summary: null,
+      // Every required field present, but the provider scored them near zero.
+      fields: {
+        issueDate: "03.05.2026",
+        dueDate: "17.05.2026",
+        amount: "89,00",
+        currency: "EUR",
+        referenceNumber: "R-0000",
+        correspondentName: "Stadtwerke",
+      },
+      fieldConfidence: {
+        issueDate: 0.1,
+        dueDate: 0.1,
+        amount: 0.1,
+        currency: 0.1,
+        referenceNumber: 0.1,
+        correspondentName: 0.1,
+      },
+    };
+
+    await service.extract(input);
+
+    // Low-confidence annotation values must not suppress the typed extraction.
+    expect(completeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores low-confidence annotation classifications for routing", async () => {
+    const service = createService({ correspondentName: "Stadtwerke" });
+
+    const input = createInput(
+      ["Rechnung", "Betrag: 89,00 EUR"].join("\n"),
+      "rechnung.pdf",
+    );
+    (input.parsed as any).preExtracted = {
+      source: "mistral-document-annotation",
+      model: "mistral-ocr-latest",
+      schemaVersion: "v1",
+      documentType: "contract",
+      documentTypeConfidence: 0.3,
+      title: null,
+      summary: null,
+      fields: {},
+      fieldConfidence: {},
+    };
+
+    const result = await service.extract(input);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+
+    // The 0.3-confidence "contract" hint must not beat deterministic invoice routing.
+    expect(intelligence?.routing?.provider).not.toBe("mistral-annotation");
+    expect(result.documentTypeName).toBe("Invoice");
   });
 
   it("adds review reasons for unresolved correspondents and validation issues", async () => {

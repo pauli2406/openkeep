@@ -70,6 +70,42 @@ JSON schema from `apps/api/src/processing/agent-schemas.ts`:
   hit when the deterministic slot is empty or the LLM reported at least the deterministic
   confidence, and field provenance follows the winner
 
+## Parse-Provider Annotation Hints
+
+When `MISTRAL_OCR_DOCUMENT_ANNOTATIONS=true` (default off), the Mistral OCR request
+additionally asks for a document annotation: a vision-capable model extracts a generic
+metadata schema (document type from the registry enum, title, summary, the union of
+relevant fields, each with confidence) inside the same OCR call. The validated result
+lands on `parsed.preExtracted` — a capability of the parse output, not a new interface,
+so other providers are unaffected.
+
+The graph shape is unchanged; nodes consume the hint conditionally:
+
+- routing skips its LLM call when the annotated type is valid and its confidence is at
+  least 0.7 (provider recorded as `mistral-annotation`)
+- title/summary skips its LLM call when the annotation carries a title AND the parse
+  provider reported a document language that matches the configured processing
+  language. Mistral OCR reports no language, so in practice titles are regenerated
+  through the language-aware LLM path — the annotation
+  request carries no language preference, so a mismatch would persist titles in the
+  document's language instead of the one selected in Settings
+- typed extraction seeds from the annotation fields via the same confidence-aware merge
+  used for LLM values (provenance `provider_annotation`). The seed is filtered to the
+  routed type's relevant fields, so the generic annotation schema cannot inject values
+  that type could never produce. The LLM call is skipped only when the annotation
+  itself supplied every required field with sufficient annotation confidence (a value scored
+  below 0.5, or with no score at all, does not count as coverage) — deterministic
+  parsing filling the gaps does not count. Type-specific refiners still run afterwards,
+  and confidence/provenance are rebuilt for the values they replace
+- correspondent resolution, tagging, and validation are unchanged — they need archive
+  context (candidate lists, deterministic seeds) the annotation cannot provide
+
+Cost is roughly neutral (annotations ~+$1/1000 pages vs. up to three saved chat calls
+per document); latency drops because up to three sequential round-trips disappear.
+Documents longer than ~8 pages get the warning `annotation_hint_partial_document`
+because annotations only consider the leading pages. Every node keeps its LLM and
+deterministic fallback, so the flag can be toggled per environment and compared.
+
 ## Routing Stage
 
 The routing stage determines the likely document type and stores:

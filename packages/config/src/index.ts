@@ -133,6 +133,7 @@ export const AppEnvSchema = z.object({
   MISTRAL_OCR_CONFIDENCE_GRANULARITY: z.enum(["page", "word", "none"]).default("page"),
   MISTRAL_OCR_EXTRACT_HEADER_FOOTER: BooleanFromEnv.default(true),
   MISTRAL_OCR_UPLOAD_STRATEGY: z.enum(["auto", "inline", "files"]).default("auto"),
+  MISTRAL_OCR_DOCUMENT_ANNOTATIONS: BooleanFromEnv.default(false),
   MISTRAL_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   OCR_LANGUAGES: z.string().default("deu+eng"),
   PARSE_PROVIDER_TIMEOUT_SECONDS: NumberFromEnv.default(120),

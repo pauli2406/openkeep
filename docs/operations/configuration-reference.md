@@ -176,6 +176,10 @@ These control upload size and search pagination limits.
 - `MISTRAL_OCR_UPLOAD_STRATEGY` (`auto` | `inline` | `files`, default `auto`): inline
   base64 below ~8MB, Files API (upload + signed URL, deleted in a finally) above —
   base64 inflates payloads ~33% and large inline bodies risk request-size rejections
+- `MISTRAL_OCR_DOCUMENT_ANNOTATIONS` (default `false`): request a structured document
+  annotation inside the OCR call and feed it to the extraction pipeline as a hint —
+  skips the routing, title/summary, and (when complete) typed-extraction LLM calls.
+  See [Agentic Document Intelligence](../technical/agentic-document-intelligence.md).
 
 Timeouts and resilience:
 

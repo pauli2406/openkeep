@@ -8,7 +8,12 @@ import type {
 import { readFile } from "fs/promises";
 
 import { AppConfigService } from "../common/config/app-config.service";
+import { DOCUMENT_TYPE_DEFINITIONS } from "./document-intelligence.registry";
 import { fetchWithTimeout } from "./http.util";
+import {
+  buildDocumentAnnotationSchema,
+  parseDocumentAnnotation,
+} from "./mistral-annotation.schema";
 import {
   MistralOcrResponseSchema,
   type MistralOcrBlock,
@@ -131,6 +136,17 @@ export const mapMistralOcrResponse = (
     warnings.push("provider_metadata_truncated");
   }
 
+  const preExtracted =
+    response.document_annotation !== undefined && response.document_annotation !== null
+      ? (parseDocumentAnnotation(response.document_annotation, response.model ?? null) ??
+        undefined)
+      : undefined;
+  if (preExtracted && pages.length > 8) {
+    // Document annotations only consider roughly the first 8 pages — the hint is
+    // still useful but may miss facts further in.
+    warnings.push("annotation_hint_partial_document");
+  }
+
   return {
     provider: "mistral-ocr",
     parseStrategy: "mistral-ocr-api",
@@ -144,6 +160,7 @@ export const mapMistralOcrResponse = (
     reviewReasons,
     warnings,
     providerMetadata,
+    ...(preExtracted ? { preExtracted } : {}),
     temporaryPaths: [],
   };
 };
@@ -206,6 +223,15 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
       if (this.configService.get("MISTRAL_OCR_EXTRACT_HEADER_FOOTER")) {
         body.extract_header = true;
         body.extract_footer = true;
+      }
+      if (this.configService.get("MISTRAL_OCR_DOCUMENT_ANNOTATIONS")) {
+        body.document_annotation_format = {
+          type: "json_schema",
+          json_schema: {
+            name: "document_metadata",
+            schema: buildDocumentAnnotationSchema(Object.keys(DOCUMENT_TYPE_DEFINITIONS)),
+          },
+        };
       }
 
       const response = await fetchWithTimeout(

@@ -34,7 +34,14 @@ import {
 import type { MetadataExtractionInput, MetadataExtractionResult } from "./provider.types";
 import { getTypeSpecificExtractor } from "./type-specific-extractors";
 
-type AgentProvider = LlmProviderId | "deterministic";
+type AgentProvider = LlmProviderId | "deterministic" | "mistral-annotation";
+
+/** Minimum annotation classification confidence to skip the routing LLM call. */
+const ANNOTATION_ROUTE_MIN_CONFIDENCE = 0.7;
+/** Minimum annotation confidence for a field to count toward required coverage. */
+const ANNOTATION_FIELD_MIN_CONFIDENCE = 0.5;
+/** Confidence attached to values produced by deterministic parsing/refinement. */
+const DETERMINISTIC_FIELD_CONFIDENCE = 0.7;
 
 interface RoutingResult {
   documentType: SupportedDocumentType;
@@ -411,6 +418,25 @@ export class AgenticDocumentIntelligenceService {
 
   private async routeDocument(input: MetadataExtractionInput): Promise<RoutingResult> {
     const fallback = this.routeDeterministically(input);
+
+    // A confident classification from the parse provider's document annotation
+    // (which saw layout and images) skips the routing LLM round-trip entirely.
+    const preExtracted = input.parsed.preExtracted;
+    if (preExtracted?.documentType) {
+      const annotatedType = this.toSupportedDocumentType(preExtracted.documentType);
+      const confidence = preExtracted.documentTypeConfidence ?? 0;
+      if (annotatedType && confidence >= ANNOTATION_ROUTE_MIN_CONFIDENCE) {
+        return {
+          documentType: annotatedType,
+          subtype: null,
+          confidence: this.normalizeConfidence(confidence, fallback.confidence),
+          reasoningHints: [`annotation:${preExtracted.source}`],
+          provider: "mistral-annotation",
+          model: preExtracted.model,
+        };
+      }
+    }
+
     const providerInfos = this.llmService.getAvailableProviderInfos();
     if (providerInfos.length === 0) {
       return fallback;
@@ -464,6 +490,23 @@ export class AgenticDocumentIntelligenceService {
     routing: RoutingResult,
   ): Promise<TitleSummaryResult> {
     const fallback = this.buildDeterministicTitleSummary(input, routing);
+
+    // An annotation-provided title skips the title/summary LLM round-trip — but
+    // only when it already matches the configured processing language. The
+    // annotation request carries no language preference, so accepting it blindly
+    // would persist titles in the document's language instead of the one selected
+    // in Settings (this branch bypasses buildGeneratedTextInstruction entirely).
+    const preExtracted = input.parsed.preExtracted;
+    if (preExtracted?.title && this.annotationMatchesPreferredLanguage(input)) {
+      return {
+        title: preExtracted.title,
+        titleConfidence: null,
+        summary: preExtracted.summary ?? fallback.summary,
+        summaryConfidence: null,
+        provider: "mistral-annotation",
+        model: preExtracted.model,
+      };
+    }
     const providerResult = await this.llmService.completeWithFallback(
       {
         messages: [
@@ -514,8 +557,36 @@ export class AgenticDocumentIntelligenceService {
     input: MetadataExtractionInput,
     routing: RoutingResult,
   ): Promise<ExtractionResult> {
-    const fallback = await this.extractTypedMetadataDeterministically(input, routing);
+    const deterministic = await this.extractTypedMetadataDeterministically(input, routing);
     const typeSpecificExtractor = getTypeSpecificExtractor(routing.documentType);
+
+    // Seed with the parse provider's annotation hint (confidence-aware merge, same
+    // rules as the LLM merge). When the annotation confidently covers every required
+    // field for the routed type, the extraction LLM round-trip is skipped.
+    const { result: fallback, annotationKeys } = this.seedWithAnnotationHint(
+      input,
+      deterministic,
+      routing,
+    );
+    // Skip the extraction call only when the ANNOTATION supplied every required
+    // field. Judging by the merged result would also skip when deterministic
+    // parsing happened to fill the slots and the annotation contributed nothing,
+    // keeping a first-match value the typed pass would have corrected.
+    const requiredKeys = this.requiredFieldKeys(routing);
+    const annotationCoversRequired =
+      requiredKeys.length > 0 && requiredKeys.every((key) => annotationKeys.includes(key));
+    if (
+      annotationCoversRequired &&
+      this.missingRequiredFields(routing, fallback.fields, fallback.fieldConfidence).length === 0
+    ) {
+      // The type-specific refiner must still run: for giftcards, portfolio
+      // statements, trade confirmations, and tax statements it replaces generic
+      // amounts with the preferred value (available balance, net settlement, ...).
+      const refinedFields =
+        typeSpecificExtractor.refineFields?.(input, fallback.fields) ?? fallback.fields;
+      return this.applyFieldRefinement(input, fallback, refinedFields);
+    }
+
     const providerResult = await this.llmService.completeWithFallback(
       {
         messages: [
@@ -576,19 +647,17 @@ export class AgenticDocumentIntelligenceService {
       { fields: fallback.fields, fieldConfidence: fallback.fieldConfidence },
       { fields: parsedFields, fieldConfidence: parsedFieldConfidence },
     );
-    const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
-
     // Only keys the LLM actually won get LLM provenance; deterministic winners keep
     // their deterministic_parse provenance (page/line/snippet).
     const llmWonFields = Object.fromEntries(
       merged.llmWonKeys
-        .filter((key) => refinedFields[key] !== undefined)
-        .map((key) => [key, refinedFields[key]]),
+        .filter((key) => merged.fields[key] !== undefined)
+        .map((key) => [key, merged.fields[key]]),
     );
 
-    return {
+    const mergedResult: ExtractionResult = {
       ...fallback,
-      fields: refinedFields,
+      fields: merged.fields,
       fieldConfidence: merged.fieldConfidence,
       fieldProvenance: this.buildFieldProvenance(
         input,
@@ -599,6 +668,163 @@ export class AgenticDocumentIntelligenceService {
       provider: providerResult.provider ?? fallback.provider,
       model: providerResult.model,
     };
+
+    const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
+    return this.applyFieldRefinement(input, mergedResult, refinedFields);
+  }
+
+  /** Required registry fields mapped to the keys used in extraction results. */
+  private requiredFieldKeys(routing: RoutingResult): string[] {
+    return getDocumentTypeDefinition(routing.documentType).requiredFields.map((field) =>
+      field === "correspondent" ? "correspondentName" : field,
+    );
+  }
+
+  private seedWithAnnotationHint(
+    input: MetadataExtractionInput,
+    deterministic: ExtractionResult,
+    routing: RoutingResult,
+  ): { result: ExtractionResult; annotationKeys: string[] } {
+    const preExtracted = input.parsed.preExtracted;
+    if (!preExtracted || Object.keys(preExtracted.fields).length === 0) {
+      return { result: deterministic, annotationKeys: [] };
+    }
+
+    // The annotation schema is generic (the union of every type's fields), so a
+    // generic letter can come back with an expiry date or holder name. Restrict
+    // the seed to what the routed type actually declares as relevant, matching
+    // what the type-specific extraction schema could have produced.
+    const relevantFields = new Set(getRelevantFieldNames(routing.documentType));
+    const annotationFields = Object.fromEntries(
+      Object.entries(preExtracted.fields).filter(([key]) => relevantFields.has(key)),
+    );
+    if (Object.keys(annotationFields).length === 0) {
+      return { result: deterministic, annotationKeys: [] };
+    }
+
+    const merged = this.mergeExtractedFields(
+      { fields: deterministic.fields, fieldConfidence: deterministic.fieldConfidence },
+      { fields: annotationFields, fieldConfidence: preExtracted.fieldConfidence },
+    );
+
+    const annotationWonFields = Object.fromEntries(
+      merged.llmWonKeys
+        .filter((key) => merged.fields[key] !== undefined)
+        .map((key) => [key, merged.fields[key]]),
+    );
+
+    return {
+      result: {
+        ...deterministic,
+        fields: merged.fields,
+        fieldConfidence: merged.fieldConfidence,
+        fieldProvenance: this.buildFieldProvenance(
+          input,
+          annotationWonFields,
+          "mistral-annotation",
+          deterministic.fieldProvenance,
+        ),
+        provider: "mistral-annotation",
+        model: preExtracted.model,
+      },
+      // Keys the annotation supplied with usable confidence. Presence alone is not
+      // enough: a value the provider itself scored at 0.1 must not make the
+      // annotation look complete and suppress the typed-extraction fallback.
+      annotationKeys: Object.entries(annotationFields)
+        .filter(([key, value]) => {
+          if (value === null || value === undefined || value === "") {
+            return false;
+          }
+          // An explicit score is required: the annotation schema permits null
+          // confidences (dropped during parsing), and treating those as usable
+          // would skip typed extraction for values the provider never rated.
+          const confidence = preExtracted.fieldConfidence[key];
+          return typeof confidence === "number" && confidence >= ANNOTATION_FIELD_MIN_CONFIDENCE;
+        })
+        .map(([key]) => key),
+    };
+  }
+
+  /**
+   * Applies a type-specific refiner and rebuilds metadata for the values it
+   * changed. Without this the persisted confidence and provenance would still
+   * describe the pre-refinement value (a giftcard's face value instead of the
+   * available balance, for example).
+   */
+  private applyFieldRefinement(
+    input: MetadataExtractionInput,
+    extraction: ExtractionResult,
+    refinedFields: Record<string, unknown>,
+  ): ExtractionResult {
+    const changedKeys = Object.keys(refinedFields).filter(
+      (key) => refinedFields[key] !== extraction.fields[key],
+    );
+    if (changedKeys.length === 0) {
+      return { ...extraction, fields: refinedFields };
+    }
+
+    const clearedKeys = changedKeys.filter((key) => {
+      const value = refinedFields[key];
+      return value === null || value === undefined || value === "";
+    });
+    const changedValues = Object.fromEntries(
+      changedKeys
+        .filter((key) => !clearedKeys.includes(key))
+        .map((key) => [key, refinedFields[key]]),
+    );
+
+    const fieldConfidence = { ...extraction.fieldConfidence };
+    for (const key of changedKeys) {
+      // Refined values come from deterministic document-text rules, so they carry
+      // the deterministic confidence rather than the replaced value's score.
+      fieldConfidence[key] = DETERMINISTIC_FIELD_CONFIDENCE;
+    }
+
+    const fieldProvenance = this.buildFieldProvenance(
+      input,
+      changedValues,
+      "deterministic",
+      extraction.fieldProvenance,
+    );
+
+    // A refiner that deliberately clears a field (the insurance premium rules do
+    // this for documents with unrelated totals) must not leave confidence or the
+    // previous value's evidence behind — that would claim proof for an absent
+    // fact and inflate the overall extraction confidence.
+    for (const key of clearedKeys) {
+      delete fieldConfidence[key];
+      delete fieldProvenance[key];
+    }
+
+    return {
+      ...extraction,
+      fields: refinedFields,
+      fieldConfidence,
+      fieldProvenance,
+    };
+  }
+
+  private missingRequiredFields(
+    routing: RoutingResult,
+    fields: Record<string, unknown>,
+    fieldConfidence: Record<string, number> = {},
+  ): string[] {
+    return getDocumentTypeDefinition(routing.documentType).requiredFields.filter(
+      (requiredField) => {
+        // Registry required fields use "correspondent"; extraction fields carry
+        // the resolved name under "correspondentName".
+        const fieldKey = requiredField === "correspondent" ? "correspondentName" : requiredField;
+        const value = fields[fieldKey];
+        if (value === null || value === undefined || value === "") {
+          return true;
+        }
+        // A value the provider itself scored as unreliable must not make the
+        // annotation look complete — it would suppress the extraction fallback
+        // and persist a fact the provider flagged as uncertain.
+        const confidence = fieldConfidence[fieldKey];
+        return typeof confidence === "number" && confidence < 0.5;
+      },
+    );
   }
 
   private mergeExtractedFields(
@@ -876,7 +1102,7 @@ export class AgenticDocumentIntelligenceService {
         continue;
       }
       const evidence = this.findEvidenceMatch(input, value);
-      fieldConfidence[key] = 0.7;
+      fieldConfidence[key] = DETERMINISTIC_FIELD_CONFIDENCE;
       fieldProvenance[key] = {
         source: "deterministic_parse",
         provider: input.parsed.provider,
@@ -1014,6 +1240,26 @@ export class AgenticDocumentIntelligenceService {
     ]
       .filter(Boolean)
       .join("\n\n");
+  }
+
+  /**
+   * The annotation request carries no language preference, so its title/summary
+   * come back in the document's language. Accept them only when that matches the
+   * configured processing language; otherwise the LLM path runs and states the
+   * target language explicitly. An unknown document language is treated as a
+   * match (there is nothing better to compare against).
+   */
+  private annotationMatchesPreferredLanguage(input: MetadataExtractionInput): boolean {
+    const documentLanguage = input.parsed.language?.slice(0, 2).toLowerCase();
+    if (!documentLanguage) {
+      // Mistral OCR never reports a language, so an unknown value must NOT count
+      // as a confirmed match — otherwise every real annotation would bypass the
+      // language-aware path and persist provider-language titles.
+      return false;
+    }
+
+    const preferred = input.preferredLanguage === "de" ? "de" : "en";
+    return documentLanguage === preferred;
   }
 
   private buildGeneratedTextInstruction(
@@ -1319,7 +1565,12 @@ export class AgenticDocumentIntelligenceService {
 
       const evidence = this.findEvidenceMatch(input, value);
       next[key] = {
-        source: provider === "deterministic" ? "deterministic_parse" : "llm_structured_extraction",
+        source:
+          provider === "deterministic"
+            ? "deterministic_parse"
+            : provider === "mistral-annotation"
+              ? "provider_annotation"
+              : "llm_structured_extraction",
         provider,
         page: evidence.page,
         lineIndex: evidence.lineIndex,
