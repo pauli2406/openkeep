@@ -120,7 +120,11 @@ export const AppEnvSchema = z.object({
   AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: EmptyStringToUndefined(z.string().url().optional()),
   AZURE_DOCUMENT_INTELLIGENCE_API_KEY: EmptyStringToUndefined(z.string().optional()),
   MISTRAL_API_KEY: EmptyStringToUndefined(z.string().optional()),
-  MISTRAL_OCR_BASE_URL: z.string().url().default("https://api.mistral.ai"),
+  // Base URL for all Mistral surfaces (chat, embeddings, files, OCR).
+  MISTRAL_API_BASE_URL: z.string().url().default("https://api.mistral.ai"),
+  // Deprecated: OCR-specific override. Falls back to MISTRAL_API_BASE_URL when unset;
+  // chat/embeddings no longer read this misnamed variable.
+  MISTRAL_OCR_BASE_URL: EmptyStringToUndefined(z.string().url().optional()),
   MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
   MISTRAL_OCR_INCLUDE_BLOCKS: BooleanFromEnv.default(true),
   // Only markdown tables are parsed into normalized cells; an HTML option would

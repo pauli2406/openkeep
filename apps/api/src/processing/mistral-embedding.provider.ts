@@ -28,7 +28,7 @@ export class MistralEmbeddingProvider implements EmbeddingProvider {
       throw new Error("Mistral embedding configuration is incomplete");
     }
 
-    const response = await fetch(`${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/embeddings`, {
+    const response = await fetch(`${this.configService.get("MISTRAL_API_BASE_URL")}/v1/embeddings`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,

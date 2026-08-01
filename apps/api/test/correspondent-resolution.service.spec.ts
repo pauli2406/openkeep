@@ -14,6 +14,9 @@ const createService = () =>
     {
       get: vi.fn(() => undefined),
     } as any,
+    {
+      getDefaultProviderOrder: vi.fn(() => ["openai", "gemini", "mistral"]),
+    } as any,
   );
 
 const buildInput = (lines: string[]) => ({
@@ -198,11 +201,13 @@ describe("CorrespondentResolutionService", () => {
       shouldCreateNew: false,
       selectedCandidateId: "c1",
     });
-    (service as any).getProvider = vi.fn(() => ({
-      provider: "openai",
-      apiKey: "test",
-      model: "gpt-test",
-    }));
+    (service as any).getProviders = vi.fn(() => [
+      {
+        provider: "openai",
+        apiKey: "test",
+        model: "gpt-test",
+      },
+    ]);
 
     const result = await service.resolve(
       buildInput(["City Water Customer Account", "INFORMATIONEN UEBER DIE BESCHAFFENHEIT DES TRINKWASSERS"]),
@@ -225,11 +230,13 @@ describe("CorrespondentResolutionService", () => {
       shouldCreateNew: true,
       selectedCandidateId: null,
     });
-    (service as any).getProvider = vi.fn(() => ({
-      provider: "openai",
-      apiKey: "test",
-      model: "gpt-test",
-    }));
+    (service as any).getProviders = vi.fn(() => [
+      {
+        provider: "openai",
+        apiKey: "test",
+        model: "gpt-test",
+      },
+    ]);
 
     const result = await service.resolve(
       buildInput(["Barmenia", "Gothaer"]),
@@ -252,11 +259,13 @@ describe("CorrespondentResolutionService", () => {
       shouldCreateNew: true,
       selectedCandidateId: null,
     });
-    (service as any).getProvider = vi.fn(() => ({
-      provider: "openai",
-      apiKey: "test",
-      model: "gpt-test",
-    }));
+    (service as any).getProviders = vi.fn(() => [
+      {
+        provider: "openai",
+        apiKey: "test",
+        model: "gpt-test",
+      },
+    ]);
 
     const result = await service.resolve(
       buildInput([
@@ -296,4 +305,42 @@ describe("CorrespondentResolutionService", () => {
     expect(result.correspondentName).toBe("MVZ Medizinisches Labor Nord MLN GmbH");
     expect(result.metadata.matchStrategy).toBe("new");
   });
+
+  it("falls back to the next provider when the first cannot resolve", async () => {
+    const service = createService();
+    const attempts: string[] = [];
+    (service as any).getProviders = vi.fn(() => [
+      { provider: "mistral", apiKey: "test", model: "mistral-small-latest" },
+      { provider: "openai", apiKey: "test", model: "gpt-test" },
+    ]);
+    (service as any).findCandidateCorrespondents = vi.fn().mockResolvedValue([]);
+    (service as any).resolveWithLlm = vi.fn(async (provider: { provider: string }) => {
+      attempts.push(provider.provider);
+      // The pinned provider is unreachable (a thrown fetch/JSON error, not just
+      // an empty result); the next one answers.
+      if (provider.provider === "mistral") {
+        throw new Error("getaddrinfo ENOTFOUND api.mistral.invalid");
+      }
+      return provider.provider === "openai"
+        ? {
+            rawName: "Stadtwerke Musterstadt",
+            cleanDisplayName: "Stadtwerke Musterstadt",
+            confidence: 0.9,
+            evidenceLines: ["Stadtwerke Musterstadt"],
+            isLikelyOrganizationOrPerson: true,
+            shouldCreateNew: true,
+            selectedCandidateId: null,
+          }
+        : null;
+    });
+
+    const result = await service.resolve(
+      buildInput(["Stadtwerke Musterstadt", "Rechnung Nr. 4711"]),
+      { correspondentName: null } as any,
+    );
+
+    expect(attempts).toEqual(["mistral", "openai"]);
+    expect(result.metadata.provider).toBe("openai");
+  });
+
 });

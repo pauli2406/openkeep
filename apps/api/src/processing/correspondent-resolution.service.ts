@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
+import { LlmService } from "./llm.service";
 import type { MetadataExtractionInput, MetadataExtractionResult } from "./provider.types";
 import { normalizeCorrespondentName } from "./normalization.util";
 
@@ -79,6 +80,7 @@ export class CorrespondentResolutionService {
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(AppConfigService) private readonly configService: AppConfigService,
+    @Inject(LlmService) private readonly llmService: LlmService,
   ) {}
 
   async resolve(
@@ -101,16 +103,49 @@ export class CorrespondentResolutionService {
       ? this.blockedReasonForCandidate(deterministicRaw)
       : null;
 
-    const provider = this.getProvider();
+    const providers = this.getProviders();
     const lexicalSeed =
       !initialBlockedReason && deterministicRaw ? deterministicRaw : evidenceLines[0] ?? null;
     const lexicalCandidates = lexicalSeed
       ? await this.findCandidateCorrespondents(lexicalSeed)
       : [];
-    const llmDecision =
-      provider && evidenceLines.length > 0
-        ? await this.resolveWithLlm(provider, input, evidenceLines, lexicalCandidates)
-        : null;
+
+    // Walk the configured providers until one resolves: a single attempt meant a
+    // failing or unreachable pinned provider disabled correspondent resolution
+    // even though other providers were configured.
+    let provider: (typeof providers)[number] | null = providers[0] ?? null;
+    let llmDecision: LlmResolution | null = null;
+    if (evidenceLines.length > 0) {
+      for (const candidateProvider of providers) {
+        let decision: LlmResolution | null = null;
+        try {
+          decision = await this.resolveWithLlm(
+            candidateProvider,
+            input,
+            evidenceLines,
+            lexicalCandidates,
+          );
+        } catch (error) {
+          // resolveWithLlm issues a raw fetch and parses JSON, so DNS/TCP errors
+          // and malformed payloads throw. Without catching here the first broken
+          // provider aborted resolution (and document processing) entirely.
+          this.logger.warn(
+            `Correspondent resolution via ${candidateProvider.provider} failed (${error instanceof Error ? error.message : error}) — trying next provider`,
+          );
+          continue;
+        }
+
+        if (decision) {
+          provider = candidateProvider;
+          llmDecision = decision;
+          break;
+        }
+
+        this.logger.warn(
+          `Correspondent resolution via ${candidateProvider.provider} returned no usable result — trying next provider`,
+        );
+      }
+    }
 
     let rawName =
       this.cleanDisplayName(llmDecision?.rawName) ??
@@ -594,34 +629,46 @@ export class CorrespondentResolutionService {
         model: string;
       }
     | null {
-    const openAiKey = this.configService.get("OPENAI_API_KEY");
-    if (openAiKey) {
-      return {
-        provider: "openai",
-        apiKey: openAiKey,
-        model: this.configService.get("OPENAI_MODEL"),
-      };
+    return this.getProviders()[0] ?? null;
+  }
+
+  /**
+   * All configured chat providers in the central order (ACTIVE_CHAT_PROVIDER
+   * first). Resolution walks this list so a failing or unreachable pinned
+   * provider does not disable correspondent resolution entirely — the same
+   * failover the chat paths already have.
+   */
+  private getProviders(): Array<{
+    provider: Exclude<ResolutionProvider, "deterministic">;
+    apiKey: string;
+    model: string;
+  }> {
+    const providers: Array<{
+      provider: Exclude<ResolutionProvider, "deterministic">;
+      apiKey: string;
+      model: string;
+    }> = [];
+
+    for (const provider of this.llmService.getDefaultProviderOrder()) {
+      if (provider === "openai") {
+        const apiKey = this.configService.get("OPENAI_API_KEY");
+        if (apiKey) {
+          providers.push({ provider, apiKey, model: this.configService.get("OPENAI_MODEL") });
+        }
+      } else if (provider === "gemini") {
+        const apiKey = this.configService.get("GEMINI_API_KEY");
+        if (apiKey) {
+          providers.push({ provider, apiKey, model: this.configService.get("GEMINI_MODEL") });
+        }
+      } else {
+        const apiKey = this.configService.get("MISTRAL_API_KEY");
+        if (apiKey) {
+          providers.push({ provider, apiKey, model: this.configService.get("MISTRAL_MODEL") });
+        }
+      }
     }
 
-    const geminiKey = this.configService.get("GEMINI_API_KEY");
-    if (geminiKey) {
-      return {
-        provider: "gemini",
-        apiKey: geminiKey,
-        model: this.configService.get("GEMINI_MODEL"),
-      };
-    }
-
-    const mistralKey = this.configService.get("MISTRAL_API_KEY");
-    if (mistralKey) {
-      return {
-        provider: "mistral",
-        apiKey: mistralKey,
-        model: this.configService.get("MISTRAL_MODEL"),
-      };
-    }
-
-    return null;
+    return providers;
   }
 
   private async resolveWithLlm(
@@ -910,7 +957,7 @@ export class CorrespondentResolutionService {
     prompt: string,
   ): Promise<string | null> {
     const response = await fetch(
-      `${this.configService.get("MISTRAL_OCR_BASE_URL")}/v1/chat/completions`,
+      `${this.configService.get("MISTRAL_API_BASE_URL")}/v1/chat/completions`,
       {
         method: "POST",
         headers: {

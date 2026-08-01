@@ -161,7 +161,9 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
       throw new Error("Mistral OCR credentials are not configured");
     }
 
-    const baseUrl = this.configService.get("MISTRAL_OCR_BASE_URL");
+    const baseUrl =
+      this.configService.get("MISTRAL_OCR_BASE_URL") ??
+      this.configService.get("MISTRAL_API_BASE_URL");
     const timeoutMs = this.configService.get("PARSE_PROVIDER_TIMEOUT_SECONDS") * 1000;
     const bytes = await readFile(input.filePath);
     const isPdf = input.mimeType === "application/pdf";

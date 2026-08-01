@@ -39,6 +39,7 @@ const createService = (overrides?: {
 }) => {
   const llmService = {
     getAvailableProviderInfos: vi.fn(() => [{ provider: "mistral", model: "mistral-small-latest" }]),
+    getDefaultProviderOrder: vi.fn(() => ["mistral", "gemini", "openai"]),
     completeWithFallback: vi.fn(async () => ({
       text: overrides?.llmText ?? null,
       provider: overrides?.llmText ? "mistral" : null,
