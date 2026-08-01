@@ -554,16 +554,27 @@ export class AgenticDocumentIntelligenceService {
       return fallback;
     }
 
+    // Providers without schema enforcement (Gemini runs in plain JSON mode) can
+    // return keys the per-type request schema could never emit — a receipt answer
+    // carrying dueDate would otherwise be merged, persisted, and even tagged
+    // "deadline". Restrict the payload to the routed type's relevant fields.
+    const relevantFieldNames = new Set(getRelevantFieldNames(routing.documentType));
+    const parsedFields = Object.fromEntries(
+      Object.entries(parsed.fields).filter(([key]) => relevantFieldNames.has(key)),
+    );
+    const parsedFieldConfidence = Object.fromEntries(
+      Object.entries(this.normalizeFieldConfidenceMap(parsed.fieldConfidence)).filter(([key]) =>
+        relevantFieldNames.has(key),
+      ),
+    );
+
     // Confidence-aware merge: the previous unconditional spread let any LLM value
     // clobber a deterministic regex hit that carried provenance — a hallucinated
     // amount beat a verified one. The LLM value only wins when the deterministic
     // slot is empty or the LLM reported at least the deterministic confidence.
     const merged = this.mergeExtractedFields(
       { fields: fallback.fields, fieldConfidence: fallback.fieldConfidence },
-      {
-        fields: parsed.fields,
-        fieldConfidence: this.normalizeFieldConfidenceMap(parsed.fieldConfidence),
-      },
+      { fields: parsedFields, fieldConfidence: parsedFieldConfidence },
     );
     const refinedFields = typeSpecificExtractor.refineFields?.(input, merged.fields) ?? merged.fields;
 

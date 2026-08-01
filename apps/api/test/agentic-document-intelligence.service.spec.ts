@@ -263,6 +263,34 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(result.referenceNumber).toBe("R-2026-042");
   });
 
+  it("drops LLM fields that are irrelevant for the routed document type", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "receipt", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Beleg", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Gemini runs without the per-type schema: dueDate is not relevant for a
+      // receipt and must not be merged, persisted, or trigger a deadline tag.
+      JSON.stringify({
+        fields: { amount: "47,20", currency: "EUR", dueDate: "31.12.2026" },
+        fieldConfidence: { amount: 0.9, currency: 0.9, dueDate: 0.95 },
+      }),
+      JSON.stringify({ tags: ["receipt"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Trattoria Roma" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+    }));
+
+    const result = await service.extract(
+      createInput(["Beleg", "Trattoria Roma", "Total: 47,20 EUR"].join("\n"), "beleg.pdf"),
+    );
+
+    expect(result.dueDate).toBeNull();
+    expect(result.tags).not.toContain("deadline");
+  });
+
   it("falls back to deterministic extraction when the LLM payload violates the schema", async () => {
     const llmResponses = [
       JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
