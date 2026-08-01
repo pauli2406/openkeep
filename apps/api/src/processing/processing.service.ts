@@ -1043,8 +1043,12 @@ export class ProcessingService {
         continue;
       }
 
-      await this.databaseService.db.transaction(async (tx) => {
-        await tx
+      const claimed = await this.databaseService.db.transaction(async (tx) => {
+        // Atomically claim the stale row: revalidate the cutoff inside the update
+        // so a document that was requeued (markProcessing refreshed updatedAt)
+        // between the candidate scan and this write is never marked failed, and
+        // concurrent reapers cannot both record the same recovery.
+        const claimedRows = await tx
           .update(documents)
           .set({
             status: "failed",
@@ -1054,7 +1058,18 @@ export class ProcessingService {
             processedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(and(eq(documents.id, candidate.documentId), eq(documents.status, "processing")));
+          .where(
+            and(
+              eq(documents.id, candidate.documentId),
+              eq(documents.status, "processing"),
+              sql`${documents.updatedAt} < ${cutoff}`,
+            ),
+          )
+          .returning({ id: documents.id });
+
+        if (claimedRows.length === 0) {
+          return false;
+        }
 
         await tx
           .update(processingJobs)
@@ -1079,7 +1094,13 @@ export class ProcessingService {
             staleMinutes,
           },
         });
+
+        return true;
       });
+
+      if (!claimed) {
+        continue;
+      }
 
       reaped += 1;
       this.logStructured("warn", "document.processing_reaped_stale", {
