@@ -190,25 +190,40 @@ export class DocumentsService {
     const title = input.metadata?.title?.trim() || input.filename;
     const source = input.metadata?.source ?? "upload";
 
+    // Atomic checksum dedup: concurrent uploads of identical content (the web
+    // client uploads several files at once) would otherwise race between the
+    // lookup and the unique insert — one request hitting the constraint, or one
+    // enqueueing processing before the other stored the object.
     const existingFile = await this.findFileByChecksum(checksum);
-    const fileRecord =
-      existingFile ??
-      (
-        await this.databaseService.db
-          .insert(documentFiles)
-          .values({
-            checksum,
-            storageKey: `documents/${checksum}`,
-            originalFilename: input.filename,
-            mimeType,
-            sizeBytes: input.buffer.length,
-          })
-          .returning()
-      )[0];
+    let insertedFile = existingFile;
+    if (!insertedFile) {
+      const [inserted] = await this.databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum,
+          storageKey: `documents/${checksum}`,
+          originalFilename: input.filename,
+          mimeType,
+          sizeBytes: input.buffer.length,
+        })
+        .onConflictDoNothing({ target: documentFiles.checksum })
+        .returning();
 
-    if (!existingFile) {
-      await this.storageService.uploadBuffer(fileRecord.storageKey, input.buffer, mimeType);
+      if (inserted) {
+        // This request created the row, so it owns storing the binary. Callers
+        // that lost the race wait for the object below instead.
+        await this.storageService.uploadBuffer(inserted.storageKey, input.buffer, mimeType);
+        insertedFile = inserted;
+      } else {
+        insertedFile = await this.findFileByChecksum(checksum);
+      }
     }
+
+    if (!insertedFile) {
+      throw new ConflictException("Failed to resolve document file for this upload");
+    }
+
+    const fileRecord = insertedFile;
 
     const [document] = await this.databaseService.db
       .insert(documents)
