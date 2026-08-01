@@ -288,6 +288,35 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(result.amount).toBe(89);
   });
 
+  it("rejects non-scalar extraction field values from schema-less providers", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Rechnung", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Gemini runs in plain JSON mode: an object value would replace the valid
+      // deterministic amount and then be dropped by normalization.
+      JSON.stringify({
+        fields: { amount: { value: 89, currency: "EUR" } },
+        fieldConfidence: { amount: 0.95 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+    }));
+
+    const result = await service.extract(
+      createInput(["Rechnung", "Betrag: 89,00 EUR"].join("\n"), "rechnung.pdf"),
+    );
+
+    expect(result.amount).toBe(89);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    expect(intelligence?.extraction?.provider).toBe("deterministic");
+  });
+
   it("warns when an ambiguous insurance amount is discarded", async () => {
     const llmResponses = [
       JSON.stringify({

@@ -27,8 +27,16 @@ export const TitleSummaryResponseSchema = z.object({
 });
 export type TitleSummaryResponse = z.infer<typeof TitleSummaryResponseSchema>;
 
+/**
+ * Field values must be scalars. Providers without schema enforcement (Gemini runs
+ * in plain JSON mode) can answer with objects like `{ value: 89, currency: "EUR" }`;
+ * merging that would replace a valid deterministic number and normalization would
+ * then drop it entirely, so such responses are rejected here instead.
+ */
+const ExtractionFieldValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
 export const TypedExtractionResponseSchema = z.object({
-  fields: z.record(z.string(), z.unknown()),
+  fields: z.record(z.string(), ExtractionFieldValueSchema),
   // The strict request schema REQUIRES a fieldConfidence entry per relevant field
   // and permits null for unknown values — the validator must accept those null
   // placeholders or every partially populated response falls back to deterministic.
@@ -43,7 +51,7 @@ export const TaggingResponseSchema = z.object({
 export type TaggingResponse = z.infer<typeof TaggingResponseSchema>;
 
 const nullableString = { type: ["string", "null"] };
-const nullableNumber = { type: ["number", "null"] };
+const nullableNumber = { type: ["number", "null"], minimum: 0, maximum: 1 };
 const nullableScalar = { type: ["string", "number", "null"] };
 
 export const buildRoutingJsonSchema = (documentTypes: readonly string[]) => ({
@@ -53,7 +61,7 @@ export const buildRoutingJsonSchema = (documentTypes: readonly string[]) => ({
     properties: {
       documentType: { type: "string", enum: [...documentTypes] },
       subtype: nullableString,
-      confidence: { type: "number" },
+      confidence: { type: "number", minimum: 0, maximum: 1 },
       reasoningHints: { type: "array", items: { type: "string" } },
     },
     required: ["documentType", "subtype", "confidence", "reasoningHints"],
@@ -110,7 +118,7 @@ export const buildTaggingJsonSchema = () => ({
     type: "object",
     properties: {
       tags: { type: "array", items: { type: "string" } },
-      confidence: { type: "number" },
+      confidence: { type: "number", minimum: 0, maximum: 1 },
     },
     required: ["tags", "confidence"],
     additionalProperties: false,
