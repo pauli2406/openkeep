@@ -1359,7 +1359,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -1413,7 +1413,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -1482,7 +1482,7 @@ export interface components {
                             /** @default false */
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -1772,7 +1772,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -1826,7 +1826,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -1895,7 +1895,7 @@ export interface components {
                             /** @default false */
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -2101,7 +2101,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 reviewedAt: string | null;
                 reviewNote: string | null;
                 searchablePdfAvailable: boolean;
@@ -2155,7 +2155,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2224,7 +2224,7 @@ export interface components {
                             /** @default false */
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -2469,7 +2469,7 @@ export interface components {
             confidence: number | null;
             /** @enum {string} */
             reviewStatus: "not_required" | "pending" | "resolved";
-            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+            reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
             reviewedAt: string | null;
             reviewNote: string | null;
             searchablePdfAvailable: boolean;
@@ -2523,7 +2523,7 @@ export interface components {
                 pageCount?: number;
                 chunkCount?: number;
                 searchablePdfGenerated?: boolean;
-                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 parse?: {
                     /** @enum {string} */
                     provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2592,7 +2592,7 @@ export interface components {
                         /** @default false */
                         issuingAuthority: boolean;
                     };
-                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     confidence?: number | null;
                     confidenceThreshold?: number;
                     ocrTextLength?: number;
@@ -2863,7 +2863,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     reviewedAt: string | null;
                     reviewNote: string | null;
                     searchablePdfAvailable: boolean;
@@ -2917,7 +2917,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -2986,7 +2986,7 @@ export interface components {
                                 /** @default false */
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -3230,7 +3230,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     reviewedAt: string | null;
                     reviewNote: string | null;
                     searchablePdfAvailable: boolean;
@@ -3284,7 +3284,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -3353,7 +3353,7 @@ export interface components {
                                 /** @default false */
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -3585,7 +3585,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     reviewedAt: string | null;
                     reviewNote: string | null;
                     searchablePdfAvailable: boolean;
@@ -3639,7 +3639,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -3708,7 +3708,7 @@ export interface components {
                                 /** @default false */
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -4049,7 +4049,7 @@ export interface components {
                 confidence: number | null;
                 /** @enum {string} */
                 reviewStatus: "not_required" | "pending" | "resolved";
-                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                 /** Format: date-time */
                 reviewedAt: string | null;
                 reviewNote: string | null;
@@ -4078,7 +4078,7 @@ export interface components {
                     pageCount?: number;
                     chunkCount?: number;
                     searchablePdfGenerated?: boolean;
-                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     parse?: {
                         /** @enum {string} */
                         provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -4147,7 +4147,7 @@ export interface components {
                             /** @default false */
                             issuingAuthority: boolean;
                         };
-                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         confidence?: number | null;
                         confidenceThreshold?: number;
                         ocrTextLength?: number;
@@ -4541,7 +4541,7 @@ export interface components {
                     confidence: number | null;
                     /** @enum {string} */
                     reviewStatus: "not_required" | "pending" | "resolved";
-                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                    reviewReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                     /** Format: date-time */
                     reviewedAt: string | null;
                     reviewNote: string | null;
@@ -4570,7 +4570,7 @@ export interface components {
                         pageCount?: number;
                         chunkCount?: number;
                         searchablePdfGenerated?: boolean;
-                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                        reviewReasons?: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                         parse?: {
                             /** @enum {string} */
                             provider: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
@@ -4639,7 +4639,7 @@ export interface components {
                                 /** @default false */
                                 issuingAuthority: boolean;
                             };
-                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
+                            activeReasons: ("low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed")[];
                             confidence?: number | null;
                             confidenceThreshold?: number;
                             ocrTextLength?: number;
@@ -5504,7 +5504,7 @@ export interface operations {
                 /** @description Filter review queue by processing status */
                 processingStatus?: "pending" | "processing" | "ready" | "failed";
                 /** @description Filter review queue by review reason */
-                reason?: "low_confidence" | "processing_failed" | "ocr_empty" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed";
+                reason?: "low_confidence" | "processing_failed" | "ocr_empty" | "ocr_low_confidence" | "missing_key_fields" | "unsupported_format" | "classification_ambiguous" | "correspondent_unresolved" | "validation_failed";
                 /** @description Page number */
                 page?: number;
                 /** @description Page size */

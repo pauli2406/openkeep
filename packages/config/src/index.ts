@@ -122,6 +122,13 @@ export const AppEnvSchema = z.object({
   MISTRAL_API_KEY: EmptyStringToUndefined(z.string().optional()),
   MISTRAL_OCR_BASE_URL: z.string().url().default("https://api.mistral.ai"),
   MISTRAL_OCR_MODEL: z.string().default("mistral-ocr-latest"),
+  MISTRAL_OCR_INCLUDE_BLOCKS: BooleanFromEnv.default(true),
+  // Only markdown tables are parsed into normalized cells; an HTML option would
+  // silently drop tables (nothing parses table.html).
+  MISTRAL_OCR_TABLE_FORMAT: z.enum(["markdown", "none"]).default("markdown"),
+  MISTRAL_OCR_CONFIDENCE_GRANULARITY: z.enum(["page", "word", "none"]).default("page"),
+  MISTRAL_OCR_EXTRACT_HEADER_FOOTER: BooleanFromEnv.default(true),
+  MISTRAL_OCR_UPLOAD_STRATEGY: z.enum(["auto", "inline", "files"]).default("auto"),
   MISTRAL_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   OCR_LANGUAGES: z.string().default("deu+eng"),
   PARSE_PROVIDER_TIMEOUT_SECONDS: NumberFromEnv.default(120),

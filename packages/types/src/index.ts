@@ -27,6 +27,7 @@ export const reviewReasons = [
   "low_confidence",
   "processing_failed",
   "ocr_empty",
+  "ocr_low_confidence",
   "missing_key_fields",
   "unsupported_format",
   "classification_ambiguous",

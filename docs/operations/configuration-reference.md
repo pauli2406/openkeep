@@ -164,6 +164,15 @@ These control upload size and search pagination limits.
 - `MISTRAL_EMBEDDING_MODEL`
 - `MISTRAL_OCR_BASE_URL`
 - `MISTRAL_OCR_MODEL`
+- `MISTRAL_OCR_INCLUDE_BLOCKS` (default `true`): paragraph blocks with real bounding boxes
+- `MISTRAL_OCR_TABLE_FORMAT` (`markdown` | `none`, default `markdown`)
+- `MISTRAL_OCR_CONFIDENCE_GRANULARITY` (`page` | `word` | `none`, default `page`); pages
+  below the confidence threshold flag the document for review (`ocr_low_confidence`)
+- `MISTRAL_OCR_EXTRACT_HEADER_FOOTER` (default `true`): headers/footers become blocks
+  tagged `metadata.region` so boilerplate can be deprioritized
+- `MISTRAL_OCR_UPLOAD_STRATEGY` (`auto` | `inline` | `files`, default `auto`): inline
+  base64 below ~8MB, Files API (upload + signed URL, deleted in a finally) above —
+  base64 inflates payloads ~33% and large inline bodies risk request-size rejections
 
 Timeouts and resilience:
 
