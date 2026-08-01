@@ -110,6 +110,16 @@ export class ProcessingService {
       parseProvider = parsed.data;
     }
     const fallbackParseProvider = this.parseProviderRegistry.getFallbackProviderId();
+
+    // Refresh updatedAt BEFORE publishing so the row is no longer stale the moment
+    // a job exists for it. markProcessing only runs once the worker picks the job
+    // up; without this touch the reaper could claim a freshly requeued document
+    // during that window (its queue check runs before the claim).
+    await this.databaseService.db
+      .update(documents)
+      .set({ updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+
     const [job] = await this.databaseService.db
       .insert(processingJobs)
       .values({
@@ -1015,6 +1025,124 @@ export class ProcessingService {
         },
       });
     });
+  }
+
+  /**
+   * A document can get stuck in "processing" when the worker process dies between
+   * pg-boss retries: the handler is never invoked again, so neither failure path runs.
+   * The reaper marks such documents as failed so they become visible and reprocessable.
+   */
+  async reapStaleProcessingDocuments(): Promise<number> {
+    const staleMinutes = this.configService.get("PROCESSING_STALE_MINUTES");
+    const cutoff = new Date(Date.now() - staleMinutes * 60_000);
+
+    const candidates = await this.databaseService.db
+      .select({
+        documentId: documents.id,
+      })
+      .from(documents)
+      .where(and(eq(documents.status, "processing"), sql`${documents.updatedAt} < ${cutoff}`));
+
+    let reaped = 0;
+    for (const candidate of candidates) {
+      const hasActiveJob = await this.bossService.hasActiveJobForDocument(
+        DOCUMENT_PROCESSING_QUEUE,
+        candidate.documentId,
+      );
+      if (hasActiveJob) {
+        continue;
+      }
+
+      const claimed = await this.databaseService.db.transaction(async (tx) => {
+        // Atomically claim the stale row: revalidate the cutoff inside the update
+        // so a document that was requeued (markProcessing refreshed updatedAt)
+        // between the candidate scan and this write is never marked failed, and
+        // concurrent reapers cannot both record the same recovery.
+        const claimedRows = await tx
+          .update(documents)
+          .set({
+            status: "failed",
+            reviewStatus: "pending",
+            reviewReasons: ["processing_failed"],
+            lastProcessingError: "stale_processing_reaped",
+            processedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(documents.id, candidate.documentId),
+              eq(documents.status, "processing"),
+              sql`${documents.updatedAt} < ${cutoff}`,
+            ),
+          )
+          .returning({ id: documents.id });
+
+        if (claimedRows.length === 0) {
+          return false;
+        }
+
+        await tx
+          .update(processingJobs)
+          .set({
+            status: "failed",
+            lastError: "stale_processing_reaped",
+            finishedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(processingJobs.documentId, candidate.documentId),
+              eq(processingJobs.queueName, DOCUMENT_PROCESSING_QUEUE),
+              eq(processingJobs.status, "running"),
+            ),
+          );
+
+        await tx.insert(auditEvents).values({
+          documentId: candidate.documentId,
+          eventType: "document.processing_reaped_stale",
+          payload: {
+            staleMinutes,
+          },
+        });
+
+        return true;
+      });
+
+      if (!claimed) {
+        continue;
+      }
+
+      reaped += 1;
+      this.logStructured("warn", "document.processing_reaped_stale", {
+        documentId: candidate.documentId,
+        staleMinutes,
+      });
+    }
+
+    return reaped;
+  }
+
+  async isDocumentProcessingStale(documentId: string): Promise<boolean> {
+    const staleMinutes = this.configService.get("PROCESSING_STALE_MINUTES");
+    const cutoff = new Date(Date.now() - staleMinutes * 60_000);
+
+    const [record] = await this.databaseService.db
+      .select({
+        status: documents.status,
+        updatedAt: documents.updatedAt,
+      })
+      .from(documents)
+      .where(eq(documents.id, documentId))
+      .limit(1);
+
+    if (!record || record.status !== "processing" || record.updatedAt >= cutoff) {
+      return false;
+    }
+
+    return !(await this.bossService.hasActiveJobForDocument(
+      DOCUMENT_PROCESSING_QUEUE,
+      documentId,
+    ));
   }
 
   private async handleRetryableEmbeddingFailure(

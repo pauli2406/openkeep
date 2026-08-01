@@ -120,6 +120,7 @@ These determine practical upper bounds and timeout behavior for document parsing
 - `OCR_EMPTY_TEXT_THRESHOLD`
 - `PROCESSING_RETRY_LIMIT`
 - `PROCESSING_RETRY_DELAY_SECONDS`
+- `PROCESSING_STALE_MINUTES` (default `30`)
 
 These values affect:
 
@@ -127,6 +128,10 @@ These values affect:
 - empty-text handling
 - retry count for processing jobs
 - retry backoff timing
+- stale-processing recovery: documents stuck in `processing` longer than
+  `PROCESSING_STALE_MINUTES` without an active queue job are marked `failed`
+  (`lastProcessingError = "stale_processing_reaped"`) by a periodic worker reaper and can
+  then be reprocessed
 
 ## API Limits
 
