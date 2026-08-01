@@ -270,6 +270,36 @@ describe("SearchOrchestratorService", () => {
     expect(response.structuredData?.kind).toBe("pending_review_documents");
   });
 
+  it("keeps count questions on the structured path even when the result is empty", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+    const explorerService = { listDeadlineItems: vi.fn().mockResolvedValue([]) };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      explorerService as never,
+    );
+
+    for (const query of [
+      "How many overdue invoices still need to be paid before the end of this month?",
+      "Wie viele Rechnungen sind in diesem Monat noch offen und zu bezahlen?",
+    ]) {
+      const response = await service.answerQuery(
+        { query, maxDocuments: 5, maxCitations: 6, maxChunkMatches: 6 },
+        { userId: "user-1" } as never,
+      );
+
+      // Zero IS the authoritative answer for a count question.
+      expect(response.route).toBe("structured");
+    }
+    expect(documentsService.answerQuery).not.toHaveBeenCalled();
+  });
+
   it("keeps content questions that merely mention 'review' on the semantic path", async () => {
     const semanticResponse = {
       status: "answered" as const,

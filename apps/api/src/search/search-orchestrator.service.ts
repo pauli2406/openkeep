@@ -140,6 +140,15 @@ export class SearchOrchestratorService {
       return false;
     }
 
+    // A count question wants the authoritative operational number, and an empty
+    // structured result IS that answer ("zero"). Routing it to RAG would let
+    // stale document text override the definitive state, so count phrasing is
+    // excluded before the content-question signal is evaluated (it would
+    // otherwise match on "how"/"wie").
+    if (/\b(how many|how much|wie viele?|wieviele?|anzahl|count of|number of)\b/.test(normalized)) {
+      return false;
+    }
+
     return /\b(say|says|sagen|sagt|steht|schreibt|about|uber|regarding|bezuglich|why|warum|how|wie|contains?|enthalt|enthalten|mentions?|erwahnt|according)\b/.test(
       normalized,
     );
