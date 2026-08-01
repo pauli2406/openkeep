@@ -26,10 +26,29 @@ export const CITATION_MIN_SCORE = 0.4;
  */
 export const DOCUMENT_QA_FULL_TEXT_MAX_CHARS = 12_000;
 
+/**
+ * Per-chunk serialization overhead in the prompt: the `[Excerpt n, Page x,
+ * Section: …]` label plus the `\n\n---\n\n` separator. Many short chunks (or long
+ * headings) would otherwise pass a raw text-length check while the assembled
+ * prompt is far larger.
+ */
+export const DOCUMENT_QA_CHUNK_OVERHEAD_CHARS = 80;
+/** Hard cap on chunk count for full-text mode, independent of total length. */
+export const DOCUMENT_QA_FULL_TEXT_MAX_CHUNKS = 60;
+
 export const shouldUseFullDocumentContext = (
   totalChars: number,
   chunkCount: number,
-): boolean => chunkCount > 0 && totalChars <= DOCUMENT_QA_FULL_TEXT_MAX_CHARS;
+  headingChars = 0,
+): boolean => {
+  if (chunkCount === 0 || chunkCount > DOCUMENT_QA_FULL_TEXT_MAX_CHUNKS) {
+    return false;
+  }
+
+  const serializedChars =
+    totalChars + headingChars + chunkCount * DOCUMENT_QA_CHUNK_OVERHEAD_CHARS;
+  return serializedChars <= DOCUMENT_QA_FULL_TEXT_MAX_CHARS;
+};
 
 export const buildInsufficientEvidenceMessage = (
   language?: AppLanguage | null,

@@ -1517,16 +1517,24 @@ export class DocumentsService {
     // so large documents never transfer their entire OCR text just to be measured.
     const chunkStats = await this.databaseService.pool.query<{
       total_chars: string;
+      heading_chars: string;
       chunk_count: string;
     }>(
-      `SELECT COALESCE(SUM(LENGTH(text)), 0)::text AS total_chars, COUNT(*)::text AS chunk_count
+      `SELECT COALESCE(SUM(LENGTH(text)), 0)::text AS total_chars,
+              COALESCE(SUM(LENGTH(COALESCE(heading, ''))), 0)::text AS heading_chars,
+              COUNT(*)::text AS chunk_count
        FROM document_chunks
        WHERE document_id = $1`,
       [documentId],
     );
     const totalChunkChars = Number(chunkStats.rows[0]?.total_chars ?? 0);
+    const headingChars = Number(chunkStats.rows[0]?.heading_chars ?? 0);
     const chunkCount = Number(chunkStats.rows[0]?.chunk_count ?? 0);
-    const fullTextMode = shouldUseFullDocumentContext(totalChunkChars, chunkCount);
+    const fullTextMode = shouldUseFullDocumentContext(
+      totalChunkChars,
+      chunkCount,
+      headingChars,
+    );
 
     const loadChunksByPosition = async (limit?: number) => {
       const rows = await this.databaseService.pool.query<{
