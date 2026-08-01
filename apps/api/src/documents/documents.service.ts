@@ -125,6 +125,14 @@ interface DocumentRow {
     : null;
 }
 
+/** Chunk-embedding candidates pulled from the vector index per query. */
+const VECTOR_CANDIDATE_LIMIT = 200;
+/**
+ * HNSW search breadth for that candidate query. Must exceed the candidate limit
+ * because the index scan happens before the provider/model and document filters.
+ */
+const VECTOR_CANDIDATE_EF_SEARCH = 400;
+
 const MANUAL_OVERRIDE_FIELDS: ManualOverrideField[] = [
   "issueDate",
   "dueDate",
@@ -1114,10 +1122,7 @@ export class DocumentsService {
     // filters apply INSIDE the candidate selection: filtering after the limit would
     // discard eligible documents whenever 200 closer chunks belong to excluded
     // documents (e.g. a selective year/correspondent filter).
-    const semanticRows = await this.databaseService.pool.query<{
-      id: string;
-      distance: string;
-    }>(
+    const semanticRows = await this.runVectorCandidateQuery(
       `SELECT t.document_id AS id, MIN(t.distance)::text AS distance
        FROM (
          SELECT e.document_id, (e.embedding <=> $${params.length + 1}::halfvec) AS distance
@@ -1127,7 +1132,7 @@ export class DocumentsService {
            AND e.model = $${params.length + 3}
            AND ${whereSql}
          ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
-         LIMIT 200
+         LIMIT ${VECTOR_CANDIDATE_LIMIT}
        ) t
        GROUP BY t.document_id
        ORDER BY MIN(t.distance) ASC, t.document_id DESC`,
@@ -2185,6 +2190,42 @@ export class DocumentsService {
     }
 
     return map;
+  }
+
+  /**
+   * Runs the HNSW candidate query with enough index search breadth.
+   *
+   * pgvector's `hnsw.ef_search` defaults to 40, so a bare `LIMIT 200` over the
+   * index returns roughly 40 approximate neighbours — and the provider/model and
+   * owner/filter predicates cut that down further, which can drop relevant
+   * documents or return nothing on larger archives. Raise ef_search for this
+   * statement and, where the server supports it, let pgvector scan iteratively
+   * so filtered queries keep pulling candidates until the limit is satisfied.
+   */
+  private async runVectorCandidateQuery(
+    sqlText: string,
+    values: unknown[],
+  ): Promise<{ rows: Array<{ id: string; distance: string }> }> {
+    const client = await this.databaseService.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Available since pgvector 0.8; ignored (and rolled back to the plain
+      // scan) on older servers that do not know the GUC.
+      await client
+        .query("SET LOCAL hnsw.iterative_scan = relaxed_order")
+        .catch(() => undefined);
+      await client
+        .query(`SET LOCAL hnsw.ef_search = ${VECTOR_CANDIDATE_EF_SEARCH}`)
+        .catch(() => undefined);
+      const result = await client.query<{ id: string; distance: string }>(sqlText, values);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private async loadSemanticMatchedChunks(

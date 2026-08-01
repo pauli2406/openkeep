@@ -105,7 +105,11 @@ Retrieval notes:
   (`german`/`english`/`simple` per document language) so stemmed queries match
   ("Rechnungen" finds "Rechnung"); it is capped at 50 candidates
 - the vector arm selects the top 200 chunk embeddings by cosine distance first
-  (HNSW-friendly `ORDER BY distance LIMIT`), then aggregates per document
+  (HNSW-friendly `ORDER BY distance LIMIT`, with the document filters applied inside
+  that candidate selection), then aggregates per document. The statement raises
+  `hnsw.ef_search` to 400 and enables iterative scanning where available, because
+  pgvector's default breadth of 40 would otherwise return far fewer candidates than
+  the limit once the provider/model and filter predicates are applied
 - deliberately deferred until the archive approaches ~50k chunks: per-provider partial
   HNSW indexes, a generated tsvector column with a language-aware GIN index, and
   rerankers — at that size revisit `semanticSearch` in
