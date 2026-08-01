@@ -103,16 +103,37 @@ export class CorrespondentResolutionService {
       ? this.blockedReasonForCandidate(deterministicRaw)
       : null;
 
-    const provider = this.getProvider();
+    const providers = this.getProviders();
     const lexicalSeed =
       !initialBlockedReason && deterministicRaw ? deterministicRaw : evidenceLines[0] ?? null;
     const lexicalCandidates = lexicalSeed
       ? await this.findCandidateCorrespondents(lexicalSeed)
       : [];
-    const llmDecision =
-      provider && evidenceLines.length > 0
-        ? await this.resolveWithLlm(provider, input, evidenceLines, lexicalCandidates)
-        : null;
+
+    // Walk the configured providers until one resolves: a single attempt meant a
+    // failing or unreachable pinned provider disabled correspondent resolution
+    // even though other providers were configured.
+    let provider: (typeof providers)[number] | null = providers[0] ?? null;
+    let llmDecision: LlmResolution | null = null;
+    if (evidenceLines.length > 0) {
+      for (const candidateProvider of providers) {
+        const decision = await this.resolveWithLlm(
+          candidateProvider,
+          input,
+          evidenceLines,
+          lexicalCandidates,
+        );
+        if (decision) {
+          provider = candidateProvider;
+          llmDecision = decision;
+          break;
+        }
+
+        this.logger.warn(
+          `Correspondent resolution via ${candidateProvider.provider} returned no usable result — trying next provider`,
+        );
+      }
+    }
 
     let rawName =
       this.cleanDisplayName(llmDecision?.rawName) ??
@@ -596,28 +617,46 @@ export class CorrespondentResolutionService {
         model: string;
       }
     | null {
-    // Derive from the central chat-provider order (ACTIVE_CHAT_PROVIDER first) —
-    // this previously hardcoded openai -> gemini -> mistral and ignored the env pin.
+    return this.getProviders()[0] ?? null;
+  }
+
+  /**
+   * All configured chat providers in the central order (ACTIVE_CHAT_PROVIDER
+   * first). Resolution walks this list so a failing or unreachable pinned
+   * provider does not disable correspondent resolution entirely — the same
+   * failover the chat paths already have.
+   */
+  private getProviders(): Array<{
+    provider: Exclude<ResolutionProvider, "deterministic">;
+    apiKey: string;
+    model: string;
+  }> {
+    const providers: Array<{
+      provider: Exclude<ResolutionProvider, "deterministic">;
+      apiKey: string;
+      model: string;
+    }> = [];
+
     for (const provider of this.llmService.getDefaultProviderOrder()) {
       if (provider === "openai") {
         const apiKey = this.configService.get("OPENAI_API_KEY");
         if (apiKey) {
-          return { provider, apiKey, model: this.configService.get("OPENAI_MODEL") };
+          providers.push({ provider, apiKey, model: this.configService.get("OPENAI_MODEL") });
         }
       } else if (provider === "gemini") {
         const apiKey = this.configService.get("GEMINI_API_KEY");
         if (apiKey) {
-          return { provider, apiKey, model: this.configService.get("GEMINI_MODEL") };
+          providers.push({ provider, apiKey, model: this.configService.get("GEMINI_MODEL") });
         }
       } else {
         const apiKey = this.configService.get("MISTRAL_API_KEY");
         if (apiKey) {
-          return { provider, apiKey, model: this.configService.get("MISTRAL_MODEL") };
+          providers.push({ provider, apiKey, model: this.configService.get("MISTRAL_MODEL") });
         }
       }
     }
 
-    return null;
+    return providers;
   }
 
   private async resolveWithLlm(
