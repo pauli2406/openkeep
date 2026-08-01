@@ -38,6 +38,8 @@ type AgentProvider = LlmProviderId | "deterministic" | "mistral-annotation";
 
 /** Minimum annotation classification confidence to skip the routing LLM call. */
 const ANNOTATION_ROUTE_MIN_CONFIDENCE = 0.7;
+/** Minimum annotation confidence for a field to count toward required coverage. */
+const ANNOTATION_FIELD_MIN_CONFIDENCE = 0.5;
 /** Confidence attached to values produced by deterministic parsing/refinement. */
 const DETERMINISTIC_FIELD_CONFIDENCE = 0.7;
 
@@ -489,9 +491,13 @@ export class AgenticDocumentIntelligenceService {
   ): Promise<TitleSummaryResult> {
     const fallback = this.buildDeterministicTitleSummary(input, routing);
 
-    // An annotation-provided title skips the title/summary LLM round-trip.
+    // An annotation-provided title skips the title/summary LLM round-trip — but
+    // only when it already matches the configured processing language. The
+    // annotation request carries no language preference, so accepting it blindly
+    // would persist titles in the document's language instead of the one selected
+    // in Settings (this branch bypasses buildGeneratedTextInstruction entirely).
     const preExtracted = input.parsed.preExtracted;
-    if (preExtracted?.title) {
+    if (preExtracted?.title && this.annotationMatchesPreferredLanguage(input)) {
       return {
         title: preExtracted.title,
         titleConfidence: null,
@@ -721,11 +727,17 @@ export class AgenticDocumentIntelligenceService {
         provider: "mistral-annotation",
         model: preExtracted.model,
       },
-      // Keys the annotation actually supplied a value for — not merely the ones
-      // that won the merge. A field the annotation provided but that lost to an
-      // equally good deterministic value is still covered by the annotation.
+      // Keys the annotation supplied with usable confidence. Presence alone is not
+      // enough: a value the provider itself scored at 0.1 must not make the
+      // annotation look complete and suppress the typed-extraction fallback.
       annotationKeys: Object.entries(annotationFields)
-        .filter(([, value]) => value !== null && value !== undefined && value !== "")
+        .filter(([key, value]) => {
+          if (value === null || value === undefined || value === "") {
+            return false;
+          }
+          const confidence = preExtracted.fieldConfidence[key];
+          return confidence === undefined || confidence >= ANNOTATION_FIELD_MIN_CONFIDENCE;
+        })
         .map(([key]) => key),
     };
   }
@@ -748,7 +760,16 @@ export class AgenticDocumentIntelligenceService {
       return { ...extraction, fields: refinedFields };
     }
 
-    const changedValues = Object.fromEntries(changedKeys.map((key) => [key, refinedFields[key]]));
+    const clearedKeys = changedKeys.filter((key) => {
+      const value = refinedFields[key];
+      return value === null || value === undefined || value === "";
+    });
+    const changedValues = Object.fromEntries(
+      changedKeys
+        .filter((key) => !clearedKeys.includes(key))
+        .map((key) => [key, refinedFields[key]]),
+    );
+
     const fieldConfidence = { ...extraction.fieldConfidence };
     for (const key of changedKeys) {
       // Refined values come from deterministic document-text rules, so they carry
@@ -756,16 +777,27 @@ export class AgenticDocumentIntelligenceService {
       fieldConfidence[key] = DETERMINISTIC_FIELD_CONFIDENCE;
     }
 
+    const fieldProvenance = this.buildFieldProvenance(
+      input,
+      changedValues,
+      "deterministic",
+      extraction.fieldProvenance,
+    );
+
+    // A refiner that deliberately clears a field (the insurance premium rules do
+    // this for documents with unrelated totals) must not leave confidence or the
+    // previous value's evidence behind — that would claim proof for an absent
+    // fact and inflate the overall extraction confidence.
+    for (const key of clearedKeys) {
+      delete fieldConfidence[key];
+      delete fieldProvenance[key];
+    }
+
     return {
       ...extraction,
       fields: refinedFields,
       fieldConfidence,
-      fieldProvenance: this.buildFieldProvenance(
-        input,
-        changedValues,
-        "deterministic",
-        extraction.fieldProvenance,
-      ),
+      fieldProvenance,
     };
   }
 
@@ -1205,6 +1237,23 @@ export class AgenticDocumentIntelligenceService {
     ]
       .filter(Boolean)
       .join("\n\n");
+  }
+
+  /**
+   * The annotation request carries no language preference, so its title/summary
+   * come back in the document's language. Accept them only when that matches the
+   * configured processing language; otherwise the LLM path runs and states the
+   * target language explicitly. An unknown document language is treated as a
+   * match (there is nothing better to compare against).
+   */
+  private annotationMatchesPreferredLanguage(input: MetadataExtractionInput): boolean {
+    const documentLanguage = input.parsed.language?.slice(0, 2).toLowerCase();
+    if (!documentLanguage) {
+      return true;
+    }
+
+    const preferred = input.preferredLanguage === "de" ? "de" : "en";
+    return documentLanguage === preferred;
   }
 
   private buildGeneratedTextInstruction(
