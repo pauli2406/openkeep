@@ -105,6 +105,8 @@ export const AppEnvSchema = z.object({
   VOYAGE_API_BASE_URL: z.string().url().default("https://api.voyageai.com/v1"),
   VOYAGE_EMBEDDING_MODEL: EmptyStringToUndefined(z.string().optional()),
   MISTRAL_MODEL: z.string().default("mistral-large-latest"),
+  LLM_TIMEOUT_SECONDS: NumberFromEnv.default(45),
+  LLM_STREAM_TIMEOUT_SECONDS: NumberFromEnv.default(120),
   GOOGLE_CLOUD_PROJECT_ID: EmptyStringToUndefined(z.string().optional()),
   GOOGLE_CLOUD_LOCATION: z.string().default("eu"),
   GOOGLE_CLOUD_ACCESS_TOKEN: EmptyStringToUndefined(z.string().optional()),

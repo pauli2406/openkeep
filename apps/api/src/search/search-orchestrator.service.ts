@@ -80,10 +80,11 @@ export class SearchOrchestratorService {
   async *streamAnswer(
     request: AnswerQueryRequest,
     principal: AuthenticatedPrincipal,
+    signal?: AbortSignal,
   ): AsyncGenerator<string> {
     const route = this.routeStructuredQuery(request.query);
     if (!route) {
-      for await (const chunk of this.documentsService.streamAnswer(request, principal)) {
+      for await (const chunk of this.documentsService.streamAnswer(request, principal, signal)) {
         yield chunk;
       }
       return;
@@ -92,7 +93,7 @@ export class SearchOrchestratorService {
     const response = await this.answerStructuredQuery(route, principal, request.maxDocuments, request.query);
 
     if (this.shouldFallThroughToSemantic(response, request.query)) {
-      const semanticStream = this.documentsService.streamAnswer(request, principal);
+      const semanticStream = this.documentsService.streamAnswer(request, principal, signal);
       let yieldedSemanticEvent = false;
       try {
         for await (const chunk of semanticStream) {

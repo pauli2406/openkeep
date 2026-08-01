@@ -9,6 +9,7 @@ import {
 import type { FastifyReply } from "fastify";
 
 import { AccessAuthGuard } from "../auth/access-auth.guard";
+import { streamSseResponse } from "../common/sse.util";
 import { CurrentPrincipal } from "../auth/current-principal.decorator";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
@@ -74,22 +75,8 @@ export class SearchController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res() reply: FastifyReply,
   ) {
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    try {
-      for await (const chunk of this.searchOrchestratorService.streamAnswer(body, principal)) {
-        reply.raw.write(chunk);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Internal error";
-      reply.raw.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
-    }
-
-    reply.raw.end();
+    await streamSseResponse(reply, (signal) =>
+      this.searchOrchestratorService.streamAnswer(body, principal, signal),
+    );
   }
 }

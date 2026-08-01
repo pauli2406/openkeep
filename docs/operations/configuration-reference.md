@@ -165,6 +165,18 @@ These control upload size and search pagination limits.
 - `MISTRAL_OCR_BASE_URL`
 - `MISTRAL_OCR_MODEL`
 
+Timeouts and resilience:
+
+- `LLM_TIMEOUT_SECONDS` (default `45`): hard timeout for non-streaming LLM completions;
+  429/5xx responses are retried once before giving up
+- `LLM_STREAM_TIMEOUT_SECONDS` (default `120`): hard timeout for streaming completions,
+  applied once across the whole provider fallback chain (not per provider)
+- streaming answers fail over to the next configured provider when a provider fails
+  before its first token; after the first token the error is surfaced instead (no silent
+  mid-answer restarts)
+- closing the client (SSE disconnect) aborts the upstream LLM request; SSE responses
+  send comment-frame heartbeats every 15s so idle proxies keep the connection open
+
 Operational notes:
 
 - chat uses the configured `ACTIVE_CHAT_PROVIDER` when set; otherwise it falls back in this order: `openai` -> `gemini` -> `mistral`
