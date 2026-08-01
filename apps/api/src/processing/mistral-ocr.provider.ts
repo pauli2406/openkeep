@@ -105,10 +105,12 @@ export const mapMistralOcrResponse = (
       width: typeof page.dimensions?.width === "number" ? page.dimensions.width : null,
       height: typeof page.dimensions?.height === "number" ? page.dimensions.height : null,
       lines,
-      // Real provider blocks win; markdown headings are the fallback when
-      // include_blocks is disabled or the response carries none, so the chunker
-      // always has heading signal.
-      blocks: blocks.length > 0 ? blocks : buildHeadingBlocks(lines),
+      // Real provider blocks win, but the chunker derives page headings ONLY from
+      // heading-role blocks — so a page that returned just paragraphs or a
+      // header/footer still needs the markdown heading fallback appended.
+      blocks: blocks.some((block) => block.role === "heading")
+        ? blocks
+        : [...blocks, ...buildHeadingBlocks(lines, blocks.length)],
       markdown: page.markdown,
     };
   });
@@ -345,11 +347,12 @@ export class MistralOcrParseProvider implements DocumentParseProvider {
  */
 const buildHeadingBlocks = (
   lines: Array<{ lineIndex: number; text: string }>,
+  blockIndexOffset = 0,
 ): NonNullable<ParsedDocument["pages"][number]["blocks"]> =>
   lines
     .filter((line) => /^#{1,6}\s+\S/.test(line.text))
     .map((line, blockIndex) => ({
-      blockIndex,
+      blockIndex: blockIndexOffset + blockIndex,
       role: "heading" as const,
       text: line.text.replace(/^#{1,6}\s+/, "").trim(),
       boundingBox: null,
@@ -494,10 +497,12 @@ export const parseMarkdownTable = (
   let rowNumber = 0;
 
   for (const row of rows) {
+    // Split on UNESCAPED pipes only: a cell like `A \| B` is one column, not two,
+    // and the escape character must not survive into the cell text.
     const columns = row
       .slice(1, -1)
-      .split("|")
-      .map((cell) => cell.trim());
+      .split(/(?<!\\)\|/)
+      .map((cell) => cell.replace(/\\\|/g, "|").trim());
 
     // Skip the separator row (|---|---|).
     if (columns.every((cell) => /^:?-{2,}:?$/.test(cell))) {

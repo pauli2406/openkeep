@@ -312,6 +312,49 @@ describe("Parse provider mappers", () => {
     expect(cells[3]).toMatchObject({ row: 2, column: 2, text: "89,00 EUR", kind: "body" });
   });
 
+  it("keeps markdown headings when the provider returns only non-heading blocks", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "# Rechnung Nr. 2024-001\n\nBetrag: 119,00 EUR",
+          blocks: [{ type: "text", text: "Betrag: 119,00 EUR" }],
+          header: "Stadtwerke Musterstadt",
+        },
+      ],
+    });
+
+    const blocks = result.pages[0]?.blocks ?? [];
+    // The chunker only reads heading-role blocks, so the markdown fallback must
+    // be appended even though paragraph/header blocks exist.
+    const headings = blocks.filter((block) => block.role === "heading");
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toMatchObject({ text: "Rechnung Nr. 2024-001", boundingBox: null });
+    expect(new Set(blocks.map((block) => block.blockIndex)).size).toBe(blocks.length);
+  });
+
+  it("treats escaped pipes inside markdown table cells as content", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "Tabelle folgt.",
+          tables: [
+            {
+              markdown: "| Rule | Value |\n|---|---|\n| A \\| B | 10 |",
+            },
+          ],
+        },
+      ],
+    });
+
+    const cells = result.tables[0]!.cells;
+    const bodyCells = cells.filter((cell) => cell.row === 2);
+    expect(bodyCells).toHaveLength(2);
+    expect(bodyCells[0]?.text).toBe("A | B");
+    expect(bodyCells[1]?.text).toBe("10");
+  });
+
   it("parses HTML tables when table_format=html is configured", () => {
     const result = mapMistralOcrResponse({
       pages: [
