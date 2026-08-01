@@ -195,6 +195,192 @@ describe("AgenticDocumentIntelligenceService", () => {
     expect(result.tags).toContain("meals");
   });
 
+  it("keeps deterministic values over low-confidence LLM values and fills gaps", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Stromrechnung Mai", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      JSON.stringify({
+        fields: {
+          // Contradicts the regex hit in the document text — low confidence, must lose.
+          amount: "999,99 EUR",
+          // Not present deterministically — high confidence, fills the gap.
+          referenceNumber: "R-2026-042",
+        },
+        fieldConfidence: { amount: 0.3, referenceNumber: 0.9 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(
+        ["Rechnung", "Stadtwerke", "Datum: 03.05.2026", "Betrag: 89,00 EUR"].join("\n"),
+        "rechnung.pdf",
+      ),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    expect(result.amount).toBe(89);
+    expect(result.referenceNumber).toBe("R-2026-042");
+    expect(intelligence?.extraction?.fieldProvenance?.amount?.source).toBe("deterministic_parse");
+    expect(intelligence?.extraction?.fieldProvenance?.referenceNumber?.source).toBe(
+      "llm_structured_extraction",
+    );
+  });
+
+  it("accepts strict responses with null fieldConfidence placeholders", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Rechnung", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Strict mode requires every relevant field in fieldConfidence; unknown ones are null.
+      JSON.stringify({
+        fields: { referenceNumber: "R-2026-042", issueDate: null, amount: null },
+        fieldConfidence: { referenceNumber: 0.9, issueDate: null, amount: null },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(["Rechnung", "Betrag: 89,00 EUR"].join("\n"), "rechnung.pdf"),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    // The response must NOT be rejected as schema-violating: the LLM-only field lands.
+    expect(intelligence?.extraction?.provider).toBe("mistral");
+    expect(result.referenceNumber).toBe("R-2026-042");
+  });
+
+  it("drops LLM fields that are irrelevant for the routed document type", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "receipt", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Beleg", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Gemini runs without the per-type schema: dueDate is not relevant for a
+      // receipt and must not be merged, persisted, or trigger a deadline tag.
+      JSON.stringify({
+        fields: { amount: "47,20", currency: "EUR", dueDate: "31.12.2026" },
+        fieldConfidence: { amount: 0.9, currency: 0.9, dueDate: 0.95 },
+      }),
+      JSON.stringify({ tags: ["receipt"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Trattoria Roma" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+    }));
+
+    const result = await service.extract(
+      createInput(["Beleg", "Trattoria Roma", "Total: 47,20 EUR"].join("\n"), "beleg.pdf"),
+    );
+
+    expect(result.dueDate).toBeNull();
+    expect(result.tags).not.toContain("deadline");
+  });
+
+  it("falls back to deterministic extraction when the LLM payload violates the schema", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Rechnung", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // fields must be an object — schema violation triggers the deterministic fallback.
+      JSON.stringify({ fields: "definitely not an object" }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(["Rechnung", "Betrag: 89,00 EUR"].join("\n"), "rechnung.pdf"),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    expect(intelligence?.extraction?.provider).toBe("deterministic");
+    expect(result.amount).toBe(89);
+  });
+
+  it("rejects non-scalar extraction field values from schema-less providers", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Rechnung", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Gemini runs in plain JSON mode: an object value would replace the valid
+      // deterministic amount and then be dropped by normalization.
+      JSON.stringify({
+        fields: { amount: { value: 89, currency: "EUR" } },
+        fieldConfidence: { amount: 0.95 },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "gemini",
+      model: "gemini-2.0-flash",
+    }));
+
+    const result = await service.extract(
+      createInput(["Rechnung", "Betrag: 89,00 EUR"].join("\n"), "rechnung.pdf"),
+    );
+
+    expect(result.amount).toBe(89);
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    expect(intelligence?.extraction?.provider).toBe("deterministic");
+  });
+
+  it("warns when an ambiguous insurance amount is discarded", async () => {
+    const llmResponses = [
+      JSON.stringify({
+        documentType: "insurance_document",
+        subtype: null,
+        confidence: 0.9,
+        reasoningHints: [],
+      }),
+      JSON.stringify({ title: "Beitragsübersicht", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      JSON.stringify({
+        fields: { amount: "1.234,00 EUR", currency: "EUR" },
+        fieldConfidence: { amount: 0.9, currency: 0.9 },
+      }),
+      JSON.stringify({ tags: ["insurance"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Versicherung AG" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    // Yearly totals only — no active-premium pattern, so the amount is unreliable.
+    const result = await service.extract(
+      createInput(
+        ["Versicherung", "Gesamtbeitrag in 2026: 1.234,00 EUR", "Arbeitgeberzuschuss: 617,00 EUR"].join("\n"),
+        "versicherung.pdf",
+      ),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    expect(result.amount).toBeNull();
+    expect(intelligence?.validation?.warnings).toContain("insurance_amount_ambiguous");
+  });
+
   it("adds review reasons for unresolved correspondents and validation issues", async () => {
     const service = createService({ correspondentName: null });
 

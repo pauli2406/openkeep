@@ -13,6 +13,12 @@ export interface LlmCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
+  /**
+   * Structured output schema. Mistral/OpenAI enforce it via
+   * `response_format: { type: "json_schema", ... }`; Gemini's schema dialect differs
+   * (no type unions), so it falls back to plain JSON mode there.
+   */
+  jsonSchema?: { name: string; schema: Record<string, unknown> };
   /** Caller abort signal (e.g. SSE client disconnect); composed with the timeout. */
   signal?: AbortSignal;
 }
@@ -375,7 +381,16 @@ export class LlmService {
       body.max_completion_tokens = options.maxTokens;
     }
 
-    if (options.jsonMode) {
+    if (options.jsonSchema) {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: options.jsonSchema.name,
+          schema: options.jsonSchema.schema,
+          strict: true,
+        },
+      };
+    } else if (options.jsonMode) {
       body.response_format = { type: "json_object" };
     }
 
@@ -435,7 +450,16 @@ export class LlmService {
       body.max_tokens = options.maxTokens;
     }
 
-    if (options.jsonMode) {
+    if (options.jsonSchema) {
+      body.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: options.jsonSchema.name,
+          schema: options.jsonSchema.schema,
+          strict: true,
+        },
+      };
+    } else if (options.jsonMode) {
       body.response_format = { type: "json_object" };
     }
 
@@ -672,7 +696,10 @@ export class LlmService {
       generationConfig.maxOutputTokens = options.maxTokens;
     }
 
-    if (options.jsonMode) {
+    if (options.jsonMode || options.jsonSchema) {
+      // Gemini's responseSchema dialect rejects JSON-Schema type unions, so schema
+      // enforcement stays with Mistral/OpenAI; Gemini gets plain JSON mode and the
+      // caller-side Zod validation catches shape violations.
       generationConfig.responseMimeType = "application/json";
     }
 
