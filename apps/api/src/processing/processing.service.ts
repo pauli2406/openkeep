@@ -110,6 +110,16 @@ export class ProcessingService {
       parseProvider = parsed.data;
     }
     const fallbackParseProvider = this.parseProviderRegistry.getFallbackProviderId();
+
+    // Refresh updatedAt BEFORE publishing so the row is no longer stale the moment
+    // a job exists for it. markProcessing only runs once the worker picks the job
+    // up; without this touch the reaper could claim a freshly requeued document
+    // during that window (its queue check runs before the claim).
+    await this.databaseService.db
+      .update(documents)
+      .set({ updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+
     const [job] = await this.databaseService.db
       .insert(processingJobs)
       .values({

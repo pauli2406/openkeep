@@ -953,8 +953,14 @@ export class DocumentsService {
 
     for (const documentId of targetDocumentIds) {
       if (statusById.get(documentId) === "processing") {
-        skippedDocumentIds.push(documentId);
-        continue;
+        // Same stale-recovery escape hatch as the single-document endpoint:
+        // without it, bulk recovery of stuck documents skips exactly the rows
+        // it is meant to rescue until the periodic reaper happens to run.
+        const stale = await this.processingService.isDocumentProcessingStale(documentId);
+        if (!stale) {
+          skippedDocumentIds.push(documentId);
+          continue;
+        }
       }
 
       const queued = await this.processingService.enqueueDocumentProcessing(
