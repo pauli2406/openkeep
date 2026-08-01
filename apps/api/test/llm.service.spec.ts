@@ -172,7 +172,7 @@ describe("LlmService", () => {
     expect(chunks).toEqual([
       { text: "Hello", done: false },
       { text: " world", done: false },
-      { text: "", done: true },
+      { text: "", done: true, provider: "mistral", model: "mistral-small-latest" },
     ]);
   });
 
@@ -245,7 +245,8 @@ describe("LlmService", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(chunks).toEqual([
       { text: "Hello", done: false },
-      { text: "", done: true },
+      // The terminal chunk is attributed to the provider that actually streamed.
+      { text: "", done: true, provider: "mistral", model: "mistral-small-latest" },
     ]);
   });
 
