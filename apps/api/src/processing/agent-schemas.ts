@@ -29,7 +29,10 @@ export type TitleSummaryResponse = z.infer<typeof TitleSummaryResponseSchema>;
 
 export const TypedExtractionResponseSchema = z.object({
   fields: z.record(z.string(), z.unknown()),
-  fieldConfidence: z.record(z.string(), z.number()).nullish(),
+  // The strict request schema REQUIRES a fieldConfidence entry per relevant field
+  // and permits null for unknown values — the validator must accept those null
+  // placeholders or every partially populated response falls back to deterministic.
+  fieldConfidence: z.record(z.string(), z.number().nullable()).nullish(),
 });
 export type TypedExtractionResponse = z.infer<typeof TypedExtractionResponseSchema>;
 

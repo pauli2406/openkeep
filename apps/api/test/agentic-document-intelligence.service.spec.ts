@@ -234,6 +234,35 @@ describe("AgenticDocumentIntelligenceService", () => {
     );
   });
 
+  it("accepts strict responses with null fieldConfidence placeholders", async () => {
+    const llmResponses = [
+      JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),
+      JSON.stringify({ title: "Rechnung", titleConfidence: 0.8, summary: null, summaryConfidence: null }),
+      // Strict mode requires every relevant field in fieldConfidence; unknown ones are null.
+      JSON.stringify({
+        fields: { referenceNumber: "R-2026-042", issueDate: null, amount: null },
+        fieldConfidence: { referenceNumber: 0.9, issueDate: null, amount: null },
+      }),
+      JSON.stringify({ tags: ["utilities"], confidence: 0.8 }),
+    ];
+
+    const service = createService({ correspondentName: "Stadtwerke" });
+    (service as any).llmService.completeWithFallback = vi.fn(async () => ({
+      text: llmResponses.shift() ?? null,
+      provider: "mistral",
+      model: "mistral-small-latest",
+    }));
+
+    const result = await service.extract(
+      createInput(["Rechnung", "Betrag: 89,00 EUR"].join("\n"), "rechnung.pdf"),
+    );
+
+    const intelligence = result.metadata.intelligence as Record<string, any> | undefined;
+    // The response must NOT be rejected as schema-violating: the LLM-only field lands.
+    expect(intelligence?.extraction?.provider).toBe("mistral");
+    expect(result.referenceNumber).toBe("R-2026-042");
+  });
+
   it("falls back to deterministic extraction when the LLM payload violates the schema", async () => {
     const llmResponses = [
       JSON.stringify({ documentType: "invoice", subtype: null, confidence: 0.9, reasoningHints: [] }),

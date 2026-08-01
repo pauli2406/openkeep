@@ -50,6 +50,26 @@ The `AgenticDocumentIntelligenceService` builds a LangGraph state graph with nod
 
 The final result is converted into the shared `MetadataExtractionResult` shape expected by the rest of the processing pipeline.
 
+## Structured Outputs
+
+All four agent LLM calls (routing, title/summary, per-type extraction, tagging) send a
+JSON schema from `apps/api/src/processing/agent-schemas.ts`:
+
+- Mistral and OpenAI enforce it via `response_format: { type: "json_schema", strict: true }`;
+  the schemas are strict-compatible (every property required, nullable where optional in
+  spirit, `additionalProperties: false`)
+- Gemini's schema dialect rejects JSON-Schema type unions, so Gemini falls back to plain
+  JSON mode; caller-side validation covers the gap
+- the per-type extraction schema is generated from the registry's relevant fields; its
+  `fieldConfidence` entries are required but nullable, and null placeholders are accepted
+  by the response validator and ignored during normalization
+- every response is validated with Zod (`parseWithSchema`) before use; a schema-violating
+  payload falls back to the deterministic extraction path, and the brace-slice JSON
+  heuristic remains only as the last-ditch parse fallback
+- merged fields are confidence-aware: an LLM value only replaces a deterministic regex
+  hit when the deterministic slot is empty or the LLM reported at least the deterministic
+  confidence, and field provenance follows the winner
+
 ## Routing Stage
 
 The routing stage determines the likely document type and stores:
