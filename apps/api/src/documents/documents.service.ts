@@ -2209,14 +2209,21 @@ export class DocumentsService {
     const client = await this.databaseService.pool.connect();
     try {
       await client.query("BEGIN");
-      // Available since pgvector 0.8; ignored (and rolled back to the plain
-      // scan) on older servers that do not know the GUC.
-      await client
-        .query("SET LOCAL hnsw.iterative_scan = relaxed_order")
-        .catch(() => undefined);
-      await client
-        .query(`SET LOCAL hnsw.ef_search = ${VECTOR_CANDIDATE_EF_SEARCH}`)
-        .catch(() => undefined);
+      // Each optional GUC runs inside its own savepoint: an unknown setting
+      // (hnsw.iterative_scan needs pgvector 0.8+) would otherwise abort the
+      // whole transaction and take the actual query down with it.
+      const trySetLocal = async (statement: string) => {
+        await client.query("SAVEPOINT vector_guc");
+        try {
+          await client.query(statement);
+          await client.query("RELEASE SAVEPOINT vector_guc");
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT vector_guc");
+        }
+      };
+
+      await trySetLocal("SET LOCAL hnsw.iterative_scan = relaxed_order");
+      await trySetLocal(`SET LOCAL hnsw.ef_search = ${VECTOR_CANDIDATE_EF_SEARCH}`);
       const result = await client.query<{ id: string; distance: string }>(sqlText, values);
       await client.query("COMMIT");
       return result;
