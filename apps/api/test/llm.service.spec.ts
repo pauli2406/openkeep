@@ -337,7 +337,7 @@ describe("LlmService", () => {
         MISTRAL_API_KEY: "mistral-key",
         MISTRAL_MODEL: "mistral-small-latest",
         MISTRAL_API_BASE_URL: "https://api.mistral.ai",
-        LLM_STREAM_TIMEOUT_SECONDS: 120,
+        LLM_STREAM_TIMEOUT_SECONDS: "120",
       }),
     );
 

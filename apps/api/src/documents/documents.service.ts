@@ -125,6 +125,24 @@ interface DocumentRow {
     : null;
 }
 
+/** Chunk-embedding candidates kept per query after the per-document cap. */
+const VECTOR_CANDIDATE_LIMIT = 200;
+/**
+ * Raw index pool scanned before capping. A single multi-hundred-page document can
+ * otherwise supply every nearest chunk, and the GROUP BY then collapses the result
+ * to that one document — hiding every other relevant match.
+ */
+const VECTOR_CANDIDATE_POOL = 600;
+/** Chunks a single document may contribute to the candidate set. */
+const VECTOR_CANDIDATE_CHUNKS_PER_DOCUMENT = 5;
+/** Lower bound for keyword candidates when the caller requests a small page. */
+const KEYWORD_CANDIDATE_MIN_LIMIT = 50;
+/**
+ * HNSW search breadth for that candidate query. Must exceed the candidate limit
+ * because the index scan happens before the provider/model and document filters.
+ */
+const VECTOR_CANDIDATE_EF_SEARCH = 400;
+
 const MANUAL_OVERRIDE_FIELDS: ManualOverrideField[] = [
   "issueDate",
   "dueDate",
@@ -1087,35 +1105,62 @@ export class DocumentsService {
     const semanticEmbedding = await this.processingService.embedQuery(queryText);
     const embeddingLiteral = serializeHalfVector(padEmbedding(semanticEmbedding.embeddings[0]!));
     const { whereSql, params } = this.buildDocumentFilterQuery(filters);
+    // Cover the requested result window: a fixed cap would truncate candidates
+    // before pagination, understating `total` and making later pages unreachable
+    // for requests with a large pageSize.
+    const keywordCandidateLimit = Math.max(KEYWORD_CANDIDATE_MIN_LIMIT, page * pageSize);
 
+    // Filter and ranking must use the SAME language-aware regconfig: filtering with
+    // 'simple' while ranking with 'german'/'english' meant a stemmed German query
+    // ("Rechnungen") never matched a document containing only "Rechnung" — the
+    // unstemmed filter silently capped recall before ranking ever ran.
+    const langRegconfig = `CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END`;
     const keywordRows = await this.databaseService.pool.query<{
       id: string;
       rank: string;
     }>(
       `SELECT d.id, ts_rank_cd(
-          to_tsvector(CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END, coalesce(d.full_text, '')),
-          websearch_to_tsquery('simple', $${params.length + 1})
+          to_tsvector(${langRegconfig}, coalesce(d.full_text, '')),
+          websearch_to_tsquery(${langRegconfig}, $${params.length + 1})
        ) AS rank
        FROM documents d
        WHERE ${whereSql}
-         AND to_tsvector('simple', coalesce(d.full_text, '')) @@ websearch_to_tsquery('simple', $${params.length + 1})
-       ORDER BY rank DESC, d.id DESC`,
+         AND to_tsvector(${langRegconfig}, coalesce(d.full_text, '')) @@ websearch_to_tsquery(${langRegconfig}, $${params.length + 1})
+       ORDER BY rank DESC, d.id DESC
+       LIMIT ${keywordCandidateLimit}`,
       [...params, queryText],
     );
 
-    const semanticRows = await this.databaseService.pool.query<{
-      id: string;
-      distance: string;
-    }>(
-      `SELECT d.id, MIN(e.embedding <=> $${params.length + 1}::halfvec)::text AS distance
-       FROM documents d
-       INNER JOIN document_chunk_embeddings e
-         ON e.document_id = d.id
-        AND e.provider = $${params.length + 2}::embedding_provider
-        AND e.model = $${params.length + 3}
-       WHERE ${whereSql}
-       GROUP BY d.id
-       ORDER BY MIN(e.embedding <=> $${params.length + 1}::halfvec) ASC, d.id DESC`,
+    // Top-K over the embedding table (bounded ORDER BY distance LIMIT n instead of
+    // aggregating every embedding row), then aggregate per document. Document
+    // filters apply INSIDE the candidate selection: filtering after the limit would
+    // discard eligible documents whenever 200 closer chunks belong to excluded
+    // documents (e.g. a selective year/correspondent filter).
+    const semanticRows = await this.runVectorCandidateQuery(
+      `SELECT t.document_id AS id, MIN(t.distance)::text AS distance
+       FROM (
+         SELECT ranked.document_id, ranked.distance
+         FROM (
+           SELECT e.document_id,
+                  (e.embedding <=> $${params.length + 1}::halfvec) AS distance,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY e.document_id
+                    ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+                  ) AS chunk_rank
+           FROM document_chunk_embeddings e
+           INNER JOIN documents d ON d.id = e.document_id
+           WHERE e.provider = $${params.length + 2}::embedding_provider
+             AND e.model = $${params.length + 3}
+             AND ${whereSql}
+           ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
+           LIMIT ${VECTOR_CANDIDATE_POOL}
+         ) ranked
+         WHERE ranked.chunk_rank <= ${VECTOR_CANDIDATE_CHUNKS_PER_DOCUMENT}
+         ORDER BY ranked.distance ASC
+         LIMIT ${VECTOR_CANDIDATE_LIMIT}
+       ) t
+       GROUP BY t.document_id
+       ORDER BY MIN(t.distance) ASC, t.document_id DESC`,
       [...params, embeddingLiteral, provider, model],
     );
 
@@ -2170,6 +2215,49 @@ export class DocumentsService {
     }
 
     return map;
+  }
+
+  /**
+   * Runs the HNSW candidate query with enough index search breadth.
+   *
+   * pgvector's `hnsw.ef_search` defaults to 40, so a bare `LIMIT 200` over the
+   * index returns roughly 40 approximate neighbours — and the provider/model and
+   * owner/filter predicates cut that down further, which can drop relevant
+   * documents or return nothing on larger archives. Raise ef_search for this
+   * statement and, where the server supports it, let pgvector scan iteratively
+   * so filtered queries keep pulling candidates until the limit is satisfied.
+   */
+  private async runVectorCandidateQuery(
+    sqlText: string,
+    values: unknown[],
+  ): Promise<{ rows: Array<{ id: string; distance: string }> }> {
+    const client = await this.databaseService.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Each optional GUC runs inside its own savepoint: an unknown setting
+      // (hnsw.iterative_scan needs pgvector 0.8+) would otherwise abort the
+      // whole transaction and take the actual query down with it.
+      const trySetLocal = async (statement: string) => {
+        await client.query("SAVEPOINT vector_guc");
+        try {
+          await client.query(statement);
+          await client.query("RELEASE SAVEPOINT vector_guc");
+        } catch {
+          await client.query("ROLLBACK TO SAVEPOINT vector_guc");
+        }
+      };
+
+      await trySetLocal("SET LOCAL hnsw.iterative_scan = relaxed_order");
+      await trySetLocal(`SET LOCAL hnsw.ef_search = ${VECTOR_CANDIDATE_EF_SEARCH}`);
+      const result = await client.query<{ id: string; distance: string }>(sqlText, values);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private async loadSemanticMatchedChunks(
