@@ -260,7 +260,6 @@ type TranslationKey =
   | "documents.reprocess"
   | "documents.date"
   | "documents.selectAll"
-  | "documents.quickPreview"
   | "documents.flagReview"
   | "documents.flagFailed"
   | "documents.flagUnfiled"
@@ -710,7 +709,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.reprocess": "Reprocess",
     "documents.date": "Date",
     "documents.selectAll": "Select all",
-    "documents.quickPreview": "Quick preview",
     "documents.flagReview": "review",
     "documents.flagFailed": "failed",
     "documents.flagUnfiled": "unfiled",
@@ -1159,7 +1157,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.reprocess": "Neu verarbeiten",
     "documents.date": "Datum",
     "documents.selectAll": "Alle auswählen",
-    "documents.quickPreview": "Schnellvorschau",
     "documents.flagReview": "Prüfung",
     "documents.flagFailed": "fehlgeschlagen",
     "documents.flagUnfiled": "nicht abgelegt",

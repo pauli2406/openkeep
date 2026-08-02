@@ -85,11 +85,14 @@ export function ExplorerSurface({
     for (const documentId of selectedIds) {
       const response = await authFetch(`/api/documents/${documentId}/download`);
       if (!response.ok) continue;
+      // Keep the original filename and extension, as the detail page does.
+      const disposition = response.headers.get("Content-Disposition");
+      const match = disposition?.match(/filename="?([^"]+)"?/);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = documentId;
+      link.download = match?.[1] ?? documentId;
       link.click();
       URL.revokeObjectURL(url);
     }
@@ -345,7 +348,6 @@ export function ExplorerSurface({
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 onOpen={openDocument}
-                onPreview={openDocument}
                 sort={(search.sort as SortField) ?? "createdAt"}
                 direction={(search.direction as "asc" | "desc") ?? "desc"}
                 onSortChange={(sort, direction) =>

@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { ArrowDown, ArrowUp, Eye } from "lucide-react";
+import { ArrowDown, ArrowUp, ExternalLink } from "lucide-react";
 import type { Document } from "@openkeep/types";
 import { Badge } from "@/components/ui/badge";
 import { colorForValue, formatCurrency } from "@/lib/explorer";
@@ -15,7 +15,6 @@ type Props = {
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   onOpen: (documentId: string) => void;
-  onPreview: (documentId: string) => void;
   sort: SortField;
   direction: "asc" | "desc";
   onSortChange: (sort: SortField, direction: "asc" | "desc") => void;
@@ -81,13 +80,13 @@ export function DocumentTable({
   selectedIds,
   onSelectionChange,
   onOpen,
-  onPreview,
   sort,
   direction,
   onSortChange,
 }: Props) {
   const { t } = useI18n();
-  const lastClickedIndex = useRef<number | null>(null);
+  // Anchored by id: a re-sort or filter changes indices under us.
+  const lastClickedId = useRef<string | null>(null);
   const selected = new Set(selectedIds);
   const allSelected = documents.length > 0 && selectedIds.length === documents.length;
 
@@ -96,9 +95,13 @@ export function DocumentTable({
       const document = documents[index];
       if (!document) return;
 
-      // Shift extends from the last row the user touched.
-      if (shiftKey && lastClickedIndex.current !== null) {
-        const [from, to] = [lastClickedIndex.current, index].sort((a, b) => a - b);
+      // Shift extends from the last row the user touched, resolved by id
+      // so re-sorting or filtering cannot slice a stale range.
+      const anchorIndex = lastClickedId.current
+        ? documents.findIndex((item) => item.id === lastClickedId.current)
+        : -1;
+      if (shiftKey && anchorIndex !== -1) {
+        const [from, to] = [anchorIndex, index].sort((a, b) => a - b);
         const range = documents.slice(from, to + 1).map((item) => item.id);
         const next = new Set(selectedIds);
         const turningOn = !selected.has(document.id);
@@ -110,7 +113,7 @@ export function DocumentTable({
         return;
       }
 
-      lastClickedIndex.current = index;
+      lastClickedId.current = document.id;
       const next = new Set(selectedIds);
       if (next.has(document.id)) next.delete(document.id);
       else next.add(document.id);
@@ -213,8 +216,11 @@ export function DocumentTable({
               }}
               onChange={() => {}}
               className={cn(
-                "h-3 w-3 flex-shrink-0 accent-[var(--ok-accent)]",
-                !isSelected && "opacity-0 group-hover:opacity-100",
+                "h-3 w-3 flex-shrink-0 accent-[var(--ok-accent)] transition-opacity",
+                // Hidden only where hover exists; always visible on touch,
+                // and always visible once focused.
+                !isSelected &&
+                  "focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100",
               )}
             />
 
@@ -261,18 +267,13 @@ export function DocumentTable({
                 : "—"}
             </span>
 
-            {/* Quick preview — revealed on hover, no permanent per-row buttons. */}
-            <button
-              type="button"
-              aria-label={t("documents.quickPreview")}
-              onClick={(event) => {
-                event.stopPropagation();
-                onPreview(document.id);
-              }}
-              className="w-5 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+            {/* Open, revealed on hover — no permanent per-row buttons. */}
+            <span
+              aria-hidden="true"
+              className="w-5 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
             >
-              <Eye className="h-3.5 w-3.5" />
-            </button>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </span>
           </div>
         );
       })}
