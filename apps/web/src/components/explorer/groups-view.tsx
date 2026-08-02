@@ -1,14 +1,16 @@
-import type { DashboardInsightsResponse } from "@openkeep/types";
-import { useQuery } from "@tanstack/react-query";
 import type { ExplorerFacets } from "@/lib/explorer";
-import { fetchDashboardInsights } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type GroupsViewProps = {
+  /**
+   * Archive-wide: `/api/documents/facets` accepts no query, so these counts
+   * do not narrow with the sidebar. The caption says so.
+   */
   facets: ExplorerFacets | undefined;
   selectedCorrespondentIds: string[];
   onSelectCorrespondent: (correspondentId: string) => void;
+  hasFilters?: boolean;
 };
 
 /**
@@ -19,24 +21,9 @@ export function GroupsView({
   facets,
   selectedCorrespondentIds,
   onSelectCorrespondent,
+  hasFilters = false,
 }: GroupsViewProps) {
   const { t } = useI18n();
-
-  // Only used to label each block with its dominant document type; the counts
-  // themselves come from the facets so they follow the active filters.
-  const insightsQuery = useQuery<DashboardInsightsResponse>({
-    queryKey: ["dashboard", "insights"],
-    queryFn: fetchDashboardInsights,
-    staleTime: 60_000,
-  });
-
-  const dominantTypeById = new Map<string, string>();
-  for (const correspondent of insightsQuery.data?.topCorrespondents ?? []) {
-    const top = [...(correspondent.documentTypes ?? [])].sort(
-      (a, b) => b.count - a.count,
-    )[0];
-    if (top) dominantTypeById.set(correspondent.id, top.name);
-  }
 
   const groups = [...(facets?.correspondents ?? [])].sort((a, b) => b.count - a.count);
 
@@ -54,7 +41,9 @@ export function GroupsView({
     <div className="p-4">
       <p className="mb-3 text-sm">
         <span className="font-semibold text-foreground">{t("groups.groupedBy")}</span>{" "}
-        <span className="text-muted-foreground">{t("groups.caption")}</span>
+        <span className="text-muted-foreground">
+          {hasFilters ? t("groups.captionUnfiltered") : t("groups.caption")}
+        </span>
       </p>
 
       <div className="grid grid-cols-6 gap-2.5">
@@ -74,13 +63,8 @@ export function GroupsView({
               )}
             >
               <span className="truncate text-sm text-foreground">{group.name}</span>
-              <span className="flex items-end justify-between gap-2">
-                <span className="ok-num text-xl font-semibold text-foreground">
-                  {group.count}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {dominantTypeById.get(group.id) ?? ""}
-                </span>
+              <span className="ok-num text-xl font-semibold text-foreground">
+                {group.count}
               </span>
             </button>
           );

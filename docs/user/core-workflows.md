@@ -27,7 +27,7 @@ Use `View documents` when the upload is complete.
 
 Open `Documents` to browse your archive.
 
-If you want semantic exploration, switch the `Documents` page to galaxy view.
+To see the archive by who sends it, switch the `Documents` page to `Groups`.
 
 ### List View
 
@@ -65,11 +65,13 @@ This is useful for:
 - monthly billing cycles
 - finding documents from a known period
 
-### Galaxy View
+### Groups View
 
-Use galaxy view when you want to explore semantically related documents.
+Use groups view to see the archive by correspondent. Each block is one
+correspondent, sized by how many documents they account for. Select a block to
+open the list filtered to that correspondent.
 
-This helps surface clusters of similar content even if the filenames or metadata differ.
+Block totals are archive-wide and do not narrow with the filter sidebar.
 
 ## Filter the Archive
 

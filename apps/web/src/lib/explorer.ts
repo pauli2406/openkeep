@@ -132,14 +132,24 @@ function setParam(
   }
 
   if (Array.isArray(value)) {
-    // `key[]=a&key[]=b`, not `key=a,b`. The API only reaches its
-    // CSV-splitting preprocess when the query parser hands it an array;
-    // a bare `key=a` arrives as a string and the filter blows up in
-    // Postgres with `Array value must start with "{"`.
-    for (const item of value) {
-      if (item !== undefined && item !== null && item !== "") {
-        params.append(`${key}[]`, String(item));
-      }
+    // Repeated bare keys. Encodings measured against the running API:
+    //   ?k=a      -> 500  (arrives as a string, never reaches the DTO's CSV
+    //                      preprocess, fails in Postgres with
+    //                      `Array value must start with "{"`)
+    //   ?k=a,b    -> 500  (same reason)
+    //   ?k[]=a    -> 200 but UNFILTERED — the bracketed key is not in the
+    //                      query schema and is silently discarded
+    //   ?k=a&k=b  -> 200 and correctly filtered
+    // Only a repeated key parses into an array, so a lone value is sent
+    // twice; `IN (a, a)` is equivalent to `IN (a)`.
+    const items = value.filter(
+      (item) => item !== undefined && item !== null && item !== "",
+    );
+    if (items.length === 1) {
+      params.append(key, String(items[0]));
+      params.append(key, String(items[0]));
+    } else {
+      for (const item of items) params.append(key, String(item));
     }
     return;
   }

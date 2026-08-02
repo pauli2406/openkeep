@@ -65,7 +65,7 @@ The Documents area is the main archive browser. It supports three views:
 
 - list view for dense scanning and bulk actions
 - timeline view for chronological browsing
-- galaxy view for semantic exploration
+- groups view for browsing by correspondent
 
 ### Search
 

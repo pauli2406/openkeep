@@ -168,7 +168,7 @@ These power the higher-level archive browsing UI:
 - dashboard widgets
 - correspondent dossier
 - timeline view
-- semantic galaxy view
+- groups view (correspondent blocks)
 
 ## Document AI Surface
 

@@ -386,12 +386,23 @@ export function ExplorerSurface({
             <GroupsView
               facets={facetsQuery.data}
               selectedCorrespondentIds={search.correspondentIds ?? []}
+              hasFilters={Boolean(
+                search.query ||
+                  search.year ||
+                  search.statuses?.length ||
+                  search.documentTypeIds?.length ||
+                  search.tags?.length ||
+                  search.dateFrom ||
+                  search.dateTo ||
+                  search.amountMin != null ||
+                  search.amountMax != null,
+              )}
               onSelectCorrespondent={(correspondentId) =>
+                // A group click opens the list for that correspondent, so it
+                // replaces the correspondent filter rather than adding to it.
                 onSearchChange(
                   nextExplorerSearch(search, {
-                    correspondentIds: search.correspondentIds?.includes(correspondentId)
-                      ? search.correspondentIds.filter((id) => id !== correspondentId)
-                      : [...(search.correspondentIds ?? []), correspondentId],
+                    correspondentIds: [correspondentId],
                     view: "list",
                     page: undefined,
                   }),
