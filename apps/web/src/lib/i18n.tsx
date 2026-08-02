@@ -256,6 +256,20 @@ type TranslationKey =
   | "today.reference"
   | "today.documentType"
   | "today.previewUnavailable"
+  | "documents.bulkUnavailable"
+  | "documents.reprocess"
+  | "documents.date"
+  | "documents.selectAll"
+  | "documents.quickPreview"
+  | "documents.flagReview"
+  | "documents.flagFailed"
+  | "documents.flagUnfiled"
+  | "documents.selected"
+  | "documents.bulkTag"
+  | "documents.bulkSetType"
+  | "documents.bulkExport"
+  | "documents.bulkDelete"
+  | "documents.clearSelection"
   | "dashboard.noTasksInView"
   | "dashboard.correspondent"
   | "dashboard.document"
@@ -692,6 +706,20 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Reference",
     "today.documentType": "Document type",
     "today.previewUnavailable": "No preview available",
+    "documents.bulkUnavailable": "Not available yet",
+    "documents.reprocess": "Reprocess",
+    "documents.date": "Date",
+    "documents.selectAll": "Select all",
+    "documents.quickPreview": "Quick preview",
+    "documents.flagReview": "review",
+    "documents.flagFailed": "failed",
+    "documents.flagUnfiled": "unfiled",
+    "documents.selected": "selected",
+    "documents.bulkTag": "Tag",
+    "documents.bulkSetType": "Set type",
+    "documents.bulkExport": "Export",
+    "documents.bulkDelete": "Delete",
+    "documents.clearSelection": "Clear",
     "dashboard.noTasksInView": "No tasks in view",
     "dashboard.correspondent": "Correspondent",
     "dashboard.document": "Document",
@@ -1127,6 +1155,20 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Referenz",
     "today.documentType": "Dokumententyp",
     "today.previewUnavailable": "Keine Vorschau verfügbar",
+    "documents.bulkUnavailable": "Noch nicht verfügbar",
+    "documents.reprocess": "Neu verarbeiten",
+    "documents.date": "Datum",
+    "documents.selectAll": "Alle auswählen",
+    "documents.quickPreview": "Schnellvorschau",
+    "documents.flagReview": "Prüfung",
+    "documents.flagFailed": "fehlgeschlagen",
+    "documents.flagUnfiled": "nicht abgelegt",
+    "documents.selected": "ausgewählt",
+    "documents.bulkTag": "Schlagwort",
+    "documents.bulkSetType": "Typ setzen",
+    "documents.bulkExport": "Exportieren",
+    "documents.bulkDelete": "Löschen",
+    "documents.clearSelection": "Aufheben",
     "dashboard.noTasksInView": "Keine Aufgaben in Ansicht",
     "dashboard.correspondent": "Korrespondenz",
     "dashboard.document": "Dokument",
