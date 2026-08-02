@@ -55,18 +55,7 @@ export const mapMistralOcrResponse = (
   const pages = response.pages.map((page, arrayIndex) => {
     const pageNumber = (typeof page.index === "number" ? page.index : arrayIndex) + 1;
 
-    const lines = page.markdown
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, lineIndex) => ({
-        lineIndex,
-        text: line,
-        boundingBox: null,
-      }));
-
-    const blocks = mapPageBlocks(page, pageNumber);
-
+    let pageHasNormalizedTables = false;
     for (const table of page.tables ?? []) {
       // With MISTRAL_OCR_TABLE_FORMAT=html the payload only carries `html`, so
       // reading markdown alone would silently drop those tables entirely.
@@ -78,6 +67,7 @@ export const mapMistralOcrResponse = (
           ? parseHtmlTable(htmlTable)
           : [];
       if (parsed.length > 0) {
+        pageHasNormalizedTables = true;
         tables.push({
           tableIndex: tables.length,
           page: pageNumber,
@@ -91,6 +81,22 @@ export const mapMistralOcrResponse = (
         });
       }
     }
+
+    const lines = page.markdown
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      // Tables that were normalized above are serialized again by the chunker;
+      // keeping their markdown rows as lines would index the same content twice
+      // (once as table chunks, once as text chunks).
+      .filter((line) => !(pageHasNormalizedTables && isMarkdownTableRow(line)))
+      .map((line, lineIndex) => ({
+        lineIndex,
+        text: line,
+        boundingBox: null,
+      }));
+
+    const blocks = mapPageBlocks(page, pageNumber);
 
     keyValues.push(...deriveKeyValuesFromMarkdown(page.markdown, pageNumber));
 
@@ -512,6 +518,10 @@ const normalizeBlockBoundingBox = (
   return null;
 };
 
+/** A markdown pipe-table row (data or separator), as emitted by Mistral. */
+const isMarkdownTableRow = (line: string): boolean =>
+  line.startsWith("|") && line.endsWith("|");
+
 /** Parses a GitHub-style markdown pipe table into normalized table cells. */
 export const parseMarkdownTable = (
   markdown: string,
@@ -647,6 +657,12 @@ const readPageConfidence = (page: MistralOcrPage): number | null => {
   if (typeof scores === "number") {
     return scores;
   }
+  if (Array.isArray(scores)) {
+    // Word granularity: aggregate the word scores into a page confidence, so
+    // MISTRAL_OCR_CONFIDENCE_GRANULARITY=word still produces pageConfidences and
+    // the ocr_low_confidence review reason instead of silently doing nothing.
+    return averageConfidence(scores);
+  }
   if (scores && typeof scores === "object") {
     const record = scores as Record<string, unknown>;
     for (const key of ["page", "overall", "score", "confidence"]) {
@@ -654,7 +670,39 @@ const readPageConfidence = (page: MistralOcrPage): number | null => {
         return record[key] as number;
       }
     }
+    for (const key of ["words", "word_scores", "scores"]) {
+      if (Array.isArray(record[key])) {
+        return averageConfidence(record[key] as unknown[]);
+      }
+    }
   }
 
   return null;
+};
+
+/** Averages numeric entries or entries carrying a confidence/score property. */
+const averageConfidence = (entries: unknown[]): number | null => {
+  const values = entries
+    .map((entry) => {
+      if (typeof entry === "number") {
+        return entry;
+      }
+      if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        if (typeof record.confidence === "number") {
+          return record.confidence;
+        }
+        if (typeof record.score === "number") {
+          return record.score;
+        }
+      }
+      return null;
+    })
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 };

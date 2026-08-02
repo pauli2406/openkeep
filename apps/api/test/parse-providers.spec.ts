@@ -333,6 +333,46 @@ describe("Parse provider mappers", () => {
     expect(new Set(blocks.map((block) => block.blockIndex)).size).toBe(blocks.length);
   });
 
+  it("aggregates word-level confidence scores into a page confidence", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "Verwaschener Scan",
+          confidence_scores: [
+            { word: "Verwaschener", confidence: 0.4 },
+            { word: "Scan", confidence: 0.6 },
+          ],
+        },
+      ],
+    });
+
+    expect(result.providerMetadata.pageConfidences).toEqual([
+      { page: 1, confidence: 0.5 },
+    ]);
+    expect(result.reviewReasons).toContain("ocr_low_confidence");
+  });
+
+  it("removes markdown table rows from lines once the table is normalized", () => {
+    const result = mapMistralOcrResponse({
+      pages: [
+        {
+          index: 0,
+          markdown: "Details siehe Tabelle.\n| Position | Betrag |\n|---|---|\n| Strom | 89,00 EUR |",
+          tables: [
+            { markdown: "| Position | Betrag |\n|---|---|\n| Strom | 89,00 EUR |" },
+          ],
+        },
+      ],
+    });
+
+    // The normalized table is serialized by the chunker; keeping the markdown
+    // rows as lines would index the same content twice.
+    expect(result.tables).toHaveLength(1);
+    const lineTexts = (result.pages[0]?.lines ?? []).map((line) => line.text);
+    expect(lineTexts).toEqual(["Details siehe Tabelle."]);
+  });
+
   it("treats escaped pipes inside markdown table cells as content", () => {
     const result = mapMistralOcrResponse({
       pages: [
