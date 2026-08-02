@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="app">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { margin:0; background:#fcfcfb; color:#26302a; font-family:"Public Sans",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  h1,h2,h3,h4 { margin:0; font-weight:600; letter-spacing:-0.01em; }
+  p { margin:0; }
+  a { color:#14544d; text-decoration:none; }
+  a:hover { color:#0d3b36; }
+  input { font-family:inherit; }
+  svg.lucide { stroke-width:1.75; }
+  ::selection { background:rgba(20,84,77,0.16); }
+  @keyframes ok-fade { from{opacity:0} to{opacity:1} }
+  @keyframes ok-pop { from{opacity:0;transform:translateY(-6px) scale(0.99)} to{opacity:1;transform:none} }
+
+  [data-theme="dark"] { color-scheme:dark; color:#e6e9e7 !important; background:#0f1214 !important; }
+  [data-theme="dark"] input { color:#e6e9e7 !important; }
+  [data-theme="dark"] input::placeholder { color:#7d857f !important; }
+  [data-theme="dark"] [data-s="app"] { background:#0f1214 !important; }
+  [data-theme="dark"] [data-s="bar"] { background:#14181a !important; }
+  [data-theme="dark"] [data-s="panel"] { background:#161a1c !important; }
+  [data-theme="dark"] [data-s="raised"] { background:#1b2023 !important; }
+  [data-theme="dark"] [data-s="sunken"] { background:#0b0e0f !important; }
+  [data-theme="dark"] [data-b] { border-color:#252b2e !important; }
+  [data-theme="dark"] [data-t="ink"] { color:#e6e9e7 !important; }
+  [data-theme="dark"] [data-t="dim"] { color:#8b938d !important; }
+  [data-theme="dark"] [data-t="accent"] { color:#5fb3a3 !important; }
+  [data-theme="dark"] [data-a="fill"] { background:#1c6b60 !important; color:#f2fbf8 !important; }
+  [data-theme="dark"] [data-a="soft"] { background:#16302c !important; color:#7fc9b8 !important; }
+  [data-theme="dark"] [data-a="warn"] { background:#2e2415 !important; color:#d9ae6a !important; border-color:#4a3a1e !important; }
+  [data-theme="dark"] [data-a="warn"] p, [data-theme="dark"] [data-a="warn"] span { color:#d9ae6a !important; }
+  [data-theme="dark"] [data-a="none"] { background:#1b2023 !important; border-color:#252b2e !important; }
+  [data-theme="dark"] [data-off="1"], [data-theme="dark"] [data-off="chip"] { color:#8b938d !important; }
+  [data-theme="dark"] [data-off="chip"] { border-color:#2c3336 !important; }
+  [data-theme="dark"] [data-t="amber"] { color:#d9ae6a !important; }
+  [data-theme="dark"] [data-t="red"] { color:#dd8d78 !important; }
+  [data-theme="dark"] [data-a="bad"] { background:#331d1a !important; color:#dd8d78 !important; }
+  [data-theme="dark"] [data-s="paper"] { background:#e9ebe9 !important; color:#26302a !important; }
+  [data-theme="dark"] [data-sel="1"] { background:#16302c !important; box-shadow:inset 2px 0 0 #4ea896 !important; }
+</style>
+</helmet>
+
+<div data-s="app" data-t="ink" data-theme="{{ theme }}" style="min-height:100vh;background:#fcfcfb;color:#26302a">
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+  <div data-s="sunken" style="display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px;background:#f2f4f2">
+    <div data-s="panel" data-b style="width:100%;max-width:380px;border:1px solid #e3e6e3;border-radius:10px;background:#fff;padding:28px;box-shadow:0 1px 2px rgba(20,40,35,0.06)">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:22px">
+        <img src="brand/logo-mark.svg" alt="" style="width:24px;height:24px;border-radius:5px">
+        <span style="font-size:15px;font-weight:700;letter-spacing:-0.01em">OpenKeep</span>
+      </div>
+      <h1 style="font-size:19px">Sign in</h1>
+      <p data-t="dim" style="font-size:13px;color:#6b716c;margin-top:4px">Your archive runs on this machine.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+        <label style="display:flex;flex-direction:column;gap:5px">
+          <span data-t="dim" style="font-size:12px;color:#6b716c">Email</span>
+          <input data-s="panel" data-b value="owner@example.com" style="height:34px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:13px;color:inherit;outline:none">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:5px">
+          <span data-t="dim" style="font-size:12px;color:#6b716c">Password</span>
+          <input data-s="panel" data-b type="password" value="passphrase" style="height:34px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:13px;color:inherit;outline:none">
+        </label>
+      </div>
+      <button data-a="fill" onClick="{{ signIn }}" style="margin-top:20px;height:36px;width:100%;border:none;border-radius:6px;background:#14544d;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Sign in</button>
+      <div data-b style="display:flex;justify-content:space-between;margin-top:16px;padding-top:14px;border-top:1px solid #e3e6e3;font-size:12px">
+        <span data-t="dim" style="color:#8b9089">First run? <span data-t="accent" style="color:#14544d;font-weight:600">Set up archive</span></span>
+        <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;color:#9aa09a">v2.4.0</span>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
+
+  <header data-s="bar" data-b style="display:flex;align-items:center;gap:16px;height:48px;flex-shrink:0;padding:0 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+    <a href="#" onClick="{{ goToday }}" style="display:flex;align-items:center;gap:8px;color:inherit">
+      <img src="brand/logo-mark.svg" alt="" style="width:20px;height:20px;border-radius:4px">
+      <span style="font-size:13.5px;font-weight:700;letter-spacing:-0.01em">OpenKeep</span>
+    </a>
+    <nav style="display:flex;gap:2px;flex-shrink:0">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+        <a href="#" onClick="{{ t.go }}" data-a="{{ t.tone }}" data-off="{{ t.off }}" style="{{ t.style }}">
+          {{ t.label }}
+          <span data-t="{{ t.countTone }}" style="{{ t.countStyle }}">{{ t.count }}</span>
+        </a>
+      </sc-for>
+    </nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;min-width:0;flex:1;justify-content:flex-end">
+      <button data-s="panel" data-b onClick="{{ openOmnibar }}" style="display:flex;align-items:center;gap:8px;height:30px;flex:1;min-width:120px;max-width:300px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 9px;cursor:pointer;font-family:inherit">
+        <i data-lucide="search" style="width:13px;height:13px;color:#8b9089"></i>
+        <span data-t="dim" style="flex:1;text-align:left;font-size:12.5px;color:#9aa09a">Ask the archive</span>
+        <kbd data-b data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8b9089;border:1px solid #e3e6e3;border-radius:3px;padding:1px 4px">⌘K</kbd>
+      </button>
+      <button data-a="fill" onClick="{{ goUpload }}" style="display:inline-flex;align-items:center;gap:6px;height:30px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 11px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">
+        <i data-lucide="upload" style="width:13px;height:13px"></i>Import
+      </button>
+      <button data-t="dim" data-off="1" onClick="{{ toggleTheme }}" style="display:flex;height:30px;width:30px;align-items:center;justify-content:center;border:none;border-radius:6px;background:transparent;color:#5b615c;cursor:pointer">
+        <span style="{{ moonStyle }}"><i data-lucide="moon" style="width:15px;height:15px"></i></span>
+        <span style="{{ sunStyle }}"><i data-lucide="sun" style="width:15px;height:15px"></i></span>
+      </button>
+      <button data-t="dim" data-off="1" onClick="{{ goSettings }}" style="display:flex;height:30px;width:30px;align-items:center;justify-content:center;border:none;border-radius:6px;background:transparent;color:#5b615c;cursor:pointer">
+        <i data-lucide="settings" style="width:15px;height:15px"></i>
+      </button>
+      <button onClick="{{ goProfile }}" data-a="soft" style="display:flex;height:30px;width:30px;align-items:center;justify-content:center;border:none;border-radius:6px;background:#e7edea;color:#14544d;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">OK</button>
+    </div>
+  </header>
+
+  <main style="flex:1;min-height:0;overflow:auto">
+
+    <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-direction:column;height:100%">
+      <div data-s="app" data-b style="display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+        <sc-for list="{{ todayChips }}" as="c" hint-placeholder-count="5">
+          <span data-a="{{ c.tone }}" data-off="{{ c.off }}" style="{{ c.style }}">{{ c.label }}</span>
+        </sc-for>
+        <span data-t="dim" style="margin-left:auto;font-size:12px;color:#8b9089">Sorted by <span data-t="accent" style="color:#14544d;font-weight:600">due date</span> · 23 open</span>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(340px,480px)">
+        <div data-b style="min-width:0;border-right:1px solid #e3e6e3;display:flex;flex-direction:column;overflow:auto">
+          <div data-s="bar" data-b data-t="dim" style="display:grid;grid-template-columns:88px minmax(0,1fr) 116px 100px;padding:0 16px;height:30px;align-items:center;border-bottom:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8b9089">
+            <span>Due</span><span>Document</span><span>Task</span><span style="text-align:right">Amount</span>
+          </div>
+          <sc-for list="{{ taskRows }}" as="r" hint-placeholder-count="10">
+            <a href="#" onClick="{{ r.open }}" data-sel="{{ r.sel }}" style="{{ r.style }}">
+              <span data-t="{{ r.dueTone }}" style="{{ r.dueStyle }}">{{ r.due }}</span>
+              <div style="min-width:0;padding-right:12px">
+                <p style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</p>
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.correspondent }} · {{ r.type }}</p>
+              </div>
+              <span data-t="dim" data-off="1" style="font-size:12px;color:#5b615c">{{ r.task }}</span>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-align:right">{{ r.amount }}</span>
+            </a>
+          </sc-for>
+        </div>
+
+        <div data-s="bar" style="min-width:0;display:flex;flex-direction:column;background:#f7f8f7">
+          <div data-s="app" data-b style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+            <span style="font-size:12.5px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Jahresabrechnung 2026</span>
+            <span data-a="warn" style="display:inline-flex;align-items:center;gap:4px;border-radius:4px;background:#fdf1e3;color:#8a5a19;padding:2px 7px;font-size:11px;font-weight:600">Needs review</span>
+            <a href="#" onClick="{{ goDetail }}" data-t="dim" style="display:inline-flex;color:#5b615c"><i data-lucide="external-link" style="width:14px;height:14px"></i></a>
+          </div>
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <div data-s="sunken" style="flex:1;min-height:0;padding:14px;display:flex;justify-content:center;background:#eceeec;overflow:hidden">
+              <div data-s="paper" style="width:330px;background:#fff;box-shadow:0 2px 10px rgba(20,40,35,0.12);padding:26px;display:flex;flex-direction:column;gap:9px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div style="height:9px;width:104px;background:#14544d"></div>
+                  <div style="height:28px;width:28px;background:#dfe3df"></div>
+                </div>
+                <div style="height:5px;width:46%;background:#dfe3df;margin-top:12px"></div>
+                <div style="height:5px;width:36%;background:#dfe3df"></div>
+                <div style="height:1px;background:#eaeceb;margin:10px 0"></div>
+                <div style="height:5px;width:90%;background:#eaeceb"></div>
+                <div style="height:5px;width:84%;background:#eaeceb"></div>
+                <div style="height:5px;width:88%;background:#eaeceb"></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;background:#fdf6ea;padding:6px 8px">
+                  <div style="height:5px;width:38%;background:#e4d3b4"></div>
+                  <div style="height:7px;width:22%;background:#8a5a19"></div>
+                </div>
+                <div style="height:5px;width:70%;background:#eaeceb"></div>
+                <div style="margin-top:auto;display:flex;justify-content:space-between">
+                  <div style="height:5px;width:28%;background:#eaeceb"></div>
+                  <div style="height:7px;width:18%;background:#14544d;opacity:0.7"></div>
+                </div>
+              </div>
+            </div>
+            <div data-s="app" data-b style="border-top:1px solid #e3e6e3;background:#fcfcfb;padding:12px 14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Extracted fields</p>
+                <span data-t="amber" style="font-size:11.5px;color:#8a5a19;font-weight:600">2 need confirming</span>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <sc-for list="{{ fields }}" as="f" hint-placeholder-count="6">
+                  <div data-s="panel" data-b data-a="{{ f.tone }}" style="{{ f.style }}">
+                    <p data-t="dim" style="font-size:11px;color:#8b9089">{{ f.label }}</p>
+                    <p style="{{ f.valueStyle }}">{{ f.value }}</p>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button data-a="fill" style="display:inline-flex;align-items:center;gap:6px;height:30px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">
+                  <i data-lucide="check" style="width:13px;height:13px"></i>Confirm and file
+                </button>
+                <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 12px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                  <i data-lucide="rotate-ccw" style="width:13px;height:13px"></i>Reprocess
+                </button>
+                <span data-t="dim" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;align-self:center">↵ confirm · ⇧↵ next</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isDocuments }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;height:100%">
+      <div data-s="app" data-b style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+        <div data-s="bar" data-b style="display:flex;gap:2px;border:1px solid #e3e6e3;border-radius:6px;background:#f2f4f2;padding:2px">
+          <sc-for list="{{ viewTabs }}" as="v" hint-placeholder-count="3">
+            <button onClick="{{ v.go }}" data-s="{{ v.surf }}" data-a="{{ v.tone }}" data-off="{{ v.off }}" style="{{ v.style }}">
+              <i data-lucide="{{ v.icon }}" style="width:13px;height:13px"></i>{{ v.label }}
+            </button>
+          </sc-for>
+        </div>
+        <sc-for list="{{ docChips }}" as="c" hint-placeholder-count="4">
+          <span data-a="{{ c.tone }}" data-off="{{ c.off }}" style="{{ c.style }}">{{ c.label }}</span>
+        </sc-for>
+        <span data-t="dim" style="margin-left:auto;font-size:12px;color:#8b9089">1.284 documents · 41 this year</span>
+      </div>
+
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:236px minmax(0,1fr)">
+        <aside data-s="bar" data-b style="border-right:1px solid #e3e6e3;background:#f7f8f7;overflow:auto;padding:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Filters</p>
+            <span data-t="accent" style="font-size:11.5px;color:#14544d;font-weight:600">Clear</span>
+          </div>
+          <sc-for list="{{ facetGroups }}" as="g" hint-placeholder-count="4">
+            <div data-b style="border-top:1px solid #e6e9e6;padding:10px 0">
+              <p data-t="dim" style="font-size:11.5px;font-weight:600;color:#6b716c;margin-bottom:6px">{{ g.title }}</p>
+              <div style="display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ g.items }}" as="f" hint-placeholder-count="5">
+                  <span data-a="{{ f.tone }}" data-off="{{ f.off }}" style="{{ f.style }}">
+                    <span style="{{ f.box }}"></span>
+                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.label }}</span>
+                    <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a">{{ f.count }}</span>
+                  </span>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </aside>
+
+        <div style="min-width:0;overflow:auto">
+          <sc-if value="{{ isListView }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div data-s="bar" data-b data-t="dim" style="display:grid;grid-template-columns:104px minmax(0,1fr) 150px 112px 104px;padding:0 16px;height:30px;align-items:center;border-bottom:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8b9089">
+              <span>Date</span><span>Document</span><span>Correspondent</span><span>Type</span><span style="text-align:right">Amount</span>
+            </div>
+            <sc-for list="{{ docRows }}" as="d" hint-placeholder-count="14">
+              <a href="#" onClick="{{ d.open }}" style="{{ d.style }}">
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6b716c">{{ d.date }}</span>
+                <div style="min-width:0;padding-right:12px;display:flex;align-items:center;gap:8px">
+                  <span style="{{ d.dot }}"></span>
+                  <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.title }}</span>
+                  <span style="{{ d.flagStyle }}">{{ d.flag }}</span>
+                </div>
+                <span data-t="dim" style="font-size:12px;color:#5b615c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:10px">{{ d.correspondent }}</span>
+                <span data-t="dim" style="font-size:12px;color:#5b615c">{{ d.type }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-align:right">{{ d.amount }}</span>
+              </a>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isTimelineView }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px;display:flex;flex-direction:column;gap:2px">
+            <sc-for list="{{ timeline }}" as="m" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:96px 1fr;gap:14px;align-items:center">
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#6b716c;text-align:right">{{ m.label }}</span>
+                <div data-b style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #eef0ee;padding:7px 0">
+                  <div style="{{ m.barStyle }}"></div>
+                  <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">{{ m.count }}</span>
+                  <span data-t="dim" style="font-size:12px;color:#8b9089;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ m.sample }}</span>
+                  <span style="{{ m.dueStyle }}">{{ m.due }}</span>
+                </div>
+              </div>
+            </sc-for>
+            <p data-t="dim" style="font-size:12px;color:#8b9089;margin-top:14px;padding-left:110px">Bar length is document count; the amber marker flags months with unpaid deadlines.</p>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ isGroupView }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px">
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <h3 style="font-size:13px">Grouped by correspondent</h3>
+              <p data-t="dim" style="font-size:12px;color:#8b9089">Block size is document count — the old galaxy view, made readable.</p>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px">
+              <sc-for list="{{ groups }}" as="g" hint-placeholder-count="12">
+                <a href="#" onClick="{{ goDocs }}" style="{{ g.style }}">
+                  <p style="{{ g.nameStyle }}">{{ g.name }}</p>
+                  <div style="margin-top:auto;display:flex;align-items:baseline;justify-content:space-between">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600">{{ g.count }}</span>
+                    <span data-t="dim" style="font-size:11px;opacity:0.75">{{ g.type }}</span>
+                  </div>
+                </a>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;height:100%">
+      <div data-s="app" data-b style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+        <a href="#" onClick="{{ goDocs }}" data-t="dim" style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:#6b716c">
+          <i data-lucide="arrow-left" style="width:13px;height:13px"></i>Documents
+        </a>
+        <span data-t="dim" style="color:#c3c8c4">/</span>
+        <span style="font-size:12.5px;font-weight:600">Jahresabrechnung 2026</span>
+        <span data-a="warn" style="display:inline-flex;align-items:center;border-radius:4px;background:#fdf1e3;color:#8a5a19;padding:2px 7px;font-size:11px;font-weight:600">Needs review</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:12px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+            <i data-lucide="download" style="width:13px;height:13px"></i>Original
+          </button>
+          <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:12px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+            <i data-lucide="file-text" style="width:13px;height:13px"></i>Searchable PDF
+          </button>
+          <button data-a="fill" style="display:inline-flex;align-items:center;gap:6px;height:28px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+            <i data-lucide="check" style="width:13px;height:13px"></i>Confirm
+          </button>
+        </div>
+      </div>
+
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px">
+        <div data-b style="min-width:0;border-right:1px solid #e3e6e3;display:flex;flex-direction:column">
+          <div data-s="bar" data-b style="display:flex;align-items:center;gap:2px;padding:6px 12px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <sc-for list="{{ detailTabs }}" as="t" hint-placeholder-count="4">
+              <button onClick="{{ t.go }}" data-a="{{ t.tone }}" data-off="{{ t.off }}" style="{{ t.style }}">{{ t.label }}</button>
+            </sc-for>
+            <div data-t="dim" style="margin-left:auto;display:flex;align-items:center;gap:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089">
+              <i data-lucide="chevron-left" style="width:13px;height:13px"></i>
+              <span>1 / 3</span>
+              <i data-lucide="chevron-right" style="width:13px;height:13px"></i>
+            </div>
+          </div>
+          <div data-s="sunken" style="flex:1;min-height:0;overflow:auto;background:#eceeec;padding:20px;display:flex;justify-content:center">
+            <div data-s="paper" style="width:560px;background:#fff;box-shadow:0 2px 14px rgba(20,40,35,0.14);padding:44px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div style="height:11px;width:150px;background:#14544d"></div>
+                <div style="height:40px;width:40px;background:#dfe3df"></div>
+              </div>
+              <div style="height:6px;width:44%;background:#dfe3df;margin-top:18px"></div>
+              <div style="height:6px;width:34%;background:#dfe3df"></div>
+              <div style="height:1px;background:#eaeceb;margin:14px 0"></div>
+              <div style="height:6px;width:92%;background:#eaeceb"></div>
+              <div style="height:6px;width:88%;background:#eaeceb"></div>
+              <div style="height:6px;width:94%;background:#eaeceb"></div>
+              <div style="height:6px;width:72%;background:#eaeceb"></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;background:#fdf6ea;padding:9px 11px">
+                <div style="height:6px;width:36%;background:#e4d3b4"></div>
+                <div style="height:9px;width:20%;background:#8a5a19"></div>
+              </div>
+              <div style="height:6px;width:80%;background:#eaeceb;margin-top:10px"></div>
+              <div style="height:6px;width:66%;background:#eaeceb"></div>
+              <div style="height:6px;width:86%;background:#eaeceb"></div>
+              <div style="margin-top:36px;display:flex;justify-content:space-between">
+                <div style="height:6px;width:26%;background:#eaeceb"></div>
+                <div style="height:9px;width:16%;background:#14544d;opacity:0.7"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div data-s="bar" style="min-width:0;overflow:auto;background:#f7f8f7">
+          <div data-b style="padding:12px 14px;border-bottom:1px solid #e3e6e3">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Fields</p>
+              <span data-t="accent" style="font-size:11.5px;color:#14544d;font-weight:600">Edit</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ detailFields }}" as="f" hint-placeholder-count="8">
+                <div data-a="{{ f.tone }}" style="{{ f.rowStyle }}">
+                  <span data-t="dim" style="width:112px;flex-shrink:0;font-size:11.5px;color:#8b9089">{{ f.label }}</span>
+                  <span style="{{ f.valStyle }}">{{ f.value }}</span>
+                  <span style="{{ f.badgeStyle }}">{{ f.badge }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div data-b style="padding:12px 14px;border-bottom:1px solid #e3e6e3">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;margin-bottom:8px">Why it needs review</p>
+            <div data-a="warn" data-b style="border:1px solid #ecd9bb;border-radius:6px;background:#fdf6ea;padding:10px 11px">
+              <p style="font-size:12.5px;color:inherit;font-weight:600">2 fields missing · confidence 61%</p>
+              <p style="font-size:12px;color:inherit;opacity:0.85;margin-top:4px">The reference number and due date could not be read from page 2. Confirm them and the document files itself.</p>
+            </div>
+          </div>
+          <div data-b style="padding:12px 14px;border-bottom:1px solid #e3e6e3">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;margin-bottom:8px">Related</p>
+            <sc-for list="{{ related }}" as="r" hint-placeholder-count="3">
+              <a href="#" onClick="{{ goDetail }}" data-b style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #e6e9e6;color:inherit">
+                <i data-lucide="file-text" style="width:13px;height:13px;color:#9aa09a;flex-shrink:0"></i>
+                <span style="flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a">{{ r.date }}</span>
+              </a>
+            </sc-for>
+          </div>
+          <div style="padding:12px 14px">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;margin-bottom:8px">History</p>
+            <sc-for list="{{ history }}" as="h" hint-placeholder-count="4">
+              <div style="display:flex;gap:9px;padding:5px 0">
+                <span style="{{ h.dot }}"></span>
+                <div style="min-width:0;flex:1">
+                  <p style="font-size:12.5px">{{ h.label }}</p>
+                  <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:1px">{{ h.at }}</p>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;height:100%">
+      <div data-s="app" data-b style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+        <h2 style="font-size:13px">Review queue</h2>
+        <span data-t="dim" style="font-size:12px;color:#8b9089">7 documents · oldest 21 days</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <sc-for list="{{ reviewChips }}" as="c" hint-placeholder-count="4">
+            <span data-a="{{ c.tone }}" data-off="{{ c.off }}" style="{{ c.style }}">{{ c.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:340px minmax(0,1fr)">
+        <div data-s="bar" data-b style="border-right:1px solid #e3e6e3;background:#f7f8f7;overflow:auto">
+          <sc-for list="{{ reviewList }}" as="r" hint-placeholder-count="7">
+            <a href="#" onClick="{{ r.select }}" data-sel="{{ r.sel }}" style="{{ r.style }}">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="{{ r.dot }}"></span>
+                <span style="flex:1;min-width:0;font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a">{{ r.confidence }}</span>
+              </div>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:3px;padding-left:14px">{{ r.reason }} · {{ r.date }}</p>
+            </a>
+          </sc-for>
+        </div>
+        <div style="min-width:0;display:flex;flex-direction:column;overflow:auto">
+          <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+            <div>
+              <h3 style="font-size:15px">Stadtwerke München — Jahresabrechnung 2026</h3>
+              <p data-t="dim" style="font-size:12.5px;color:#8b9089;margin-top:3px">Utility bill · 01.03.2026 · 2 fields missing · confidence 61%</p>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,300px);gap:14px;align-items:start">
+              <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+                <div data-s="bar" data-b data-t="dim" style="padding:8px 12px;border-bottom:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Confirm fields</div>
+                <div style="padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ reviewFields }}" as="f" hint-placeholder-count="6">
+                    <div style="{{ f.rowStyle }}">
+                      <span data-t="dim" style="width:118px;flex-shrink:0;font-size:12px;color:#8b9089">{{ f.label }}</span>
+                      <input data-s="panel" data-b data-a="{{ f.tone }}" value="{{ f.value }}" style="{{ f.inputStyle }}">
+                      <span data-t="{{ f.hintTone }}" style="{{ f.hintStyle }}">{{ f.hint }}</span>
+                    </div>
+                  </sc-for>
+                  <div data-b style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;padding-top:10px;border-top:1px solid #eef0ee">
+                    <button data-a="fill" style="display:inline-flex;align-items:center;gap:6px;height:30px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">
+                      <i data-lucide="check" style="width:13px;height:13px"></i>Confirm and file
+                    </button>
+                    <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 12px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                      <i data-lucide="rotate-ccw" style="width:13px;height:13px"></i>Reprocess
+                    </button>
+                    <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 12px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">Skip</button>
+                    <span data-t="dim" style="margin-left:auto;align-self:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">↵ confirm · j/k next</span>
+                  </div>
+                </div>
+              </div>
+              <div data-s="sunken" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#eceeec;padding:12px;display:flex;justify-content:center">
+                <div data-s="paper" style="width:100%;background:#fff;box-shadow:0 2px 10px rgba(20,40,35,0.12);padding:20px;display:flex;flex-direction:column;gap:7px">
+                  <div style="height:8px;width:60%;background:#14544d"></div>
+                  <div style="height:5px;width:40%;background:#dfe3df;margin-top:10px"></div>
+                  <div style="height:1px;background:#eaeceb;margin:8px 0"></div>
+                  <div style="height:5px;width:92%;background:#eaeceb"></div>
+                  <div style="height:5px;width:86%;background:#eaeceb"></div>
+                  <div style="display:flex;justify-content:space-between;margin-top:8px;background:#fdf6ea;padding:6px 8px">
+                    <div style="height:5px;width:40%;background:#e4d3b4"></div>
+                    <div style="height:6px;width:24%;background:#8a5a19"></div>
+                  </div>
+                  <div style="height:5px;width:74%;background:#eaeceb"></div>
+                  <div style="height:5px;width:64%;background:#eaeceb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isSearch }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;height:100%;overflow:hidden">
+
+      <aside data-s="bar" data-b style="width:212px;flex-shrink:0;border-right:1px solid #e3e6e3;background:#f7f8f7;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:10px">
+          <button data-a="fill" onClick="{{ newChat }}" style="display:flex;width:100%;align-items:center;gap:7px;height:30px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 10px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">
+            <i data-lucide="plus" style="width:13px;height:13px"></i>New conversation
+          </button>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:0 8px 8px">
+          <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;padding:6px 6px 4px">Recent</p>
+          <sc-for list="{{ conversations }}" as="c" hint-placeholder-count="6">
+            <a href="#" onClick="{{ c.go }}" data-sel="{{ c.sel }}" style="{{ c.style }}">
+              <span style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</span>
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a;flex-shrink:0">{{ c.ago }}</span>
+            </a>
+          </sc-for>
+        </div>
+        <div data-b style="border-top:1px solid #e3e6e3;padding:9px 12px">
+          <p data-t="dim" style="font-size:11px;color:#8b9089;line-height:1.5">Answers cite the documents they came from. Only extracted text is sent to the chat provider.</p>
+        </div>
+      </aside>
+
+      <div style="flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)">
+        <div style="min-width:0;display:flex;flex-direction:column;border-right:1px solid #e3e6e3" data-b>
+          <div data-s="app" data-b style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+            <h2 style="font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Fällige Rechnungen März 2026</h2>
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a;flex-shrink:0">3 turns</span>
+            <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0">
+              <sc-for list="{{ scopeChips }}" as="c" hint-placeholder-count="3">
+                <span data-a="{{ c.tone }}" data-off="{{ c.off }}" style="{{ c.style }}">{{ c.label }}</span>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="flex:1;min-height:0;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:20px">
+
+            <div style="display:flex;justify-content:flex-end">
+              <div data-a="soft" style="max-width:76%;border-radius:10px 10px 2px 10px;background:#e7edea;color:#14544d;padding:9px 13px;font-size:13.5px;line-height:1.55">Welche Rechnungen sind diesen Monat fällig?</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <p style="font-size:13.5px;line-height:1.75">Drei Rechnungen werden im März 2026 fällig, zusammen <strong>1.284,60 €</strong>. Die Jahresabrechnung der Stadtwerke ist <span data-t="red" style="color:#a8462f;font-weight:600">seit 4 Tagen überfällig</span><span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 4px;margin-left:3px">1</span>. Telekom wird am 28. März abgebucht<span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 4px;margin-left:3px">2</span>, die Kfz-Versicherung am 31. März<span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 4px;margin-left:3px">3</span>.</p>
+
+              <div data-s="bar" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#f7f8f7;overflow:hidden">
+                <div data-b data-t="dim" style="display:grid;grid-template-columns:minmax(0,1fr) 84px 80px 72px;padding:0 12px;height:27px;align-items:center;border-bottom:1px solid #e3e6e3;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8b9089">
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Dokument</span><span>Fällig</span><span style="text-align:right">Betrag</span><span style="text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Aktion</span>
+                </div>
+                <sc-for list="{{ searchRows }}" as="s" hint-placeholder-count="3">
+                  <a href="#" onClick="{{ goDetail }}" data-b style="display:grid;grid-template-columns:minmax(0,1fr) 84px 80px 72px;align-items:center;padding:0 12px;height:36px;border-bottom:1px solid #eef0ee;color:inherit">
+                    <span style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:10px">{{ s.title }}</span>
+                    <span data-t="{{ s.dueTone }}" style="{{ s.dueStyle }}">{{ s.due }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-align:right">{{ s.amount }}</span>
+                    <span data-t="dim" style="font-size:11.5px;color:#8b9089;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ s.task }}</span>
+                  </a>
+                </sc-for>
+              </div>
+
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ sourcePills }}" as="c" hint-placeholder-count="3">
+                  <a href="#" onClick="{{ c.go }}" data-s="bar" data-b data-sel="{{ c.sel }}" style="{{ c.style }}">
+                    <span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;color:#14544d;background:#e7edea;border-radius:3px;padding:0 4px">{{ c.n }}</span>
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</span>
+                    <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a">p.{{ c.page }}</span>
+                  </a>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end">
+              <div data-a="soft" style="max-width:76%;border-radius:10px 10px 2px 10px;background:#e7edea;color:#14544d;padding:9px 13px;font-size:13.5px;line-height:1.55">Und was war es letztes Jahr im selben Monat?</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <p style="font-size:13.5px;line-height:1.75">Im März 2025 waren es vier Rechnungen über <strong>1.402,10 €</strong> — also rund <strong>8 % mehr</strong> als in diesem Monat. Der Unterschied kommt fast vollständig aus dem Stromabschlag, der zum 01.01.2026 von 118,00 € auf 94,00 € gesenkt wurde<span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 4px;margin-left:3px">4</span>.</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <a href="#" onClick="{{ goDetail }}" data-s="bar" data-b style="display:inline-flex;align-items:center;gap:7px;max-width:100%;border:1px solid #e3e6e3;border-radius:999px;background:#f7f8f7;padding:4px 10px;font-size:11.5px;color:inherit">
+                  <span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;color:#14544d;background:#e7edea;border-radius:3px;padding:0 4px">4</span>
+                  <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Stromabschlag Januar</span>
+                  <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a">p.1</span>
+                </a>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end">
+              <div data-a="soft" style="max-width:76%;border-radius:10px 10px 2px 10px;background:#e7edea;color:#14544d;padding:9px 13px;font-size:13.5px;line-height:1.55">Zeig mir nur die überfälligen.</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8b9089">Durchsucht 1.284 Dokumente</span>
+                <span style="{{ pulseStyle }}"></span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <div data-s="sunken" style="height:9px;width:74%;border-radius:3px;background:#e6e9e6"></div>
+                <div data-s="sunken" style="height:9px;width:88%;border-radius:3px;background:#e6e9e6"></div>
+                <div data-s="sunken" style="height:9px;width:46%;border-radius:3px;background:#e6e9e6"></div>
+              </div>
+            </div>
+          </div>
+
+          <div data-s="app" data-b style="border-top:1px solid #e3e6e3;background:#fcfcfb;padding:11px 16px">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px">
+              <sc-for list="{{ followUps }}" as="f" hint-placeholder-count="3">
+                <span data-s="bar" data-b style="border:1px solid #dde1de;border-radius:999px;background:#f7f8f7;padding:4px 10px;font-size:11.5px;color:#5b615c;cursor:pointer">{{ f }}</span>
+              </sc-for>
+            </div>
+            <div data-s="panel" data-b style="display:flex;align-items:flex-end;gap:9px;border:1px solid #d6dad7;border-radius:8px;background:#fff;padding:8px 10px">
+              <textarea rows="1" placeholder="Frag dein Archiv…" style="flex:1;min-width:0;border:none;background:transparent;font-size:13.5px;line-height:1.5;color:inherit;outline:none;resize:none;font-family:inherit"></textarea>
+              <button data-a="fill" style="display:flex;height:28px;width:28px;flex-shrink:0;align-items:center;justify-content:center;border:none;border-radius:6px;background:#14544d;color:#fff;cursor:pointer">
+                <i data-lucide="arrow-up" style="width:14px;height:14px"></i>
+              </button>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:7px">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a">↵ senden · ⇧↵ neue Zeile</span>
+              <span data-t="dim" style="margin-left:auto;font-size:11px;color:#9aa09a">gpt-4o-mini · nur Textauszüge</span>
+            </div>
+          </div>
+        </div>
+
+        <div data-s="bar" style="min-width:0;display:flex;flex-direction:column;background:#f7f8f7;overflow:hidden">
+          <div data-s="app" data-b style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#fcfcfb">
+            <span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 5px">1</span>
+            <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Jahresabrechnung 2026</span>
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089;flex-shrink:0">S. 2 / 3</span>
+            <a href="#" onClick="{{ goDetail }}" data-t="dim" style="display:inline-flex;color:#5b615c"><i data-lucide="external-link" style="width:14px;height:14px"></i></a>
+          </div>
+          <div data-s="sunken" style="flex:1;min-height:0;overflow:auto;background:#eceeec;padding:14px;display:flex;justify-content:center">
+            <div data-s="paper" style="width:100%;max-width:330px;height:fit-content;background:#fff;box-shadow:0 2px 12px rgba(20,40,35,0.13);padding:24px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div style="height:8px;width:96px;background:#14544d"></div>
+                <div style="height:26px;width:26px;background:#dfe3df"></div>
+              </div>
+              <div style="height:5px;width:44%;background:#dfe3df;margin-top:12px"></div>
+              <div style="height:1px;background:#eaeceb;margin:9px 0"></div>
+              <div style="height:5px;width:90%;background:#eaeceb"></div>
+              <div style="height:5px;width:82%;background:#eaeceb"></div>
+              <div style="border-radius:3px;background:#fdf1e3;box-shadow:inset 2px 0 0 #8a5a19;padding:7px 8px;display:flex;flex-direction:column;gap:5px;margin:5px 0">
+                <div style="height:5px;width:92%;background:#e4d3b4"></div>
+                <div style="height:5px;width:64%;background:#e4d3b4"></div>
+              </div>
+              <div style="height:5px;width:86%;background:#eaeceb"></div>
+              <div style="height:5px;width:72%;background:#eaeceb"></div>
+              <div style="height:5px;width:80%;background:#eaeceb"></div>
+              <div style="margin-top:20px;display:flex;justify-content:space-between">
+                <div style="height:5px;width:26%;background:#eaeceb"></div>
+                <div style="height:7px;width:18%;background:#14544d;opacity:0.7"></div>
+              </div>
+            </div>
+          </div>
+          <div data-s="app" data-b style="border-top:1px solid #e3e6e3;background:#fcfcfb;padding:11px 14px">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;margin-bottom:7px">Zitierte Stelle</p>
+            <div data-a="warn" data-b style="border:1px solid #ecd9bb;border-radius:6px;background:#fdf6ea;padding:9px 11px">
+              <p style="font-size:12.5px;line-height:1.6;color:inherit">„Der Gesamtbetrag von 486,20 € ist fällig am 18.03.2026 und wird ohne Abzug erbeten."</p>
+            </div>
+            <div style="display:flex;gap:7px;margin-top:9px">
+              <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:12px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                <i data-lucide="corner-up-left" style="width:12px;height:12px"></i>Im Dokument suchen
+              </button>
+              <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:28px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 10px;font-size:12px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                <i data-lucide="copy" style="width:12px;height:12px"></i>Kopieren
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:820px;margin:0 auto;padding:24px 24px 60px;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <h2 style="font-size:16px">Import documents</h2>
+        <p data-t="dim" style="font-size:12.5px;color:#8b9089;margin-top:3px">Files are OCR'd and classified locally. PDF, JPEG, PNG, TIFF, HEIC.</p>
+      </div>
+      <div data-s="bar" data-b style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1px dashed #c3ccc6;border-radius:8px;background:#f7f8f7;padding:34px">
+        <i data-lucide="upload" style="width:20px;height:20px;color:#14544d"></i>
+        <p style="font-size:13px;font-weight:500;margin-top:4px">Drop files here or <span data-t="accent" style="color:#14544d">browse</span></p>
+        <p data-t="dim" style="font-size:11.5px;color:#8b9089">The watch folder <span style="font-family:'IBM Plex Mono',monospace">/watch-folder</span> imports automatically every 5 min.</p>
+      </div>
+      <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Queue · 4</span>
+          <span data-t="dim" style="font-size:11.5px;color:#9aa09a">2 processing · 1 done · 1 duplicate</span>
+          <span data-t="accent" style="margin-left:auto;font-size:11.5px;color:#14544d;font-weight:600">Clear finished</span>
+        </div>
+        <sc-for list="{{ uploadRows }}" as="u" hint-placeholder-count="4">
+          <div data-b style="display:grid;grid-template-columns:minmax(0,1fr) 90px 120px 130px;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #eef0ee">
+            <div style="min-width:0;display:flex;align-items:center;gap:9px">
+              <i data-lucide="file" style="width:14px;height:14px;color:#9aa09a;flex-shrink:0"></i>
+              <div style="min-width:0">
+                <p style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.name }}</p>
+                <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:2px">{{ u.size }}</p>
+              </div>
+            </div>
+            <span data-t="dim" style="font-size:11.5px;color:#8b9089">{{ u.pages }}</span>
+            <div>
+              <div data-s="sunken" style="height:4px;border-radius:2px;background:#e6e9e6;overflow:hidden">
+                <div style="{{ u.barStyle }}"></div>
+              </div>
+              <p data-t="dim" style="font-size:11px;color:#8b9089;margin-top:4px">{{ u.stage }}</p>
+            </div>
+            <span style="{{ u.statusStyle }}">{{ u.status }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button data-s="panel" data-b style="height:32px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 14px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">Cancel all</button>
+        <button data-a="fill" onClick="{{ goToday }}" style="height:32px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">Done</button>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:940px;margin:0 auto;padding:24px 24px 60px;display:flex;flex-direction:column;gap:14px">
+
+      <div data-s="panel" data-b style="display:flex;align-items:center;gap:16px;border:1px solid #e3e6e3;border-radius:8px;background:#fff;padding:16px">
+        <span data-a="soft" style="display:flex;height:52px;width:52px;flex-shrink:0;align-items:center;justify-content:center;border-radius:8px;background:#e7edea;color:#14544d;font-size:17px;font-weight:700">OK</span>
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px">
+            <h2 style="font-size:16px">Archive Owner</h2>
+            <span data-a="soft" style="border-radius:4px;background:#e7edea;color:#14544d;padding:1px 7px;font-size:11px;font-weight:600">Owner</span>
+          </div>
+          <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b9089;margin-top:4px">owner@example.com · signed in 06:12 · this machine</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button data-s="panel" data-b style="height:30px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 12px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">Edit</button>
+          <button onClick="{{ logout }}" data-s="panel" data-b style="display:inline-flex;align-items:center;gap:6px;height:30px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 12px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+            <i data-lucide="log-out" style="width:13px;height:13px"></i>Sign out
+          </button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+        <sc-for list="{{ profileStats }}" as="p" hint-placeholder-count="4">
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;padding:11px 13px">
+            <p data-t="dim" style="font-size:11.5px;color:#8b9089">{{ p.label }}</p>
+            <p style="font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;letter-spacing:-0.02em;margin-top:4px">{{ p.value }}</p>
+            <p data-t="dim" style="font-size:11px;color:#9aa09a;margin-top:2px">{{ p.hint }}</p>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">Sign-in and security</h3>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">Nothing here leaves this machine.</p>
+            </div>
+            <sc-for list="{{ securityRows }}" as="r" hint-placeholder-count="4">
+              <div data-b style="display:flex;align-items:center;gap:14px;padding:11px 14px;border-bottom:1px solid #eef0ee">
+                <div style="min-width:0;flex:1">
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <p style="font-size:12.5px;font-weight:500">{{ r.label }}</p>
+                    <span data-a="{{ r.tone }}" data-off="{{ r.off }}" style="{{ r.badgeStyle }}">{{ r.badge }}</span>
+                  </div>
+                  <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ r.hint }}</p>
+                </div>
+                <button data-s="panel" data-b style="{{ r.actionStyle }}">{{ r.action }}</button>
+              </div>
+            </sc-for>
+          </div>
+
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <div style="flex:1">
+                <h3 style="font-size:13px">API tokens</h3>
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">For the CLI and scripted imports. Shown once at creation.</p>
+              </div>
+              <button data-a="fill" style="display:inline-flex;align-items:center;gap:6px;height:28px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+                <i data-lucide="plus" style="width:12px;height:12px"></i>New token
+              </button>
+            </div>
+            <div data-s="bar" data-b data-t="dim" style="display:grid;grid-template-columns:minmax(0,1fr) 110px 110px 72px;gap:12px;padding:0 14px;height:28px;align-items:center;border-bottom:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8b9089">
+              <span>Name</span><span>Created</span><span>Expires</span><span></span>
+            </div>
+            <sc-for list="{{ tokens }}" as="tk" hint-placeholder-count="3">
+              <div data-b style="display:grid;grid-template-columns:minmax(0,1fr) 110px 110px 72px;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #eef0ee">
+                <div style="min-width:0">
+                  <p style="font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tk.name }}</p>
+                  <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:2px">{{ tk.prefix }}</p>
+                </div>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">{{ tk.created }}</span>
+                <span data-t="{{ tk.expiryTone }}" style="{{ tk.expiryStyle }}">{{ tk.expires }}</span>
+                <button data-s="panel" data-b style="justify-self:end;height:26px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 9px;font-size:11.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">Revoke</button>
+              </div>
+            </sc-for>
+          </div>
+
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">Recent activity</h3>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">From the archive audit log.</p>
+            </div>
+            <div style="padding:10px 14px">
+              <sc-for list="{{ activity }}" as="a" hint-placeholder-count="5">
+                <div style="display:flex;gap:10px;padding:6px 0">
+                  <span style="{{ a.dot }}"></span>
+                  <div style="min-width:0;flex:1">
+                    <p style="font-size:12.5px">{{ a.label }}</p>
+                    <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:1px">{{ a.at }}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">Preferences</h3>
+            </div>
+            <sc-for list="{{ preferences }}" as="p" hint-placeholder-count="5">
+              <div data-b style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #eef0ee">
+                <div style="min-width:0;flex:1">
+                  <p style="font-size:12.5px;font-weight:500">{{ p.label }}</p>
+                  <p data-t="dim" style="font-size:11px;color:#8b9089;margin-top:2px">{{ p.hint }}</p>
+                </div>
+                <span data-t="{{ p.tone }}" style="{{ p.valueStyle }}">{{ p.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">Your data</h3>
+            </div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">
+              <button data-s="panel" data-b style="display:flex;align-items:center;gap:8px;height:32px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 11px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit;text-align:left">
+                <i data-lucide="download" style="width:13px;height:13px"></i>Export archive
+              </button>
+              <button data-s="panel" data-b style="display:flex;align-items:center;gap:8px;height:32px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 11px;font-size:12.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit;text-align:left">
+                <i data-lucide="file-clock" style="width:13px;height:13px"></i>Download audit log
+              </button>
+              <p data-t="dim" style="font-size:11px;color:#9aa09a;line-height:1.5;margin-top:2px">Export writes originals, metadata and the audit log to a single folder — enough to rebuild the archive elsewhere.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:980px;margin:0 auto;padding:24px 24px 60px;display:flex;gap:24px">
+      <nav style="width:150px;flex-shrink:0;display:flex;flex-direction:column;gap:1px;position:sticky;top:0;align-self:flex-start">
+        <sc-for list="{{ settingsNav }}" as="n" hint-placeholder-count="6">
+          <span onClick="{{ n.go }}" data-a="{{ n.tone }}" data-off="{{ n.off }}" style="{{ n.style }}">{{ n.label }}</span>
+        </sc-for>
+      </nav>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+        <sc-if value="{{ isSetGeneral }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ settingsSections }}" as="sec" hint-placeholder-count="4">
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">{{ sec.title }}</h3>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ sec.description }}</p>
+            </div>
+            <sc-for list="{{ sec.rows }}" as="row" hint-placeholder-count="3">
+              <div data-b style="display:flex;align-items:center;gap:16px;padding:11px 14px;border-bottom:1px solid #eef0ee">
+                <div style="min-width:0;flex:1">
+                  <p style="font-size:12.5px;font-weight:500">{{ row.label }}</p>
+                  <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ row.hint }}</p>
+                </div>
+                <span data-t="{{ row.valueTone }}" style="{{ row.valueStyle }}">{{ row.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ isSetTaxonomy }}" hint-placeholder-val="{{ false }}">
+        <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+          <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <div style="flex:1;min-width:0">
+              <h3 style="font-size:13px">Tags, correspondents and types</h3>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">318 tags · 41 unused · 6 look like duplicates</p>
+            </div>
+            <button data-a="fill" style="display:inline-flex;align-items:center;gap:6px;height:28px;border:none;border-radius:6px;background:#14544d;color:#fff;padding:0 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
+              <i data-lucide="plus" style="width:12px;height:12px"></i>New tag
+            </button>
+          </div>
+
+          <div data-b style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid #eef0ee">
+            <div data-s="bar" data-b style="display:flex;gap:2px;border:1px solid #e3e6e3;border-radius:6px;background:#f2f4f2;padding:2px">
+              <sc-for list="{{ taxKinds }}" as="k" hint-placeholder-count="3">
+                <button onClick="{{ k.go }}" data-s="{{ k.surf }}" data-a="{{ k.tone }}" data-off="{{ k.off }}" style="{{ k.style }}">{{ k.label }}<span style="{{ k.countStyle }}">{{ k.count }}</span></button>
+              </sc-for>
+            </div>
+            <div data-s="panel" data-b style="display:flex;align-items:center;gap:7px;height:28px;flex:1;min-width:0;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 9px">
+              <i data-lucide="search" style="width:13px;height:13px;color:#8b9089"></i>
+              <input placeholder="Filter 318 tags" style="flex:1;min-width:0;border:none;background:transparent;font-size:12.5px;color:inherit;outline:none">
+            </div>
+            <sc-for list="{{ taxFilters }}" as="f" hint-placeholder-count="3">
+              <span data-a="{{ f.tone }}" data-off="{{ f.off }}" style="{{ f.style }}">{{ f.label }}</span>
+            </sc-for>
+          </div>
+
+          <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid #e3e6e3;background:#f2f4f2">
+            <span data-t="accent" style="font-size:11.5px;font-weight:600;color:#14544d">3 selected</span>
+            <div style="display:flex;gap:6px">
+              <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:5px;height:24px;border:1px solid #d6dad7;border-radius:5px;background:#fff;padding:0 8px;font-size:11.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                <i data-lucide="git-merge" style="width:11px;height:11px"></i>Merge into…
+              </button>
+              <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:5px;height:24px;border:1px solid #d6dad7;border-radius:5px;background:#fff;padding:0 8px;font-size:11.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                <i data-lucide="pencil" style="width:11px;height:11px"></i>Rename
+              </button>
+              <button data-s="panel" data-b style="display:inline-flex;align-items:center;gap:5px;height:24px;border:1px solid #d6dad7;border-radius:5px;background:#fff;padding:0 8px;font-size:11.5px;font-weight:500;color:inherit;cursor:pointer;font-family:inherit">
+                <i data-lucide="trash-2" style="width:11px;height:11px"></i>Delete
+              </button>
+            </div>
+            <span data-t="dim" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">shift-click to range-select</span>
+          </div>
+
+          <div data-s="bar" data-b data-t="dim" style="display:grid;grid-template-columns:26px minmax(0,1fr) 78px 104px 128px;gap:10px;padding:0 14px;height:28px;align-items:center;border-bottom:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#8b9089">
+            <span></span><span>Tag</span><span style="text-align:right">Docs</span><span>Last used</span><span>Suggestion</span>
+          </div>
+          <div style="max-height:420px;overflow:auto">
+            <sc-for list="{{ taxRows }}" as="t" hint-placeholder-count="16">
+              <div data-sel="{{ t.sel }}" style="{{ t.style }}">
+                <span style="{{ t.box }}"></span>
+                <div style="min-width:0;display:flex;align-items:center;gap:8px">
+                  <span style="{{ t.dot }}"></span>
+                  <span style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.name }}</span>
+                </div>
+                <span data-t="{{ t.countTone }}" style="{{ t.docStyle }}">{{ t.docs }}</span>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">{{ t.last }}</span>
+                <span data-a="{{ t.hintTone }}" data-off="{{ t.hintOff }}" style="{{ t.hintStyle }}">{{ t.hint }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div data-s="bar" data-b data-t="dim" style="display:flex;align-items:center;gap:12px;padding:8px 14px;border-top:1px solid #e3e6e3;background:#f7f8f7;font-size:11.5px;color:#8b9089">
+            <span>Showing 16 of 318</span>
+            <span data-t="accent" style="color:#14544d;font-weight:600">Load more</span>
+            <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">Sorted by document count</span>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isSetProviders }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px">
+            <sc-for list="{{ pipelineStats }}" as="p" hint-placeholder-count="4">
+              <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;padding:11px 13px">
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089">{{ p.label }}</p>
+                <p style="{{ p.valueStyle }}">{{ p.value }}</p>
+                <p data-t="dim" style="font-size:11px;color:#9aa09a;margin-top:2px">{{ p.hint }}</p>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ providerGroups }}" as="g" hint-placeholder-count="3">
+            <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+              <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+                <div style="flex:1;min-width:0">
+                  <h3 style="font-size:13px">{{ g.title }}</h3>
+                  <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ g.description }}</p>
+                </div>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089">{{ g.summary }}</span>
+              </div>
+              <sc-for list="{{ g.items }}" as="p" hint-placeholder-count="3">
+                <div data-b style="display:grid;grid-template-columns:14px minmax(0,1fr) 168px 150px;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #eef0ee">
+                  <span style="{{ p.dot }}"></span>
+                  <div style="min-width:0">
+                    <p style="font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</p>
+                    <p data-t="dim" style="font-size:11px;color:#9aa09a;margin-top:2px">{{ p.note }}</p>
+                  </div>
+                  <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.model }}</span>
+                  <div style="display:flex;gap:6px;justify-content:flex-end">
+                    <span data-a="{{ p.roleTone }}" data-off="{{ p.roleOff }}" style="{{ p.roleStyle }}">{{ p.role }}</span>
+                    <span data-a="{{ p.stateTone }}" data-off="{{ p.stateOff }}" style="{{ p.stateStyle }}">{{ p.state }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+
+          <div data-s="panel" data-b style="border:1px solid #e3e6e3;border-radius:8px;background:#fff;overflow:hidden">
+            <div data-s="bar" data-b style="padding:10px 14px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <h3 style="font-size:13px">Recent jobs</h3>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">Last 24 hours across both queues.</p>
+            </div>
+            <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="5">
+              <div data-b style="display:grid;grid-template-columns:14px minmax(0,1fr) 116px 84px 92px;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef0ee">
+                <span style="{{ j.dot }}"></span>
+                <span style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ j.document }}</span>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089">{{ j.queue }}</span>
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089">{{ j.duration }}</span>
+                <span data-a="{{ j.tone }}" data-off="{{ j.off }}" style="{{ j.statusStyle }}">{{ j.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+  </main>
+</div>
+
+<sc-if value="{{ omnibarOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;z-index:50;display:flex;justify-content:center;padding-top:90px">
+    <div onClick="{{ closeOmnibar }}" style="position:absolute;inset:0;background:rgba(16,26,22,0.38);animation:ok-fade 140ms ease-out both"></div>
+    <div data-s="panel" data-b style="position:relative;width:620px;max-height:460px;display:flex;flex-direction:column;overflow:hidden;border:1px solid #d6dad7;border-radius:10px;background:#fff;box-shadow:0 18px 48px rgba(16,26,22,0.22);animation:ok-pop 160ms cubic-bezier(0.16,1,0.3,1) both">
+      <div data-b style="display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #e3e6e3">
+        <i data-lucide="search" style="width:15px;height:15px;color:#8b9089"></i>
+        <input placeholder="Search, ask, or jump to…" style="height:46px;flex:1;border:none;background:transparent;font-size:14px;color:inherit;outline:none">
+        <kbd data-b data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8b9089;border:1px solid #e3e6e3;border-radius:3px;padding:1px 4px">ESC</kbd>
+      </div>
+      <div style="flex:1;overflow:auto;padding:6px">
+        <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;padding:8px 10px 6px">Jump to</p>
+        <sc-for list="{{ omniJump }}" as="j" hint-placeholder-count="4">
+          <a href="#" onClick="{{ j.go }}" data-sel="{{ j.sel }}" style="{{ j.style }}">
+            <i data-lucide="{{ j.icon }}" style="width:14px;height:14px;color:#8b9089;flex-shrink:0"></i>
+            <span style="flex:1">{{ j.label }}</span>
+            <kbd data-b data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a;border:1px solid #e3e6e3;border-radius:3px;padding:1px 4px">{{ j.key }}</kbd>
+          </a>
+        </sc-for>
+        <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089;padding:10px 10px 6px">Ask the archive</p>
+        <sc-for list="{{ omniAsk }}" as="q" hint-placeholder-count="3">
+          <a href="#" onClick="{{ goSearch }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;color:inherit">
+            <i data-lucide="corner-down-right" style="width:14px;height:14px;color:#8b9089;flex-shrink:0"></i>
+            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ q }}</span>
+          </a>
+        </sc-for>
+      </div>
+      <div data-s="bar" data-b data-t="dim" style="display:flex;gap:14px;padding:7px 12px;border-top:1px solid #e3e6e3;background:#f7f8f7;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa09a">
+        <span>↑↓ navigate</span><span>↵ open</span><span>⌘↵ ask</span>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+</sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;denseRows&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Density&quot;}}">
+const MONO = "'IBM Plex Mono',monospace";
+const GREEN = "#14544d", AMBER = "#8a5a19", RED = "#a8462f";
+
+class Component extends DCLogic {
+  state = { screen: "today", view: "list", theme: "light", omnibar: false, reviewSel: 0, detailTab: "preview", setTab: "general", taxKind: "tags" };
+
+  componentDidMount() {
+    this.icons();
+    this.paintBody();
+    this._key = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); this.setState({ omnibar: true }); }
+      if (e.key === "Escape") this.setState({ omnibar: false });
+    };
+    window.addEventListener("keydown", this._key);
+  }
+  componentDidUpdate() { this.icons(); this.paintBody(); }
+  paintBody() {
+    const dark = this.state.theme === "dark";
+    document.body.style.background = dark ? "#0f1214" : "#fcfcfb";
+    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this._key); clearInterval(this._t); }
+  icons() {
+    const run = () => window.lucide && window.lucide.createIcons();
+    if (window.lucide) run();
+    else { clearInterval(this._t); this._t = setInterval(() => { if (window.lucide) { clearInterval(this._t); run(); } }, 120); }
+  }
+
+  go = (screen, extra) => (e) => { if (e) e.preventDefault(); this.setState({ screen, omnibar: false, ...(extra || {}) }); };
+
+  renderVals() {
+    const st = this.state, s = st.screen, dark = st.theme === "dark";
+    const dense = this.props.denseRows ?? false;
+    const rowH = dense ? 36 : 48;
+
+    const tasks = [
+      { due: "-4d", correspondent: "Stadtwerke München", title: "Jahresabrechnung 2026", type: "Utility bill", task: "Pay invoice", amount: "486,20", overdue: true },
+      { due: "6d", correspondent: "Telekom Deutschland", title: "Mobilfunk März 2026", type: "Invoice", task: "Pay invoice", amount: "39,99" },
+      { due: "9d", correspondent: "HUK-Coburg", title: "Kfz-Versicherung Beitragsrechnung", type: "Insurance", task: "Pay invoice", amount: "758,41" },
+      { due: "21d", correspondent: "Finanzamt München", title: "Einkommensteuerbescheid 2025", type: "Tax notice", task: "File objection", amount: "—" },
+      { due: "24d", correspondent: "AOK Bayern", title: "Beitragsbescheid Q2 2026", type: "Notice", task: "Check figures", amount: "412,00" },
+      { due: "39d", correspondent: "Unfiled", title: "Mietvertrag Nachtrag 3", type: "Contract", task: "Sign and return", amount: "—" },
+      { due: "44d", correspondent: "Deutsche Bahn", title: "BahnCard 50 Verlängerung", type: "Invoice", task: "Cancel or renew", amount: "244,00" },
+      { due: "58d", correspondent: "Allianz", title: "Hausratversicherung Anpassung", type: "Insurance", task: "Confirm sum insured", amount: "189,60" },
+      { due: "61d", correspondent: "Stadt München", title: "Grundsteuerbescheid 2026", type: "Tax notice", task: "Standing order", amount: "128,40" },
+      { due: "72d", correspondent: "Vodafone", title: "Kabelanschluss Kündigung", type: "Letter", task: "Registered mail", amount: "—" },
+    ];
+
+    const docs = [
+      { date: "01.03.2026", title: "Jahresabrechnung 2026", correspondent: "Stadtwerke München", type: "Utility bill", amount: "486,20", color: GREEN, flag: "review" },
+      { date: "03.03.2026", title: "Mobilfunk März 2026", correspondent: "Telekom Deutschland", type: "Invoice", amount: "39,99", color: "#2f6f9e" },
+      { date: "24.02.2026", title: "Kfz-Versicherung Beitragsrechnung", correspondent: "HUK-Coburg", type: "Insurance", amount: "758,41", color: "#7a5ba6", flag: "review" },
+      { date: "18.02.2026", title: "Lohnabrechnung Februar 2026", correspondent: "Arbeitgeber GmbH", type: "Payslip", amount: "—", color: "#4a7d5a" },
+      { date: "11.02.2026", title: "Einkommensteuerbescheid 2025", correspondent: "Finanzamt München", type: "Tax notice", amount: "1.204,00", color: "#8a6a2f", flag: "review" },
+      { date: "04.02.2026", title: "Beitragsbescheid Q1 2026", correspondent: "AOK Bayern", type: "Notice", amount: "412,00", color: "#2f6f9e" },
+      { date: "30.01.2026", title: "Mietvertrag Nachtrag 3", correspondent: "Unfiled", type: "Contract", amount: "—", color: "#9aa09a", flag: "unfiled" },
+      { date: "22.01.2026", title: "Stromabschlag Januar", correspondent: "Stadtwerke München", type: "Utility bill", amount: "94,00", color: GREEN },
+      { date: "15.01.2026", title: "BahnCard 50 Rechnung", correspondent: "Deutsche Bahn", type: "Invoice", amount: "244,00", color: "#2f6f9e" },
+      { date: "08.01.2026", title: "Hausratversicherung Police", correspondent: "Allianz", type: "Insurance", amount: "189,60", color: "#7a5ba6" },
+      { date: "02.01.2026", title: "Jahresmeldung Sozialversicherung", correspondent: "Arbeitgeber GmbH", type: "Notice", amount: "—", color: "#4a7d5a" },
+      { date: "28.12.2025", title: "Weihnachtsgeld Abrechnung", correspondent: "Arbeitgeber GmbH", type: "Payslip", amount: "—", color: "#4a7d5a" },
+      { date: "19.12.2025", title: "Grundsteuerbescheid 2026", correspondent: "Stadt München", type: "Tax notice", amount: "128,40", color: "#8a6a2f" },
+      { date: "11.12.2025", title: "Kabelanschluss Vertrag", correspondent: "Vodafone", type: "Contract", amount: "—", color: "#9aa09a" },
+    ];
+
+    const months = [
+      ["Apr 2025", 14], ["Mai 2025", 22], ["Jun 2025", 18], ["Jul 2025", 31],
+      ["Aug 2025", 9], ["Sep 2025", 27], ["Okt 2025", 24], ["Nov 2025", 38],
+      ["Dez 2025", 41], ["Jan 2026", 19], ["Feb 2026", 33], ["Mär 2026", 28],
+    ];
+    const maxM = Math.max(...months.map((m) => m[1]));
+
+    const facet = (label, count, on) => ({
+      label, count, tone: on ? "soft" : "none2", off: on ? null : "1",
+      style: "display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:5px;font-size:12.5px;" + (on ? `background:#e7edea;color:${GREEN};font-weight:600;` : "color:inherit;"),
+      box: `width:11px;height:11px;border-radius:3px;flex-shrink:0;` + (on ? `background:${GREEN};` : "border:1px solid #c3ccc6;"),
+    });
+
+    const chip = (label, on) => ({
+      label, tone: on ? "fill" : "none2", off: on ? null : "chip",
+      style: "border-radius:999px;padding:4px 11px;font-size:12px;white-space:nowrap;" +
+        (on ? `background:${GREEN};color:#fff;font-weight:600;` : "border:1px solid #dde1de;color:#5b615c;"),
+    });
+
+    const taskRowBase = `display:grid;grid-template-columns:88px minmax(0,1fr) 116px 100px;align-items:center;padding:0 16px;height:${rowH}px;border-bottom:1px solid #eef0ee;color:inherit;`;
+    const docRowBase = `display:grid;grid-template-columns:104px minmax(0,1fr) 150px 112px 104px;align-items:center;padding:0 16px;height:${dense ? 32 : 40}px;border-bottom:1px solid #eef0ee;color:inherit;`;
+
+    return {
+      theme: st.theme,
+      moonStyle: dark ? "display:none" : "display:inline-flex",
+      sunStyle: dark ? "display:inline-flex" : "display:none",
+      toggleTheme: () => this.setState({ theme: dark ? "light" : "dark" }),
+      isLogin: s === "login", isApp: s !== "login",
+      isToday: s === "today", isDocuments: s === "documents", isDetail: s === "detail",
+      isReview: s === "review", isSearch: s === "search", isUpload: s === "upload",
+      isSettings: s === "settings", isProfile: s === "profile",
+      isListView: st.view === "list", isTimelineView: st.view === "timeline", isGroupView: st.view === "groups",
+      omnibarOpen: st.omnibar,
+      openOmnibar: () => this.setState({ omnibar: true }),
+      closeOmnibar: () => this.setState({ omnibar: false }),
+      signIn: this.go("today"), logout: this.go("login"),
+      goToday: this.go("today"), goDocs: this.go("documents", { view: "list" }),
+      goDetail: this.go("detail"), goReview: this.go("review"),
+      goSearch: this.go("search"), goUpload: this.go("upload"), goSettings: this.go("settings"),
+      goProfile: this.go("profile"),
+
+      profileStats: [
+        { label: "Documents", value: "1.284", hint: "since Apr 2023" },
+        { label: "Reviewed by you", value: "1.277", hint: "7 still open" },
+        { label: "Storage", value: "18.4 GB", hint: "originals kept" },
+        { label: "Archive age", value: "3y 4m", hint: "first import 12.04.2023" },
+      ],
+
+      securityRows: [
+        { label: "Display name", hint: "Shown in the audit log", action: "Edit", badge: "Archive Owner", tone: "none2", off: "chip" },
+        { label: "Email", hint: "Used for sign-in", action: "Change", badge: "owner@example.com", tone: "none2", off: "chip" },
+        { label: "Password", hint: "Last changed 4 months ago", action: "Change", badge: "Strong", tone: "soft" },
+        { label: "Two-factor authentication", hint: "Time-based code (TOTP) from an authenticator app", action: "Enable", badge: "Disabled", tone: "warn" },
+        { label: "Recovery codes", hint: "Generated when you enable 2FA · shown once", action: "Generate", badge: "None", tone: "none2", off: "chip", disabled: true },
+      ].map((r) => ({
+        ...r,
+        badgeStyle: "flex-shrink:0;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;" +
+          (r.tone === "soft" ? `background:#e7edea;color:${GREEN};`
+            : r.tone === "warn" ? `background:#fdf1e3;color:${AMBER};`
+            : `border:1px solid #dde1de;color:#8b9089;font-family:${MONO};font-weight:500;`),
+        actionStyle: "flex-shrink:0;height:28px;border:1px solid #d6dad7;border-radius:6px;background:#fff;padding:0 11px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;" +
+          (r.disabled ? "color:#9aa09a;" : "color:inherit;"),
+      })),
+
+      tokens: [
+        { name: "openkeep-cli", prefix: "ok_live_8f2c…", created: "12.04.2026", expires: "No expiry" },
+        { name: "Scanner dropbox", prefix: "ok_live_a41d…", created: "03.02.2026", expires: "in 11 days", warn: true },
+        { name: "Backup script", prefix: "ok_live_77b0…", created: "28.11.2025", expires: "01.12.2026" },
+      ].map((tk) => ({
+        ...tk, expiryTone: tk.warn ? "amber" : "dim",
+        expiryStyle: `font-family:${MONO};font-size:11.5px;` + (tk.warn ? `color:${AMBER};font-weight:600;` : "color:#8b9089;"),
+      })),
+
+      activity: [
+        { label: "Confirmed 4 documents in the review queue", at: "Today 09:41", color: GREEN },
+        { label: "Imported 2 files from the watch folder", at: "Today 06:15", color: "#9aa09a" },
+        { label: "Signed in from this device", at: "Today 06:12", color: "#9aa09a" },
+        { label: "Created API token · Scanner dropbox", at: "03.02.2026 14:22", color: "#9aa09a" },
+        { label: "Password changed", at: "02.04.2026 18:20", color: AMBER },
+      ].map((a) => ({ ...a, dot: `width:6px;height:6px;border-radius:9999px;background:${a.color};margin-top:6px;flex-shrink:0` })),
+
+      preferences: [
+        { label: "Interface language", hint: "Applies to the whole UI", value: "English" },
+        { label: "Document language", hint: "OCR and extraction", value: "Deutsch" },
+        { label: "Appearance", hint: "Follows the toggle in the top bar", value: dark ? "Dark" : "Light" },
+        { label: "Date format", hint: "Used across lists and fields", value: "DD.MM.YYYY" },
+        { label: "Start screen", hint: "Where OpenKeep opens", value: "Today", accent: true },
+      ].map((p) => ({
+        ...p, tone: p.accent ? "accent" : "ink",
+        valueStyle: `flex-shrink:0;font-family:${MONO};font-size:12px;font-weight:600;` + (p.accent ? `color:${GREEN};` : "color:inherit;"),
+      })),
+
+      tabs: [
+        { label: "Today", to: "today", count: "" },
+        { label: "Documents", to: "documents", count: "1.284" },
+        { label: "Review", to: "review", count: "7" },
+        { label: "Chat", to: "search", count: "" },
+      ].map((t) => {
+        const on = s === t.to || (t.to === "documents" && s === "detail");
+        return {
+          ...t, go: this.go(t.to, t.to === "documents" ? { view: "list" } : null),
+          tone: on ? "soft" : "none2", off: on ? null : "1",
+          countTone: t.to === "review" ? "amber" : "dim",
+          style: "display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:6px 10px;font-size:12.5px;" +
+            (on ? `background:#e7edea;color:${GREEN};font-weight:600;` : "color:#5b615c;"),
+          countStyle: `font-family:${MONO};font-size:10.5px;` + (t.to === "review" ? `color:${AMBER};` : "color:#9aa09a;"),
+        };
+      }),
+
+      todayChips: [chip("Open tasks", true), chip("Overdue · 1"), chip("This month"), chip("Invoices"), chip("+ Filter")],
+      docChips: [chip("2026", true), chip("All types"), chip("All correspondents"), chip("+ Filter")],
+      reviewChips: [chip("All · 7", true), chip("Missing fields · 4"), chip("Ambiguous type · 2"), chip("No correspondent · 1")],
+
+      taskRows: tasks.map((r, i) => ({
+        ...r, open: this.go("detail"), sel: i === 0 ? "1" : "0", dueTone: r.overdue ? "red" : "dim",
+        style: taskRowBase + (i === 0 ? `background:#eef3f1;box-shadow:inset 2px 0 0 ${GREEN};` : ""),
+        dueStyle: `font-family:${MONO};font-size:12.5px;` + (r.overdue ? `color:${RED};font-weight:600;` : "color:#6b716c;"),
+      })),
+
+      fields: [
+        { label: "Correspondent", value: "Stadtwerke München" },
+        { label: "Document type", value: "Utility bill" },
+        { label: "Issue date", value: "01.03.2026" },
+        { label: "Due date", value: "18.03.2026", warn: true },
+        { label: "Amount", value: "486,20 €" },
+        { label: "Reference", value: "—", warn: true },
+      ].map((f) => ({
+        ...f, tone: f.warn ? "warn" : "none",
+        style: "border-radius:5px;padding:7px 9px;" + (f.warn ? "border:1px solid #ecd9bb;background:#fdf6ea;" : "border:1px solid #e3e6e3;background:#fff;"),
+        valueStyle: "font-size:12.5px;font-weight:600;margin-top:2px;" + (f.warn ? `color:${AMBER};` : "color:inherit;"),
+      })),
+
+      viewTabs: [
+        { label: "List", icon: "list", value: "list" },
+        { label: "Timeline", icon: "calendar-range", value: "timeline" },
+        { label: "Groups", icon: "layout-grid", value: "groups" },
+      ].map((v) => ({
+        ...v,
+        surf: st.view === v.value ? "raised" : "none2",
+        tone: st.view === v.value ? "soft" : "none2",
+        off: st.view === v.value ? null : "1",
+        go: (e) => { e.preventDefault(); this.setState({ view: v.value }); },
+        style: "display:inline-flex;align-items:center;gap:6px;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;" +
+          (st.view === v.value ? `background:#fff;color:${GREEN};font-weight:600;box-shadow:0 1px 2px rgba(20,40,35,0.1);` : "background:transparent;color:#5b615c;"),
+      })),
+
+      facetGroups: [
+        { title: "Year", items: [facet("2026", 41, true), facet("2025", 268), facet("2024", 231), facet("2023", 204), facet("2022", 188)] },
+        { title: "Type", items: [facet("Invoice", 412), facet("Utility bill", 186), facet("Tax notice", 94), facet("Insurance", 88), facet("Contract", 52)] },
+        { title: "Correspondent", items: [facet("Stadtwerke München", 84), facet("Finanzamt München", 52), facet("Telekom", 47), facet("HUK-Coburg", 31), facet("AOK Bayern", 28)] },
+        { title: "Status", items: [facet("Filed", 1249), facet("Needs review", 7), facet("Processing", 3), facet("Failed", 2)] },
+      ],
+
+      docRows: docs.map((d) => ({
+        ...d, open: this.go("detail"),
+        style: docRowBase,
+        dot: `width:7px;height:7px;border-radius:2px;background:${d.color};flex-shrink:0`,
+        flagStyle: d.flag
+          ? `flex-shrink:0;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:600;` +
+            (d.flag === "review" ? `background:#fdf1e3;color:${AMBER};` : "background:#eef0ee;color:#6b716c;")
+          : "display:none",
+      })),
+
+      timeline: months.slice().reverse().map(([label, count], i) => ({
+        label, count,
+        barStyle: `height:8px;border-radius:2px;background:${GREEN};opacity:0.55;width:${Math.max((count / maxM) * 62, 4)}%;flex-shrink:0`,
+        sample: ["Jahresabrechnung, Mobilfunk, Beitragsrechnung", "Einkommensteuerbescheid, Lohnabrechnung", "Mietvertrag Nachtrag, Stromabschlag", "Weihnachtsgeld, Jahresmeldung SV", "Grundsteuerbescheid, Kabelvertrag", "Beitragsbescheid, Police"][i % 6],
+        due: i === 0 ? "1 unpaid" : i === 2 ? "1 unpaid" : "",
+        dueStyle: (i === 0 || i === 2) ? `margin-left:auto;flex-shrink:0;font-size:11px;font-weight:600;color:${AMBER};background:#fdf1e3;border-radius:3px;padding:1px 6px` : "display:none",
+      })),
+
+      groups: [
+        { name: "Stadtwerke München", count: 84, type: "Utility", span: 2, tone: 0.9 },
+        { name: "Finanzamt München", count: 52, type: "Tax", span: 2, tone: 0.7 },
+        { name: "Telekom", count: 47, type: "Invoice", span: 2, tone: 0.62 },
+        { name: "HUK-Coburg", count: 31, type: "Insurance", span: 1, tone: 0.5 },
+        { name: "AOK Bayern", count: 28, type: "Notice", span: 1, tone: 0.46 },
+        { name: "Arbeitgeber GmbH", count: 24, type: "Payslip", span: 1, tone: 0.42 },
+        { name: "Deutsche Bahn", count: 19, type: "Invoice", span: 1, tone: 0.36 },
+        { name: "Allianz", count: 17, type: "Insurance", span: 1, tone: 0.33 },
+        { name: "Stadt München", count: 14, type: "Tax", span: 1, tone: 0.3 },
+        { name: "Vodafone", count: 12, type: "Contract", span: 1, tone: 0.27 },
+        { name: "Sparkasse", count: 9, type: "Statement", span: 1, tone: 0.24 },
+        { name: "Unfiled", count: 6, type: "Mixed", span: 1, tone: 0.2 },
+      ].map((g) => ({
+        ...g,
+        style: `grid-column:span ${g.span};display:flex;flex-direction:column;min-height:${g.span > 1 ? 96 : 78}px;border-radius:8px;padding:11px 12px;background:rgba(20,84,77,${g.tone * 0.16});border:1px solid rgba(20,84,77,${0.1 + g.tone * 0.2});color:inherit`,
+        nameStyle: `font-size:${g.span > 1 ? 13 : 12}px;font-weight:600;line-height:1.3`,
+      })),
+
+      detailTabs: [
+        { label: "Preview", value: "preview" }, { label: "Text", value: "text" },
+        { label: "Fields", value: "fields" }, { label: "History", value: "history" },
+      ].map((t) => ({
+        ...t,
+        tone: st.detailTab === t.value ? "soft" : "none2",
+        off: st.detailTab === t.value ? null : "1",
+        go: (e) => { e.preventDefault(); this.setState({ detailTab: t.value }); },
+        style: "border:none;border-radius:5px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:inherit;" +
+          (st.detailTab === t.value ? `background:#e7edea;color:${GREEN};font-weight:600;` : "background:transparent;color:#5b615c;"),
+      })),
+
+      detailFields: [
+        { label: "Correspondent", value: "Stadtwerke München" },
+        { label: "Type", value: "Utility bill" },
+        { label: "Issue date", value: "01.03.2026" },
+        { label: "Due date", value: "18.03.2026", badge: "check", warn: true },
+        { label: "Amount", value: "486,20 €" },
+        { label: "Reference", value: "not found", badge: "add", warn: true },
+        { label: "Tags", value: "Energie · Wohnung" },
+        { label: "Pages", value: "3 · OCR de" },
+      ].map((f) => ({
+        ...f, tone: f.warn ? "warn" : "none",
+        rowStyle: "display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:5px;" + (f.warn ? "background:#fdf6ea;" : ""),
+        valStyle: "flex:1;min-width:0;font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" + (f.warn ? `color:${AMBER};` : ""),
+        badgeStyle: f.badge ? `flex-shrink:0;font-size:10.5px;font-weight:600;color:${AMBER};border:1px solid #ecd9bb;border-radius:3px;padding:1px 5px` : "display:none",
+      })),
+
+      related: [
+        { title: "Stromabschlag Januar", date: "22.01.26" },
+        { title: "Jahresabrechnung 2025", date: "03.03.25" },
+        { title: "Zählerstandmitteilung", date: "18.12.25" },
+      ],
+      history: [
+        { label: "Imported from watch folder", at: "22.03.2026 10:00", color: "#9aa09a" },
+        { label: "OCR completed · 3 pages", at: "22.03.2026 10:01", color: "#4a7d5a" },
+        { label: "Flagged for review · 2 fields missing", at: "22.03.2026 10:01", color: AMBER },
+        { label: "Type set to Utility bill", at: "22.03.2026 10:02", color: "#9aa09a" },
+      ].map((h) => ({ ...h, dot: `width:6px;height:6px;border-radius:9999px;background:${h.color};margin-top:5px;flex-shrink:0` })),
+
+      reviewList: [
+        { title: "Jahresabrechnung 2026", reason: "2 fields missing", date: "01.03.26", confidence: "61%", tone: AMBER },
+        { title: "Kfz-Versicherung Beitragsrechnung", reason: "Type ambiguous", date: "24.02.26", confidence: "48%", tone: RED },
+        { title: "Einkommensteuerbescheid 2025", reason: "No correspondent", date: "11.02.26", confidence: "55%", tone: AMBER },
+        { title: "Mietvertrag Nachtrag 3", reason: "OCR low confidence", date: "30.01.26", confidence: "42%", tone: RED },
+        { title: "Beitragsbescheid Q1 2026", reason: "1 field missing", date: "04.02.26", confidence: "68%", tone: AMBER },
+        { title: "Kabelanschluss Vertrag", reason: "Duplicate suspected", date: "11.12.25", confidence: "71%", tone: AMBER },
+        { title: "Zählerstandmitteilung", reason: "Type ambiguous", date: "18.12.25", confidence: "52%", tone: RED },
+      ].map((r, i) => ({
+        ...r, sel: st.reviewSel === i ? "1" : "0",
+        select: (e) => { e.preventDefault(); this.setState({ reviewSel: i }); },
+        style: "display:block;padding:10px 12px;border-bottom:1px solid #eef0ee;color:inherit;" +
+          (st.reviewSel === i ? `background:#eef3f1;box-shadow:inset 2px 0 0 ${GREEN};` : ""),
+        dot: `width:6px;height:6px;border-radius:9999px;background:${r.tone};flex-shrink:0`,
+      })),
+
+      reviewFields: [
+        { label: "Correspondent", value: "Stadtwerke München", hint: "confident" },
+        { label: "Document type", value: "Utility bill", hint: "confident" },
+        { label: "Issue date", value: "01.03.2026", hint: "confident" },
+        { label: "Due date", value: "18.03.2026", hint: "check page 2", warn: true },
+        { label: "Amount", value: "486,20 €", hint: "confident" },
+        { label: "Reference number", value: "", hint: "not found", warn: true },
+      ].map((f) => ({
+        ...f, tone: f.warn ? "warn" : "none", hintTone: f.warn ? "amber" : "dim",
+        rowStyle: "display:flex;align-items:center;gap:10px;flex-wrap:wrap",
+        inputStyle: "flex:1;min-width:140px;height:30px;border-radius:6px;padding:0 9px;font-size:12.5px;color:inherit;outline:none;" +
+          (f.warn ? "border:1px solid #ecd9bb;background:#fdf6ea;" : "border:1px solid #e3e6e3;background:#fff;"),
+        hintStyle: "width:90px;flex-shrink:0;font-size:11px;" + (f.warn ? `color:${AMBER};font-weight:600;` : "color:#9aa09a;"),
+      })),
+
+      searchRows: [
+        { title: "Stadtwerke München — Jahresabrechnung 2026", due: "18.03.2026", amount: "486,20", task: "Pay", overdue: true },
+        { title: "Telekom Deutschland — Mobilfunk März 2026", due: "28.03.2026", amount: "39,99", task: "Direct debit" },
+        { title: "HUK-Coburg — Kfz-Versicherung", due: "31.03.2026", amount: "758,41", task: "Pay" },
+      ].map((r) => ({ ...r, dueTone: r.overdue ? "red" : "dim", dueStyle: `font-family:${MONO};font-size:12px;` + (r.overdue ? `color:${RED};font-weight:600;` : "color:#6b716c;") })),
+      sources: [
+        { n: 1, title: "Jahresabrechnung 2026", page: 2, quote: "Fällig am 18.03.2026" },
+        { n: 2, title: "Mobilfunk März 2026", page: 1, quote: "Einzug am 28.03.2026" },
+        { n: 3, title: "Kfz-Versicherung", page: 1, quote: "Beitrag fällig 31.03.2026" },
+      ],
+      newChat: (e) => { if (e) e.preventDefault(); this.setState({ convo: 0 }); },
+      pulseStyle: `width:6px;height:6px;border-radius:9999px;background:${GREEN};animation:ok-fade 900ms ease-in-out infinite alternate`,
+
+      conversations: [
+        { title: "Fällige Rechnungen März 2026", ago: "jetzt" },
+        { title: "Steuerunterlagen 2025 komplett?", ago: "2 T" },
+        { title: "Wann läuft die BahnCard aus?", ago: "5 T" },
+        { title: "Alle Verträge mit Kündigungsfrist", ago: "1 W" },
+        { title: "Stromkosten pro Jahr vergleichen", ago: "2 W" },
+        { title: "Was hat die Versicherung erstattet?", ago: "1 M" },
+      ].map((c, i) => ({
+        ...c, sel: (st.convo ?? 0) === i ? "1" : "0",
+        go: (e) => { e.preventDefault(); this.setState({ convo: i }); },
+        style: "display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:6px;font-size:12.5px;color:inherit;" +
+          ((st.convo ?? 0) === i ? "background:#eef3f1;font-weight:600;" : ""),
+      })),
+
+      scopeChips: [chip("Ganzes Archiv", true), chip("2026"), chip("Rechnungen")],
+
+      sourcePills: [
+        { n: 1, title: "Jahresabrechnung 2026", page: 2, sel: "1" },
+        { n: 2, title: "Mobilfunk März 2026", page: 1 },
+        { n: 3, title: "Kfz-Versicherung", page: 1 },
+      ].map((c) => ({
+        ...c, go: (e) => e.preventDefault(),
+        style: "display:inline-flex;align-items:center;gap:7px;max-width:100%;border-radius:999px;padding:4px 10px;font-size:11.5px;color:inherit;" +
+          (c.sel ? `border:1px solid ${GREEN};background:#eef3f1;` : "border:1px solid #e3e6e3;background:#f7f8f7;"),
+      })),
+
+      followUps: [
+        "Welche kann ich per Lastschrift zahlen?",
+        "Erinnere mich 3 Tage vorher",
+        "Summe pro Anbieter",
+      ],
+
+      searchHits: [
+        { title: "Jahresabrechnung 2026", score: "0.94", snippet: "…Gesamtbetrag 486,20 € fällig am 18.03.2026, Zahlung ohne Abzug…" },
+        { title: "Mobilfunk März 2026", score: "0.88", snippet: "…der Rechnungsbetrag von 39,99 € wird am 28.03.2026 eingezogen…" },
+        { title: "Kfz-Versicherung Beitragsrechnung", score: "0.81", snippet: "…Jahresbeitrag 758,41 €, fällig zum 31.03.2026 für Police 44-118-9920…" },
+        { title: "Stromabschlag Januar", score: "0.64", snippet: "…monatlicher Abschlag 94,00 €, nächste Fälligkeit 01.04.2026…" },
+        { title: "Beitragsbescheid Q1 2026", score: "0.58", snippet: "…Beitrag für das erste Quartal 412,00 €, bereits ausgeglichen…" },
+      ],
+
+      uploadRows: [
+        { name: "scan_2026-03-22_bescheid.pdf", size: "1.4 MB", pages: "3 pages", stage: "Classifying", pct: 72, status: "Processing", tone: "run" },
+        { name: "IMG_4471.HEIC", size: "3.2 MB", pages: "1 page", stage: "OCR", pct: 34, status: "Processing", tone: "run" },
+        { name: "telekom_maerz.pdf", size: "0.4 MB", pages: "2 pages", stage: "Filed as Invoice", pct: 100, status: "Done", tone: "ok" },
+        { name: "jahresabrechnung_2026.pdf", size: "1.4 MB", pages: "3 pages", stage: "Already in archive", pct: 100, status: "Duplicate", tone: "warn" },
+      ].map((u) => ({
+        ...u,
+        barStyle: `height:100%;width:${u.pct}%;border-radius:2px;background:${u.tone === "warn" ? AMBER : GREEN};opacity:${u.tone === "ok" ? 0.55 : 1}`,
+        statusStyle: "justify-self:end;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;" +
+          (u.tone === "warn" ? `background:#fdf1e3;color:${AMBER};` : u.tone === "ok" ? `background:#e7edea;color:${GREEN};` : "background:#eef0ee;color:#5b615c;"),
+      })),
+
+      isSetGeneral: st.setTab === "general", isSetTaxonomy: st.setTab === "taxonomy", isSetProviders: st.setTab === "providers",
+
+      settingsNav: [
+        { label: "General", to: "general" },
+        { label: "Tags & taxonomy", to: "taxonomy" },
+        { label: "AI providers", to: "providers" },
+      ].map((n) => {
+        const on = st.setTab === n.to;
+        return {
+          label: n.label, tone: on ? "soft" : "none2", off: on ? null : "1",
+          go: (e) => { e.preventDefault(); this.setState({ setTab: n.to }); },
+          style: "padding:6px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;" + (on ? `background:#e7edea;color:${GREEN};font-weight:600;` : "color:#5b615c;"),
+        };
+      }),
+
+      taxKinds: [
+        { label: "Tags", count: "318", value: "tags" },
+        { label: "Correspondents", count: "84", value: "correspondents" },
+        { label: "Types", count: "14", value: "types" },
+      ].map((k) => {
+        const on = st.taxKind === k.value;
+        return {
+          ...k, surf: on ? "raised" : "none2", tone: on ? "soft" : "none2", off: on ? null : "1",
+          go: (e) => { e.preventDefault(); this.setState({ taxKind: k.value }); },
+          style: "display:inline-flex;align-items:center;gap:6px;border:none;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:inherit;" +
+            (on ? `background:#fff;color:${GREEN};font-weight:600;box-shadow:0 1px 2px rgba(20,40,35,0.1);` : "background:transparent;color:#5b615c;"),
+          countStyle: `font-family:${MONO};font-size:10.5px;opacity:0.7`,
+        };
+      }),
+      taxFilters: [chip("All", true), chip("Unused · 41"), chip("Duplicates · 6")],
+
+      taxRows: [
+        { name: "Rechnung", docs: 412, last: "heute", sel: "1" },
+        { name: "Energie", docs: 186, last: "heute", sel: "1" },
+        { name: "Versicherung", docs: 118, last: "vor 3 T" },
+        { name: "Steuer 2025", docs: 94, last: "vor 5 T" },
+        { name: "Wohnung", docs: 88, last: "vor 1 W" },
+        { name: "Vertrag", docs: 76, last: "vor 1 W" },
+        { name: "Gehalt", docs: 61, last: "vor 2 W" },
+        { name: "Auto", docs: 54, last: "vor 2 W" },
+        { name: "Gesundheit", docs: 47, last: "vor 3 W" },
+        { name: "rechnungen", docs: 31, last: "vor 1 M", hint: "merge into Rechnung", sel: "1" },
+        { name: "Steuer 2024", docs: 28, last: "vor 2 M" },
+        { name: "Bank", docs: 24, last: "vor 2 M" },
+        { name: "Energie-Abschlag", docs: 19, last: "vor 3 M", hint: "merge into Energie" },
+        { name: "Garantie", docs: 12, last: "vor 5 M" },
+        { name: "Umzug 2023", docs: 4, last: "vor 1 J", hint: "unused", stale: true },
+        { name: "temp-import", docs: 0, last: "nie", hint: "unused", stale: true },
+      ].map((t) => ({
+        ...t,
+        style: "display:grid;grid-template-columns:26px minmax(0,1fr) 78px 104px 128px;align-items:center;gap:10px;padding:0 14px;height:34px;border-bottom:1px solid #eef0ee;" +
+          (t.sel ? "background:#eef3f1;" : ""),
+        box: `width:12px;height:12px;border-radius:3px;flex-shrink:0;` + (t.sel ? `background:${GREEN};` : "border:1px solid #c3ccc6;"),
+        dot: `width:6px;height:6px;border-radius:9999px;flex-shrink:0;background:${GREEN};opacity:${Math.max(t.docs / 412, 0.18)}`,
+        countTone: t.stale ? "dim" : "ink",
+        docStyle: `font-family:${MONO};font-size:12px;text-align:right;` + (t.stale ? "color:#9aa09a;" : ""),
+        hint: t.hint || "",
+        hintTone: t.hint === "unused" ? "none2" : t.hint ? "warn" : "none2",
+        hintOff: t.hint && t.hint !== "unused" ? null : "1",
+        hintStyle: t.hint
+          ? "justify-self:start;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;" +
+            (t.hint === "unused" ? "border:1px solid #dde1de;color:#8b9089;" : `background:#fdf1e3;color:${AMBER};`)
+          : "display:none",
+      })),
+
+      pipelineStats: [
+        { label: "Processing queue", value: "2", hint: "1 running · 1 waiting", tone: "ink" },
+        { label: "Embedding queue", value: "1", hint: "bge-m3 · local", tone: "ink" },
+        { label: "Failed today", value: "0", hint: "last failure 14 days ago", tone: "ink" },
+        { label: "Avg. per document", value: "8.4s", hint: "OCR + classify + embed", tone: "ink" },
+      ].map((p) => ({
+        ...p, valueStyle: `font-family:${MONO};font-size:19px;font-weight:600;letter-spacing:-0.02em;margin-top:4px;`,
+      })),
+
+      providerGroups: [
+        { title: "Parsing", description: "OCR and text extraction", summary: "local-ocr active", items: [
+          { name: "Local OCR", note: "Tesseract 5 · de+en", model: "tesseract-5", role: "Active", state: "Available", ok: true, active: true },
+          { name: "Amazon Textract", note: "Cloud · documents leave the machine", model: "textract-v1", role: "Fallback", state: "Available", ok: true, fallback: true },
+          { name: "Azure Document Intelligence", note: "No credentials stored", model: "—", role: "", state: "Not configured", ok: false },
+        ] },
+        { title: "Embeddings", description: "Vector index for semantic search", summary: "1024 dim · 1.284 docs indexed", items: [
+          { name: "Local (bge-m3)", note: "Runs on this machine", model: "bge-m3", role: "Active", state: "Available", ok: true, active: true },
+          { name: "OpenAI", note: "Key stored · not in use", model: "text-embedding-3-small", role: "", state: "Available", ok: true },
+          { name: "Voyage", note: "No key stored", model: "—", role: "", state: "Not configured", ok: false },
+        ] },
+        { title: "Chat", description: "Answers in search and the omnibar", summary: "openai active", items: [
+          { name: "OpenAI", note: "Only extracted text is sent", model: "gpt-4o-mini", role: "Active", state: "Configured", ok: true, active: true },
+          { name: "Local (Ollama)", note: "Not reachable on :11434", model: "llama3.1", role: "", state: "Offline", ok: false, bad: true },
+        ] },
+      ].map((g) => ({
+        ...g,
+        items: g.items.map((p) => ({
+          ...p,
+          dot: `width:7px;height:7px;border-radius:9999px;flex-shrink:0;background:${p.bad ? RED : p.ok ? GREEN : "#c3ccc6"}`,
+          roleTone: p.active ? "soft" : p.fallback ? "warn" : "none2",
+          roleOff: p.role ? null : "1",
+          roleStyle: p.role
+            ? "border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;" +
+              (p.active ? `background:#e7edea;color:${GREEN};` : `background:#fdf1e3;color:${AMBER};`)
+            : "display:none",
+          stateTone: p.bad ? "bad" : p.ok ? "none2" : "none2",
+          stateOff: p.bad ? null : "chip",
+          stateStyle: "border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;" +
+            (p.bad ? `background:#fdeeea;color:${RED};` : "border:1px solid #dde1de;color:#8b9089;"),
+        })),
+      })),
+
+      jobs: [
+        { document: "scan_2026-03-22_bescheid.pdf", queue: "document.process", duration: "running", status: "Running", tone: "soft" },
+        { document: "IMG_4471.HEIC", queue: "document.process", duration: "4.1s", status: "Queued", tone: "none2", off: "chip" },
+        { document: "telekom_maerz.pdf", queue: "document.embed", duration: "1.2s", status: "Done", tone: "soft", ok: true },
+        { document: "Mobilfunk März 2026", queue: "document.process", duration: "7.8s", status: "Done", tone: "soft", ok: true },
+        { document: "Beitragsbescheid Q2 2026", queue: "document.embed", duration: "0.9s", status: "Done", tone: "soft", ok: true },
+      ].map((j) => ({
+        ...j,
+        dot: `width:7px;height:7px;border-radius:9999px;flex-shrink:0;background:${j.status === "Queued" ? "#c3ccc6" : GREEN};opacity:${j.status === "Running" ? 1 : 0.65}`,
+        statusStyle: "justify-self:end;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;" +
+          (j.tone === "soft" ? `background:#e7edea;color:${GREEN};` : "border:1px solid #dde1de;color:#8b9089;"),
+      })),
+      settingsSections: [
+        { title: "Account", description: "Owner account and sign-in", rows: [
+          { label: "Email", hint: "Used for sign-in", value: "owner@example.com" },
+          { label: "Password", hint: "Last changed 4 months ago", value: "Change", accent: true },
+          { label: "Two-factor authentication", hint: "TOTP authenticator app", value: "Off" }] },
+        { title: "Language", description: "Interface and processing language", rows: [
+          { label: "Interface", hint: "Applies to the whole UI", value: "English" },
+          { label: "Document processing", hint: "OCR and field extraction", value: "Deutsch" },
+          { label: "Answers", hint: "Language the archive replies in", value: "Match question" }] },
+        { title: "AI providers", description: "Everything runs locally unless changed", rows: [
+          { label: "Mode", hint: "Documents never leave this machine", value: "local-only" },
+          { label: "OCR engine", hint: "Tesseract 5 · de+en", value: "local-ocr" },
+          { label: "Embeddings", hint: "bge-m3 · 1024 dim", value: "local" }] },
+        { title: "Watch folder & storage", description: "Automatic import and disk usage", rows: [
+          { label: "Watch folder", hint: "Scanned every 5 minutes", value: "/watch-folder" },
+          { label: "Last scan", hint: "1 imported · 1 duplicate", value: "10:00" },
+          { label: "Storage", hint: "1.284 documents · originals kept", value: "18.4 GB" }] },
+      ].map((sec) => ({
+        ...sec,
+        rows: sec.rows.map((r) => ({ ...r, valueTone: r.accent ? "accent" : "ink", valueStyle: `flex-shrink:0;font-size:12.5px;font-weight:600;font-family:${MONO};` + (r.accent ? `color:${GREEN};` : "color:inherit;") })),
+      })),
+
+      omniJump: [
+        { label: "Today", icon: "sun", key: "T", go: this.go("today") },
+        { label: "Documents", icon: "files", key: "D", go: this.go("documents", { view: "list" }) },
+        { label: "Review queue · 7", icon: "circle-alert", key: "R", go: this.go("review") },
+        { label: "Import files", icon: "upload", key: "U", go: this.go("upload") },
+      ].map((j, i) => ({ ...j, sel: i === 0 ? "1" : "0", style: "display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;color:inherit;" + (i === 0 ? "background:#eef3f1;" : "") })),
+      omniAsk: [
+        "Welche Rechnungen sind diesen Monat fällig?",
+        "Was ist überfällig?",
+        "Zeig mir alle Dokumente vom Finanzamt 2025",
+      ],
+    };
+  }
+}
+
+</script>
+</body>
+</html>
