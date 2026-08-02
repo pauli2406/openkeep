@@ -257,6 +257,7 @@ type TranslationKey =
   | "today.documentType"
   | "today.previewUnavailable"
   | "documents.bulkUnavailable"
+  | "timeline.monthError"
   | "timeline.empty"
   | "timeline.emptyMonth"
   | "timeline.loadingMonth"
@@ -711,6 +712,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.documentType": "Document type",
     "today.previewUnavailable": "No preview available",
     "documents.bulkUnavailable": "Not available yet",
+    "timeline.monthError": "Could not load this month.",
     "timeline.empty": "No dated documents match the current filters.",
     "timeline.emptyMonth": "No documents in this month.",
     "timeline.loadingMonth": "Loading month",
@@ -1164,6 +1166,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.documentType": "Dokumententyp",
     "today.previewUnavailable": "Keine Vorschau verfügbar",
     "documents.bulkUnavailable": "Noch nicht verfügbar",
+    "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
     "timeline.empty": "Keine datierten Dokumente passen zu den Filtern.",
     "timeline.emptyMonth": "Keine Dokumente in diesem Monat.",
     "timeline.loadingMonth": "Monat wird geladen",

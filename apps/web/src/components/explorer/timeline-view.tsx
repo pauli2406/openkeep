@@ -1,11 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import type {
-  DocumentsTimelineResponse,
-  DashboardInsightsResponse,
-} from "@openkeep/types";
+import type { DocumentsTimelineResponse } from "@openkeep/types";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import type { ExplorerSearch } from "@/lib/explorer";
-import { fetchDashboardInsights, fetchFilteredDocuments } from "@/lib/explorer";
+import { fetchFilteredDocuments } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { LoadingBlock } from "./shared";
@@ -72,6 +69,21 @@ function MonthDocuments({
     return <LoadingBlock label={t("timeline.loadingMonth")} />;
   }
 
+  if (documentsQuery.isError) {
+    return (
+      <div className="flex items-center gap-3 py-3 pl-[104px] text-sm text-[var(--ok-red)]">
+        {t("timeline.monthError")}
+        <button
+          type="button"
+          onClick={() => documentsQuery.refetch()}
+          className="font-semibold text-[var(--ok-accent)] hover:underline"
+        >
+          {t("dashboard.retry")}
+        </button>
+      </div>
+    );
+  }
+
   const items = documentsQuery.data?.items ?? [];
   if (items.length === 0) {
     return (
@@ -111,19 +123,34 @@ export function TimelineView({
 }: TimelineViewProps) {
   const { t } = useI18n();
 
-  // The timeline response carries no deadline data, so the unpaid marker is
-  // derived from the insights the app already caches.
-  const insightsQuery = useQuery<DashboardInsightsResponse>({
-    queryKey: ["dashboard", "insights"],
-    queryFn: fetchDashboardInsights,
+  // The timeline response carries no deadline data. Derive the unpaid
+  // markers from the same filtered document set the rows describe, rather
+  // than the dashboard preview, which is global and capped at six.
+  const deadlinesQuery = useQuery({
+    queryKey: ["documents", "timeline-deadlines", search],
+    queryFn: () =>
+      fetchFilteredDocuments({
+        ...search,
+        sort: "dueDate",
+        direction: "asc",
+        page: 1,
+        pageSize: 100,
+      }),
     staleTime: 60_000,
   });
 
   const unpaidByMonth = new Map<string, number>();
-  for (const item of insightsQuery.data?.overdueItems ?? []) {
-    const date = new Date(item.dueDate);
-    if (Number.isNaN(date.getTime())) continue;
-    const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  for (const document of deadlinesQuery.data?.items ?? []) {
+    if (!document.dueDate || document.taskCompletedAt) continue;
+    // Parse the date parts directly: `new Date("2026-03-01")` is UTC
+    // midnight and shifts into the previous month west of UTC.
+    const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(document.dueDate);
+    if (!parts) continue;
+    const due = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+    if (due >= todayStart) continue;
+    const key = `${Number(parts[1])}-${Number(parts[2])}`;
     unpaidByMonth.set(key, (unpaidByMonth.get(key) ?? 0) + 1);
   }
 
