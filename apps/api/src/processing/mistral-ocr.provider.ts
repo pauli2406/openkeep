@@ -11,6 +11,11 @@ import { AppConfigService } from "../common/config/app-config.service";
 import { DOCUMENT_TYPE_DEFINITIONS } from "./document-intelligence.registry";
 import { fetchWithTimeout } from "./http.util";
 import {
+  isMarkdownTableRow,
+  isMarkdownTableSeparatorRow,
+  splitMarkdownTableRow,
+} from "./markdown-table.util";
+import {
   buildDocumentAnnotationSchema,
   parseDocumentAnnotation,
 } from "./mistral-annotation.schema";
@@ -523,21 +528,16 @@ export const parseMarkdownTable = (
   const rows = markdown
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.startsWith("|") && line.endsWith("|"));
+    .filter(isMarkdownTableRow);
 
   const cells: ParsedDocumentTable["cells"] = [];
   let rowNumber = 0;
 
   for (const row of rows) {
-    // Split on UNESCAPED pipes only: a cell like `A \| B` is one column, not two,
-    // and the escape character must not survive into the cell text.
-    const columns = row
-      .slice(1, -1)
-      .split(/(?<!\\)\|/)
-      .map((cell) => cell.replace(/\\\|/g, "|").trim());
+    const columns = splitMarkdownTableRow(row);
 
     // Skip the separator row (|---|---|).
-    if (columns.every((cell) => /^:?-{2,}:?$/.test(cell))) {
+    if (isMarkdownTableSeparatorRow(columns)) {
       continue;
     }
 

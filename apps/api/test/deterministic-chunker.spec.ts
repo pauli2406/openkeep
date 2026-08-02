@@ -160,6 +160,8 @@ describe("DeterministicChunker", () => {
               { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
               { lineIndex: 2, text: "|---|---|", boundingBox: null },
               { lineIndex: 3, text: "| Strom | 89,00 \\| 92,00 EUR |", boundingBox: null },
+              // Pipe-delimited, but not part of the normalized table.
+              { lineIndex: 4, text: "| grep -c ok | wc -l |", boundingBox: null },
             ],
             blocks: [],
           },
@@ -176,5 +178,7 @@ describe("DeterministicChunker", () => {
     // A pipe inside a cell stays escaped, so the row keeps two columns instead of
     // silently becoming three.
     expect(combined).toContain("| Strom | 89,00 \\| 92,00 EUR |");
+    // A pipe-delimited line that belongs to no normalized table must survive.
+    expect(combined).toContain("| grep -c ok | wc -l |");
   });
 });
