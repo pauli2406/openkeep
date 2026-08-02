@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
-import { Filter, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { ExplorerFacets, ExplorerSearch } from "@/lib/explorer";
 
@@ -9,59 +11,163 @@ type FilterSidebarProps = {
   search: ExplorerSearch;
   onSearchChange: (updates: Partial<ExplorerSearch>) => void;
   className?: string;
-  compact?: boolean;
 };
 
+/** Above this many entries a section gets its own filter box and virtualises. */
+const SEARCHABLE_THRESHOLD = 8;
+const ROW_HEIGHT = 28;
+const MAX_LIST_HEIGHT = 280;
+
+type FacetEntry = { id: string; label: string; count: number };
+
 function toggleArrayValue(values: string[] | undefined, value: string) {
-  if (!values || values.length === 0) {
-    return [value];
-  }
+  if (!values || values.length === 0) return [value];
   return values.includes(value)
     ? values.filter((item) => item !== value)
     : [...values, value];
 }
 
-function FilterSection({
-  title,
-  children,
+function FacetRow({
+  entry,
+  checked,
+  onToggle,
+  style,
 }: {
-  title: string;
-  children: ReactNode;
+  entry: FacetEntry;
+  checked: boolean;
+  onToggle: () => void;
+  style?: React.CSSProperties;
 }) {
   return (
-    <section className="space-y-3 border-t border-[color:var(--explorer-border)] pt-4 first:border-t-0 first:pt-0">
-      <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
-        {title}
-      </h3>
-      {children}
-    </section>
+    <label
+      style={style}
+      className="flex cursor-pointer items-center gap-2 rounded-[var(--r-sm)] px-1.5 text-sm transition-colors hover:bg-secondary"
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onToggle}
+        className="h-3 w-3 flex-shrink-0 accent-[var(--ok-accent)]"
+      />
+      <span className="min-w-0 flex-1 truncate text-foreground">{entry.label}</span>
+      <span className="ok-num flex-shrink-0 text-xs text-muted-foreground">
+        {entry.count}
+      </span>
+    </label>
   );
 }
 
-function FacetCheckbox({
-  label,
-  count,
-  checked,
-  onChange,
+/** One collapsible facet section; searches and virtualises past the threshold. */
+function FacetSection({
+  title,
+  entries,
+  selectedIds,
+  onToggle,
 }: {
-  label: string;
-  count: number;
-  checked: boolean;
-  onChange: () => void;
+  title: string;
+  entries: FacetEntry[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
 }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(true);
+  const [filter, setFilter] = useState("");
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const searchable = entries.length > SEARCHABLE_THRESHOLD;
+  const visible = useMemo(() => {
+    if (!filter.trim()) return entries;
+    const needle = filter.trim().toLowerCase();
+    return entries.filter((entry) => entry.label.toLowerCase().includes(needle));
+  }, [entries, filter]);
+
+  const virtualizer = useVirtualizer({
+    count: visible.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
+
+  if (entries.length === 0) return null;
+
+  const listHeight = Math.min(visible.length * ROW_HEIGHT, MAX_LIST_HEIGHT);
+
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-[color:var(--explorer-border)] hover:bg-[var(--ok-sunken)]">
-      <span className="flex items-center gap-3 text-sm text-[color:var(--explorer-ink)]">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={onChange}
-          className="h-4 w-4 rounded border-[color:var(--explorer-border-strong)] accent-[color:var(--explorer-rust)]"
-        />
-        {label}
-      </span>
-      <span className="ok-num text-xs text-[color:var(--explorer-muted)]">{count}</span>
-    </label>
+    <section className="border-b py-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="mb-1 flex w-full items-center gap-1 px-1.5 text-sm font-semibold text-foreground"
+      >
+        {open ? (
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3 w-3 text-muted-foreground" />
+        )}
+        {title}
+        {selectedIds.length > 0 ? (
+          <span className="ok-num ml-auto text-xs text-[var(--ok-accent)]">
+            {selectedIds.length}
+          </span>
+        ) : null}
+      </button>
+
+      {open ? (
+        <>
+          {searchable ? (
+            <Input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder={t("filters.searchPlaceholder")}
+              className="mb-1 h-[26px]"
+            />
+          ) : null}
+
+          {visible.length === 0 ? (
+            <p className="px-1.5 py-1 text-xs text-muted-foreground">
+              {t("filters.noMatches")}
+            </p>
+          ) : searchable ? (
+            // Virtualised: only the rows in view are mounted.
+            <div ref={parentRef} style={{ height: listHeight }} className="overflow-auto">
+              <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+                {virtualizer.getVirtualItems().map((row) => {
+                  const entry = visible[row.index];
+                  return (
+                    <FacetRow
+                      key={entry.id}
+                      entry={entry}
+                      checked={selectedIds.includes(entry.id)}
+                      onToggle={() => onToggle(entry.id)}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: ROW_HEIGHT,
+                        transform: `translateY(${row.start}px)`,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div>
+              {visible.map((entry) => (
+                <FacetRow
+                  key={entry.id}
+                  entry={entry}
+                  checked={selectedIds.includes(entry.id)}
+                  onToggle={() => onToggle(entry.id)}
+                  style={{ height: ROW_HEIGHT }}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -70,204 +176,194 @@ export function FilterSidebar({
   search,
   onSearchChange,
   className,
-  compact = false,
 }: FilterSidebarProps) {
+  const { t } = useI18n();
+
   const activeCount = [
-    search.query,
     search.year,
     search.correspondentIds?.length,
     search.documentTypeIds?.length,
     search.statuses?.length,
     search.tags?.length,
-    search.amountMin,
-    search.amountMax,
+    search.amountMin ?? search.amountMax,
   ].filter(Boolean).length;
 
+  const clearAll = () =>
+    onSearchChange({
+      year: undefined,
+      correspondentIds: undefined,
+      documentTypeIds: undefined,
+      statuses: undefined,
+      tags: undefined,
+      amountMin: undefined,
+      amountMax: undefined,
+      dateFrom: undefined,
+      dateTo: undefined,
+      page: undefined,
+    });
+
   return (
-    <aside
-      className={cn(
-        "rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5 shadow-[0_24px_80px_rgba(39,33,22,0.08)]",
-        className,
-      )}
-    >
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
-          <p className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-[color:var(--explorer-muted)]">
-            <Filter className="h-3.5 w-3.5" />
-            Explorer Filters
-          </p>
-          <p className="mt-1 text-sm text-[color:var(--explorer-muted)]">
-            {activeCount} active
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-[color:var(--explorer-muted)]"
-          onClick={() =>
+    <aside className={cn("min-w-0 border-r", className)}>
+      <div className="flex h-8 items-center justify-between border-b bg-[var(--ok-bar)] px-3">
+        <span className="ok-eyebrow">{t("filters.title")}</span>
+        {activeCount > 0 ? (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-xs font-semibold text-[var(--ok-accent)] hover:underline"
+          >
+            {t("filters.clear")}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="px-1.5">
+        <FacetSection
+          title={t("filters.status")}
+          entries={(facets?.statuses ?? []).map((entry) => ({
+            id: entry.status,
+            label: entry.status,
+            count: entry.count,
+          }))}
+          selectedIds={search.statuses ?? []}
+          onToggle={(id) =>
             onSearchChange({
-              query: undefined,
-              year: undefined,
-              correspondentIds: undefined,
-              documentTypeIds: undefined,
-              statuses: undefined,
-              tags: undefined,
-              amountMin: undefined,
-              amountMax: undefined,
+              statuses: toggleArrayValue(search.statuses, id),
               page: undefined,
             })
           }
-        >
-          <X className="h-3.5 w-3.5" />
-          Clear
-        </Button>
-      </div>
+        />
 
-      <div className="space-y-5">
-        <FilterSection title="Years">
-          <div className="grid grid-cols-2 gap-2">
-            {facets?.years.slice(0, compact ? 6 : 12).map((year) => (
-              <button
-                key={year.year}
-                type="button"
-                onClick={() =>
-                  onSearchChange({
-                    year: search.year === year.year ? undefined : year.year,
-                    page: undefined,
-                  })
-                }
-                className={cn(
-                  "rounded-2xl border px-3 py-2 text-left text-sm transition",
-                  search.year === year.year
-                    ? "border-[color:var(--explorer-rust)] bg-[color:var(--explorer-rust-soft)] text-[color:var(--explorer-rust)]"
-                    : "border-[color:var(--explorer-border)] text-[color:var(--explorer-ink)] hover:border-[color:var(--explorer-rust)]/40",
-                )}
-              >
-                <span className="block font-medium">{year.year}</span>
-                <span className="text-xs text-[color:var(--explorer-muted)]">
-                  <span className="ok-num">{year.count}</span> docs
-                </span>
-              </button>
-            ))}
-          </div>
-        </FilterSection>
+        <FacetSection
+          title={t("filters.year")}
+          entries={(facets?.years ?? []).map((entry) => ({
+            id: String(entry.year),
+            label: String(entry.year),
+            count: entry.count,
+          }))}
+          selectedIds={search.year ? [String(search.year)] : []}
+          onToggle={(id) =>
+            onSearchChange({
+              year: search.year === Number(id) ? undefined : Number(id),
+              page: undefined,
+            })
+          }
+        />
 
-        <FilterSection title="Status">
-          <div className="space-y-1.5">
-            {facets?.statuses.map((item) => (
-              <FacetCheckbox
-                key={item.status}
-                label={item.status}
-                count={item.count}
-                checked={search.statuses?.includes(item.status) ?? false}
-                onChange={() =>
-                  onSearchChange({
-                    statuses: toggleArrayValue(search.statuses, item.status),
-                    page: undefined,
-                  })
-                }
-              />
-            ))}
-          </div>
-        </FilterSection>
+        <FacetSection
+          title={t("filters.type")}
+          entries={(facets?.documentTypes ?? []).map((entry) => ({
+            id: entry.id,
+            label: entry.name,
+            count: entry.count,
+          }))}
+          selectedIds={search.documentTypeIds ?? []}
+          onToggle={(id) =>
+            onSearchChange({
+              documentTypeIds: toggleArrayValue(search.documentTypeIds, id),
+              page: undefined,
+            })
+          }
+        />
 
-        <FilterSection title="Correspondents">
-          <div className="space-y-1.5">
-            {facets?.correspondents.slice(0, compact ? 8 : 14).map((item) => (
-              <FacetCheckbox
-                key={item.id}
-                label={item.name}
-                count={item.count}
-                checked={search.correspondentIds?.includes(item.id) ?? false}
-                onChange={() =>
-                  onSearchChange({
-                    correspondentIds: toggleArrayValue(search.correspondentIds, item.id),
-                    page: undefined,
-                  })
-                }
-              />
-            ))}
-          </div>
-        </FilterSection>
+        <FacetSection
+          title={t("filters.correspondent")}
+          entries={(facets?.correspondents ?? []).map((entry) => ({
+            id: entry.id,
+            label: entry.name,
+            count: entry.count,
+          }))}
+          selectedIds={search.correspondentIds ?? []}
+          onToggle={(id) =>
+            onSearchChange({
+              correspondentIds: toggleArrayValue(search.correspondentIds, id),
+              page: undefined,
+            })
+          }
+        />
 
-        <FilterSection title="Document Types">
-          <div className="space-y-1.5">
-            {facets?.documentTypes.slice(0, compact ? 6 : 12).map((item) => (
-              <FacetCheckbox
-                key={item.id}
-                label={item.name}
-                count={item.count}
-                checked={search.documentTypeIds?.includes(item.id) ?? false}
-                onChange={() =>
-                  onSearchChange({
-                    documentTypeIds: toggleArrayValue(search.documentTypeIds, item.id),
-                    page: undefined,
-                  })
-                }
-              />
-            ))}
-          </div>
-        </FilterSection>
+        <FacetSection
+          title={t("filters.tag")}
+          entries={(facets?.tags ?? []).map((entry) => ({
+            id: entry.id,
+            label: entry.name,
+            count: entry.count,
+          }))}
+          selectedIds={search.tags ?? []}
+          onToggle={(id) =>
+            onSearchChange({
+              tags: toggleArrayValue(search.tags, id),
+              page: undefined,
+            })
+          }
+        />
 
-        <FilterSection title="Tags">
-          <div className="space-y-1.5">
-            {facets?.tags.slice(0, compact ? 6 : 12).map((item) => (
-              <FacetCheckbox
-                key={item.id}
-                label={item.name}
-                count={item.count}
-                checked={search.tags?.includes(item.id) ?? false}
-                onChange={() =>
-                  onSearchChange({
-                    tags: toggleArrayValue(search.tags, item.id),
-                    page: undefined,
-                  })
-                }
-              />
-            ))}
+        {/* Date and Amount are ranges, not facet lists. */}
+        <section className="border-b py-2.5">
+          <p className="mb-1 px-1.5 text-sm font-semibold text-foreground">
+            {t("filters.date")}
+          </p>
+          <div className="flex items-center gap-1.5 px-1.5">
+            <Input
+              type="date"
+              aria-label={t("filters.dateFrom")}
+              value={search.dateFrom ?? ""}
+              onChange={(event) =>
+                onSearchChange({
+                  dateFrom: event.target.value || undefined,
+                  page: undefined,
+                })
+              }
+              className="h-[26px]"
+            />
+            <Input
+              type="date"
+              aria-label={t("filters.dateTo")}
+              value={search.dateTo ?? ""}
+              onChange={(event) =>
+                onSearchChange({
+                  dateTo: event.target.value || undefined,
+                  page: undefined,
+                })
+              }
+              className="h-[26px]"
+            />
           </div>
-        </FilterSection>
+        </section>
 
-        <FilterSection title="Amount Range">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="space-y-2">
-              <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                Minimum
-              </span>
-              <input
-                type="number"
-                value={search.amountMin ?? ""}
-                min={facets?.amountRange.min ?? undefined}
-                max={facets?.amountRange.max ?? undefined}
-                onChange={(event) =>
-                  onSearchChange({
-                    amountMin: event.target.value ? Number(event.target.value) : undefined,
-                    page: undefined,
-                  })
-                }
-                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-card px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                Maximum
-              </span>
-              <input
-                type="number"
-                value={search.amountMax ?? ""}
-                min={facets?.amountRange.min ?? undefined}
-                max={facets?.amountRange.max ?? undefined}
-                onChange={(event) =>
-                  onSearchChange({
-                    amountMax: event.target.value ? Number(event.target.value) : undefined,
-                    page: undefined,
-                  })
-                }
-                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-card px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
-              />
-            </label>
+        <section className="py-2.5">
+          <p className="mb-1 px-1.5 text-sm font-semibold text-foreground">
+            {t("filters.amount")}
+          </p>
+          <div className="flex items-center gap-1.5 px-1.5">
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder={t("filters.min")}
+              value={search.amountMin ?? ""}
+              onChange={(event) =>
+                onSearchChange({
+                  amountMin: event.target.value ? Number(event.target.value) : undefined,
+                  page: undefined,
+                })
+              }
+              className="ok-num h-[26px]"
+            />
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder={t("filters.max")}
+              value={search.amountMax ?? ""}
+              onChange={(event) =>
+                onSearchChange({
+                  amountMax: event.target.value ? Number(event.target.value) : undefined,
+                  page: undefined,
+                })
+              }
+              className="ok-num h-[26px]"
+            />
           </div>
-        </FilterSection>
+        </section>
       </div>
     </aside>
   );

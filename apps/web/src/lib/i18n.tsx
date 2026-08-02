@@ -258,6 +258,23 @@ type TranslationKey =
   | "today.previewUnavailable"
   | "documents.bulkUnavailable"
   | "timeline.monthError"
+  | "filters.title"
+  | "filters.clear"
+  | "filters.clearAll"
+  | "filters.status"
+  | "filters.year"
+  | "filters.type"
+  | "filters.correspondent"
+  | "filters.tag"
+  | "filters.date"
+  | "filters.dateFrom"
+  | "filters.dateTo"
+  | "filters.amount"
+  | "filters.min"
+  | "filters.max"
+  | "filters.searchPlaceholder"
+  | "filters.noMatches"
+  | "filters.chipSearch"
   | "groups.empty"
   | "groups.groupedBy"
   | "groups.caption"
@@ -716,6 +733,23 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.previewUnavailable": "No preview available",
     "documents.bulkUnavailable": "Not available yet",
     "timeline.monthError": "Could not load this month.",
+    "filters.title": "Filters",
+    "filters.clear": "Clear",
+    "filters.clearAll": "Clear all",
+    "filters.status": "Status",
+    "filters.year": "Year",
+    "filters.type": "Type",
+    "filters.correspondent": "Correspondent",
+    "filters.tag": "Tag",
+    "filters.date": "Date",
+    "filters.dateFrom": "From",
+    "filters.dateTo": "To",
+    "filters.amount": "Amount",
+    "filters.min": "Min",
+    "filters.max": "Max",
+    "filters.searchPlaceholder": "Filter…",
+    "filters.noMatches": "No matches",
+    "filters.chipSearch": "Search",
     "groups.empty": "No correspondents match the current filters.",
     "groups.groupedBy": "Grouped by correspondent",
     "groups.caption": "Block size is document count.",
@@ -1173,6 +1207,23 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.previewUnavailable": "Keine Vorschau verfügbar",
     "documents.bulkUnavailable": "Noch nicht verfügbar",
     "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
+    "filters.title": "Filter",
+    "filters.clear": "Zurücksetzen",
+    "filters.clearAll": "Alle zurücksetzen",
+    "filters.status": "Status",
+    "filters.year": "Jahr",
+    "filters.type": "Typ",
+    "filters.correspondent": "Korrespondent",
+    "filters.tag": "Schlagwort",
+    "filters.date": "Datum",
+    "filters.dateFrom": "Von",
+    "filters.dateTo": "Bis",
+    "filters.amount": "Betrag",
+    "filters.min": "Min",
+    "filters.max": "Max",
+    "filters.searchPlaceholder": "Filtern…",
+    "filters.noMatches": "Keine Treffer",
+    "filters.chipSearch": "Suche",
     "groups.empty": "Keine Korrespondenten passen zu den Filtern.",
     "groups.groupedBy": "Nach Korrespondent gruppiert",
     "groups.caption": "Die Blockgröße zeigt die Anzahl der Dokumente.",
