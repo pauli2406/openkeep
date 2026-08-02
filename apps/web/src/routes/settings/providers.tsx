@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useI18n } from "@/lib/i18n";
 import { AiProvidersSection } from "@/components/settings/providers-section";
-import { ProcessingActivitySection } from "@/components/settings/processing-section";
 
 export const Route = createFileRoute("/settings/providers")({
   component: ProvidersSettingsPage,
@@ -15,7 +14,6 @@ function ProvidersSettingsPage() {
           page heading for assistive technology. */}
       <h1 className="ok-page-title">{t("settingsNav.providers")}</h1>
       <AiProvidersSection />
-      <ProcessingActivitySection />
     </div>
   );
 }
