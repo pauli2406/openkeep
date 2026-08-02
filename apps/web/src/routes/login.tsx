@@ -75,7 +75,7 @@ function LoginPage() {
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             <div className="mb-4 flex justify-center">
-              <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
+              <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-lg" />
             </div>
             <CardDescription>
               Enter the 6-digit code from your authenticator app, or a recovery code.
@@ -125,7 +125,7 @@ function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
-            <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
+            <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-lg" />
           </div>
           <CardDescription>{t("login.description")}</CardDescription>
         </CardHeader>

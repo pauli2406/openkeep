@@ -121,13 +121,13 @@ function CorrespondentDetailPage() {
       />
 
       <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+        <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
           Relationship Overview
         </p>
         <div className="mt-4 rounded-[1.7rem] bg-[color:var(--explorer-paper-strong)] px-5 py-5">
           {intelligenceStatus === "ready" && intelligence?.overview ? (
             <div className="space-y-4">
-              <p className="max-w-4xl font-[var(--font-display)] text-2xl leading-relaxed text-[color:var(--explorer-ink)]">
+              <p className="max-w-4xl text-base leading-relaxed text-[color:var(--explorer-ink)]">
                 {intelligence.overview}
               </p>
               {intelligence.profile ? (
@@ -156,7 +156,7 @@ function CorrespondentDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Key Changes
           </p>
           <div className="mt-4 space-y-3">
@@ -191,10 +191,10 @@ function CorrespondentDetailPage() {
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+              <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
                 Monthly Activity
               </p>
-              <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+              <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
                 Rhythm
               </h2>
             </div>
@@ -206,7 +206,7 @@ function CorrespondentDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Current State
           </p>
           <div className="mt-4 space-y-3">
@@ -234,7 +234,7 @@ function CorrespondentDetailPage() {
         </section>
 
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Timeline Highlights
           </p>
           <div className="mt-4 space-y-3">
@@ -262,7 +262,7 @@ function CorrespondentDetailPage() {
 
       {intelligence?.domainInsights.insurance ? (
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(236,241,255,0.68))] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Insurance Lens
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -303,7 +303,7 @@ function CorrespondentDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Type Breakdown
           </p>
           <div className="mt-4 space-y-3">
@@ -313,14 +313,14 @@ function CorrespondentDetailPage() {
                 className="flex items-center justify-between rounded-[1.35rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
               >
                 <span className="text-sm font-medium text-[color:var(--explorer-ink)]">{item.name}</span>
-                <span className="text-sm text-[color:var(--explorer-muted)]">{item.count}</span>
+                <span className="ok-num text-sm text-[color:var(--explorer-muted)]">{item.count}</span>
               </div>
             ))}
           </div>
         </section>
 
         <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Legacy Summary
           </p>
           <div className="mt-4 rounded-[1.6rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-4">
@@ -334,10 +334,10 @@ function CorrespondentDetailPage() {
       <section className="space-y-5 rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
               Documents
             </p>
-            <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+            <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
               Documents from {data.correspondent.name}
             </h2>
           </div>
@@ -433,7 +433,7 @@ function findCurrentStateFact(
 function FactPanel({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[1.45rem] border border-[color:var(--explorer-border)] bg-white/65 px-4 py-4">
-      <p className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
+      <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
         {label}
       </p>
       <p className="mt-2 text-sm font-medium text-[color:var(--explorer-ink)]">{value}</p>
@@ -443,7 +443,7 @@ function FactPanel({ label, value }: { label: string; value: string }) {
 
 function Chip({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-[color:var(--explorer-border)] bg-white/70 px-3 py-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-ink)]">
+    <span className="rounded-full border border-[color:var(--explorer-border)] bg-white/70 px-3 py-1.5 ok-eyebrow text-[color:var(--explorer-ink)]">
       {children}
     </span>
   );

@@ -30,7 +30,7 @@ function FilterSection({
 }) {
   return (
     <section className="space-y-3 border-t border-[color:var(--explorer-border)] pt-4 first:border-t-0 first:pt-0">
-      <h3 className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-[color:var(--explorer-muted)]">
+      <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
         {title}
       </h3>
       {children}
@@ -60,7 +60,7 @@ function FacetCheckbox({
         />
         {label}
       </span>
-      <span className="text-xs text-[color:var(--explorer-muted)]">{count}</span>
+      <span className="ok-num text-xs text-[color:var(--explorer-muted)]">{count}</span>
     </label>
   );
 }
@@ -145,7 +145,7 @@ export function FilterSidebar({
               >
                 <span className="block font-medium">{year.year}</span>
                 <span className="text-xs text-[color:var(--explorer-muted)]">
-                  {year.count} docs
+                  <span className="ok-num">{year.count}</span> docs
                 </span>
               </button>
             ))}

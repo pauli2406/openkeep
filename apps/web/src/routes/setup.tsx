@@ -66,7 +66,7 @@ function SetupPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
-            <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-3xl" />
+            <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-lg" />
           </div>
           <CardTitle className="text-lg">{t("setup.title")}</CardTitle>
           <CardDescription>

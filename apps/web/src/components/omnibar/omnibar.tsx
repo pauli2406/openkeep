@@ -437,7 +437,7 @@ function ZeroState({
       {safeRecentSearches.length > 0 && (
         <section>
           <div className="flex items-center justify-between px-5 py-3">
-            <h3 className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+            <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
               Recent Searches
             </h3>
             <button
@@ -481,7 +481,7 @@ function ZeroState({
       {/* Suggestions */}
       <section>
         <div className="px-5 py-3">
-          <h3 className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+          <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Suggested for you
           </h3>
         </div>
@@ -577,7 +577,7 @@ function ResultsPane({
     <div className="p-5">
       {/* Query heading */}
       <div className="mb-4 flex items-start justify-between gap-3">
-        <h2 className="font-[var(--font-display)] text-xl leading-tight text-[color:var(--explorer-ink)]">
+        <h2 className="text-xl leading-tight text-[color:var(--explorer-ink)]">
           {query}
         </h2>
         <Link
@@ -668,7 +668,7 @@ function ResultsPane({
                           className="no-underline"
                           title={title}
                         >
-                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-white">
+                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-white">
                             {children}
                           </span>
                         </Link>
@@ -702,7 +702,7 @@ function ResultsPane({
           {/* Citations / Sources */}
           {answerStream.citations.length > 0 && (
             <div>
-              <h3 className="mb-2.5 flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+              <h3 className="mb-2.5 flex items-center gap-1.5 ok-eyebrow text-[color:var(--explorer-muted)]">
                 <Quote className="h-3 w-3" />
                 Sources
               </h3>
@@ -752,7 +752,7 @@ function ResultsPane({
           {answerStream.citations.length === 0 &&
             searchResults.length > 0 && (
               <div>
-                <h3 className="mb-2.5 flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+                <h3 className="mb-2.5 flex items-center gap-1.5 ok-eyebrow text-[color:var(--explorer-muted)]">
                   <FileText className="h-3 w-3" />
                   Matching Documents
                 </h3>
@@ -798,7 +798,7 @@ function ResultsPane({
           {/* Follow-up chips */}
           {followUps.length > 0 && answerStream.status === "done" && (
             <div>
-              <h3 className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+              <h3 className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
                 Follow up
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -927,7 +927,7 @@ function CitationPreviewPane({
       {/* Left panel – Search summary (40%) */}
       <div className="flex w-2/5 flex-col overflow-y-auto border-r border-[color:var(--explorer-border)]">
         <div className="flex items-center justify-between border-b border-[color:var(--explorer-border)] px-4 py-3">
-          <h3 className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+          <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Search Results
           </h3>
           <button
@@ -982,7 +982,7 @@ function CitationPreviewPane({
         {/* Other citations */}
         {answerStream.citations.length > 0 && (
           <div className="p-4">
-            <h4 className="mb-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
+            <h4 className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
               All Sources
             </h4>
             <div className="space-y-1.5">
@@ -1014,13 +1014,13 @@ function CitationPreviewPane({
         {/* Document header */}
         <div className="flex items-start justify-between border-b border-[color:var(--explorer-border)] px-5 py-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate font-[var(--font-display)] text-lg text-[color:var(--explorer-ink)]">
+            <h2 className="truncate text-lg text-[color:var(--explorer-ink)]">
               {doc?.title ?? citation.title}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[color:var(--explorer-muted)]">
               {doc?.correspondent && <span>{doc.correspondent.name}</span>}
               {doc?.issueDate && (
-                <span>{format(new Date(doc.issueDate), "MMM d, yyyy")}</span>
+                <span className="ok-num">{format(new Date(doc.issueDate), "MMM d, yyyy")}</span>
               )}
               {doc?.documentType && (
                 <span className="rounded-full border border-[color:var(--explorer-border)] px-2 py-0.5">
@@ -1075,7 +1075,7 @@ function CitationPreviewPane({
             <div className="space-y-6">
               {pages.map((page) => (
                 <div key={page.page} data-page={page.page}>
-                  <p className="mb-2 text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+                  <p className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
                     Page {page.page}
                   </p>
                   <div className="space-y-0.5">
