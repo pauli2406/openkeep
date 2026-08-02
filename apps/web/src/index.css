@@ -184,6 +184,10 @@
     min-height: 100vh;
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
+    /* The scale has to start here, not at `text-base` — otherwise any
+       copy without an explicit size utility stays at the browser's 16px. */
+    font-size: var(--text-base);
+    line-height: 1.5;
   }
 
   #root {
