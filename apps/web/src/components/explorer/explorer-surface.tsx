@@ -375,6 +375,7 @@ export function ExplorerSurface({
               <TimelineView
                 timeline={timelineQuery.data}
                 search={search}
+                onOpenDocument={openDocument}
                 expanded={search.expanded ?? []}
                 onToggleMonth={(monthKey) =>
                   onSearchChange(
