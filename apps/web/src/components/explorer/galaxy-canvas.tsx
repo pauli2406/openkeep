@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Expand, Orbit, ScanSearch } from "lucide-react";
 import type { DocumentsProjectionResponse } from "@openkeep/types";
 import type { GalaxyColorBy } from "@/lib/explorer";
-import { colorForValue } from "@/lib/explorer";
+import { colorForValue, resolveColor } from "@/lib/explorer";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 
 type GalaxyCanvasProps = {
@@ -32,6 +33,7 @@ export function GalaxyCanvas({
   onColorByChange,
   onOpenDocument,
 }: GalaxyCanvasProps) {
+  const { theme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState<Viewport>({
@@ -100,7 +102,8 @@ export function GalaxyCanvas({
     for (const point of projection.points) {
       const x = projectX(point.x, rect.width, viewport);
       const y = projectY(point.y, rect.height, viewport);
-      const color = colorForProjectionPoint(point, colorBy);
+      // Canvas cannot resolve var(); do it before painting.
+      const color = resolveColor(colorForProjectionPoint(point, colorBy));
       const isSelected = selection.includes(point.documentId);
       const isHovered = hoveredPoint?.documentId === point.documentId;
       const radius = isHovered ? 7 : isSelected ? 5 : 3.4;
@@ -137,7 +140,8 @@ export function GalaxyCanvas({
       context.fill();
       context.stroke();
     }
-  }, [colorBy, hoveredPoint, lasso, projection, selection, viewport]);
+    // `theme` is a dependency because the point colors are theme tokens.
+  }, [colorBy, hoveredPoint, lasso, projection, selection, viewport, theme]);
 
   function findNearestPoint(clientX: number, clientY: number) {
     const container = containerRef.current;

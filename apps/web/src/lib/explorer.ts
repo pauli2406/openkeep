@@ -253,6 +253,22 @@ export function formatCurrency(
   }
 }
 
+/**
+ * Resolve a `var(--token)` string to a concrete color.
+ *
+ * Canvas 2D does not perform CSS custom-property substitution, so anything
+ * drawn with fillStyle/strokeStyle has to be resolved against the document
+ * first. DOM consumers can keep using the `var()` form directly.
+ */
+export function resolveColor(value: string): string {
+  const match = /^var\((--[a-zA-Z0-9-]+)\)$/.exec(value.trim());
+  if (!match || typeof document === "undefined") return value;
+  const resolved = getComputedStyle(document.documentElement)
+    .getPropertyValue(match[1])
+    .trim();
+  return resolved || value;
+}
+
 export function colorForValue(value: string): string {
   // Theme-aware: each token has a light and a dark value, so tag and
   // type dots stay legible on both surfaces.

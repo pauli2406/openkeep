@@ -44,6 +44,26 @@ Primary navigation surfaces:
 - settings
 - account menu (profile, sign out)
 
+## Theming
+
+Color lives entirely in `apps/web/src/index.css` as `--ok-*` custom properties:
+`:root` carries the light values and `[data-theme="dark"]` overrides them. The
+shadcn/Radix `--color-*` names are aliases onto those tokens, so components
+never name a color directly.
+
+`data-theme` is set on `<html>`. An inline script in `index.html` applies it
+before first paint — reading `localStorage["openkeep.theme"]`, falling back to
+`prefers-color-scheme` — so a dark user never sees a light flash. `useTheme`
+(`src/hooks/use-theme.ts`) keeps React in sync, persists an explicit choice, and
+follows the OS until one is made.
+
+Two things need care when adding UI:
+
+- Canvas 2D cannot resolve `var()`. Anything painted through `fillStyle` or
+  `strokeStyle` must go through `resolveColor()` from `src/lib/explorer.ts`, and
+  its draw effect must depend on the current theme so it repaints on toggle.
+- Document previews render on `--ok-paper`, which stays light in both themes.
+
 ## Auth Model
 
 `AuthProvider` in `apps/web/src/hooks/use-auth.tsx` manages:
