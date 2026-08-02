@@ -25,19 +25,24 @@ In production-style deployments, the built web app is served by the API process 
 The root route in `apps/web/src/routes/__root.tsx` provides:
 
 - authenticated shell layout
-- sidebar navigation
-- mobile drawer navigation
+- a 48px top bar carrying primary navigation
 - redirect behavior for unauthenticated users
+
+The top bar replaced the former sidebar and mobile drawer. Left to right it
+holds the logo mark, the primary tabs, a search field that opens the omnibar
+(also reachable with Cmd/Ctrl+K), the Import action, the theme toggle, the
+settings gear and the account menu. The tab row scrolls horizontally on narrow
+viewports; the search field collapses to its icon below the `md` breakpoint.
 
 Primary navigation surfaces:
 
-- dashboard
+- today
 - documents
-- explore
 - review
-- search
-- upload
+- chat
+- import
 - settings
+- account menu (profile, sign out)
 
 ## Auth Model
 

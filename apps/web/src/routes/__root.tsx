@@ -123,11 +123,11 @@ function RootComponent() {
               aria-hidden="true"
               className="h-5 w-5 rounded-[var(--r-sm)]"
             />
-            <span className="text-[13.5px] font-bold tracking-[-0.01em]">OpenKeep</span>
+            <span className="hidden text-[13.5px] font-bold tracking-[-0.01em] sm:inline">OpenKeep</span>
           </Link>
 
           {/* The nav block never shrinks; the search field absorbs the width. */}
-          <nav className="flex flex-shrink-0 gap-0.5">
+          <nav className="flex min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none] md:flex-shrink-0 [&::-webkit-scrollbar]:hidden">
             <NavTab to="/" label={t("root.nav.today")} active={path === "/"} />
             <NavTab
               to="/documents"
@@ -153,13 +153,13 @@ function RootComponent() {
             <button
               type="button"
               onClick={openOmnibar}
-              className="flex h-[30px] min-w-[120px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--r-md)] border border-input bg-card px-2.5 transition-colors hover:bg-secondary"
+              className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center gap-2 rounded-[var(--r-md)] border border-input bg-card transition-colors hover:bg-secondary md:w-auto md:min-w-[120px] md:max-w-[300px] md:flex-1 md:flex-shrink md:justify-start md:px-2.5"
             >
               <Search className="h-[13px] w-[13px] flex-shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate text-left text-sm text-[var(--ok-faint)]">
+              <span className="hidden min-w-0 flex-1 truncate text-left text-sm text-[var(--ok-faint)] md:inline">
                 {t("root.search.placeholder")}
               </span>
-              <kbd className="ok-num flex-shrink-0 rounded-[var(--r-sm)] border px-1 text-[10px] text-muted-foreground">
+              <kbd className="ok-num hidden flex-shrink-0 rounded-[var(--r-sm)] border px-1 text-[10px] text-muted-foreground md:inline">
                 ⌘K
               </kbd>
             </button>
@@ -167,7 +167,7 @@ function RootComponent() {
             <Button asChild className="flex-shrink-0">
               <Link to="/upload">
                 <Upload />
-                {t("root.nav.import")}
+                <span className="hidden sm:inline">{t("root.nav.import")}</span>
               </Link>
             </Button>
 

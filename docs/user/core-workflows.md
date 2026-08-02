@@ -7,9 +7,9 @@ description: Learn the main archive tasks, from upload and browsing to reprocess
 
 This guide covers the most common tasks in OpenKeep.
 
-## Upload Documents
+## Import Documents
 
-Open `Upload` and either:
+Select `Import` in the top bar and either:
 
 - drag files into the drop zone
 - click the drop zone to choose files manually
