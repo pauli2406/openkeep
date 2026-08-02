@@ -20,11 +20,20 @@ export const isMarkdownTableSeparatorRow = (cells: string[]): boolean =>
 
 /**
  * Comparable signature of a table row, used to recognize the markdown rows a parse
- * provider already normalized into `ParsedDocumentTable` cells. Joined on a control
- * character so cell boundaries cannot be forged by the cell text itself.
+ * provider already normalized into `ParsedDocumentTable` cells. Serialized rather
+ * than joined on a separator so cell boundaries cannot be forged by cell text.
+ *
+ * Trailing empty cells are ignored: a ragged table (a two-cell header above
+ * three-cell body rows) is padded to the widest row in the normalized model, while
+ * the source line still carries only its original cells.
  */
-export const buildTableRowSignature = (cells: string[]): string =>
-  cells.map((cell) => cell.trim().toLowerCase()).join("\u0001");
+export const buildTableRowSignature = (cells: string[]): string => {
+  const normalized = cells.map((cell) => cell.trim().toLowerCase());
+  while (normalized.length > 0 && normalized[normalized.length - 1] === "") {
+    normalized.pop();
+  }
+  return JSON.stringify(normalized);
+};
 
 /** Escapes a cell so a pipe inside its text cannot open another column. */
 export const escapeMarkdownTableCell = (text: string): string => text.replace(/\|/g, "\\|");

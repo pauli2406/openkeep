@@ -181,4 +181,59 @@ describe("DeterministicChunker", () => {
     // A pipe-delimited line that belongs to no normalized table must survive.
     expect(combined).toContain("| grep -c ok | wc -l |");
   });
+
+  it("matches source rows of a ragged table despite normalized padding", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Übersicht",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            // Two-cell header above a three-cell body row: `buildTableRows` pads the
+            // header, the source line does not carry the padding cell.
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Position", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "Strom", kind: "body" as const },
+              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "89,00", kind: "body" as const },
+              { row: 2, column: 3, rowSpan: 1, columnSpan: 1, text: "EUR", kind: "body" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Übersicht", boundingBox: null },
+              { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "|---|---|", boundingBox: null },
+              { lineIndex: 3, text: "| Strom | 89,00 | EUR |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    expect(combined.match(/Position/g)).toHaveLength(1);
+    expect(combined.match(/Strom/g)).toHaveLength(1);
+  });
 });
