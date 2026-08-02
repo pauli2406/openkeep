@@ -48,7 +48,10 @@ function serializeTableAsMarkdown(table: ParsedDocumentTable): string {
     if (!grid.has(cell.row)) {
       grid.set(cell.row, new Map());
     }
-    grid.get(cell.row)!.set(cell.column, cell.text.trim());
+    // A cell may legitimately contain a pipe (the mapper unescapes `\|` from the
+    // provider markdown). Since the original rows are no longer chunked as prose,
+    // an unescaped pipe here would silently split one cell into two.
+    grid.get(cell.row)!.set(cell.column, cell.text.trim().replace(/\|/g, "\\|"));
     if (cell.kind === "header") {
       headerRows.add(cell.row);
     }

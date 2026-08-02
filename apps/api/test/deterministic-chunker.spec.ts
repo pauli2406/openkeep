@@ -138,7 +138,14 @@ describe("DeterministicChunker", () => {
               { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Position", kind: "header" as const },
               { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
               { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "Strom", kind: "body" as const },
-              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "89,00 EUR", kind: "body" as const },
+              {
+                row: 2,
+                column: 2,
+                rowSpan: 1,
+                columnSpan: 1,
+                text: "89,00 | 92,00 EUR",
+                kind: "body" as const,
+              },
             ],
             metadata: {},
           },
@@ -152,7 +159,7 @@ describe("DeterministicChunker", () => {
               { lineIndex: 0, text: "Details siehe Tabelle.", boundingBox: null },
               { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
               { lineIndex: 2, text: "|---|---|", boundingBox: null },
-              { lineIndex: 3, text: "| Strom | 89,00 EUR |", boundingBox: null },
+              { lineIndex: 3, text: "| Strom | 89,00 \\| 92,00 EUR |", boundingBox: null },
             ],
             blocks: [],
           },
@@ -166,5 +173,8 @@ describe("DeterministicChunker", () => {
     // provider keeps for the text blocks must not be chunked as prose.
     expect(combined.match(/Strom/g)).toHaveLength(1);
     expect(combined).toContain("[Table]");
+    // A pipe inside a cell stays escaped, so the row keeps two columns instead of
+    // silently becoming three.
+    expect(combined).toContain("| Strom | 89,00 \\| 92,00 EUR |");
   });
 });

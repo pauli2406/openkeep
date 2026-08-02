@@ -1127,7 +1127,9 @@ export class DocumentsService {
     // ("Rechnungen") never matched a document containing only "Rechnung" — the
     // unstemmed filter silently capped recall before ranking ever ran.
     const langRegconfig = `CASE d.language WHEN 'de' THEN 'german'::regconfig WHEN 'en' THEN 'english'::regconfig ELSE 'simple'::regconfig END`;
-    const keywordMatchSql = `to_tsvector(${langRegconfig}, coalesce(d.full_text, '')) @@ websearch_to_tsquery(${langRegconfig}, $${params.length + 1})`;
+    const buildKeywordMatchSql = (placeholder: number) =>
+      `to_tsvector(${langRegconfig}, coalesce(d.full_text, '')) @@ websearch_to_tsquery(${langRegconfig}, $${placeholder})`;
+    const keywordMatchSql = buildKeywordMatchSql(params.length + 1);
     const [keywordRows, keywordTotalRows] = await Promise.all([
       this.databaseService.pool.query<{
         id: string;
@@ -1186,6 +1188,24 @@ export class DocumentsService {
       [...params, embeddingLiteral, provider, model],
     );
 
+    // `total` must not depend on the requested page, so it is derived from the two
+    // page-independent quantities: the exact keyword count and the vector candidate
+    // window (capped at VECTOR_CANDIDATE_LIMIT). Counting how many vector candidates
+    // the keyword arm does NOT match makes the union exact instead of a lower bound
+    // that would jump around as `keywordCandidateLimit` grows with the page.
+    const vectorCandidateIds = semanticRows.rows.map((row) => row.id);
+    let vectorOnlyTotal = 0;
+    if (vectorCandidateIds.length > 0) {
+      const vectorOnlyRows = await this.databaseService.pool.query<{ total: string }>(
+        `SELECT COUNT(*)::text AS total
+         FROM documents d
+         WHERE d.id = ANY($1::uuid[])
+           AND NOT (${buildKeywordMatchSql(2)})`,
+        [vectorCandidateIds, queryText],
+      );
+      vectorOnlyTotal = Number(vectorOnlyRows.rows[0]?.total ?? 0);
+    }
+
     const keywordRankMap = new Map<string, number>();
     const keywordScoreMap = new Map<string, number>();
     keywordRows.rows.forEach((row, index) => {
@@ -1211,10 +1231,10 @@ export class DocumentsService {
       })),
     );
 
-    // combined covers the fetched candidate window; the independent keyword count
-    // keeps `total` stable across pages so later pages remain discoverable. It is
-    // still a lower bound when vector-only matches beyond the candidate cap exist.
-    const total = Math.max(combined.length, keywordTotal);
+    // Page-independent by construction: every keyword match plus the vector
+    // candidates the keyword arm misses. `combined` (the fetched window) can never
+    // exceed it, so deeper pages stay discoverable without the count drifting.
+    const total = keywordTotal + vectorOnlyTotal;
     const paged = combined.slice((page - 1) * pageSize, page * pageSize);
     const documentsById = await this.getDocumentsByIds(
       paged.map((item) => item.id),

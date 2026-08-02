@@ -113,8 +113,9 @@ Retrieval notes:
   minimum cosine distance per filtered document over the composite primary key, so
   every eligible document is considered exactly once (perfect diversity — a
   multi-hundred-page file cannot crowd out other matches) and the result is exact.
-  `total` for keyword matches is counted independently of the fetched window, so
-  pagination stays stable across pages
+  `total` is page-independent: the exact keyword count plus the vector candidates
+  the keyword arm does not match, so the reported result count does not drift while
+  paginating
 - deliberately deferred until the archive approaches ~50k chunks: a global ANN
   pre-filter in front of the per-document lateral probe, per-provider partial HNSW
   indexes, a generated tsvector column with a language-aware GIN index, and
