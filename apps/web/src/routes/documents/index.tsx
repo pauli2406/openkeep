@@ -15,7 +15,7 @@ function DocumentsExplorerPage() {
     <ExplorerSurface
       eyebrow="Archive Explorer"
       title="Documents"
-      description="Switch between a dense list, a chronological timeline, and a semantic galaxy while keeping the same faceted sidebar pinned to the archive."
+      description=""
       search={search}
       onSearchChange={(next) =>
         navigate({

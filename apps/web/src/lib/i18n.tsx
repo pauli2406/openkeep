@@ -258,6 +258,9 @@ type TranslationKey =
   | "today.previewUnavailable"
   | "documents.bulkUnavailable"
   | "timeline.monthError"
+  | "groups.empty"
+  | "groups.groupedBy"
+  | "groups.caption"
   | "timeline.empty"
   | "timeline.emptyMonth"
   | "timeline.loadingMonth"
@@ -302,7 +305,6 @@ type TranslationKey =
   | "dashboard.rhythm"
   | "dashboard.openTimeline"
   | "dashboard.largestClusters"
-  | "dashboard.openGalaxyView"
   | "dashboard.deadlines"
   | "dashboard.upcomingTasks"
   | "documentDetail.loadDoc"
@@ -713,6 +715,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.previewUnavailable": "No preview available",
     "documents.bulkUnavailable": "Not available yet",
     "timeline.monthError": "Could not load this month.",
+    "groups.empty": "No correspondents match the current filters.",
+    "groups.groupedBy": "Grouped by correspondent",
+    "groups.caption": "Block size is document count.",
     "timeline.empty": "No dated documents match the current filters.",
     "timeline.emptyMonth": "No documents in this month.",
     "timeline.loadingMonth": "Loading month",
@@ -757,7 +762,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "dashboard.rhythm": "12-month rhythm",
     "dashboard.openTimeline": "Open timeline",
     "dashboard.largestClusters": "Largest clusters",
-    "dashboard.openGalaxyView": "Open galaxy view",
     "dashboard.deadlines": "Deadlines",
     "dashboard.upcomingTasks": "Upcoming tasks",
     "documentDetail.loadDoc": "Failed to load document",
@@ -1167,6 +1171,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.previewUnavailable": "Keine Vorschau verfügbar",
     "documents.bulkUnavailable": "Noch nicht verfügbar",
     "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
+    "groups.empty": "Keine Korrespondenten passen zu den Filtern.",
+    "groups.groupedBy": "Nach Korrespondent gruppiert",
+    "groups.caption": "Die Blockgröße zeigt die Anzahl der Dokumente.",
     "timeline.empty": "Keine datierten Dokumente passen zu den Filtern.",
     "timeline.emptyMonth": "Keine Dokumente in diesem Monat.",
     "timeline.loadingMonth": "Monat wird geladen",
@@ -1211,7 +1218,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "dashboard.rhythm": "Rhythmus der letzten 12 Monate",
     "dashboard.openTimeline": "Zeitachse offnen",
     "dashboard.largestClusters": "Grosste Cluster",
-    "dashboard.openGalaxyView": "Galaxieansicht offnen",
     "dashboard.deadlines": "Fristen",
     "dashboard.upcomingTasks": "Bevorstehende Aufgaben",
     "documentDetail.loadDoc": "Dokument konnte nicht geladen werden",

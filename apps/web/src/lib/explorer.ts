@@ -1,14 +1,12 @@
 import type {
   DashboardInsightsResponse,
-  DocumentsProjectionResponse,
   DocumentsTimelineResponse,
   CorrespondentInsightsResponse,
   SearchDocumentsResponse,
 } from "@openkeep/types";
 import { authFetch } from "./api";
 
-export type ExplorerView = "list" | "timeline" | "galaxy";
-export type GalaxyColorBy = "correspondent" | "type" | "status" | "year";
+export type ExplorerView = "list" | "timeline" | "groups";
 
 export type ExplorerSearch = {
   query?: string;
@@ -26,7 +24,6 @@ export type ExplorerSearch = {
   sort?: string;
   direction?: string;
   view?: ExplorerView;
-  colorBy?: GalaxyColorBy;
   expanded?: string[];
 };
 
@@ -75,7 +72,6 @@ export function parseExplorerSearch(search: Record<string, unknown>): ExplorerSe
   const statuses = parseCsvValue(search.statuses) ?? parseCsvValue(search.status);
 
   const view = search.view;
-  const colorBy = search.colorBy;
 
   return {
     query: typeof search.query === "string" && search.query.trim() ? search.query : undefined,
@@ -100,15 +96,8 @@ export function parseExplorerSearch(search: Record<string, unknown>): ExplorerSe
         ? search.direction
         : undefined,
     view:
-      view === "timeline" || view === "galaxy" || view === "list"
+      view === "timeline" || view === "groups" || view === "list"
         ? view
-        : undefined,
-    colorBy:
-      colorBy === "correspondent" ||
-      colorBy === "type" ||
-      colorBy === "status" ||
-      colorBy === "year"
-        ? colorBy
         : undefined,
     expanded: parseCsvValue(search.expanded),
   };
@@ -143,8 +132,14 @@ function setParam(
   }
 
   if (Array.isArray(value)) {
-    if (value.length > 0) {
-      params.set(key, value.join(","));
+    // `key[]=a&key[]=b`, not `key=a,b`. The API only reaches its
+    // CSV-splitting preprocess when the query parser hands it an array;
+    // a bare `key=a` arrives as a string and the filter blows up in
+    // Postgres with `Array value must start with "{"`.
+    for (const item of value) {
+      if (item !== undefined && item !== null && item !== "") {
+        params.append(`${key}[]`, String(item));
+      }
     }
     return;
   }
@@ -203,17 +198,6 @@ export async function fetchDocumentsTimeline(
     throw new Error("Failed to load timeline");
   }
   return (await response.json()) as DocumentsTimelineResponse;
-}
-
-export async function fetchDocumentsProjection(
-  search: ExplorerSearch,
-): Promise<DocumentsProjectionResponse> {
-  const params = explorerSearchToParams(search);
-  const response = await authFetch(`/api/documents/projection?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error("Failed to load projection");
-  }
-  return (await response.json()) as DocumentsProjectionResponse;
 }
 
 export async function fetchDashboardInsights(): Promise<DashboardInsightsResponse> {
