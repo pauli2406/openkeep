@@ -180,12 +180,14 @@ export function FilterSidebar({
   const { t } = useI18n();
 
   const activeCount = [
-    search.year,
-    search.correspondentIds?.length,
-    search.documentTypeIds?.length,
-    search.statuses?.length,
-    search.tags?.length,
-    search.amountMin ?? search.amountMax,
+    search.year != null,
+    Boolean(search.correspondentIds?.length),
+    Boolean(search.documentTypeIds?.length),
+    Boolean(search.statuses?.length),
+    Boolean(search.tags?.length),
+    // != null, not truthiness: an amountMin of 0 is a real filter
+    search.amountMin != null || search.amountMax != null,
+    Boolean(search.dateFrom || search.dateTo),
   ].filter(Boolean).length;
 
   const clearAll = () =>

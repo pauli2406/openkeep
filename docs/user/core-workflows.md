@@ -79,14 +79,21 @@ The filter sidebar lets you narrow the current document set.
 
 Current filters include:
 
-- year
 - status
-- correspondent
+- year
 - document type
+- correspondent
 - tags
+- date range
 - amount range
 
-You can clear all active filters from the sidebar.
+Each section collapses, and any section with more than a handful of entries
+gets its own filter box — type a few letters to find one tag among hundreds
+instead of scrolling.
+
+Active filters also appear as chips above the list. Select a chip to remove
+that filter, or use `Clear all` (shown once more than one filter is set).
+The sidebar's own `Clear` resets everything too.
 
 ## Open a Document
 
