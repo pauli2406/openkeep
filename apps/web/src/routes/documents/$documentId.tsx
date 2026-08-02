@@ -2206,7 +2206,7 @@ function DocumentDetailPage() {
                                 type="button"
                                 variant="default"
                                 size="sm"
-                                className="h-auto rounded-full px-3 py-1 text-xs"
+                                className="h-auto px-3 py-1 text-xs"
                                 onClick={() => toggleEditTag(tag.id)}
                               >
                                 {tag.name}
@@ -2232,7 +2232,7 @@ function DocumentDetailPage() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    className="h-auto rounded-full px-3 py-1 text-xs"
+                                    className="h-auto px-3 py-1 text-xs"
                                     onClick={() => toggleEditTag(tag.id)}
                                   >
                                     {tag.name}
@@ -2246,7 +2246,7 @@ function DocumentDetailPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-auto rounded-full px-3 py-1 text-xs"
+                              className="h-auto px-3 py-1 text-xs"
                               onClick={() => createTagMutation.mutate(tagQuery.trim())}
                               disabled={createTagMutation.isPending}
                             >

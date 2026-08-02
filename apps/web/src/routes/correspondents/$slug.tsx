@@ -89,7 +89,7 @@ function CorrespondentDetailPage() {
 
   return (
     <div className="space-y-8 p-6 md:p-8">
-      <Button variant="ghost" className="rounded-full" onClick={() => navigate({ to: "/" })}>
+      <Button variant="ghost" onClick={() => navigate({ to: "/" })}>
         <ArrowLeft className="h-4 w-4" />
         Back to dashboard
       </Button>
@@ -341,7 +341,7 @@ function CorrespondentDetailPage() {
               Documents from {data.correspondent.name}
             </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link
               to="/documents"
               search={{

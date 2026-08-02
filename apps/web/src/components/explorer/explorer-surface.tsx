@@ -264,7 +264,6 @@ export function ExplorerSurface({
 
         <Button
           variant="outline"
-          className="rounded-full"
           onClick={() => setSidebarOpen((current) => !current)}
         >
           <Sidebar className="h-4 w-4" />
@@ -274,7 +273,7 @@ export function ExplorerSurface({
         {activeView === "list" ? (
           <Button
             variant={selectionMode ? "default" : "outline"}
-            className={`rounded-full ${
+            className={`${
               selectionMode
                 ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-white hover:bg-[color:var(--explorer-cobalt)]/90"
                 : ""
@@ -330,7 +329,6 @@ export function ExplorerSurface({
             </button>
             <Button
               variant="outline"
-              className="rounded-full"
               disabled={selectedIds.length === 0}
               onClick={() => setReprocessDialogOpen(true)}
             >
@@ -339,7 +337,6 @@ export function ExplorerSurface({
             </Button>
             <Button
               variant="destructive"
-              className="rounded-full"
               disabled={selectedIds.length === 0}
               onClick={() => setDeleteDialogOpen(true)}
             >
@@ -461,7 +458,6 @@ export function ExplorerSurface({
           <DialogFooter>
             <Button
               variant="outline"
-              className="rounded-full"
               onClick={() => setDeleteDialogOpen(false)}
               disabled={batchDeleteMutation.isPending}
             >
@@ -470,7 +466,6 @@ export function ExplorerSurface({
             </Button>
             <Button
               variant="destructive"
-              className="rounded-full"
               onClick={() => batchDeleteMutation.mutate(selectedIds)}
               disabled={selectedIds.length === 0 || batchDeleteMutation.isPending}
             >

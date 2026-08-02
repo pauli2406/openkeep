@@ -289,7 +289,7 @@ export function GalaxyCanvas({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-full border-white/80 bg-white/70 backdrop-blur"
+            className="border-white/80 bg-white/70 backdrop-blur"
             onClick={() =>
               setViewport({
                 scale: 1,

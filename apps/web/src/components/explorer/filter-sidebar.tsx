@@ -103,7 +103,7 @@ export function FilterSidebar({
         <Button
           variant="ghost"
           size="sm"
-          className="rounded-full text-[color:var(--explorer-muted)]"
+          className="text-[color:var(--explorer-muted)]"
           onClick={() =>
             onSearchChange({
               query: undefined,

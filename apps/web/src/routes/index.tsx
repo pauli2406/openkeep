@@ -235,7 +235,7 @@ function TaskTable({
                   size="sm"
                   onClick={() => onComplete(item.documentId)}
                   disabled={isCompleting}
-                  className="w-full rounded-full md:w-auto"
+                  className="w-full md:w-auto"
                 >
                   <Check className="h-4 w-4" />
                   {isCompleting ? t("dashboard.saving") : t("dashboard.done")}
@@ -347,7 +347,7 @@ function DashboardPage() {
                {t("dashboard.rhythm")}
              </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link to="/documents" search={{ view: "timeline" }}>
               {t("dashboard.openTimeline")}
             </Link>
@@ -366,7 +366,7 @@ function DashboardPage() {
                {t("dashboard.largestClusters")}
              </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link to="/documents" search={{ view: "galaxy" }}>
               <Sparkles className="h-4 w-4" />
               {t("dashboard.openGalaxyView")}
