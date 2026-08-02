@@ -64,7 +64,7 @@ export function MetricRibbon({
         <div
           key={item.label}
           className={cn(
-            "rounded-[1.75rem] border px-5 py-4",
+            "rounded-[var(--r-lg)] border px-5 py-4",
             item.tone === "rust" &&
               "border-[color:var(--explorer-rust)]/20 bg-[color:var(--explorer-rust-soft)]",
             item.tone === "cobalt" &&
@@ -96,7 +96,7 @@ export function MiniSparkline({
     return (
       <div
         className={cn(
-          "flex h-28 items-center justify-center rounded-[1.5rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]",
+          "flex h-28 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]",
           className,
         )}
       >
@@ -162,7 +162,7 @@ export function DeadlineList({
 }) {
   if (items.length === 0) {
     return (
-      <div className="flex min-h-44 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+      <div className="flex min-h-44 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
         No deadlines in view
       </div>
     );
@@ -183,7 +183,7 @@ export function DeadlineList({
             to="/documents/$documentId"
             params={{ documentId: item.documentId }}
             className={cn(
-              "flex items-center justify-between gap-4 rounded-[1.35rem] border px-4 py-3 transition hover:-translate-y-0.5",
+              "flex items-center justify-between gap-4 rounded-[var(--r-lg)] border px-4 py-3 transition hover:-translate-y-0.5",
               tone,
             )}
           >
@@ -227,7 +227,7 @@ export function DocumentRows({
 }) {
   if (documents.length === 0) {
     return (
-      <div className="flex min-h-44 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+      <div className="flex min-h-44 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
         {emptyLabel}
       </div>
     );
@@ -239,7 +239,7 @@ export function DocumentRows({
         (() => {
           const isSelected = selectedIds.includes(document.id);
           const cardClassName = cn(
-            "group relative flex items-start justify-between gap-4 rounded-[1.5rem] border px-4 py-4 transition",
+            "group relative flex items-start justify-between gap-4 rounded-[var(--r-lg)] border px-4 py-4 transition",
             selectionMode
               ? "border-[color:var(--explorer-border-strong)] bg-[linear-gradient(180deg,rgba(255,251,244,0.96),rgba(248,241,228,0.96))] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/45"
               : "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/40",
@@ -396,7 +396,7 @@ export function DocumentRows({
 
 export function LoadingBlock({ label }: { label: string }) {
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[1.8rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
+    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
       <div className="h-9 w-9 animate-spin rounded-full border-2 border-[color:var(--explorer-border-strong)] border-t-[color:var(--explorer-cobalt)]" />
       <p className="text-sm text-[color:var(--explorer-muted)]">{label}</p>
     </div>
@@ -411,7 +411,7 @@ export function ErrorBlock({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[1.8rem] border border-[#d8b7a8] bg-[#fff5f0] text-center">
+    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[#d8b7a8] bg-[#fff5f0] text-center">
       <AlertCircle className="h-8 w-8 text-[color:var(--explorer-rust)]" />
       <p className="max-w-md text-sm text-[color:var(--explorer-muted)]">{label}</p>
       {action}

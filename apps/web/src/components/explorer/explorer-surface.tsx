@@ -295,7 +295,7 @@ export function ExplorerSurface({
       </div>
 
       {activeView === "list" && selectionMode ? (
-        <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-[1.8rem] border border-[color:var(--explorer-cobalt)]/20 bg-[linear-gradient(135deg,rgba(244,238,225,0.94),rgba(231,239,255,0.98))] px-5 py-4 shadow-[0_24px_50px_rgba(56,84,165,0.16)] backdrop-blur">
+        <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-cobalt)]/20 bg-[linear-gradient(135deg,rgba(244,238,225,0.94),rgba(231,239,255,0.98))] px-5 py-4 shadow-[0_24px_50px_rgba(56,84,165,0.16)] backdrop-blur">
           <div className="space-y-1">
             <p className="ok-eyebrow text-[color:var(--explorer-cobalt)]">
               Archive Curation Mode
@@ -442,7 +442,7 @@ export function ExplorerSurface({
       </div>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="border-[color:var(--explorer-border)] bg-[linear-gradient(180deg,#fffaf1,#f8f0df)] text-[color:var(--explorer-ink)] sm:rounded-[1.6rem]">
+        <DialogContent className="border-[color:var(--explorer-border)] bg-[linear-gradient(180deg,#fffaf1,#f8f0df)] text-[color:var(--explorer-ink)] sm:rounded-[var(--r-lg)]">
           <DialogHeader>
             <DialogTitle className="ok-page-title">
               Delete {selectedIds.length} document{selectedIds.length === 1 ? "" : "s"}?
@@ -452,7 +452,7 @@ export function ExplorerSurface({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-[1.25rem] border border-[color:var(--explorer-border)] bg-white/70 px-4 py-3 text-sm text-[color:var(--explorer-ink)]">
+          <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/70 px-4 py-3 text-sm text-[color:var(--explorer-ink)]">
             {selectedIds.length > 0
               ? `${selectedIds.length} selected items will be deleted from the current archive.`
               : "No documents selected."}

@@ -214,7 +214,7 @@ export function GalaxyCanvas({
 
       <div
         ref={containerRef}
-        className="relative h-[620px] overflow-hidden rounded-[2rem] border border-[color:var(--explorer-border)] bg-[radial-gradient(circle_at_20%_20%,rgba(56,84,165,0.08),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(183,72,23,0.1),transparent_30%),linear-gradient(180deg,rgba(255,252,246,0.95),rgba(247,241,231,0.96))]"
+        className="relative h-[620px] overflow-hidden rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[radial-gradient(circle_at_20%_20%,rgba(56,84,165,0.08),transparent_35%),radial-gradient(circle_at_80%_10%,rgba(183,72,23,0.1),transparent_30%),linear-gradient(180deg,rgba(255,252,246,0.95),rgba(247,241,231,0.96))]"
         onWheel={(event) => {
           event.preventDefault();
           const delta = event.deltaY > 0 ? -0.08 : 0.08;
@@ -303,7 +303,7 @@ export function GalaxyCanvas({
           </Button>
         </div>
         {hoveredPoint ? (
-          <div className="absolute bottom-5 left-5 max-w-sm rounded-[1.4rem] border border-[color:var(--explorer-border)] bg-white/90 px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
+          <div className="absolute bottom-5 left-5 max-w-sm rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/90 px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
             <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
               {hoveredPoint.typeName ?? "Document"}
             </p>
