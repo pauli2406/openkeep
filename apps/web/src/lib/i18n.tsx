@@ -284,6 +284,25 @@ type TranslationKey =
   | "timeline.loadingMonth"
   | "timeline.unpaid"
   | "timeline.caption"
+  | "documentDetail.needsReview"
+  | "documentDetail.original"
+  | "documentDetail.searchablePdf"
+  | "documentDetail.confirm"
+  | "documentDetail.fields"
+  | "documentDetail.removeTag"
+  | "documentDetail.addTag"
+  | "documentDetail.moreFields"
+  | "documentDetail.whyReview"
+  | "documentDetail.processing"
+  | "documentDetail.parseProvider"
+  | "documentDetail.embedding"
+  | "documentDetail.pages"
+  | "documentDetail.chunks"
+  | "documentDetail.discard"
+  | "documentDetail.page"
+  | "documentDetail.zoomIn"
+  | "documentDetail.zoomOut"
+  | "documentDetail.qa"
   | "documents.reprocess"
   | "documents.date"
   | "documents.selectAll"
@@ -759,6 +778,25 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "timeline.loadingMonth": "Loading month",
     "timeline.unpaid": "unpaid",
     "timeline.caption": "Bar length is document count; the amber marker flags months with unpaid deadlines.",
+    "documentDetail.needsReview": "Needs review",
+    "documentDetail.original": "Original",
+    "documentDetail.searchablePdf": "Searchable PDF",
+    "documentDetail.confirm": "Confirm",
+    "documentDetail.fields": "Fields",
+    "documentDetail.removeTag": "Remove tag",
+    "documentDetail.addTag": "Add tag…",
+    "documentDetail.moreFields": "More fields",
+    "documentDetail.whyReview": "Why it needs review",
+    "documentDetail.processing": "Processing",
+    "documentDetail.parseProvider": "Parse provider",
+    "documentDetail.embedding": "Embedding",
+    "documentDetail.pages": "Pages",
+    "documentDetail.chunks": "Chunks",
+    "documentDetail.discard": "Discard",
+    "documentDetail.page": "Page",
+    "documentDetail.zoomIn": "Zoom in",
+    "documentDetail.zoomOut": "Zoom out",
+    "documentDetail.qa": "Q&A",
     "documents.reprocess": "Reprocess",
     "documents.date": "Date",
     "documents.selectAll": "Select all",
@@ -1233,6 +1271,25 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "timeline.loadingMonth": "Monat wird geladen",
     "timeline.unpaid": "offen",
     "timeline.caption": "Die Balkenlänge zeigt die Anzahl der Dokumente; die gelbe Markierung kennzeichnet Monate mit offenen Fristen.",
+    "documentDetail.needsReview": "Prüfung nötig",
+    "documentDetail.original": "Original",
+    "documentDetail.searchablePdf": "Durchsuchbares PDF",
+    "documentDetail.confirm": "Bestätigen",
+    "documentDetail.fields": "Felder",
+    "documentDetail.removeTag": "Schlagwort entfernen",
+    "documentDetail.addTag": "Schlagwort hinzufügen…",
+    "documentDetail.moreFields": "Weitere Felder",
+    "documentDetail.whyReview": "Warum Prüfung nötig ist",
+    "documentDetail.processing": "Verarbeitung",
+    "documentDetail.parseProvider": "Parse-Anbieter",
+    "documentDetail.embedding": "Embedding",
+    "documentDetail.pages": "Seiten",
+    "documentDetail.chunks": "Chunks",
+    "documentDetail.discard": "Verwerfen",
+    "documentDetail.page": "Seite",
+    "documentDetail.zoomIn": "Vergrößern",
+    "documentDetail.zoomOut": "Verkleinern",
+    "documentDetail.qa": "Q&A",
     "documents.reprocess": "Neu verarbeiten",
     "documents.date": "Datum",
     "documents.selectAll": "Alle auswählen",

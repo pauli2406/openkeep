@@ -99,16 +99,18 @@ The sidebar's own `Clear` resets everything too.
 
 From any list, search result, correspondent page, or exploration surface, open a document to view its detail page.
 
-The document detail page includes:
+The document detail page is two columns: the document itself on the left, its
+metadata in a rail on the right.
 
-- preview
-- OCR text
-- intelligence tab
-- raw details
-- audit history
-- metadata editor
-- actions such as reprocess and download
-- AI summary and Q&A section
+The left column has tabs — preview (with zoom and page navigation), OCR text,
+intelligence, Q&A, raw details, and audit history. The top bar carries the
+download actions and, when the document needs review, a `Confirm` button.
+
+The right rail shows the extracted fields as a list. Select any value to edit
+it in place; changed values turn amber, and a single `Save` bar appears at the
+bottom of the rail. Below the fields sit the reason a document needs review, a
+collapsible processing summary (parse provider, embedding, confidence), and the
+reprocess and delete actions.
 
 ## Work Through Today
 

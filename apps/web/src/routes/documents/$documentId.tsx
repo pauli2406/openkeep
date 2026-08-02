@@ -14,6 +14,9 @@ import type {
 import { createSseParser } from "@openkeep/sdk";
 
 import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
+import { DocumentQaSection } from "@/components/document-detail/qa-section";
+import { DetailHeader } from "@/components/document-detail/detail-header";
+import { FieldsRail } from "@/components/document-detail/fields-rail";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { cn } from "@/lib/utils";
@@ -560,6 +563,8 @@ function DocumentDetailPage() {
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(100);
+  const [previewPage, setPreviewPage] = useState(1);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
   const [tagQuery, setTagQuery] = useState("");
   const [newCorrespondentName, setNewCorrespondentName] = useState("");
@@ -710,6 +715,21 @@ function DocumentDetailPage() {
   }, [previewQuery.data, documentQuery.data?.mimeType]);
 
   // --- Mutations ---
+
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/api/documents/{id}/review/resolve", {
+        params: { path: { id: documentId } },
+        body: {},
+      });
+      if (error) throw new Error(getApiErrorMessage(error, t("documentDetail.failedToSaveChanges")));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
@@ -868,7 +888,7 @@ function DocumentDetailPage() {
 
   // --- Handlers ---
 
-  function startEditing() {
+  const seedForm = useCallback(() => {
     const doc = documentQuery.data;
     if (!doc) return;
     setTagQuery("");
@@ -886,8 +906,14 @@ function DocumentDetailPage() {
       documentTypeId: doc.documentType?.id ?? EMPTY_SELECT_VALUE,
       tagIds: doc.tags.map((tag) => tag.id),
     });
-    setIsEditing(true);
-  }
+  }, [documentQuery.data]);
+
+  // The rail edits in place, so the form follows the document: seeded on
+  // load and re-seeded when the server copy actually changes.
+  useEffect(() => {
+    seedForm();
+    setPreviewPage(1);
+  }, [seedForm]);
 
   function cancelEditing() {
     setTagQuery("");
@@ -1124,75 +1150,90 @@ function DocumentDetailPage() {
   const pageNumbers = Object.keys(textBlocksByPage)
     .map(Number)
     .sort((a, b) => a - b);
+  const pageCount = doc.metadata.pageCount ?? pageNumbers.length ?? 1;
+
+  const lockNote =
+    pendingNewLocks.length > 0
+      ? `${t("documentDetail.savingWillLock")} ${pendingNewLocks
+          .map((field) => formatManualOverrideField(field, t))
+          .join(", ")}.`
+      : lockedFields.length > 0
+        ? t("documentDetail.lockedFieldsSticky")
+        : null;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Breadcrumb / Back */}
-      <div className="flex items-center gap-2">
-        <Link
-          to="/documents"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {copy.documents}
-        </Link>
-        <span className="text-sm text-muted-foreground">/</span>
-        <span className="text-sm font-medium truncate max-w-xs">{doc.title}</span>
-      </div>
-
-      {/* Document Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <FileText className="h-6 w-6 shrink-0 text-muted-foreground" />
-          <h1 className="ok-page-title truncate">{doc.title}</h1>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant={statusVariant(doc.status)}>{doc.status}</Badge>
-          {doc.reviewStatus === "pending" && (
-            <Badge variant="warning">{copy.pendingReview}</Badge>
-          )}
-          {doc.reviewStatus === "resolved" && (
-            <Badge variant="success">{copy.reviewResolved}</Badge>
-          )}
-        </div>
-      </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <DetailHeader
+        doc={doc}
+        onDownload={handleDownload}
+        onConfirm={() => confirmMutation.mutate()}
+        confirmPending={confirmMutation.isPending}
+      />
       <DocumentProcessingIndicator document={doc} />
 
-      {/* Two-Column Layout */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Left Column - Content */}
-        <div className="lg:col-span-3 space-y-4">
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
+        {/* Left column: preview and the content tabs */}
+        <div className="flex min-h-0 flex-col overflow-auto">
           <Tabs defaultValue="preview">
-            <TabsList>
-              <TabsTrigger value="preview" className="gap-1.5">
-                <Eye className="h-3.5 w-3.5" />
-                {copy.preview}
-              </TabsTrigger>
-              <TabsTrigger value="text" className="gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
-                {copy.ocrText}
-              </TabsTrigger>
-              <TabsTrigger value="intelligence" className="gap-1.5">
-                <BrainCircuit className="h-3.5 w-3.5" />
-                {copy.intelligence}
-              </TabsTrigger>
-              <TabsTrigger value="details" className="gap-1.5">
-                <Hash className="h-3.5 w-3.5" />
-                {copy.details}
-              </TabsTrigger>
-              <TabsTrigger value="history" className="gap-1.5">
-                <History className="h-3.5 w-3.5" />
-                {copy.history}
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex flex-shrink-0 items-center gap-2 border-b bg-[var(--ok-bar)] px-3 py-1.5">
+              <TabsList className="bg-transparent p-0">
+                <TabsTrigger value="preview">{copy.preview}</TabsTrigger>
+                <TabsTrigger value="text">{copy.ocrText}</TabsTrigger>
+                <TabsTrigger value="intelligence">{copy.intelligence}</TabsTrigger>
+                <TabsTrigger value="qa">{t("documentDetail.qa")}</TabsTrigger>
+                <TabsTrigger value="details">{copy.details}</TabsTrigger>
+                <TabsTrigger value="history">{copy.history}</TabsTrigger>
+              </TabsList>
+              <div className="ok-num ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  aria-label={t("documentDetail.zoomOut")}
+                  onClick={() => setPreviewZoom((z) => Math.max(50, z - 25))}
+                  className="px-1 hover:text-foreground"
+                >
+                  −
+                </button>
+                <span>{previewZoom}%</span>
+                <button
+                  type="button"
+                  aria-label={t("documentDetail.zoomIn")}
+                  onClick={() => setPreviewZoom((z) => Math.min(300, z + 25))}
+                  className="px-1 hover:text-foreground"
+                >
+                  +
+                </button>
+                {pageCount > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={t("documentDetail.page")}
+                      onClick={() => setPreviewPage((p) => Math.max(1, p - 1))}
+                      className="px-1 hover:text-foreground"
+                    >
+                      ‹
+                    </button>
+                    <span>
+                      {previewPage} / {pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t("documentDetail.page")}
+                      onClick={() => setPreviewPage((p) => Math.min(pageCount, p + 1))}
+                      className="px-1 hover:text-foreground"
+                    >
+                      ›
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
 
-            {/* Preview Tab */}
             <TabsContent value="preview">
               <Card>
                 <CardContent className="p-4 space-y-4">
                   <div
                     className="w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--ok-paper-border)] bg-[var(--ok-sunken)]"
-                    style={{ height: "60vh" }}
+                    style={{ height: "calc(100vh - 230px)" }}
                   >
                     {previewQuery.isLoading && (
                       <div className="flex h-full items-center justify-center">
@@ -1211,7 +1252,8 @@ function DocumentDetailPage() {
                           {/* PDF: iframe */}
                           {previewCategory === "pdf" && (
                             <iframe
-                              src={previewUrl}
+                              key={`${previewPage}-${previewZoom}`}
+                              src={`${previewUrl}#page=${previewPage}&zoom=${previewZoom}`}
                               className="h-full w-full bg-[var(--ok-paper)]"
                               title={t("documentDetail.documentPreviewTitle")}
                             />
@@ -1223,7 +1265,8 @@ function DocumentDetailPage() {
                               <img
                                 src={previewUrl}
                                 alt={doc.title}
-                                className="max-h-full max-w-full rounded object-contain shadow-lg"
+                                style={{ transform: `scale(${previewZoom / 100})` }}
+                                className="max-h-full max-w-full rounded object-contain shadow-lg transition-transform"
                               />
                             </div>
                           )}
@@ -1628,1049 +1671,46 @@ function DocumentDetailPage() {
               </Card>
             </TabsContent>
 
-          </Tabs>
 
-          <DocumentQaSection documentId={doc.id} />
+            <TabsContent value="qa">
+              <DocumentQaSection documentId={doc.id} />
+            </TabsContent>
+          </Tabs>
         </div>
 
-        {/* Right Column - Metadata & Actions */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Metadata Card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                 <CardTitle className="text-base">{t("documentDetail.metadata")}</CardTitle>
-                {!isEditing ? (
-                  <Button variant="ghost" size="sm" className="gap-1.5" onClick={startEditing}>
-                    <Edit2 className="h-3.5 w-3.5" />
-                    {t("documentDetail.edit")}
-                  </Button>
-                ) : (
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1"
-                      onClick={saveEdits}
-                      disabled={updateMutation.isPending}
-                    >
-                      {updateMutation.isPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Save className="h-3.5 w-3.5" />
-                      )}
-                       {t("documentDetail.save")}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={cancelEditing}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {updateMutation.isError && (
-                <p className="text-xs text-destructive mt-1">{t("documentDetail.failedToSaveChanges")}</p>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditing && (
-                <div className="rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-xs text-[var(--ok-amber)]">
-                  {pendingNewLocks.length > 0
-                    ? `${t("documentDetail.savingWillLock")} ${pendingNewLocks.map((field) => formatManualOverrideField(field, t)).join(", ")}.`
-                    : lockedFields.length > 0
-                      ? t("documentDetail.lockedFieldsSticky")
-                      : t("documentDetail.changedFieldsSticky")}
-                </div>
-              )}
-
-              {/* Title */}
-              {isEditing && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">{t("documentDetail.title")}</Label>
-                  <Input
-                    value={editForm.title}
-                    onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
-                  />
-                </div>
-              )}
-
-              {/* Correspondent */}
-              <div className="flex items-start gap-2">
-                <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">{t("documentDetail.correspondent")}</p>
-                    {lockedFields.includes("correspondentId") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("correspondentId")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          {t("documentDetail.unlock")}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Select
-                        value={editForm.correspondentId}
-                        onValueChange={(value) =>
-                          setEditForm((current) => ({
-                            ...current,
-                            correspondentId: value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder={t("documentDetail.selectCorrespondent")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>{t("documentDetail.noCorrespondent")}</SelectItem>
-                          {(correspondentsQuery.data ?? []).map((correspondent) => (
-                            <SelectItem key={correspondent.id} value={correspondent.id}>
-                              {correspondent.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="mt-2 flex gap-2">
-                        <Input
-                          value={newCorrespondentName}
-                          onChange={(e) => setNewCorrespondentName(e.target.value)}
-                          placeholder={t("documentDetail.addNewCorrespondent")}
-                          onKeyDown={(event) => {
-                            if (
-                              event.key === "Enter" &&
-                              newCorrespondentName.trim().length > 0 &&
-                              !createCorrespondentMutation.isPending
-                            ) {
-                              event.preventDefault();
-                              createCorrespondentMutation.mutate(newCorrespondentName.trim());
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => createCorrespondentMutation.mutate(newCorrespondentName.trim())}
-                          disabled={
-                            createCorrespondentMutation.isPending || newCorrespondentName.trim().length === 0
-                          }
-                        >
-                          {createCorrespondentMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Plus className="h-4 w-4" />
-                          )}
-                          {t("documentDetail.add")}
-                        </Button>
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {t("documentDetail.createCorrespondentHelp")}
-                      </p>
-                      {createCorrespondentMutation.isError && (
-                        <p className="mt-1 text-sm text-destructive">
-                          {createCorrespondentMutation.error instanceof Error
-                            ? createCorrespondentMutation.error.message
-                            : t("documentDetail.failedToCreateCorrespondent")}
-                        </p>
-                      )}
-                      {pendingNewLocks.includes("correspondentId") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          {t("documentDetail.savingWillLockField")}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">
-                      {doc.correspondent?.name ?? t("documentDetail.unknown")}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Document Type */}
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">{t("documentDetail.documentType")}</p>
-                    {lockedFields.includes("documentTypeId") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("documentTypeId")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          {t("documentDetail.unlock")}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Select
-                        value={editForm.documentTypeId}
-                        onValueChange={(value) =>
-                          setEditForm((current) => ({
-                            ...current,
-                            documentTypeId: value,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder={t("documentDetail.selectDocumentType")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={EMPTY_SELECT_VALUE}>{t("documentDetail.noDocumentType")}</SelectItem>
-                          {(documentTypesQuery.data ?? []).map((documentType) => (
-                            <SelectItem key={documentType.id} value={documentType.id}>
-                              {documentType.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {pendingNewLocks.includes("documentTypeId") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">
-                      {doc.documentType?.name ?? t("documentDetail.unclassified")}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Issue Date */}
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">{t("documentDetail.issueDate")}</p>
-                    {lockedFields.includes("issueDate") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("issueDate")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          {t("documentDetail.unlock")}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        type="date"
-                        value={editForm.issueDate}
-                        onChange={(e) => setEditForm((f) => ({ ...f, issueDate: e.target.value }))}
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("issueDate") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="ok-num text-sm font-medium">{formatDate(doc.issueDate)}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Due Date */}
-              <div className="flex items-start gap-2">
-                <Clock className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Due Date</p>
-                    {lockedFields.includes("dueDate") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("dueDate")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        type="date"
-                        value={editForm.dueDate}
-                        onChange={(e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))}
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("dueDate") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="ok-num text-sm font-medium">{formatDate(doc.dueDate)}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Expiry Date */}
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Expiry Date</p>
-                    {lockedFields.includes("expiryDate") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("expiryDate")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        type="date"
-                        value={editForm.expiryDate}
-                        onChange={(e) => setEditForm((f) => ({ ...f, expiryDate: e.target.value }))}
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("expiryDate") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="ok-num text-sm font-medium">{formatDate(doc.expiryDate)}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Amount & Currency */}
-              <div className="flex items-start gap-2">
-                <DollarSign className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Amount</p>
-                    {(lockedFields.includes("amount") || lockedFields.includes("currency")) && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => {
-                            if (lockedFields.includes("amount")) clearOverrideMutation.mutate("amount");
-                            if (lockedFields.includes("currency")) clearOverrideMutation.mutate("currency");
-                          }}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={editForm.amount}
-                          onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
-                          className="flex-1"
-                        />
-                        <Input
-                          placeholder="EUR"
-                          maxLength={3}
-                          value={editForm.currency}
-                          onChange={(e) =>
-                            setEditForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))
-                          }
-                          className="w-20"
-                        />
-                      </div>
-                      {(pendingNewLocks.includes("amount") ||
-                        pendingNewLocks.includes("currency")) && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock the amount fields you changed.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">
-                      {doc.amount !== null
-                        ? `${doc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${doc.currency ?? ""}`
-                        : "-"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Reference Number */}
-              <div className="flex items-start gap-2">
-                <Hash className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Reference Number</p>
-                    {lockedFields.includes("referenceNumber") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("referenceNumber")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        value={editForm.referenceNumber}
-                        onChange={(e) => setEditForm((f) => ({ ...f, referenceNumber: e.target.value }))}
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("referenceNumber") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">{doc.referenceNumber ?? "-"}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Holder Name */}
-              <div className="flex items-start gap-2">
-                <FileQuestion className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Holder Name</p>
-                    {lockedFields.includes("holderName") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("holderName")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        value={editForm.holderName}
-                        onChange={(e) => setEditForm((f) => ({ ...f, holderName: e.target.value }))}
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("holderName") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">{doc.holderName ?? "-"}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Issuing Authority */}
-              <div className="flex items-start gap-2">
-                <Building2 className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Issuing Authority</p>
-                    {lockedFields.includes("issuingAuthority") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("issuingAuthority")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <>
-                      <Input
-                        value={editForm.issuingAuthority}
-                        onChange={(e) =>
-                          setEditForm((f) => ({ ...f, issuingAuthority: e.target.value }))
-                        }
-                        className="mt-1"
-                      />
-                      {pendingNewLocks.includes("issuingAuthority") && (
-                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
-                          Saving will lock this field.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium">{doc.issuingAuthority ?? "-"}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="flex items-start gap-2">
-                <Tag className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs text-muted-foreground">Tags</p>
-                    {lockedFields.includes("tagIds") && (
-                      <>
-                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-auto px-1 py-0 text-xs text-muted-foreground hover:text-foreground gap-1"
-                          onClick={() => clearOverrideMutation.mutate("tagIds")}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          <Unlock className="h-3 w-3" />
-                          Unlock
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {isEditing ? (
-                    <div className="mt-2 space-y-2">
-                      <Input
-                        value={tagQuery}
-                        onChange={(e) => setTagQuery(e.target.value)}
-                        placeholder="Filter tags..."
-                      />
-                      {selectedTags.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs text-muted-foreground">Selected tags</p>
-                          <div className="flex flex-wrap gap-2">
-                            {selectedTags.map((tag) => (
-                              <Button
-                                key={tag.id}
-                                type="button"
-                                variant="default"
-                                size="sm"
-                                className="h-auto px-3 py-1 text-xs"
-                                onClick={() => toggleEditTag(tag.id)}
-                              >
-                                {tag.name}
-                                <X className="h-3 w-3" />
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {tagFilter.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          Search to add an existing tag or create a new one.
-                        </p>
-                      ) : (
-                        <div className="space-y-2">
-                          {availableTags.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">Matching tags</p>
-                              <div className="flex flex-wrap gap-2">
-                                {availableTags.map((tag) => (
-                                  <Button
-                                    key={tag.id}
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-auto px-3 py-1 text-xs"
-                                    onClick={() => toggleEditTag(tag.id)}
-                                  >
-                                    {tag.name}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {canCreateTag && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-auto px-3 py-1 text-xs"
-                              onClick={() => createTagMutation.mutate(tagQuery.trim())}
-                              disabled={createTagMutation.isPending}
-                            >
-                              {createTagMutation.isPending ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Plus className="h-3 w-3" />
-                              )}
-                              Create tag "{tagQuery.trim()}"
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                      {pendingNewLocks.includes("tagIds") && (
-                        <p className="text-xs text-[var(--ok-amber)]">
-                          Saving will lock the tag selection.
-                        </p>
-                      )}
-                      {createTagMutation.isError && (
-                        <p className="text-sm text-destructive">
-                          {createTagMutation.error instanceof Error
-                            ? createTagMutation.error.message
-                            : "Failed to create tag."}
-                        </p>
-                      )}
-                      {tagsQuery.isSuccess &&
-                        tagFilter.length > 0 &&
-                        availableTags.length === 0 &&
-                        selectedTags.length > 0 &&
-                        !canCreateTag && (
-                        <p className="text-sm text-muted-foreground">
-                          All matching tags are already selected.
-                        </p>
-                      )}
-                      {tagsQuery.isSuccess &&
-                        tagFilter.length > 0 &&
-                        availableTags.length === 0 &&
-                        selectedTags.length === 0 &&
-                        !canCreateTag && (
-                        <p className="text-sm text-muted-foreground">
-                          No tags match the current filter.
-                        </p>
-                      )}
-                      {tagsQuery.isSuccess && (tagsQuery.data ?? []).length === 0 && (
-                        <p className="text-sm text-muted-foreground">No tags available.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {doc.tags.length > 0 ? (
-                        doc.tags.map((tag) => (
-                          <Badge key={tag.id} variant="secondary">
-                            {tag.name}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-sm text-muted-foreground">{t("documentDetail.noTags")}</span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {isEditing &&
-                (tagsQuery.isError ||
-                  correspondentsQuery.isError ||
-                  documentTypesQuery.isError) && (
-                  <p className="text-xs text-destructive">
-                    {t("documentDetail.taxonomyOptionsLoadFailed")}
-                  </p>
-                )}
-
-              <Separator />
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{t("documentDetail.manualOverrides")}</p>
-                    <p className="text-sm font-medium">
-                      {lockedFields.length > 0
-                        ? `${lockedFields.length} ${t(lockedFields.length === 1 ? "documentDetail.lockedField" : "documentDetail.lockedFields")}`
-                        : t("documentDetail.none")}
-                    </p>
-                  </div>
-                  {manualOverrides?.updatedAt && (
-                    <span className="text-xs text-muted-foreground">
-                      <span className="ok-num">{formatDateTime(manualOverrides.updatedAt)}</span>
-                    </span>
-                  )}
-                </div>
-
-                {lockedFields.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t("documentDetail.stickyOverrideHint")}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {lockedFields.map((field) => (
-                      <div
-                        key={field}
-                        className="flex items-start justify-between gap-3 rounded-md border px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">
-                            {formatManualOverrideField(field, t)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {renderManualOverrideValue(doc, field, t)}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="shrink-0"
-                          onClick={() => clearOverrideMutation.mutate(field)}
-                          disabled={clearOverrideMutation.isPending}
-                        >
-                          {t("documentDetail.clear")}
-                        </Button>
-                      </div>
-                    ))}
-                    {clearOverrideMutation.isError && (
-                      <p className="text-xs text-destructive">
-                        {clearOverrideMutation.error instanceof Error
-                          ? clearOverrideMutation.error.message
-                           : t("documentDetail.failedToClearOverride")}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* Confidence */}
-              {doc.confidence !== null && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{t("documentDetail.confidence")}</span>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${confidenceBg(doc.confidence)} ${confidenceColor(doc.confidence)}`}
-                  >
-                    <span className="ok-num">{(doc.confidence * 100).toFixed(0)}%</span>
-                  </span>
-                </div>
-              )}
-
-              {/* Processing Status */}
-              <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{t("documentDetail.processingStatus")}</span>
-                <Badge variant={statusVariant(doc.status)}>{doc.status}</Badge>
-              </div>
-
-              {/* Embedding Status */}
-              <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">{t("documentDetail.embeddingStatus")}</span>
-                <Badge variant="outline">{doc.embeddingStatus}</Badge>
-              </div>
-
-              {/* OCR Provider */}
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                  <ScanText className="h-3 w-3" />
-                    {t("documentDetail.ocrProvider")}
-                </span>
-                <span className="text-xs font-medium text-right truncate">
-                  {parseProviderLabel(doc.parseProvider)}
-                </span>
-              </div>
-
-              {/* Embedding Model */}
-              {doc.embeddingProvider && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                    <Braces className="h-3 w-3" />
-                    {t("documentDetail.embeddingModel")}
-                  </span>
-                  <div className="text-right min-w-0">
-                    <p className="text-xs font-medium truncate">
-                      {embeddingProviderLabel(doc.embeddingProvider)}
-                    </p>
-                    {doc.embeddingModel && (
-                      <p className="text-xs text-muted-foreground font-mono truncate">
-                        {doc.embeddingModel}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Timestamps */}
-              <Separator />
-              <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>{t("documentDetail.created")}</span>
-                  <span className="ok-num">{formatDateTime(doc.createdAt)}</span>
-                </div>
-                {doc.processedAt && (
-                  <div className="flex justify-between">
-                    <span>{t("documentDetail.processed")}</span>
-                    <span className="ok-num">{formatDateTime(doc.processedAt)}</span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Review Section */}
-          {doc.reviewStatus === "pending" && (
-            <Card className="border-[var(--ok-amber)]/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-[var(--ok-amber)]" />
-                  {t("documentDetail.pendingReview")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Review Reasons */}
-                <div className="flex flex-wrap gap-1.5">
-                  {doc.reviewReasons.map((reason) => (
-                    <Badge key={reason} variant="warning">
-                      {formatReviewReason(reason)}
-                    </Badge>
-                  ))}
-                </div>
-
-                {/* Review Evidence */}
-                {doc.metadata.reviewEvidence && (
-                  <div className="rounded-md border bg-muted/50 p-3 space-y-2 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">{t("documentDetail.documentClass")}</span>
-                      <span className="font-medium capitalize">
-                        {doc.metadata.reviewEvidence.documentClass}
-                      </span>
-                    </div>
-                    {doc.metadata.reviewEvidence.requiredFields.length > 0 && (
-                      <div>
-                        <span className="text-muted-foreground">{t("documentDetail.requiredFields")}</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {doc.metadata.reviewEvidence.requiredFields.map((f) => (
-                            <Badge key={f} variant="outline" className="text-xs">
-                              {f}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {doc.metadata.reviewEvidence.missingFields.length > 0 && (
-                      <div>
-                        <span className="text-muted-foreground">{t("documentDetail.missingFields")}</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {doc.metadata.reviewEvidence.missingFields.map((f) => (
-                            <Badge key={f} variant="destructive" className="text-xs">
-                              {f}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {doc.metadata.reviewEvidence.confidence != null && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">{t("documentDetail.confidence")}</span>
-                        <span className={`font-medium ${confidenceColor(doc.metadata.reviewEvidence.confidence)}`}>
-                          <span className="ok-num">{(doc.metadata.reviewEvidence.confidence * 100).toFixed(0)}%</span>
-                          {doc.metadata.reviewEvidence.confidenceThreshold != null && (
-                            <span className="text-muted-foreground font-normal">
-                              {` (${t("documentDetail.threshold")}: `}<span className="ok-num">{(doc.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%</span>)
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Review Actions */}
-                <div className="flex gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => resolveReviewMutation.mutate()}
-                    disabled={resolveReviewMutation.isPending}
-                  >
-                    {resolveReviewMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="h-3.5 w-3.5" />
-                    )}
-                    {t("documentDetail.resolveReview")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => requeueMutation.mutate()}
-                    disabled={requeueMutation.isPending}
-                  >
-                    {requeueMutation.isPending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    )}
-                    {t("documentDetail.requeue")}
-                  </Button>
-                </div>
-                {resolveReviewMutation.isError && (
-                  <p className="text-xs text-destructive">
-                    {resolveReviewMutation.error instanceof Error
-                      ? resolveReviewMutation.error.message
-                       : t("documentDetail.failedToResolveReview")}
-                  </p>
-                )}
-                {requeueMutation.isError && (
-                  <p className="text-xs text-destructive">
-                    {requeueMutation.error instanceof Error
-                      ? requeueMutation.error.message
-                       : t("documentDetail.failedToRequeue")}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Actions Card */}
-          <Card>
-            <CardHeader className="pb-3">
-               <CardTitle className="text-base">{t("documentDetail.actions")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {/* Reprocess — opens dialog when multiple providers available */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={() => {
-                  const available = providersQuery.data?.parseProviders.filter((p) => p.available) ?? [];
-                  if (available.length > 1) {
-                    setSelectedParseProvider(
-                      providersQuery.data?.activeParseProvider ?? available[0]?.id ?? "",
-                    );
-                    setReprocessDialogOpen(true);
-                  } else {
-                    reprocessMutation.mutate(undefined);
-                  }
-                }}
-                disabled={reprocessMutation.isPending || doc.status === "processing"}
-              >
-                {reprocessMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RotateCcw className="h-4 w-4" />
-                )}
-                 {t("documentDetail.reprocessDocument")}
-              </Button>
-              {reprocessMutation.isError && (
-                <p className="text-xs text-destructive">
-                  {reprocessMutation.error instanceof Error
-                    ? reprocessMutation.error.message
-                     : t("documentDetail.failedToReprocessDocument")}
-                </p>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={() => handleDownload("original")}
-              >
-                <Download className="h-4 w-4" />
-                {t("documentDetail.downloadOriginal")}
-              </Button>
-
-              {doc.searchablePdfAvailable && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start gap-2"
-                  onClick={() => handleDownload("searchable")}
-                >
-                  <Download className="h-4 w-4" />
-                  {t("documentDetail.downloadSearchable")}
-                </Button>
-              )}
-
-              <Separator />
-
-              <Button
-                variant="destructive"
-                size="sm"
-                className="w-full justify-start gap-2"
-                onClick={() => setDeleteDialogOpen(true)}
-                disabled={deleteDocumentMutation.isPending || doc.status === "processing"}
-              >
-                {deleteDocumentMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                {t("documentDetail.deleteDocument")}
-              </Button>
-              {doc.status === "processing" && (
-                <p className="text-xs text-muted-foreground">
-                  {t("documentDetail.cannotDeleteWhileProcessing")}
-                </p>
-              )}
-              {deleteDocumentMutation.isError && (
-                <p className="text-xs text-destructive">
-                  {deleteDocumentMutation.error instanceof Error
-                    ? deleteDocumentMutation.error.message
-                     : t("documentDetail.failedToDeleteDocument")}
-                </p>
-              )}
-
-              {/* Processing error */}
-              {doc.lastProcessingError && (
-                <>
-                  <Separator />
-                  <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3">
-                    <p className="text-xs font-medium text-destructive mb-1">{t("documentDetail.lastProcessingError")}</p>
-                    <p className="text-xs text-muted-foreground">{doc.lastProcessingError}</p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+        {/* Right rail: fields, review, processing */}
+        <FieldsRail
+          doc={doc}
+          form={editForm}
+          onFormChange={(patch) => setEditForm((current) => ({ ...current, ...patch }))}
+          correspondents={correspondentsQuery.data ?? []}
+          documentTypes={documentTypesQuery.data ?? []}
+          tags={tagsQuery.data ?? []}
+          onCreateTag={(name) => createTagMutation.mutate(name)}
+          createTagPending={createTagMutation.isPending}
+          onSave={saveEdits}
+          onReset={seedForm}
+          saving={updateMutation.isPending}
+          saveError={updateMutation.isError ? t("documentDetail.failedToSaveChanges") : null}
+          lockNote={lockNote}
+          onReprocess={() => {
+            const available =
+              providersQuery.data?.parseProviders.filter((entry) => entry.available) ?? [];
+            if (available.length > 1) {
+              setSelectedParseProvider(
+                providersQuery.data?.activeParseProvider ?? available[0]?.id ?? "",
+              );
+              setReprocessDialogOpen(true);
+            } else {
+              reprocessMutation.mutate(undefined);
+            }
+          }}
+          reprocessPending={reprocessMutation.isPending}
+          onDelete={() => setDeleteDialogOpen(true)}
+          deletePending={deleteDocumentMutation.isPending}
+          processing={doc.status === "processing"}
+        />
+      </div>
 
           {/* Reprocess provider picker dialog */}
           <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
@@ -2775,328 +1815,12 @@ function DocumentDetailPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
     </div>
-   );
+  );
+
 }
 
 // ---------------------------------------------------------------------------
 // AI Section component — Q&A with SSE streaming
 // ---------------------------------------------------------------------------
 
-type QaStreamState = {
-  status: "idle" | "loading" | "streaming" | "done" | "error";
-  answerText: string;
-  citations: Array<{
-    chunkIndex: number;
-    pageFrom: number | null;
-    pageTo: number | null;
-    quote: string;
-    score: number;
-  }>;
-  errorMessage: string | null;
-};
-
-function DocumentQaSection({
-  documentId,
-}: {
-  documentId: string;
-}) {
-  const { t } = useI18n();
-  // ─── Q&A state ───
-  const [qa, setQa] = useState<QaStreamState>({
-    status: "idle",
-    answerText: "",
-    citations: [],
-    errorMessage: null,
-  });
-  const qaAbortRef = useRef<AbortController | null>(null);
-  const [question, setQuestion] = useState("");
-
-  // ─── Q&A history ───
-  const [qaHistory, setQaHistory] = useState<
-    Array<{ question: string; answer: string; citations: QaStreamState["citations"] }>
-  >([]);
-
-  // ─── Load persisted Q&A history on mount ───
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await authFetch(`/api/documents/${documentId}/qa-history`);
-        if (res.ok) {
-          const entries = await res.json();
-          setQaHistory(
-            entries.map((e: { question: string; answer: string; citations: QaStreamState["citations"] }) => ({
-              question: e.question,
-              answer: e.answer,
-              citations: e.citations,
-            })),
-          );
-        }
-      } catch {
-        // Non-critical — history simply starts empty
-      }
-    })();
-    return () => {
-      qaAbortRef.current?.abort();
-    };
-  }, [documentId]);
-
-  // ─── Stream Q&A ───
-  const streamQa = useCallback(
-    async (q: string) => {
-      qaAbortRef.current?.abort();
-      const controller = new AbortController();
-      qaAbortRef.current = controller;
-
-      setQa({
-        status: "loading",
-        answerText: "",
-        citations: [],
-        errorMessage: null,
-      });
-
-      try {
-        const response = await authFetch(
-          `/api/documents/${documentId}/ask/stream`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: q }),
-            signal: controller.signal,
-          },
-        );
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-        const parser = createSseParser((currentEvent, data) => {
-          {
-            {
-              try {
-                const parsed = JSON.parse(data);
-
-                if (currentEvent === "citations") {
-                  setQa((s) => ({
-                    ...s,
-                    status: "streaming",
-                    citations: parsed.citations ?? [],
-                  }));
-                } else if (currentEvent === "answer-token") {
-                  setQa((s) => ({
-                    ...s,
-                    status: "streaming",
-                    answerText: s.answerText + (parsed.text ?? ""),
-                  }));
-                } else if (currentEvent === "done") {
-                  setQa((s) => {
-                    const finalAnswer = parsed.answer ?? s.answerText;
-                    const finalCitations = parsed.citations ?? s.citations;
-                    // Add to local history. The server persists the entry at
-                    // stream end and reports historyEntryId; when that is absent
-                    // (older API, or a failed server-side write) fall back to the
-                    // deprecated client write so the turn is not lost on reload.
-                    if (finalAnswer) {
-                      setQaHistory((h) => [
-                        ...h,
-                        {
-                          question: q,
-                          answer: finalAnswer,
-                          citations: finalCitations,
-                        },
-                      ]);
-
-                      if (!parsed.historyEntryId) {
-                        authFetch(`/api/documents/${documentId}/qa-history`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            question: q,
-                            answer: finalAnswer,
-                            citations: finalCitations,
-                          }),
-                        }).catch(() => {});
-                      }
-                    }
-                    // Reset to idle so the answer only shows in the history list
-                    return {
-                      status: "idle",
-                      answerText: "",
-                      citations: [],
-                      errorMessage: null,
-                    };
-                  });
-                } else if (currentEvent === "error") {
-                  setQa((s) => ({
-                    ...s,
-                    status: "error",
-                    errorMessage: parsed.message,
-                  }));
-                }
-              } catch {
-                // skip malformed
-              }
-            }
-          }
-        });
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          parser.push(decoder.decode(value, { stream: true }));
-        }
-        parser.flush();
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setQa((s) => ({
-          ...s,
-          status: "error",
-          errorMessage: err instanceof Error ? err.message : t("documentDetail.failedToAnswer"),
-        }));
-      }
-    },
-    [documentId, t],
-  );
-
-  function handleAskSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const q = question.trim();
-    if (q.length === 0) return;
-    setQuestion("");
-    streamQa(q);
-  }
-
-  const isQaStreaming = qa.status === "loading" || qa.status === "streaming";
-
-  return (
-    <div className="space-y-4">
-      {/* ─── Q&A Section ─── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Quote className="h-4 w-4 text-[var(--explorer-cobalt)]" />
-              {t("documentDetail.askAboutDocument")}
-            </CardTitle>
-            {qaHistory.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
-                onClick={() => {
-                  setQaHistory([]);
-                  authFetch(`/api/documents/${documentId}/qa-history`, {
-                    method: "DELETE",
-                  }).catch(() => {});
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-                {t("documentDetail.clearHistory")}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Q&A history */}
-          {qaHistory.length > 0 && (
-            <div className="space-y-3">
-              {qaHistory.map((entry, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border border-[var(--explorer-border)] bg-[var(--explorer-paper)] px-3.5 py-3"
-                >
-                  <p className="text-sm font-medium text-foreground">{entry.question}</p>
-                  <div className="mt-2 prose prose-sm max-w-none text-muted-foreground prose-p:leading-relaxed">
-                    <Markdown>{entry.answer}</Markdown>
-                  </div>
-                  {entry.citations.length > 0 && (
-                    <div className="mt-3 space-y-1.5 border-t border-[var(--explorer-border)] pt-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {t("documentDetail.referencedExcerpts")}
-                      </p>
-                      {entry.citations.map((cit, ci) => (
-                        <div
-                          key={ci}
-                          className="rounded-md border border-[var(--explorer-border)] bg-card px-3 py-2"
-                        >
-                          <p className="line-clamp-2 text-xs text-muted-foreground">
-                            {cit.quote}
-                          </p>
-                          {(cit.pageFrom || cit.pageTo) && (
-                            <span className="mt-0.5 inline-block text-[10px] text-muted-foreground/60">
-                              {t("documentDetail.pageWord")} {cit.pageFrom ?? cit.pageTo}
-                              {cit.pageTo && cit.pageTo !== cit.pageFrom
-                                ? `\u2013${cit.pageTo}`
-                                : ""}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Current answer stream */}
-          {(qa.status === "loading" || qa.status === "streaming" || qa.status === "error") && (
-              <div className="rounded-lg border border-[var(--explorer-cobalt-soft)] bg-[var(--explorer-cobalt-soft)] px-4 py-3">
-                {qa.status === "loading" && (
-                  <div className="flex items-center gap-2.5 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--explorer-cobalt)]" />
-                    <span className="text-sm">{t("documentDetail.searchingChunks")}</span>
-                  </div>
-                )}
-
-                {qa.status === "error" && (
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--explorer-rust)]" />
-                    <p className="text-sm text-[var(--explorer-rust)]">
-                      {qa.errorMessage ?? t("documentDetail.failedToAnswer")}
-                    </p>
-                  </div>
-                )}
-
-                {qa.status === "streaming" && (
-                  <div>
-                    <div className="prose prose-sm max-w-none text-foreground prose-headings:font-semibold prose-p:leading-relaxed prose-strong:text-foreground">
-                      <Markdown>{qa.answerText}</Markdown>
-                      <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-          {/* Question input */}
-          <form onSubmit={handleAskSubmit} className="flex gap-2">
-            <Input
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder={t("documentDetail.askQuestionPlaceholder")}
-              disabled={isQaStreaming}
-              className="h-10 flex-1 rounded-lg border-[var(--explorer-border-strong)] bg-card text-sm"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isQaStreaming || question.trim().length === 0}
-              className="h-10 gap-1.5 rounded-lg px-4"
-            >
-              {isQaStreaming ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              {t("documentDetail.ask")}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
