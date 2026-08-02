@@ -9,6 +9,12 @@ export type AppLanguage = "en" | "de";
 
 type TranslationKey =
   | "root.loading"
+  | "root.nav.today"
+  | "root.nav.chat"
+  | "root.nav.import"
+  | "root.nav.profile"
+  | "root.search.placeholder"
+  | "root.theme.toggle"
   | "root.nav.dashboard"
   | "root.nav.documents"
   | "root.nav.review"
@@ -415,6 +421,12 @@ type TranslationKey =
 const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
   en: {
     "root.loading": "Loading...",
+    "root.nav.today": "Today",
+    "root.nav.chat": "Chat",
+    "root.nav.import": "Import",
+    "root.nav.profile": "Profile",
+    "root.search.placeholder": "Ask the archive",
+    "root.theme.toggle": "Toggle theme",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Documents",
     "root.nav.review": "Review",
@@ -820,6 +832,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
   },
   de: {
     "root.loading": "Wird geladen...",
+    "root.nav.today": "Heute",
+    "root.nav.chat": "Chat",
+    "root.nav.import": "Import",
+    "root.nav.profile": "Profil",
+    "root.search.placeholder": "Das Archiv fragen",
+    "root.theme.toggle": "Design wechseln",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Dokumente",
     "root.nav.review": "Prufung",

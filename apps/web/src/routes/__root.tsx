@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   createRootRouteWithContext,
   Outlet,
@@ -8,41 +7,77 @@ import {
   useLocation,
   redirect,
 } from "@tanstack/react-router";
-import {
-  Search,
-  Upload,
-  ClipboardCheck,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  FileText,
-  LayoutDashboard,
-} from "lucide-react";
-import { OpenKeepLogo } from "@/components/brand/openkeep-logo";
+import { useQuery } from "@tanstack/react-query";
+import { Search, Upload, Settings, LogOut, Moon, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, type RouterContext } from "@/hooks/use-auth";
-import { Omnibar } from "@/components/omnibar/omnibar";
+import { Omnibar, openOmnibar } from "@/components/omnibar/omnibar";
+import { fetchDashboardInsights } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { useTheme } from "@/hooks/use-theme";
+
+/** Top-bar tab. `count` is rendered as a mono badge when present. */
+function NavTab({
+  to,
+  label,
+  count,
+  tone = "dim",
+  active,
+}: {
+  to: string;
+  label: string;
+  count?: number;
+  tone?: "dim" | "amber";
+  active: boolean;
+}) {
+  return (
+    <Link
+      to={to}
+      className={[
+        "inline-flex items-center gap-1.5 rounded-[var(--r-md)] px-2.5 py-1.5 text-sm transition-colors",
+        active
+          ? "bg-accent font-semibold text-accent-foreground"
+          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+      ].join(" ")}
+    >
+      {label}
+      {count ? (
+        <span
+          className={`ok-num text-[10.5px] ${
+            tone === "amber" ? "text-[var(--ok-amber)]" : "text-[var(--ok-faint)]"
+          }`}
+        >
+          {count.toLocaleString()}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
 function RootComponent() {
   const auth = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const publicPaths = ["/login", "/setup"];
   const isPublicRoute = publicPaths.some((path) => location.pathname === path);
-  const navItems = [
-    { to: "/", label: t("root.nav.dashboard"), icon: LayoutDashboard },
-    { to: "/documents", label: t("root.nav.documents"), icon: FileText },
-    { to: "/review", label: t("root.nav.review"), icon: ClipboardCheck },
-    { to: "/search", label: t("root.nav.search"), icon: Search },
-    { to: "/upload", label: t("root.nav.upload"), icon: Upload },
-  ] as const;
-  const bottomNavItems = [{ to: "/settings", label: t("root.nav.settings"), icon: Settings }] as const;
+  const isAuthed = auth.isAuthenticated;
+
+  // Same key as the Today page, so the bar shares its cache.
+  const { data: insights } = useQuery({
+    queryKey: ["dashboard", "insights"],
+    queryFn: fetchDashboardInsights,
+    enabled: isAuthed,
+    staleTime: 60_000,
+  });
 
   if (auth.isLoading) {
     return (
@@ -55,11 +90,11 @@ function RootComponent() {
     );
   }
 
-  if (!auth.isAuthenticated && isPublicRoute) {
+  if (!isAuthed && isPublicRoute) {
     return <Outlet />;
   }
 
-  if (!auth.isAuthenticated) {
+  if (!isAuthed) {
     return <Navigate to="/login" replace />;
   }
 
@@ -68,122 +103,121 @@ function RootComponent() {
     navigate({ to: "/" });
   }
 
-  const sidebarContent = (
-    <>
-      {/* Brand */}
-      <div className="flex h-14 items-center gap-2.5 px-5">
-        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="text-base" />
-      </div>
-
-      <Separator />
-
-      {/* Main navigation */}
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-3">
-        {navItems.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] transition-colors hover:bg-[color:var(--explorer-paper-strong)] hover:text-[color:var(--explorer-ink)]"
-            activeProps={{
-              className:
-                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium bg-[color:var(--explorer-paper-strong)] text-[color:var(--explorer-ink)] transition-colors",
-            }}
-            activeOptions={{ exact: item.to === "/" }}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* Bottom section */}
-      <div className="mt-auto px-3 pb-3">
-        <Separator className="mb-3" />
-        {bottomNavItems.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            onClick={() => setMobileMenuOpen(false)}
-            className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] transition-colors hover:bg-[color:var(--explorer-paper-strong)] hover:text-[color:var(--explorer-ink)]"
-            activeProps={{
-              className:
-                "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium bg-[color:var(--explorer-paper-strong)] text-[color:var(--explorer-ink)] transition-colors",
-            }}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        ))}
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 rounded-2xl px-3 py-3 text-sm font-medium text-[color:var(--explorer-muted)] hover:bg-[color:var(--explorer-paper-strong)] hover:text-destructive"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          {t("root.nav.logout")}
-        </Button>
-      </div>
-    </>
-  );
+  const path = location.pathname;
+  const initials =
+    (auth.user?.displayName ?? auth.user?.email ?? "?")
+      .split(/[\s@._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]!.toUpperCase())
+      .join("") || "?";
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
-        {/* Desktop sidebar */}
-        <aside className="hidden w-72 flex-col border-r border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]/90 backdrop-blur md:flex">
-          {sidebarContent}
-        </aside>
+      <div className="flex h-screen flex-col overflow-hidden bg-background">
+        <header className="flex h-12 flex-shrink-0 items-center gap-4 border-b bg-[var(--ok-bar)] px-4">
+          <Link to="/" className="flex flex-shrink-0 items-center gap-2 text-foreground">
+            <img
+              src="/brand/logo-mark.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-5 w-5 rounded-[var(--r-sm)]"
+            />
+            <span className="text-[13.5px] font-bold tracking-[-0.01em]">OpenKeep</span>
+          </Link>
 
-        {/* Mobile menu overlay */}
-        {mobileMenuOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50 md:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-        )}
+          {/* The nav block never shrinks; the search field absorbs the width. */}
+          <nav className="flex flex-shrink-0 gap-0.5">
+            <NavTab to="/" label={t("root.nav.today")} active={path === "/"} />
+            <NavTab
+              to="/documents"
+              label={t("root.nav.documents")}
+              count={insights?.stats.totalDocuments}
+              active={path.startsWith("/documents")}
+            />
+            <NavTab
+              to="/review"
+              label={t("root.nav.review")}
+              count={insights?.stats.pendingReview}
+              tone="amber"
+              active={path.startsWith("/review")}
+            />
+            <NavTab
+              to="/search"
+              label={t("root.nav.chat")}
+              active={path.startsWith("/search")}
+            />
+          </nav>
 
-        {/* Mobile sidebar drawer */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] transition-transform duration-200 ease-in-out md:hidden ${
-            mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-        >
-          <div className="absolute right-2 top-3">
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={openOmnibar}
+              className="flex h-[30px] min-w-[120px] max-w-[300px] flex-1 items-center gap-2 rounded-[var(--r-md)] border border-input bg-card px-2.5 transition-colors hover:bg-secondary"
+            >
+              <Search className="h-[13px] w-[13px] flex-shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-left text-sm text-[var(--ok-faint)]">
+                {t("root.search.placeholder")}
+              </span>
+              <kbd className="ok-num flex-shrink-0 rounded-[var(--r-sm)] border px-1 text-[10px] text-muted-foreground">
+                ⌘K
+              </kbd>
+            </button>
+
+            <Button asChild className="flex-shrink-0">
+              <Link to="/upload">
+                <Upload />
+                {t("root.nav.import")}
+              </Link>
+            </Button>
+
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setMobileMenuOpen(false)}
+              className="flex-shrink-0 text-muted-foreground"
+              onClick={toggleTheme}
+              aria-label={t("root.theme.toggle")}
             >
-              <X className="h-5 w-5" />
-              <span className="sr-only">{t("root.menu.close")}</span>
+              {theme === "dark" ? <Sun /> : <Moon />}
             </Button>
+
+            <Button
+              asChild
+              variant="ghost"
+              size="icon"
+              className="flex-shrink-0 text-muted-foreground"
+            >
+              <Link to="/settings" aria-label={t("root.nav.settings")}>
+                <Settings />
+              </Link>
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[var(--r-md)] bg-accent text-[11px] font-bold text-accent-foreground"
+                aria-label={t("root.nav.profile")}
+              >
+                {initials}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link to="/settings">
+                    <User />
+                    {t("root.nav.profile")}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut />
+                  {t("root.nav.logout")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          {sidebarContent}
-        </aside>
+        </header>
 
-        {/* Main content area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Mobile header */}
-          <header className="flex h-16 items-center gap-3 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]/90 px-4 md:hidden">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMobileMenuOpen(true)}
-            >
-              <Menu className="h-5 w-5" />
-              <span className="sr-only">{t("root.menu.open")}</span>
-            </Button>
-            <div className="flex items-center gap-2">
-              <OpenKeepLogo markClassName="h-7 w-7" wordmarkClassName="text-xl" />
-            </div>
-          </header>
-
-          {/* Page content */}
-          <main className="flex-1 overflow-auto">
-            <Outlet />
-          </main>
-        </div>
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
 
         {/* Global omnibar (Cmd+K) */}
         <Omnibar />
