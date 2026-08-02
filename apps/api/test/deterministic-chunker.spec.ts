@@ -112,4 +112,59 @@ describe("DeterministicChunker", () => {
     });
     expect(chunks[0]?.text).toContain("Line one");
   });
+
+  it("indexes a normalized table once, not twice via its markdown rows", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Details siehe Tabelle.",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Position", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "Strom", kind: "body" as const },
+              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "89,00 EUR", kind: "body" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Details siehe Tabelle.", boundingBox: null },
+              { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "|---|---|", boundingBox: null },
+              { lineIndex: 3, text: "| Strom | 89,00 EUR |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    expect(combined).toContain("Details siehe Tabelle.");
+    // The serialized table appears exactly once — the raw markdown rows that the
+    // provider keeps for the text blocks must not be chunked as prose.
+    expect(combined.match(/Strom/g)).toHaveLength(1);
+    expect(combined).toContain("[Table]");
+  });
 });

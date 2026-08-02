@@ -353,7 +353,7 @@ describe("Parse provider mappers", () => {
     expect(result.reviewReasons).toContain("ocr_low_confidence");
   });
 
-  it("removes markdown table rows from lines once the table is normalized", () => {
+  it("keeps markdown table rows in lines so they reach the text blocks", () => {
     const result = mapMistralOcrResponse({
       pages: [
         {
@@ -366,11 +366,17 @@ describe("Parse provider mappers", () => {
       ],
     });
 
-    // The normalized table is serialized by the chunker; keeping the markdown
-    // rows as lines would index the same content twice.
+    // Only lines are persisted as text blocks (document text view, matching-line
+    // snippets, evidence localization), so the rows have to survive here; the
+    // chunker drops them from prose chunks to avoid indexing the table twice.
     expect(result.tables).toHaveLength(1);
     const lineTexts = (result.pages[0]?.lines ?? []).map((line) => line.text);
-    expect(lineTexts).toEqual(["Details siehe Tabelle."]);
+    expect(lineTexts).toEqual([
+      "Details siehe Tabelle.",
+      "| Position | Betrag |",
+      "|---|---|",
+      "| Strom | 89,00 EUR |",
+    ]);
   });
 
   it("treats escaped pipes inside markdown table cells as content", () => {

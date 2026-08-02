@@ -50,6 +50,10 @@ Text block geometry:
   return only when a document is reprocessed with a geometry-capable provider
 - `documents.metadata.parse.providerMetadata` holds a bounded summary of the provider
   response (model, pages processed, document size), never the raw OCR payload
+- markdown table rows stay in `pages[].lines` (only lines become `document_text_blocks`,
+  which back `GET /api/documents/:id/text`, matching-line snippets and evidence
+  localization); the chunker skips those rows on pages that also carry a normalized
+  table, so a table is embedded once rather than twice
 
 ## Document Read and Update Surface
 

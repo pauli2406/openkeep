@@ -55,7 +55,6 @@ export const mapMistralOcrResponse = (
   const pages = response.pages.map((page, arrayIndex) => {
     const pageNumber = (typeof page.index === "number" ? page.index : arrayIndex) + 1;
 
-    let pageHasNormalizedTables = false;
     for (const table of page.tables ?? []) {
       // With MISTRAL_OCR_TABLE_FORMAT=html the payload only carries `html`, so
       // reading markdown alone would silently drop those tables entirely.
@@ -67,7 +66,6 @@ export const mapMistralOcrResponse = (
           ? parseHtmlTable(htmlTable)
           : [];
       if (parsed.length > 0) {
-        pageHasNormalizedTables = true;
         tables.push({
           tableIndex: tables.length,
           page: pageNumber,
@@ -86,10 +84,10 @@ export const mapMistralOcrResponse = (
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
-      // Tables that were normalized above are serialized again by the chunker;
-      // keeping their markdown rows as lines would index the same content twice
-      // (once as table chunks, once as text chunks).
-      .filter((line) => !(pageHasNormalizedTables && isMarkdownTableRow(line)))
+      // Table rows stay in `lines` on purpose: only lines reach
+      // `document_text_blocks`, which backs GET /api/documents/:id/text, the
+      // matching-line snippets and evidence localization. The chunker skips
+      // them when the same table was normalized, so nothing is indexed twice.
       .map((line, lineIndex) => ({
         lineIndex,
         text: line,
@@ -517,10 +515,6 @@ const normalizeBlockBoundingBox = (
 
   return null;
 };
-
-/** A markdown pipe-table row (data or separator), as emitted by Mistral. */
-const isMarkdownTableRow = (line: string): boolean =>
-  line.startsWith("|") && line.endsWith("|");
 
 /** Parses a GitHub-style markdown pipe table into normalized table cells. */
 export const parseMarkdownTable = (

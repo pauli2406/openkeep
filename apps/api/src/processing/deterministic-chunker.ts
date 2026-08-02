@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { createHash } from "crypto";
 import type { ParsedDocumentTable } from "@openkeep/types";
 
+import { isMarkdownTableRow } from "./markdown-table.util";
 import type { Chunker, ChunkingInput } from "./provider.types";
 
 const DEFAULT_STRATEGY = "normalized-parse-v2";
@@ -203,6 +204,12 @@ export class DeterministicChunker implements Chunker {
     for (const page of parsed.pages) {
       const headingBlocks = page.blocks.filter((block) => block.role === "heading");
       const pageHeading = headingBlocks[0]?.text?.trim() || null;
+      const pageTables = tablesByPage.get(page.pageNumber);
+      // Providers that emit markdown (Mistral OCR) keep the raw table rows in
+      // `lines` so they still reach `document_text_blocks`; indexing them as
+      // prose too would embed the same table twice, once here and once from the
+      // normalized table serialized below.
+      const skipMarkdownTableRows = (pageTables?.length ?? 0) > 0;
 
       for (const line of page.lines) {
         const lineText = line.text.trim();
@@ -210,11 +217,14 @@ export class DeterministicChunker implements Chunker {
           continue;
         }
 
+        if (skipMarkdownTableRows && isMarkdownTableRow(lineText)) {
+          continue;
+        }
+
         addLine(lineText, page.pageNumber, pageHeading);
       }
 
       // Inject serialized tables for this page after the regular lines
-      const pageTables = tablesByPage.get(page.pageNumber);
       if (pageTables) {
         for (const table of pageTables) {
           const tableMarkdown = serializeTableAsMarkdown(table);
