@@ -93,7 +93,10 @@
   --color-secondary: var(--ok-raised);
   --color-secondary-foreground: var(--ok-ink);
   --color-muted: var(--ok-raised);
-  --color-muted-foreground: var(--ok-dim);
+  /* --ok-muted, not --ok-dim: this alias carries real content
+     (card descriptions, metadata, placeholders) and --ok-dim is only
+     ~3:1 on the light surfaces. --ok-muted is 5.7-6.4:1. */
+  --color-muted-foreground: var(--ok-muted);
   --color-accent: var(--ok-accent-soft);
   --color-accent-foreground: var(--ok-accent-soft-ink);
   --color-destructive: var(--ok-red);
@@ -137,7 +140,7 @@
   --explorer-border: var(--ok-border);
   --explorer-border-strong: var(--ok-border-strong);
   --explorer-ink: var(--ok-ink);
-  --explorer-muted: var(--ok-dim);
+  --explorer-muted: var(--ok-muted);
   --explorer-cobalt: var(--ok-accent);
   --explorer-cobalt-soft: var(--ok-accent-soft);
   --explorer-rust: var(--ok-amber);
