@@ -249,6 +249,7 @@ type TranslationKey =
   | "today.needsReview"
   | "today.confirmAndFile"
   | "today.openDocument"
+  | "today.openHint"
   | "today.confirmHint"
   | "today.nextHint"
   | "today.issueDate"
@@ -684,6 +685,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.needsReview": "Needs review",
     "today.confirmAndFile": "Confirm and file",
     "today.openDocument": "Open document",
+    "today.openHint": "open",
     "today.confirmHint": "confirm",
     "today.nextHint": "next",
     "today.issueDate": "Issue date",
@@ -1118,6 +1120,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.needsReview": "Prüfung nötig",
     "today.confirmAndFile": "Bestätigen und ablegen",
     "today.openDocument": "Dokument öffnen",
+    "today.openHint": "öffnen",
     "today.confirmHint": "bestätigen",
     "today.nextHint": "weiter",
     "today.issueDate": "Ausstellungsdatum",

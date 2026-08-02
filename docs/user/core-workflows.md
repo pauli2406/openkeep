@@ -88,21 +88,20 @@ The document detail page includes:
 - actions such as reprocess and download
 - AI summary and Q&A section
 
-## Work With the Dashboard
+## Work Through Today
 
-The dashboard is useful for daily archive monitoring.
+Today is the daily queue. Use it to:
 
-Use it to:
-
-- spot pending review items
-- see your most active correspondents
-- watch recent arrivals
-- check upcoming deadlines
-- open a correspondent dossier
+- see everything with an open deadline, soonest first
+- spot what is overdue
+- preview a document and its extracted fields without leaving the queue
+- confirm and file a task once it is handled
+- narrow the queue to overdue items, this month, or invoices
 
 ## Open a Correspondent Dossier
 
-From the dashboard, select a correspondent card to open a dedicated view.
+Open the `Groups` view under Documents and select a correspondent, or select a
+correspondent in the filter sidebar, to focus the archive on them.
 
 This page shows:
 

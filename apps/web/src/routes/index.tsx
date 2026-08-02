@@ -8,10 +8,10 @@ import { Chip } from "@/components/ui/chip";
 import { ErrorBlock, LoadingBlock } from "@/components/explorer/shared";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
-import { fetchDashboardInsights, formatCurrency } from "@/lib/explorer";
+import { fetchFilteredDocuments, formatCurrency } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { DashboardDeadlineItem, Document } from "@openkeep/types";
+import type { Document } from "@openkeep/types";
 
 export const Route = createFileRoute("/")({
   component: TodayPage,
@@ -19,8 +19,69 @@ export const Route = createFileRoute("/")({
 
 type TaskFilter = "open" | "overdue" | "month" | "invoices";
 
+/** A queue row derived from a document with a due date. */
+type TaskItem = {
+  documentId: string;
+  title: string;
+  dueDate: string;
+  amount: number | null;
+  currency: string | null;
+  correspondentName: string | null;
+  documentTypeName: string | null;
+  taskLabel: string;
+  daysUntilDue: number;
+  isOverdue: boolean;
+};
+
+/** Parse `YYYY-MM-DD` in local time; `new Date(str)` treats it as UTC. */
+function parseDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+/** Mirrors the API's buildTaskLabel so rows read the same either way. */
+function taskLabelFor(documentTypeName: string | null, isOverdue: boolean): string {
+  const normalized = documentTypeName?.trim().toLowerCase() ?? "";
+  if (normalized.includes("invoice") || normalized.includes("bill")) {
+    return isOverdue ? "Pay immediately" : "Pay";
+  }
+  if (normalized.includes("contract") || normalized.includes("legal")) {
+    return isOverdue ? "Respond immediately" : "Respond";
+  }
+  if (normalized.includes("insurance")) {
+    return isOverdue ? "Review immediately" : "Review";
+  }
+  return isOverdue ? "Handle immediately" : "Handle";
+}
+
+function toTask(document: Document): TaskItem {
+  const due = parseDateOnly(document.dueDate ?? "");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilDue = due
+    ? Math.round((due.getTime() - today.getTime()) / 86_400_000)
+    : 0;
+  const isOverdue = daysUntilDue < 0;
+  return {
+    documentId: document.id,
+    title: document.title,
+    dueDate: document.dueDate ?? "",
+    amount: document.amount ?? null,
+    currency: document.currency ?? null,
+    correspondentName: document.correspondent?.name ?? null,
+    documentTypeName: document.documentType?.name ?? null,
+    taskLabel: taskLabelFor(document.documentType?.name ?? null, isOverdue),
+    daysUntilDue,
+    isOverdue,
+  };
+}
+
 /** "-4d" when overdue, "6d" otherwise — the design's DUE column. */
-function dueLabel(item: DashboardDeadlineItem): string {
+function dueLabel(item: TaskItem): string {
   return item.isOverdue
     ? `-${Math.abs(item.daysUntilDue)}d`
     : `${item.daysUntilDue}d`;
@@ -108,16 +169,25 @@ function TaskPreview({ documentId }: { documentId: string }) {
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
-      // Same endpoint the review queue uses; keeps one resolve path.
-      const { error } = await api.POST("/api/documents/{id}/review/resolve", {
+      // Deadline rows are selected while task_completed_at IS NULL, so
+      // completing the task is what takes the row out of the queue.
+      const { error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
-        body: {},
+        body: { taskCompletedAt: new Date().toISOString() },
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("dashboard.failedToCompleteTask")));
       }
+      // Resolve the review too, when there is one to resolve.
+      if (needsReview) {
+        await api.POST("/api/documents/{id}/review/resolve", {
+          params: { path: { id: documentId } },
+          body: {},
+        });
+      }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents", "deadlines"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard", "insights"] });
       queryClient.invalidateQueries({ queryKey: ["document", documentId] });
       queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
@@ -203,7 +273,7 @@ function TaskPreview({ documentId }: { documentId: string }) {
         <div className="mt-3 flex items-center gap-2">
           <Button
             onClick={() => confirmMutation.mutate()}
-            disabled={confirmMutation.isPending || !needsReview}
+            disabled={confirmMutation.isPending}
           >
             <Check />
             {t("today.confirmAndFile")}
@@ -218,7 +288,7 @@ function TaskPreview({ documentId }: { documentId: string }) {
             {t("today.openDocument")}
           </Button>
           <span className="ok-num ml-auto text-[10.5px] text-muted-foreground">
-            ↵ {t("today.confirmHint")} · ⇥ {t("today.nextHint")}
+            ↵ {t("today.openHint")} · ⇥ {t("today.nextHint")}
           </span>
         </div>
       </div>
@@ -233,31 +303,55 @@ function TodayPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // The insights endpoint caps deadlines at 6 overdue + 6 upcoming, which is
+  // not a queue. Take them from the documents endpoint sorted by due date and
+  // derive the queue fields the design needs.
   const insightsQuery = useQuery({
-    queryKey: ["dashboard", "insights"],
-    queryFn: fetchDashboardInsights,
+    queryKey: ["documents", "deadlines"],
+    queryFn: () =>
+      fetchFilteredDocuments({
+        sort: "dueDate",
+        direction: "asc",
+        page: 1,
+        pageSize: 100,
+      }),
     refetchInterval: (query) =>
-      processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
+      processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
   const allTasks = useMemo(() => {
-    const data = insightsQuery.data;
-    if (!data) return [] as DashboardDeadlineItem[];
-    return [...data.overdueItems, ...data.upcomingDeadlines].sort(
-      (a, b) => a.daysUntilDue - b.daysUntilDue,
-    );
+    const items = insightsQuery.data?.items ?? [];
+    return items
+      .filter((document) => document.dueDate && !document.taskCompletedAt)
+      .map(toTask)
+      .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }, [insightsQuery.data]);
 
   const tasks = useMemo(() => {
     switch (filter) {
       case "overdue":
         return allTasks.filter((item) => item.isOverdue);
-      case "month":
-        return allTasks.filter((item) => item.daysUntilDue <= 31);
+      case "month": {
+        // Calendar month, matching the API's current-month semantics —
+        // not "within 31 days", which would sweep in old overdue items.
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return allTasks.filter((item) => {
+          const due = parseDateOnly(item.dueDate);
+          return due !== null && due >= start && due <= end;
+        });
+      }
       case "invoices":
-        return allTasks.filter((item) =>
-          (item.documentTypeName ?? "").toLowerCase().includes("invoice"),
-        );
+        // Same family the API's invoiceOnly predicate recognises.
+        return allTasks.filter((item) => {
+          const name = (item.documentTypeName ?? "").toLowerCase();
+          return (
+            name.includes("invoice") ||
+            name.includes("bill") ||
+            name.includes("rechnung")
+          );
+        });
       default:
         return allTasks;
     }
@@ -282,7 +376,15 @@ function TodayPage() {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      // Never hijack a focused control: Enter belongs to it, not the queue.
+      if (
+        target &&
+        (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) ||
+          target.isContentEditable ||
+          target.closest("[role='dialog']"))
+      ) {
+        return;
+      }
       if (tasks.length === 0) return;
 
       if (event.key === "ArrowDown" || event.key === "Tab") {
@@ -365,7 +467,21 @@ function TodayPage() {
                 <button
                   key={item.documentId}
                   type="button"
-                  onClick={() => setSelectedId(item.documentId)}
+                  onClick={() => {
+                    // The preview rail is hidden below lg, so on narrow
+                    // screens a tap has to go straight to the document.
+                    if (
+                      typeof window !== "undefined" &&
+                      !window.matchMedia("(min-width: 1024px)").matches
+                    ) {
+                      navigate({
+                        to: "/documents/$documentId",
+                        params: { documentId: item.documentId },
+                      });
+                      return;
+                    }
+                    setSelectedId(item.documentId);
+                  }}
                   onDoubleClick={() =>
                     navigate({
                       to: "/documents/$documentId",
