@@ -48,6 +48,33 @@
   /* red */
   --ok-red: #a8462f;
   --ok-red-soft: #fdeeea;
+
+  /* status green (distinct from the accent, used for "done"/"ok") */
+  --ok-green: #4a7d5a;
+  --ok-green-soft: #e8f0ea;
+
+  /* A scan is a scan: the document preview surface stays light in both
+     themes, it just sits on a darker sunken surface in dark mode. */
+  --ok-paper: #ffffff;
+  --ok-paper-ink: #26302a;
+  --ok-paper-border: #e3e6e3;
+
+  /* citation / search highlight drawn on --ok-paper */
+  --ok-highlight: #fdf1e3;
+  --ok-highlight-rule: #8a5a19;
+
+  /* modal scrim */
+  --ok-overlay: rgba(20, 26, 24, 0.45);
+
+  /* categorical palette for tag/type dots and charts */
+  --ok-cat-1: #14544d;
+  --ok-cat-2: #2f6f9e;
+  --ok-cat-3: #7a5ba6;
+  --ok-cat-4: #4a7d5a;
+  --ok-cat-5: #8a6a2f;
+  --ok-cat-6: #a8462f;
+  --ok-cat-7: #8a2d55;
+  --ok-cat-8: #6b716c;
 }
 
 [data-theme="dark"] {
@@ -79,6 +106,28 @@
 
   --ok-red: #dd8d78;
   --ok-red-soft: #331d1a;
+
+  --ok-green: #7fb98d;
+  --ok-green-soft: #16301c;
+
+  /* paper stays light; only its frame darkens */
+  --ok-paper: #e9ebe9;
+  --ok-paper-ink: #26302a;
+  --ok-paper-border: #2c3336;
+
+  --ok-highlight: #f3e4c8;
+  --ok-highlight-rule: #8a5a19;
+
+  --ok-overlay: rgba(0, 0, 0, 0.6);
+
+  --ok-cat-1: #5fb3a3;
+  --ok-cat-2: #6ea8d8;
+  --ok-cat-3: #b095db;
+  --ok-cat-4: #7fb98d;
+  --ok-cat-5: #d9ae6a;
+  --ok-cat-6: #dd8d78;
+  --ok-cat-7: #d187a8;
+  --ok-cat-8: #9aa39c;
 }
 
 @theme {

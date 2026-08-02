@@ -302,15 +302,15 @@ function reviewStatusVariant(
 }
 
 function confidenceColor(confidence: number): string {
-  if (confidence >= 0.8) return "text-emerald-600";
-  if (confidence >= 0.5) return "text-amber-600";
-  return "text-red-600";
+  if (confidence >= 0.8) return "text-[var(--ok-green)]";
+  if (confidence >= 0.5) return "text-[var(--ok-amber)]";
+  return "text-[var(--ok-red)]";
 }
 
 function confidenceBg(confidence: number): string {
-  if (confidence >= 0.8) return "bg-emerald-100";
-  if (confidence >= 0.5) return "bg-amber-100";
-  return "bg-red-100";
+  if (confidence >= 0.8) return "bg-[var(--ok-green-soft)]";
+  if (confidence >= 0.5) return "bg-[var(--ok-amber-soft)]";
+  return "bg-[var(--ok-red-soft)]";
 }
 
 function formatReviewReason(reason: string): string {
@@ -1191,7 +1191,7 @@ function DocumentDetailPage() {
               <Card>
                 <CardContent className="p-4 space-y-4">
                   <div
-                    className="w-full rounded-md border overflow-hidden bg-muted"
+                    className="w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--ok-paper-border)] bg-[var(--ok-sunken)]"
                     style={{ height: "60vh" }}
                   >
                     {previewQuery.isLoading && (
@@ -1212,14 +1212,14 @@ function DocumentDetailPage() {
                           {previewCategory === "pdf" && (
                             <iframe
                               src={previewUrl}
-                              className="h-full w-full"
+                              className="h-full w-full bg-[var(--ok-paper)]"
                               title={t("documentDetail.documentPreviewTitle")}
                             />
                           )}
 
                           {/* Image: native img */}
                           {previewCategory === "image" && (
-                            <div className="flex h-full items-center justify-center bg-[repeating-conic-gradient(var(--color-muted)_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-4">
+                            <div className="flex h-full items-center justify-center bg-[var(--ok-paper)] p-4">
                               <img
                                 src={previewUrl}
                                 alt={doc.title}
@@ -1230,8 +1230,8 @@ function DocumentDetailPage() {
 
                           {/* Text: inline preformatted */}
                           {previewCategory === "text" && (
-                            <div className="h-full overflow-auto p-4">
-                              <pre className="text-sm leading-relaxed font-mono whitespace-pre-wrap break-words text-foreground">
+                            <div className="h-full overflow-auto bg-[var(--ok-paper)] p-4">
+                              <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-[var(--ok-paper-ink)]">
                                 {textPreviewContent ?? t("documentDetail.loadingContent")}
                               </pre>
                             </div>
@@ -1673,7 +1673,7 @@ function DocumentDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing && (
-                <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+                <div className="rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-xs text-[var(--ok-amber)]">
                   {pendingNewLocks.length > 0
                     ? `${t("documentDetail.savingWillLock")} ${pendingNewLocks.map((field) => formatManualOverrideField(field, t)).join(", ")}.`
                     : lockedFields.length > 0
@@ -1701,7 +1701,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">{t("documentDetail.correspondent")}</p>
                     {lockedFields.includes("correspondentId") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1781,7 +1781,7 @@ function DocumentDetailPage() {
                         </p>
                       )}
                       {pendingNewLocks.includes("correspondentId") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           {t("documentDetail.savingWillLockField")}
                         </p>
                       )}
@@ -1802,7 +1802,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">{t("documentDetail.documentType")}</p>
                     {lockedFields.includes("documentTypeId") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1840,7 +1840,7 @@ function DocumentDetailPage() {
                         </SelectContent>
                       </Select>
                       {pendingNewLocks.includes("documentTypeId") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -1861,7 +1861,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">{t("documentDetail.issueDate")}</p>
                     {lockedFields.includes("issueDate") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1884,7 +1884,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("issueDate") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -1903,7 +1903,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Due Date</p>
                     {lockedFields.includes("dueDate") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1926,7 +1926,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("dueDate") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -1945,7 +1945,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Expiry Date</p>
                     {lockedFields.includes("expiryDate") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1968,7 +1968,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("expiryDate") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -1987,7 +1987,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Amount</p>
                     {(lockedFields.includes("amount") || lockedFields.includes("currency")) && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2027,7 +2027,7 @@ function DocumentDetailPage() {
                       </div>
                       {(pendingNewLocks.includes("amount") ||
                         pendingNewLocks.includes("currency")) && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock the amount fields you changed.
                         </p>
                       )}
@@ -2050,7 +2050,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Reference Number</p>
                     {lockedFields.includes("referenceNumber") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2072,7 +2072,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("referenceNumber") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -2091,7 +2091,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Holder Name</p>
                     {lockedFields.includes("holderName") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2113,7 +2113,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("holderName") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -2132,7 +2132,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Issuing Authority</p>
                     {lockedFields.includes("issuingAuthority") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2156,7 +2156,7 @@ function DocumentDetailPage() {
                         className="mt-1"
                       />
                       {pendingNewLocks.includes("issuingAuthority") && (
-                        <p className="mt-1 text-xs text-amber-700">
+                        <p className="mt-1 text-xs text-[var(--ok-amber)]">
                           Saving will lock this field.
                         </p>
                       )}
@@ -2175,7 +2175,7 @@ function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">Tags</p>
                     {lockedFields.includes("tagIds") && (
                       <>
-                        <Lock className="h-3 w-3 text-amber-500" />
+                        <Lock className="h-3 w-3 text-[var(--ok-amber)]" />
                         <Button
                           variant="ghost"
                           size="sm"
@@ -2261,7 +2261,7 @@ function DocumentDetailPage() {
                         </div>
                       )}
                       {pendingNewLocks.includes("tagIds") && (
-                        <p className="text-xs text-amber-700">
+                        <p className="text-xs text-[var(--ok-amber)]">
                           Saving will lock the tag selection.
                         </p>
                       )}
@@ -2455,10 +2455,10 @@ function DocumentDetailPage() {
 
           {/* Review Section */}
           {doc.reviewStatus === "pending" && (
-            <Card className="border-amber-200">
+            <Card className="border-[var(--ok-amber)]/30">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTriangle className="h-4 w-4 text-[var(--ok-amber)]" />
                   {t("documentDetail.pendingReview")}
                 </CardTitle>
               </CardHeader>

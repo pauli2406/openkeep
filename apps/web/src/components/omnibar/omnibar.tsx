@@ -309,7 +309,7 @@ export function Omnibar() {
         <div className="fixed inset-0 z-50 flex justify-center">
           {/* Backdrop */}
           <div
-            className="omnibar-backdrop absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="omnibar-backdrop absolute inset-0 bg-[var(--ok-overlay)] backdrop-blur-sm"
             onClick={close}
           />
 
@@ -317,7 +317,7 @@ export function Omnibar() {
           <div
             ref={panelRef}
             className={cn(
-              "omnibar-panel relative mt-6 flex max-h-[min(600px,calc(100vh-3rem))] flex-col overflow-hidden rounded-2xl border border-[color:var(--explorer-border)] bg-white shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08)]",
+              "omnibar-panel relative mt-6 flex max-h-[min(600px,calc(100vh-3rem))] flex-col overflow-hidden rounded-2xl border border-[color:var(--explorer-border)] bg-card shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08)]",
               screen === "citation-preview"
                 ? "w-[min(1200px,calc(100vw-2rem))]"
                 : "w-[min(720px,calc(100vw-2rem))]",
@@ -579,7 +579,7 @@ function ResultsPane({
           to="/search"
           search={{ q: query }}
           onClick={onOpenFullPage}
-          className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-white px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
+          className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
         >
           Open full search
         </Link>
@@ -600,7 +600,7 @@ function ResultsPane({
           <button
             type="button"
             onClick={onRetry}
-            className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-white px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
+            className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
           >
             Retry
           </button>
@@ -663,7 +663,7 @@ function ResultsPane({
                           className="no-underline"
                           title={title}
                         >
-                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-white">
+                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-[var(--ok-accent-fill-ink)]">
                             {children}
                           </span>
                         </Link>
@@ -715,7 +715,7 @@ function ResultsPane({
                         pageTo: cit.pageTo,
                       })
                     }
-                    className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
+                    className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
                   >
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[color:var(--explorer-rust-soft)] text-[10px] font-bold text-[color:var(--explorer-rust)]">
                       {i + 1}
@@ -763,7 +763,7 @@ function ResultsPane({
                           quote: result.matchedChunks[0]?.text,
                         })
                       }
-                      className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-white px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
+                      className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
                     >
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--explorer-muted)]" />
                       <div className="min-w-0 flex-1">
@@ -784,7 +784,7 @@ function ResultsPane({
 
           {/* No answer text */}
           {answerStream.status === "done" && !answerStream.answerText && (
-            <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
+            <div className="rounded-xl border border-[var(--ok-amber)]/25 bg-[var(--ok-amber-soft)] px-4 py-3 text-sm text-[var(--ok-amber)]">
               Not enough evidence in your archive to answer this question
               confidently.
             </div>
@@ -802,7 +802,7 @@ function ResultsPane({
                     key={fu}
                     type="button"
                     onClick={() => onFollowUp(fu)}
-                    className="rounded-full border border-[color:var(--explorer-border)] bg-white px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-all hover:border-[color:var(--explorer-cobalt)]/35 hover:bg-[color:var(--explorer-cobalt-soft)]"
+                    className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-all hover:border-[color:var(--explorer-cobalt)]/35 hover:bg-[color:var(--explorer-cobalt-soft)]"
                   >
                     {fu}
                   </button>

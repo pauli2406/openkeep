@@ -254,15 +254,17 @@ export function formatCurrency(
 }
 
 export function colorForValue(value: string): string {
+  // Theme-aware: each token has a light and a dark value, so tag and
+  // type dots stay legible on both surfaces.
   const palette = [
-    "#b74817",
-    "#3854a5",
-    "#0c8c78",
-    "#8c5d12",
-    "#8a2d55",
-    "#395f35",
-    "#6d4db8",
-    "#7d3a24",
+    "var(--ok-cat-1)",
+    "var(--ok-cat-2)",
+    "var(--ok-cat-3)",
+    "var(--ok-cat-4)",
+    "var(--ok-cat-5)",
+    "var(--ok-cat-6)",
+    "var(--ok-cat-7)",
+    "var(--ok-cat-8)",
   ];
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {

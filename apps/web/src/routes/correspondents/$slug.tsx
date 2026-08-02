@@ -164,7 +164,7 @@ function CorrespondentDetailPage() {
               intelligence!.changes.map((change: CorrespondentIntelligenceChange, index: number) => (
                 <div
                   key={`${change.title}-${index}`}
-                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/60 px-4 py-3"
+                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">
@@ -214,7 +214,7 @@ function CorrespondentDetailPage() {
               intelligence!.currentState.map((fact: CorrespondentIntelligenceFact) => (
                 <div
                   key={`${fact.label}-${fact.value}`}
-                  className="flex items-start justify-between gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                  className="flex items-start justify-between gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
                 >
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
@@ -242,7 +242,7 @@ function CorrespondentDetailPage() {
               timelineEvents.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
                 <div
                   key={`${event.title}-${index}`}
-                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">{event.title}</p>
@@ -310,7 +310,7 @@ function CorrespondentDetailPage() {
             {data.documentTypeBreakdown.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center justify-between rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                className="flex items-center justify-between rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
               >
                 <span className="text-sm font-medium text-[color:var(--explorer-ink)]">{item.name}</span>
                 <span className="ok-num text-sm text-[color:var(--explorer-muted)]">{item.count}</span>
@@ -323,7 +323,7 @@ function CorrespondentDetailPage() {
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Legacy Summary
           </p>
-          <div className="mt-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-4">
+          <div className="mt-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-4">
             <p className="text-sm leading-relaxed text-[color:var(--explorer-muted)]">
               {data.summary ?? intelligence?.profile?.narrative ?? "No summary available yet."}
             </p>
@@ -432,7 +432,7 @@ function findCurrentStateFact(
 
 function FactPanel({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/65 px-4 py-4">
+    <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-4">
       <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
         {label}
       </p>
@@ -443,7 +443,7 @@ function FactPanel({ label, value }: { label: string; value: string }) {
 
 function Chip({ children }: { children: string }) {
   return (
-    <span className="rounded-full border border-[color:var(--explorer-border)] bg-white/70 px-3 py-1.5 ok-eyebrow text-[color:var(--explorer-ink)]">
+    <span className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 ok-eyebrow text-[color:var(--explorer-ink)]">
       {children}
     </span>
   );

@@ -125,7 +125,7 @@ function ClusterStrip({
           key={item.id}
           to="/correspondents/$slug"
           params={{ slug: item.slug }}
-          className="group rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/60 p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35"
+          className="group rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -198,7 +198,7 @@ function TaskTable({
               key={item.documentId}
               className={cn(
                 "grid grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] md:items-center md:gap-4",
-                item.isOverdue && "bg-[#fff6f1]",
+                item.isOverdue && "bg-[var(--ok-red-soft)]",
               )}
             >
               <div className="min-w-0">
@@ -246,7 +246,7 @@ function TaskTable({
         })}
       </div>
       {error ? (
-        <div className="border-t border-[color:var(--explorer-border)] px-4 py-3 text-sm text-[#b74817]">
+        <div className="border-t border-[color:var(--explorer-border)] px-4 py-3 text-sm text-[var(--ok-red)]">
           {error}
         </div>
       ) : null}

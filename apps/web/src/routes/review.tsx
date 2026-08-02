@@ -369,7 +369,7 @@ function ReviewPage() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             {total === 0 ? (
               <>
-                <CheckCircle className="h-12 w-12 text-emerald-500" />
+                <CheckCircle className="h-12 w-12 text-[var(--ok-green)]" />
                 <h3 className="mt-4 text-lg font-semibold">{copy.allCaughtUp}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {copy.noReview}

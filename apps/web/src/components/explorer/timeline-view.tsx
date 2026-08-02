@@ -79,7 +79,7 @@ function MonthDocuments({
 
   if (!bounds) {
     return (
-      <div className="rounded-[var(--r-lg)] border border-[#d8b7a8] bg-[#fff5f0] px-4 py-3 text-sm text-[color:var(--explorer-muted)]">
+      <div className="rounded-[var(--r-lg)] border border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-4 py-3 text-sm text-[color:var(--explorer-muted)]">
         This timeline bucket has an invalid month value and cannot be expanded.
       </div>
     );
@@ -91,7 +91,7 @@ function MonthDocuments({
 
   if (documentsQuery.isError) {
     return (
-      <div className="rounded-[var(--r-lg)] border border-[#d8b7a8] bg-[#fff5f0] px-4 py-3 text-sm text-[color:var(--explorer-muted)]">
+      <div className="rounded-[var(--r-lg)] border border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-4 py-3 text-sm text-[color:var(--explorer-muted)]">
         Failed to load documents for this month.
       </div>
     );
@@ -139,7 +139,7 @@ export function TimelineView({
               return (
                 <div
                   key={monthKey}
-                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55"
+                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card"
                 >
                   <button
                     type="button"

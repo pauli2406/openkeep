@@ -275,7 +275,7 @@ export function ExplorerSurface({
             variant={selectionMode ? "default" : "outline"}
             className={`${
               selectionMode
-                ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-white hover:bg-[color:var(--explorer-cobalt)]/90"
+                ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)] hover:bg-[color:var(--explorer-cobalt)]/90"
                 : ""
             }`}
             onClick={() => {
@@ -314,7 +314,7 @@ export function ExplorerSurface({
                   ? clearVisible()
                   : selectVisible()
               }
-              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 ok-eyebrow text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
+              className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-2 ok-eyebrow text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
             >
               {selectedVisibleCount === visibleDocumentIds.length && visibleDocumentIds.length > 0
                 ? "Clear visible"
@@ -323,7 +323,7 @@ export function ExplorerSurface({
             <button
               type="button"
               onClick={() => setSelectedIds([])}
-              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 ok-eyebrow text-[color:var(--explorer-muted)] transition hover:text-[color:var(--explorer-ink)]"
+              className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-2 ok-eyebrow text-[color:var(--explorer-muted)] transition hover:text-[color:var(--explorer-ink)]"
             >
               Reset
             </button>
@@ -439,7 +439,7 @@ export function ExplorerSurface({
       </div>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="border-[color:var(--explorer-border)] bg-[linear-gradient(180deg,#fffaf1,#f8f0df)] text-[color:var(--explorer-ink)] sm:rounded-[var(--r-lg)]">
+        <DialogContent className="border-[color:var(--explorer-border)] bg-card text-[color:var(--explorer-ink)]">
           <DialogHeader>
             <DialogTitle className="ok-page-title">
               Delete {selectedIds.length} document{selectedIds.length === 1 ? "" : "s"}?
@@ -449,7 +449,7 @@ export function ExplorerSurface({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/70 px-4 py-3 text-sm text-[color:var(--explorer-ink)]">
+          <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3 text-sm text-[color:var(--explorer-ink)]">
             {selectedIds.length > 0
               ? `${selectedIds.length} selected items will be deleted from the current archive.`
               : "No documents selected."}

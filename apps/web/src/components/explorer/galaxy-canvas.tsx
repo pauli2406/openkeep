@@ -281,7 +281,7 @@ export function GalaxyCanvas({
         }}
       >
         <canvas ref={canvasRef} className="h-full w-full" />
-        <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/80 bg-white/70 px-3 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--explorer-muted)] backdrop-blur">
+        <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/80 bg-card px-3 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--explorer-muted)] backdrop-blur">
           <ScanSearch className="h-3.5 w-3.5" />
           Drag to lasso · scroll to zoom
         </div>
@@ -289,7 +289,7 @@ export function GalaxyCanvas({
           <Button
             variant="outline"
             size="sm"
-            className="border-white/80 bg-white/70 backdrop-blur"
+            className="border-white/80 bg-card backdrop-blur"
             onClick={() =>
               setViewport({
                 scale: 1,
@@ -303,7 +303,7 @@ export function GalaxyCanvas({
           </Button>
         </div>
         {hoveredPoint ? (
-          <div className="absolute bottom-5 left-5 max-w-sm rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/90 px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
+          <div className="absolute bottom-5 left-5 max-w-sm rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
             <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
               {hoveredPoint.typeName ?? "Document"}
             </p>

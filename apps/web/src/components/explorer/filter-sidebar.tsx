@@ -50,7 +50,7 @@ function FacetCheckbox({
   onChange: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-[color:var(--explorer-border)] hover:bg-black/3">
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-transparent px-3 py-2 transition hover:border-[color:var(--explorer-border)] hover:bg-[var(--ok-sunken)]">
       <span className="flex items-center gap-3 text-sm text-[color:var(--explorer-ink)]">
         <input
           type="checkbox"
@@ -245,7 +245,7 @@ export function FilterSidebar({
                     page: undefined,
                   })
                 }
-                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-white/60 px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
+                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-card px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
               />
             </label>
             <label className="space-y-2">
@@ -263,7 +263,7 @@ export function FilterSidebar({
                     page: undefined,
                   })
                 }
-                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-white/60 px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
+                className="h-11 w-full rounded-2xl border border-[color:var(--explorer-border)] bg-card px-3 text-sm text-[color:var(--explorer-ink)] outline-none transition focus:border-[color:var(--explorer-cobalt)]"
               />
             </label>
           </div>
