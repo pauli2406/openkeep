@@ -112,4 +112,235 @@ describe("DeterministicChunker", () => {
     });
     expect(chunks[0]?.text).toContain("Line one");
   });
+
+  it("indexes a normalized table once, not twice via its markdown rows", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Details siehe Tabelle.",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Position", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "Strom", kind: "body" as const },
+              {
+                row: 2,
+                column: 2,
+                rowSpan: 1,
+                columnSpan: 1,
+                text: "89,00 | 92,00 EUR",
+                kind: "body" as const,
+              },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Details siehe Tabelle.", boundingBox: null },
+              { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "|---|---|", boundingBox: null },
+              { lineIndex: 3, text: "| Strom | 89,00 \\| 92,00 EUR |", boundingBox: null },
+              // Pipe-delimited, but not part of the normalized table.
+              { lineIndex: 4, text: "| grep -c ok | wc -l |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    expect(combined).toContain("Details siehe Tabelle.");
+    // The serialized table appears exactly once — the raw markdown rows that the
+    // provider keeps for the text blocks must not be chunked as prose.
+    expect(combined.match(/Strom/g)).toHaveLength(1);
+    expect(combined).toContain("[Table]");
+    // A pipe inside a cell stays escaped, so the row keeps two columns instead of
+    // silently becoming three.
+    expect(combined).toContain("| Strom | 89,00 \\| 92,00 EUR |");
+    // A pipe-delimited line that belongs to no normalized table must survive.
+    expect(combined).toContain("| grep -c ok | wc -l |");
+  });
+
+  it("matches source rows of a ragged table despite normalized padding", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Übersicht",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            // Two-cell header above a three-cell body row: `buildTableRows` pads the
+            // header, the source line does not carry the padding cell.
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Position", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "Strom", kind: "body" as const },
+              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "89,00", kind: "body" as const },
+              { row: 2, column: 3, rowSpan: 1, columnSpan: 1, text: "EUR", kind: "body" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Übersicht", boundingBox: null },
+              { lineIndex: 1, text: "| Position | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "|---|---|", boundingBox: null },
+              { lineIndex: 3, text: "| Strom | 89,00 | EUR |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    expect(combined.match(/Position/g)).toHaveLength(1);
+    expect(combined.match(/Strom/g)).toHaveLength(1);
+  });
+
+  it("keeps a second, unnormalized table that repeats a row of the first", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Konten",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Datum", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "01.01.", kind: "body" as const },
+              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "5,00", kind: "body" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 1, text: "|---|---|", boundingBox: null },
+              { lineIndex: 2, text: "| 01.01. | 5,00 |", boundingBox: null },
+              // Second table with the same header, absent from `tables`.
+              { lineIndex: 3, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 4, text: "|---|---|", boundingBox: null },
+              { lineIndex: 5, text: "| 02.02. | 7,00 |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    // The unnormalized table keeps its heading row, so its values stay attributable.
+    expect(combined).toContain("| 02.02. | 7,00 |");
+    expect(combined.match(/Datum/g)).toHaveLength(2);
+    expect(combined.match(/01\.01\./g)).toHaveLength(1);
+  });
+
+  it("emits the serialized table where its source rows were", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Intro",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Datum", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Einleitung vor der Tabelle.", boundingBox: null },
+              { lineIndex: 1, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "Erläuterung nach der Tabelle.", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    // intro → table → explanation, not intro → explanation → table.
+    expect(combined.indexOf("Einleitung")).toBeLessThan(combined.indexOf("[Table]"));
+    expect(combined.indexOf("[Table]")).toBeLessThan(combined.indexOf("Erläuterung"));
+  });
 });

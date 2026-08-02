@@ -32,6 +32,8 @@ x-app-env: &app-env
   MISTRAL_API_KEY: ${MISTRAL_API_KEY:?MISTRAL_API_KEY fehlt}
   # Base URL for all Mistral surfaces (chat, embeddings, files, OCR).
   MISTRAL_API_BASE_URL: ${MISTRAL_API_BASE_URL:-https://api.mistral.ai}
+  # Deprecated OCR-only override; empty means "use MISTRAL_API_BASE_URL".
+  MISTRAL_OCR_BASE_URL: ${MISTRAL_OCR_BASE_URL:-}
   MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-large-latest}
   MISTRAL_OCR_MODEL: ${MISTRAL_OCR_MODEL:-mistral-ocr-latest}
   # OCR request options (see docs/operations/configuration-reference.md).

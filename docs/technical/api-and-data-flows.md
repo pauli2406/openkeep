@@ -50,6 +50,10 @@ Text block geometry:
   return only when a document is reprocessed with a geometry-capable provider
 - `documents.metadata.parse.providerMetadata` holds a bounded summary of the provider
   response (model, pages processed, document size), never the raw OCR payload
+- markdown table rows stay in `pages[].lines` (only lines become `document_text_blocks`,
+  which back `GET /api/documents/:id/text`, matching-line snippets and evidence
+  localization); the chunker skips those rows on pages that also carry a normalized
+  table, so a table is embedded once rather than twice
 
 ## Document Read and Update Surface
 
@@ -105,16 +109,16 @@ Retrieval notes:
   (`german`/`english`/`simple` per document language) so stemmed queries match
   ("Rechnungen" finds "Rechnung"); its candidate cap covers the requested result
   window (`page * pageSize`, at least 50) so pagination stays reachable
-- the vector arm scans a larger index pool, caps how many chunks a single document
-  may contribute (so one multi-hundred-page document cannot crowd out every other
-  match), and then keeps the top 200 candidates by cosine distance
-  (HNSW-friendly `ORDER BY distance LIMIT`, with the document filters applied inside
-  that candidate selection), then aggregates per document. The statement raises
-  `hnsw.ef_search` to 400 and enables iterative scanning where available, because
-  pgvector's default breadth of 40 would otherwise return far fewer candidates than
-  the limit once the provider/model and filter predicates are applied
-- deliberately deferred until the archive approaches ~50k chunks: per-provider partial
-  HNSW indexes, a generated tsvector column with a language-aware GIN index, and
+- the vector arm ranks documents by their nearest chunk: a lateral probe computes the
+  minimum cosine distance per filtered document over the composite primary key, so
+  every eligible document is considered exactly once (perfect diversity — a
+  multi-hundred-page file cannot crowd out other matches) and the result is exact.
+  `total` is page-independent: the exact keyword count plus the vector candidates
+  the keyword arm does not match, so the reported result count does not drift while
+  paginating
+- deliberately deferred until the archive approaches ~50k chunks: a global ANN
+  pre-filter in front of the per-document lateral probe, per-provider partial HNSW
+  indexes, a generated tsvector column with a language-aware GIN index, and
   rerankers — at that size revisit `semanticSearch` in
   `apps/api/src/documents/documents.service.ts`
 

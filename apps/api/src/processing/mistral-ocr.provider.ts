@@ -11,6 +11,11 @@ import { AppConfigService } from "../common/config/app-config.service";
 import { DOCUMENT_TYPE_DEFINITIONS } from "./document-intelligence.registry";
 import { fetchWithTimeout } from "./http.util";
 import {
+  isMarkdownTableRow,
+  isMarkdownTableSeparatorRow,
+  splitMarkdownTableRow,
+} from "./markdown-table.util";
+import {
   buildDocumentAnnotationSchema,
   parseDocumentAnnotation,
 } from "./mistral-annotation.schema";
@@ -55,18 +60,6 @@ export const mapMistralOcrResponse = (
   const pages = response.pages.map((page, arrayIndex) => {
     const pageNumber = (typeof page.index === "number" ? page.index : arrayIndex) + 1;
 
-    const lines = page.markdown
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line, lineIndex) => ({
-        lineIndex,
-        text: line,
-        boundingBox: null,
-      }));
-
-    const blocks = mapPageBlocks(page, pageNumber);
-
     for (const table of page.tables ?? []) {
       // With MISTRAL_OCR_TABLE_FORMAT=html the payload only carries `html`, so
       // reading markdown alone would silently drop those tables entirely.
@@ -91,6 +84,22 @@ export const mapMistralOcrResponse = (
         });
       }
     }
+
+    const lines = page.markdown
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      // Table rows stay in `lines` on purpose: only lines reach
+      // `document_text_blocks`, which backs GET /api/documents/:id/text, the
+      // matching-line snippets and evidence localization. The chunker skips
+      // them when the same table was normalized, so nothing is indexed twice.
+      .map((line, lineIndex) => ({
+        lineIndex,
+        text: line,
+        boundingBox: null,
+      }));
+
+    const blocks = mapPageBlocks(page, pageNumber);
 
     keyValues.push(...deriveKeyValuesFromMarkdown(page.markdown, pageNumber));
 
@@ -519,21 +528,16 @@ export const parseMarkdownTable = (
   const rows = markdown
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.startsWith("|") && line.endsWith("|"));
+    .filter(isMarkdownTableRow);
 
   const cells: ParsedDocumentTable["cells"] = [];
   let rowNumber = 0;
 
   for (const row of rows) {
-    // Split on UNESCAPED pipes only: a cell like `A \| B` is one column, not two,
-    // and the escape character must not survive into the cell text.
-    const columns = row
-      .slice(1, -1)
-      .split(/(?<!\\)\|/)
-      .map((cell) => cell.replace(/\\\|/g, "|").trim());
+    const columns = splitMarkdownTableRow(row);
 
     // Skip the separator row (|---|---|).
-    if (columns.every((cell) => /^:?-{2,}:?$/.test(cell))) {
+    if (isMarkdownTableSeparatorRow(columns)) {
       continue;
     }
 
@@ -647,6 +651,12 @@ const readPageConfidence = (page: MistralOcrPage): number | null => {
   if (typeof scores === "number") {
     return scores;
   }
+  if (Array.isArray(scores)) {
+    // Word granularity: aggregate the word scores into a page confidence, so
+    // MISTRAL_OCR_CONFIDENCE_GRANULARITY=word still produces pageConfidences and
+    // the ocr_low_confidence review reason instead of silently doing nothing.
+    return averageConfidence(scores);
+  }
   if (scores && typeof scores === "object") {
     const record = scores as Record<string, unknown>;
     for (const key of ["page", "overall", "score", "confidence"]) {
@@ -654,7 +664,39 @@ const readPageConfidence = (page: MistralOcrPage): number | null => {
         return record[key] as number;
       }
     }
+    for (const key of ["words", "word_scores", "scores"]) {
+      if (Array.isArray(record[key])) {
+        return averageConfidence(record[key] as unknown[]);
+      }
+    }
   }
 
   return null;
+};
+
+/** Averages numeric entries or entries carrying a confidence/score property. */
+const averageConfidence = (entries: unknown[]): number | null => {
+  const values = entries
+    .map((entry) => {
+      if (typeof entry === "number") {
+        return entry;
+      }
+      if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        if (typeof record.confidence === "number") {
+          return record.confidence;
+        }
+        if (typeof record.score === "number") {
+          return record.score;
+        }
+      }
+      return null;
+    })
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 };
