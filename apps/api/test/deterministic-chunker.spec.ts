@@ -293,4 +293,54 @@ describe("DeterministicChunker", () => {
     expect(combined.match(/Datum/g)).toHaveLength(2);
     expect(combined.match(/01\.01\./g)).toHaveLength(1);
   });
+
+  it("emits the serialized table where its source rows were", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Intro",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Datum", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "Einleitung vor der Tabelle.", boundingBox: null },
+              { lineIndex: 1, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 2, text: "Erläuterung nach der Tabelle.", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    // intro → table → explanation, not intro → explanation → table.
+    expect(combined.indexOf("Einleitung")).toBeLessThan(combined.indexOf("[Table]"));
+    expect(combined.indexOf("[Table]")).toBeLessThan(combined.indexOf("Erläuterung"));
+  });
 });

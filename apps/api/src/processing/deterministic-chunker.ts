@@ -288,18 +288,53 @@ export class DeterministicChunker implements Chunker {
       // `tables`) survives — even when it repeats a row of the normalized table.
       const lineTexts = page.lines.map((line) => line.text.trim());
       const skippedLineIndices = new Set<number>();
+      const tableByRegionStart = new Map<number, ParsedDocumentTable>();
+      // Tables whose rows are not in the page markdown (HTML tables, markdown the
+      // provider reflowed) have no source position and are appended at the end.
+      const unplacedTables: ParsedDocumentTable[] = [];
       let searchFrom = 0;
       for (const table of pageTables ?? []) {
         const signatures = buildTableRows(table).rows.map(buildTableRowSignature);
         const region = findTableRegion(lineTexts, searchFrom, signatures);
         if (!region) {
+          unplacedTables.push(table);
           continue;
         }
         region.forEach((index) => skippedLineIndices.add(index));
+        tableByRegionStart.set(region[0]!, table);
         searchFrom = region[region.length - 1]! + 1;
       }
 
+      const emitTable = (table: ParsedDocumentTable) => {
+        const tableMarkdown = serializeTableAsMarkdown(table);
+        if (!tableMarkdown) {
+          return;
+        }
+
+        // If the table is large, flush current lines first so the table
+        // gets its own chunk(s) rather than being appended to unrelated text
+        if (tableMarkdown.length > MAX_CHUNK_CHARS / 2 && currentLines.length > 0) {
+          flush();
+        }
+
+        // Add each table line individually so the size limit is respected
+        for (const tableLine of tableMarkdown.split("\n")) {
+          const trimmed = tableLine.trim();
+          if (trimmed) {
+            addLine(trimmed, page.pageNumber, pageHeading);
+          }
+        }
+      };
+
       page.lines.forEach((line, lineIndex) => {
+        // The serialized table takes the place of its source rows, so an
+        // `intro → table → explanation` page keeps that order and the table stays
+        // in the same chunk neighbourhood as the prose describing it.
+        const tableAtLine = tableByRegionStart.get(lineIndex);
+        if (tableAtLine) {
+          emitTable(tableAtLine);
+        }
+
         const lineText = lineTexts[lineIndex]!;
         if (!lineText || skippedLineIndices.has(lineIndex)) {
           return;
@@ -308,28 +343,8 @@ export class DeterministicChunker implements Chunker {
         addLine(lineText, page.pageNumber, pageHeading);
       });
 
-      // Inject serialized tables for this page after the regular lines
-      if (pageTables) {
-        for (const table of pageTables) {
-          const tableMarkdown = serializeTableAsMarkdown(table);
-          if (!tableMarkdown) {
-            continue;
-          }
-
-          // If the table is large, flush current lines first so the table
-          // gets its own chunk(s) rather than being appended to unrelated text
-          if (tableMarkdown.length > MAX_CHUNK_CHARS / 2 && currentLines.length > 0) {
-            flush();
-          }
-
-          // Add each table line individually so the size limit is respected
-          for (const tableLine of tableMarkdown.split("\n")) {
-            const trimmed = tableLine.trim();
-            if (trimmed) {
-              addLine(trimmed, page.pageNumber, pageHeading);
-            }
-          }
-        }
+      for (const table of unplacedTables) {
+        emitTable(table);
       }
 
       flush();
