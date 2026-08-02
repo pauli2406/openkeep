@@ -1,53 +1,147 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   OpenKeep design tokens (#40)
+
+   `--ok-*` is the single source of truth for color. `:root` holds
+   the light theme, `[data-theme="dark"]` overrides it. Everything
+   else in this file — the shadcn `--color-*` names, the radius
+   scale, the legacy `--explorer-*` aliases — points at these.
+
+   Values are taken from design/prototype/openkeep-workspace.dc.html,
+   which is what rendered design/screens/*.png.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --ok-app: #fcfcfb;
+  --ok-bar: #f7f8f7;
+  --ok-panel: #ffffff;
+  --ok-raised: #f2f4f2;
+  --ok-sunken: #eceeec;
+
+  /* borders */
+  --ok-border: #e3e6e3;
+  --ok-border-soft: #eef0ee;
+  --ok-border-strong: #d6dad7;
+
+  /* text */
+  --ok-ink: #26302a;
+  --ok-muted: #5b615c;
+  --ok-dim: #8b9089;
+  --ok-faint: #9aa09a;
+
+  /* accent (green) */
+  --ok-accent: #14544d;
+  --ok-accent-soft: #e7edea;
+  --ok-accent-soft-ink: #14544d;
+  --ok-accent-fill: #14544d;
+  --ok-accent-fill-ink: #ffffff;
+
+  /* amber */
+  --ok-amber: #8a5a19;
+  --ok-amber-soft: #fdf1e3;
+
+  /* red */
+  --ok-red: #a8462f;
+  --ok-red-soft: #fdeeea;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ok-app: #0f1214;
+  --ok-bar: #14181a;
+  --ok-panel: #161a1c;
+  --ok-raised: #1b2023;
+  --ok-sunken: #0b0e0f;
+
+  --ok-border: #252b2e;
+  --ok-border-soft: #1e2325;
+  --ok-border-strong: #2c3336;
+
+  --ok-ink: #e6e9e7;
+  --ok-muted: #a7afa9;
+  --ok-dim: #8b938d;
+  --ok-faint: #7d857f;
+
+  --ok-accent: #5fb3a3;
+  --ok-accent-soft: #16302c;
+  --ok-accent-soft-ink: #7fc9b8;
+  --ok-accent-fill: #1c6b60;
+  --ok-accent-fill-ink: #f2fbf8;
+
+  --ok-amber: #d9ae6a;
+  --ok-amber-soft: #2e2415;
+
+  --ok-red: #dd8d78;
+  --ok-red-soft: #331d1a;
+}
+
 @theme {
-  --color-background: #f5efe4;
-  --color-foreground: #1b1610;
-  --color-card: #fffaf1;
-  --color-card-foreground: #1b1610;
-  --color-popover: #fffdf8;
-  --color-popover-foreground: #1b1610;
-  --color-primary: #3854a5;
-  --color-primary-foreground: #fefcf8;
-  --color-secondary: #f0e5d3;
-  --color-secondary-foreground: #2a2217;
-  --color-muted: #efe6d8;
-  --color-muted-foreground: #756858;
-  --color-accent: #ece1d0;
-  --color-accent-foreground: #1b1610;
-  --color-destructive: #bb4b2f;
-  --color-destructive-foreground: #fff8f3;
-  --color-border: #dccfba;
-  --color-input: #dccfba;
-  --color-ring: #3854a5;
-  --color-sidebar-background: #f7f1e7;
-  --color-sidebar-foreground: #2a2217;
-  --color-sidebar-primary: #3854a5;
-  --color-sidebar-primary-foreground: #fffaf4;
-  --color-sidebar-accent: #ece1d0;
-  --color-sidebar-accent-foreground: #1b1610;
-  --color-sidebar-border: #dccfba;
-  --color-sidebar-ring: #3854a5;
-  --radius-sm: 0.45rem;
-  --radius-md: 0.8rem;
-  --radius-lg: 1.15rem;
-  --radius-xl: 1.6rem;
+  /* shadcn/Radix primitives keep working by aliasing onto --ok-* */
+  --color-background: var(--ok-app);
+  --color-foreground: var(--ok-ink);
+  --color-card: var(--ok-panel);
+  --color-card-foreground: var(--ok-ink);
+  --color-popover: var(--ok-panel);
+  --color-popover-foreground: var(--ok-ink);
+  --color-primary: var(--ok-accent-fill);
+  --color-primary-foreground: var(--ok-accent-fill-ink);
+  --color-secondary: var(--ok-raised);
+  --color-secondary-foreground: var(--ok-ink);
+  --color-muted: var(--ok-raised);
+  --color-muted-foreground: var(--ok-dim);
+  --color-accent: var(--ok-accent-soft);
+  --color-accent-foreground: var(--ok-accent-soft-ink);
+  --color-destructive: var(--ok-red);
+  --color-destructive-foreground: var(--ok-app);
+  --color-border: var(--ok-border);
+  --color-input: var(--ok-border-strong);
+  --color-ring: var(--ok-accent);
+  --color-sidebar-background: var(--ok-bar);
+  --color-sidebar-foreground: var(--ok-ink);
+  --color-sidebar-primary: var(--ok-accent-fill);
+  --color-sidebar-primary-foreground: var(--ok-accent-fill-ink);
+  --color-sidebar-accent: var(--ok-accent-soft);
+  --color-sidebar-accent-foreground: var(--ok-accent-soft-ink);
+  --color-sidebar-border: var(--ok-border);
+  --color-sidebar-ring: var(--ok-accent);
 
-  --font-sans: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
-  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  /* radii — nothing above 8px; 999px is for filter chips only */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-pill: 999px;
 
-  --explorer-paper: #f5efe4;
-  --explorer-paper-strong: #ede2d0;
-  --explorer-panel: rgba(255, 251, 244, 0.86);
-  --explorer-border: rgba(80, 63, 37, 0.16);
-  --explorer-border-strong: rgba(80, 63, 37, 0.28);
-  --explorer-ink: #1b1610;
-  --explorer-muted: #726555;
-  --explorer-rust: #b74817;
-  --explorer-rust-soft: rgba(183, 72, 23, 0.12);
-  --explorer-cobalt: #3854a5;
-  --explorer-cobalt-soft: rgba(56, 84, 165, 0.12);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-lg);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-sans);
+}
+
+/* Legacy `--explorer-*` names, kept as aliases so the existing
+   components render in the new palette without being touched.
+   Issues #42–#44 replace the call sites; these go with them. */
+:root,
+[data-theme="dark"] {
+  --explorer-paper: var(--ok-app);
+  --explorer-paper-strong: var(--ok-raised);
+  --explorer-panel: var(--ok-panel);
+  --explorer-surface: var(--ok-panel);
+  --explorer-border: var(--ok-border);
+  --explorer-border-strong: var(--ok-border-strong);
+  --explorer-ink: var(--ok-ink);
+  --explorer-muted: var(--ok-dim);
+  --explorer-cobalt: var(--ok-accent);
+  --explorer-cobalt-soft: var(--ok-accent-soft);
+  --explorer-rust: var(--ok-amber);
+  --explorer-rust-soft: var(--ok-amber-soft);
 }
 
 @layer base {
@@ -58,20 +152,13 @@
 
   html {
     min-height: 100%;
-    background:
-      radial-gradient(circle at top left, rgba(56, 84, 165, 0.12), transparent 32%),
-      radial-gradient(circle at 85% 0%, rgba(183, 72, 23, 0.1), transparent 28%),
-      linear-gradient(180deg, #f8f2e8 0%, #f1eadf 100%);
+    background: var(--ok-app);
   }
 
   body {
     min-height: 100vh;
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    background:
-      radial-gradient(circle at top left, rgba(56, 84, 165, 0.08), transparent 36%),
-      radial-gradient(circle at 90% 10%, rgba(183, 72, 23, 0.08), transparent 24%),
-      linear-gradient(180deg, #f8f2e8 0%, #f1eadf 100%);
   }
 
   #root {
@@ -83,7 +170,7 @@
   h3,
   h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.01em;
   }
 
   button,
@@ -94,8 +181,8 @@
   }
 
   ::selection {
-    background: rgba(56, 84, 165, 0.18);
-    color: var(--explorer-ink);
+    background: color-mix(in srgb, var(--ok-accent) 16%, transparent);
+    color: var(--ok-ink);
   }
 
   /* ─── Omnibar Animations ─── */
