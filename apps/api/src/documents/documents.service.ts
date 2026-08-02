@@ -1165,8 +1165,14 @@ export class DocumentsService {
     // bounded by each document's own chunk rows, diversity is perfect (every
     // eligible document is considered once — a 300-page file cannot crowd out other
     // matches), and the result is exact rather than an approximate index scan that
-    // the provider/model predicates would thin out. Revisit with a global ANN
-    // pre-filter once the archive approaches ~50k chunks (documented trigger point).
+    // the provider/model predicates would thin out. MIN() rather than
+    // `ORDER BY ... LIMIT 1` on purpose: the latter is an ANN-shaped query, so the
+    // planner may answer it from the HNSW index, where the document/provider/model
+    // predicates degrade to post-filters — a document whose chunks fall outside the
+    // visit window would then return no row at all and silently drop out of the
+    // results. An aggregate cannot use that index, so exactness does not depend on
+    // the planner. Revisit with a global ANN pre-filter once the archive approaches
+    // ~50k chunks (documented trigger point).
     const semanticRows = await this.databaseService.pool.query<{
       id: string;
       distance: string;
@@ -1174,15 +1180,14 @@ export class DocumentsService {
       `SELECT d.id, l.distance::text AS distance
        FROM documents d
        CROSS JOIN LATERAL (
-         SELECT (e.embedding <=> $${params.length + 1}::halfvec) AS distance
+         SELECT MIN(e.embedding <=> $${params.length + 1}::halfvec) AS distance
          FROM document_chunk_embeddings e
          WHERE e.document_id = d.id
            AND e.provider = $${params.length + 2}::embedding_provider
            AND e.model = $${params.length + 3}
-         ORDER BY e.embedding <=> $${params.length + 1}::halfvec ASC
-         LIMIT 1
        ) l
        WHERE ${whereSql}
+         AND l.distance IS NOT NULL
        ORDER BY l.distance ASC, d.id DESC
        LIMIT ${VECTOR_CANDIDATE_LIMIT}`,
       [...params, embeddingLiteral, provider, model],

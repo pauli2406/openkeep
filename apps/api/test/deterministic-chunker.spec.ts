@@ -236,4 +236,61 @@ describe("DeterministicChunker", () => {
     expect(combined.match(/Position/g)).toHaveLength(1);
     expect(combined.match(/Strom/g)).toHaveLength(1);
   });
+
+  it("keeps a second, unnormalized table that repeats a row of the first", async () => {
+    const chunks = await chunker.chunk({
+      documentId: "11111111-1111-1111-1111-111111111111",
+      parsed: {
+        provider: "mistral-ocr",
+        parseStrategy: "fixture",
+        text: "Konten",
+        language: "de",
+        keyValues: [],
+        chunkHints: [],
+        reviewReasons: [],
+        warnings: [],
+        searchablePdfPath: undefined,
+        providerMetadata: {},
+        temporaryPaths: [],
+        tables: [
+          {
+            tableIndex: 0,
+            page: 1,
+            title: null,
+            boundingBox: null,
+            cells: [
+              { row: 1, column: 1, rowSpan: 1, columnSpan: 1, text: "Datum", kind: "header" as const },
+              { row: 1, column: 2, rowSpan: 1, columnSpan: 1, text: "Betrag", kind: "header" as const },
+              { row: 2, column: 1, rowSpan: 1, columnSpan: 1, text: "01.01.", kind: "body" as const },
+              { row: 2, column: 2, rowSpan: 1, columnSpan: 1, text: "5,00", kind: "body" as const },
+            ],
+            metadata: {},
+          },
+        ],
+        pages: [
+          {
+            pageNumber: 1,
+            width: null,
+            height: null,
+            lines: [
+              { lineIndex: 0, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 1, text: "|---|---|", boundingBox: null },
+              { lineIndex: 2, text: "| 01.01. | 5,00 |", boundingBox: null },
+              // Second table with the same header, absent from `tables`.
+              { lineIndex: 3, text: "| Datum | Betrag |", boundingBox: null },
+              { lineIndex: 4, text: "|---|---|", boundingBox: null },
+              { lineIndex: 5, text: "| 02.02. | 7,00 |", boundingBox: null },
+            ],
+            blocks: [],
+          },
+        ],
+      },
+    });
+
+    const combined = chunks.map((chunk) => chunk.text).join("\n");
+    // The unnormalized table keeps its heading row, so its values stay attributable.
+    expect(combined).toContain("| 02.02. | 7,00 |");
+    expect(combined.match(/Datum/g)).toHaveLength(2);
+    expect(combined.match(/01\.01\./g)).toHaveLength(1);
+  });
 });

@@ -76,6 +76,57 @@ function buildTableRows(table: ParsedDocumentTable): {
   return { rows, headerRows };
 }
 
+/**
+ * Locates the source rows of one normalized table: the first run of markdown rows
+ * at or after `from` whose content rows match `signatures` in order. Separator rows
+ * inside the run are consumed with it. Returns the matched line indices, or null
+ * when the table's rows do not appear in the page markdown (an HTML table, or
+ * markdown the provider reflowed) — nothing is dropped in that case.
+ */
+function findTableRegion(
+  lineTexts: string[],
+  from: number,
+  signatures: string[],
+): number[] | null {
+  if (signatures.length === 0) {
+    return null;
+  }
+
+  for (let start = from; start < lineTexts.length; start++) {
+    const consumed: number[] = [];
+    let signatureIndex = 0;
+
+    for (let index = start; index < lineTexts.length && signatureIndex < signatures.length; index++) {
+      const text = lineTexts[index]!;
+      if (!isMarkdownTableRow(text)) {
+        break;
+      }
+
+      const cells = splitMarkdownTableRow(text);
+      if (isMarkdownTableSeparatorRow(cells)) {
+        // A separator only belongs to a table once one of its rows matched.
+        if (consumed.length === 0) {
+          break;
+        }
+        consumed.push(index);
+        continue;
+      }
+
+      if (buildTableRowSignature(cells) !== signatures[signatureIndex]) {
+        break;
+      }
+      consumed.push(index);
+      signatureIndex += 1;
+    }
+
+    if (signatureIndex === signatures.length) {
+      return consumed;
+    }
+  }
+
+  return null;
+}
+
 function serializeTableAsMarkdown(table: ParsedDocumentTable): string {
   const { rows, headerRows } = buildTableRows(table);
   if (rows.length === 0) {
@@ -231,36 +282,31 @@ export class DeterministicChunker implements Chunker {
       // Providers that emit markdown (Mistral OCR) keep the raw table rows in
       // `lines` so they still reach `document_text_blocks`; indexing them as
       // prose too would embed the same table twice, once here and once from the
-      // normalized table serialized below. Only rows that actually belong to a
-      // normalized table are dropped — an unrelated pipe-delimited line (code, a
-      // one-cell layout, a table missing from `tables`) stays in the chunks.
-      const normalizedRowSignatures = new Set<string>();
+      // normalized table serialized below. Each normalized table is located as a
+      // contiguous run of source rows and consumed once, so an unrelated
+      // pipe-delimited line (code, a one-cell layout, a second table missing from
+      // `tables`) survives — even when it repeats a row of the normalized table.
+      const lineTexts = page.lines.map((line) => line.text.trim());
+      const skippedLineIndices = new Set<number>();
+      let searchFrom = 0;
       for (const table of pageTables ?? []) {
-        for (const row of buildTableRows(table).rows) {
-          normalizedRowSignatures.add(buildTableRowSignature(row));
-        }
-      }
-
-      for (const line of page.lines) {
-        const lineText = line.text.trim();
-        if (!lineText) {
+        const signatures = buildTableRows(table).rows.map(buildTableRowSignature);
+        const region = findTableRegion(lineTexts, searchFrom, signatures);
+        if (!region) {
           continue;
         }
+        region.forEach((index) => skippedLineIndices.add(index));
+        searchFrom = region[region.length - 1]! + 1;
+      }
 
-        if (normalizedRowSignatures.size > 0 && isMarkdownTableRow(lineText)) {
-          const cells = splitMarkdownTableRow(lineText);
-          // Separator rows carry no content of their own; they are only dropped
-          // alongside the normalized rows they belong to.
-          if (
-            normalizedRowSignatures.has(buildTableRowSignature(cells)) ||
-            isMarkdownTableSeparatorRow(cells)
-          ) {
-            continue;
-          }
+      page.lines.forEach((line, lineIndex) => {
+        const lineText = lineTexts[lineIndex]!;
+        if (!lineText || skippedLineIndices.has(lineIndex)) {
+          return;
         }
 
         addLine(lineText, page.pageNumber, pageHeading);
-      }
+      });
 
       // Inject serialized tables for this page after the regular lines
       if (pageTables) {
