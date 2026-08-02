@@ -11,12 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as SetupRouteImport } from './routes/setup'
-import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ReviewRouteImport } from './routes/review'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as DocumentsIndexRouteImport } from './routes/documents/index'
+import { Route as SettingsTaxonomyRouteImport } from './routes/settings/taxonomy'
+import { Route as SettingsProvidersRouteImport } from './routes/settings/providers'
 import { Route as DocumentsDocumentIdRouteImport } from './routes/documents/$documentId'
 import { Route as CorrespondentsSlugRouteImport } from './routes/correspondents/$slug'
 
@@ -30,11 +34,6 @@ const SetupRoute = SetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -45,9 +44,19 @@ const ReviewRoute = ReviewRouteImport.update({
   path: '/review',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,10 +64,25 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const DocumentsIndexRoute = DocumentsIndexRouteImport.update({
   id: '/documents/',
   path: '/documents/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsTaxonomyRoute = SettingsTaxonomyRouteImport.update({
+  id: '/taxonomy',
+  path: '/taxonomy',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
+  id: '/providers',
+  path: '/providers',
+  getParentRoute: () => SettingsRouteRoute,
 } as any)
 const DocumentsDocumentIdRoute = DocumentsDocumentIdRouteImport.update({
   id: '/documents/$documentId',
@@ -73,86 +97,109 @@ const CorrespondentsSlugRoute = CorrespondentsSlugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
+  '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/taxonomy': typeof SettingsTaxonomyRoute
   '/documents/': typeof DocumentsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
+  '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/taxonomy': typeof SettingsTaxonomyRoute
   '/documents': typeof DocumentsIndexRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
+  '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/taxonomy': typeof SettingsTaxonomyRoute
   '/documents/': typeof DocumentsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/settings'
     | '/login'
+    | '/profile'
     | '/review'
     | '/search'
-    | '/settings'
     | '/setup'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
+    | '/settings/providers'
+    | '/settings/taxonomy'
     | '/documents/'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/profile'
     | '/review'
     | '/search'
-    | '/settings'
     | '/setup'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
+    | '/settings/providers'
+    | '/settings/taxonomy'
     | '/documents'
+    | '/settings'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/login'
+    | '/profile'
     | '/review'
     | '/search'
-    | '/settings'
     | '/setup'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
+    | '/settings/providers'
+    | '/settings/taxonomy'
     | '/documents/'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ProfileRoute: typeof ProfileRoute
   ReviewRoute: typeof ReviewRoute
   SearchRoute: typeof SearchRoute
-  SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
   UploadRoute: typeof UploadRoute
   CorrespondentsSlugRoute: typeof CorrespondentsSlugRoute
@@ -176,13 +223,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/search': {
       id: '/search'
       path: '/search'
@@ -197,11 +237,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -211,12 +265,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/documents/': {
       id: '/documents/'
       path: '/documents'
       fullPath: '/documents/'
       preLoaderRoute: typeof DocumentsIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/settings/taxonomy': {
+      id: '/settings/taxonomy'
+      path: '/taxonomy'
+      fullPath: '/settings/taxonomy'
+      preLoaderRoute: typeof SettingsTaxonomyRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/providers': {
+      id: '/settings/providers'
+      path: '/providers'
+      fullPath: '/settings/providers'
+      preLoaderRoute: typeof SettingsProvidersRouteImport
+      parentRoute: typeof SettingsRouteRoute
     }
     '/documents/$documentId': {
       id: '/documents/$documentId'
@@ -235,12 +310,29 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SettingsRouteRouteChildren {
+  SettingsProvidersRoute: typeof SettingsProvidersRoute
+  SettingsTaxonomyRoute: typeof SettingsTaxonomyRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
+  SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsTaxonomyRoute: SettingsTaxonomyRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRouteRoute: SettingsRouteRouteWithChildren,
   LoginRoute: LoginRoute,
+  ProfileRoute: ProfileRoute,
   ReviewRoute: ReviewRoute,
   SearchRoute: SearchRoute,
-  SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
   UploadRoute: UploadRoute,
   CorrespondentsSlugRoute: CorrespondentsSlugRoute,

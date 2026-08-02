@@ -82,7 +82,11 @@ button on the right of the top bar.
 
 ### Settings
 
-Settings covers administrative functions such as API tokens, taxonomies, archive import/export, provider availability, and system health.
+Settings is split into three sections, reached from its left navigation:
+`General` (language, watch folder, archive import/export, system health),
+`Tags & taxonomy`, and `AI providers`. Your account — profile, two-factor
+authentication and API tokens — lives on the `Profile` page, opened from the
+avatar menu in the top bar.
 
 ## Light and Dark Appearance
 

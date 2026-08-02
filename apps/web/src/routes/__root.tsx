@@ -201,7 +201,7 @@ function RootComponent() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem asChild>
-                  <Link to="/settings">
+                  <Link to="/profile">
                     <User />
                     {t("root.nav.profile")}
                   </Link>
