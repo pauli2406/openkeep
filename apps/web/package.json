@@ -11,8 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots"
+    "test:visual": "./visual/run-in-container.sh",
+    "test:visual:update": "./visual/run-in-container.sh --update-snapshots",
+    "test:visual:local": "playwright test"
   },
   "dependencies": {
     "@openkeep/sdk": "workspace:*",

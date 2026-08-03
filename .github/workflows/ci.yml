@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes an older run on the same ref. `main` is excluded:
+# cancelling there would leave gaps in the record of which commits were green.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast signal. These three are split rather than chained so a type error and a
+  # failing test surface together instead of one hiding the other; the shared
+  # Turbo cache means the overlap costs little.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: lint
+      - run: pnpm lint
+
+  test:
+    name: Unit and smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: test
+      - run: pnpm test
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: build
+      - run: pnpm build
+
+  # ---------------------------------------------------------------------------
+  # Slower checks. Kept out of the three above so a Docker pull or a browser
+  # download never delays the ordinary signal.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: API integration (Postgres + MinIO)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: integration
+      # Testcontainers starts Postgres and MinIO itself, using the Docker
+      # daemon the runner already provides.
+      - run: pnpm test:api:integration
+
+  visual:
+    name: Visual regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: visual
+      # `test:visual` runs the suite inside the pinned Playwright image, the
+      # same command contributors use. Text rasterisation depends on the font
+      # stack and freetype build — ten of the forty-four baselines differed
+      # between a dev machine and that container — so the image is what makes
+      # the comparison meaningful. It also builds the app, which the suite
+      # serves from apps/web/dist.
+      - run: pnpm --filter @openkeep/web test:visual
+      - name: Upload diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          # Contains the expected, actual and diff image for each failure,
+          # which is the only practical way to review a visual regression.
+          path: apps/web/test-results
+          retention-days: 14
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `gitleaks git` walks history; a shallow clone would scan almost
+          # nothing and pass for the wrong reason.
+          fetch-depth: 0
+      # Called directly rather than through pnpm: this job needs neither Node
+      # nor the dependency tree, and the script falls back to the gitleaks
+      # container when the binary is absent, which it is on a runner.
+      #
+      # Pull requests scan the working tree (~30s). Pushes to main scan the
+      # full history (~3m30s over 300+ commits), which is the backstop for
+      # anything that reached a branch and was then removed. Running history
+      # on every PR would spend six times the minutes to re-scan commits that
+      # main has already cleared.
+      - name: Scan working tree
+        if: github.event_name == 'pull_request'
+        run: sh ./scripts/security/run-gitleaks.sh dir
+
+      - name: Scan full history
+        if: github.event_name != 'pull_request'
+        run: sh ./scripts/security/run-gitleaks.sh git
+
+  # A single required check to protect `main` with, so adding a job later does
+  # not mean editing branch protection.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [lint, test, build, integration, visual, secrets]
+    if: always()
+    steps:
+      - name: Verify every job succeeded
+        run: |
+          results='${{ join(needs.*.result, ' ') }}'
+          echo "job results: $results"
+          for result in $results; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a required job did not succeed"
+              exit 1
+            fi
+          done

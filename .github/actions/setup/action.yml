@@ -1,0 +1,39 @@
+name: Setup workspace
+description: Node, pnpm, a warm dependency store and a warm Turbo cache.
+
+inputs:
+  turbo-cache-key:
+    description: >-
+      Distinguishes this job's Turbo cache entry. Jobs run in parallel and
+      would otherwise race to save the same key; each writes its own and falls
+      back to any entry from this branch, then from main.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm
+      # Version comes from `packageManager` in package.json, so it cannot drift
+      # from what contributors run locally.
+      uses: pnpm/action-setup@v4
+
+    - name: Install Node
+      uses: actions/setup-node@v4
+      with:
+        # `engines.node` is `>=22`; pin a single minor so a Node release cannot
+        # change CI's behaviour without a commit saying so.
+        node-version: "22.x"
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile --prefer-offline
+
+    - name: Restore Turbo cache
+      uses: actions/cache@v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ inputs.turbo-cache-key }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-${{ inputs.turbo-cache-key }}-
+          turbo-${{ runner.os }}-
