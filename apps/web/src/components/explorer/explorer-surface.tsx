@@ -239,7 +239,7 @@ export function ExplorerSurface({
                   }
                   className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
                     activeView === option.value
-                      ? "bg-[color:var(--explorer-cobalt-soft)] text-[color:var(--explorer-cobalt)]"
+                      ? "bg-[color:var(--ok-accent-soft)] text-[color:var(--ok-accent)]"
                       : "text-[color:var(--explorer-muted)]"
                   }`}
                 >

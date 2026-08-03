@@ -204,18 +204,12 @@
    Issues #42–#44 replace the call sites; these go with them. */
 :root,
 [data-theme="dark"] {
-  --explorer-paper: var(--ok-app);
-  --explorer-paper-strong: var(--ok-raised);
   --explorer-panel: var(--ok-panel);
   --explorer-surface: var(--ok-panel);
   --explorer-border: var(--ok-border);
   --explorer-border-strong: var(--ok-border-strong);
   --explorer-ink: var(--ok-ink);
   --explorer-muted: var(--ok-muted);
-  --explorer-cobalt: var(--ok-accent);
-  --explorer-cobalt-soft: var(--ok-accent-soft);
-  --explorer-rust: var(--ok-amber);
-  --explorer-rust-soft: var(--ok-amber-soft);
 }
 
 @layer base {

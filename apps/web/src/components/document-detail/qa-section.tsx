@@ -201,7 +201,7 @@ export function DocumentQaSection({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Quote className="h-4 w-4 text-[var(--explorer-cobalt)]" />
+              <Quote className="h-4 w-4 text-[var(--ok-accent)]" />
               {t("documentDetail.askAboutDocument")}
             </CardTitle>
             {qaHistory.length > 0 && (
@@ -229,7 +229,7 @@ export function DocumentQaSection({
               {qaHistory.map((entry, i) => (
                 <div
                   key={i}
-                  className="rounded-lg border border-[var(--explorer-border)] bg-[var(--explorer-paper)] px-3.5 py-3"
+                  className="rounded-lg border border-[var(--explorer-border)] bg-[var(--ok-app)] px-3.5 py-3"
                 >
                   <p className="text-sm font-medium text-foreground">{entry.question}</p>
                   <div className="mt-2 prose prose-sm max-w-none text-muted-foreground prose-p:leading-relaxed">
@@ -267,18 +267,18 @@ export function DocumentQaSection({
 
           {/* Current answer stream */}
           {(qa.status === "loading" || qa.status === "streaming" || qa.status === "error") && (
-              <div className="rounded-lg border border-[var(--explorer-cobalt-soft)] bg-[var(--explorer-cobalt-soft)] px-4 py-3">
+              <div className="rounded-lg border border-[var(--ok-accent-soft)] bg-[var(--ok-accent-soft)] px-4 py-3">
                 {qa.status === "loading" && (
                   <div className="flex items-center gap-2.5 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin text-[var(--explorer-cobalt)]" />
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--ok-accent)]" />
                     <span className="text-sm">{t("documentDetail.searchingChunks")}</span>
                   </div>
                 )}
 
                 {qa.status === "error" && (
                   <div className="flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--explorer-rust)]" />
-                    <p className="text-sm text-[var(--explorer-rust)]">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ok-amber)]" />
+                    <p className="text-sm text-[var(--ok-amber)]">
                       {qa.errorMessage ?? t("documentDetail.failedToAnswer")}
                     </p>
                   </div>
@@ -288,7 +288,7 @@ export function DocumentQaSection({
                   <div>
                     <div className="prose prose-sm max-w-none text-foreground prose-headings:font-semibold prose-p:leading-relaxed prose-strong:text-foreground">
                       <Markdown>{qa.answerText}</Markdown>
-                      <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--explorer-cobalt)]" />
+                      <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[var(--ok-accent)]" />
                     </div>
                   </div>
                 )}
