@@ -2,11 +2,21 @@
   "name": "@openkeep/types",
   "version": "0.1.0",
   "private": true,
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts",
+    "build": "tsup src/index.ts --format cjs,esm --dts",
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo \"No tests for @openkeep/types\"",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -15,4 +25,3 @@
     "zod": "^3.24.1"
   }
 }
-

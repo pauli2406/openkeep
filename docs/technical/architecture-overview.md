@@ -28,6 +28,25 @@ OpenKeep is a self-hosted document archive that combines:
 - `packages/types`: shared public types and schemas
 - `packages/sdk`: generated API client used by the web app
 
+### Module Formats
+
+`packages/types` and `packages/sdk` are consumed by both a CommonJS runtime
+(the NestJS API and the worker) and a browser bundler (the web app), so both
+build **dual CJS + ESM** and declare an `exports` map with `require` and
+`import` conditions.
+
+This is load-bearing rather than tidiness. `packages/sdk` re-exports the
+types package (`export * from "@openkeep/types"`), and the web app imports
+the SDK at runtime — so a CJS-only types build reaches the browser through
+that re-export and fails with `ReferenceError: module is not defined`, even
+though the web app itself only imports types as types. Vite serves linked
+workspace packages as source rather than pre-bundling them, so nothing
+converts the CJS on the way through.
+
+Any new package the web app can reach, directly or through a re-export, has
+to build ESM too. `packages/config` and `packages/db` are CJS-only because
+only Node runtimes consume them.
+
 ## Runtime Components
 
 ### API
