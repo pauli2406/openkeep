@@ -66,9 +66,9 @@ export function MetricRibbon({
           className={cn(
             "rounded-[var(--r-lg)] border px-5 py-4",
             item.tone === "rust" &&
-              "border-[color:var(--explorer-rust)]/20 bg-[color:var(--explorer-rust-soft)]",
+              "border-[color:var(--ok-amber)]/20 bg-[color:var(--ok-amber-soft)]",
             item.tone === "cobalt" &&
-              "border-[color:var(--explorer-cobalt)]/20 bg-[color:var(--explorer-cobalt-soft)]",
+              "border-[color:var(--ok-accent)]/20 bg-[color:var(--ok-accent-soft)]",
             (!item.tone || item.tone === "neutral") &&
               "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]",
           )}
@@ -132,7 +132,7 @@ export function MiniSparkline({
       <polyline
         points={points.join(" ")}
         fill="none"
-        stroke="var(--explorer-cobalt)"
+        stroke="var(--ok-accent)"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -145,8 +145,8 @@ export function MiniSparkline({
             cx={x}
             cy={y}
             r="3.5"
-            fill="var(--explorer-paper)"
-            stroke="var(--explorer-cobalt)"
+            fill="var(--ok-app)"
+            stroke="var(--ok-accent)"
             strokeWidth="2"
           />
         );
@@ -241,10 +241,10 @@ export function DocumentRows({
           const cardClassName = cn(
             "group relative flex items-start justify-between gap-4 rounded-[var(--r-lg)] border px-4 py-4 transition",
             selectionMode
-              ? "border-[color:var(--explorer-border-strong)] bg-[linear-gradient(180deg,rgba(255,251,244,0.96),rgba(248,241,228,0.96))] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/45"
-              : "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/40",
+              ? "border-[color:var(--explorer-border-strong)] bg-[linear-gradient(180deg,rgba(255,251,244,0.96),rgba(248,241,228,0.96))] hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/45"
+              : "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/40",
             isSelected &&
-              "border-[color:var(--explorer-cobalt)] bg-[linear-gradient(180deg,rgba(236,241,255,0.88),rgba(255,251,244,0.98))] shadow-[0_18px_38px_rgba(56,84,165,0.16)]",
+              "border-[color:var(--ok-accent)] bg-[linear-gradient(180deg,rgba(236,241,255,0.88),rgba(255,251,244,0.98))] shadow-[0_18px_38px_rgba(56,84,165,0.16)]",
           );
 
           const content = (
@@ -260,8 +260,8 @@ export function DocumentRows({
                   className={cn(
                     "absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border transition",
                     isSelected
-                      ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)] shadow-[0_10px_22px_rgba(56,84,165,0.25)]"
-                      : "border-[color:var(--explorer-border-strong)] bg-card text-[color:var(--explorer-muted)] hover:border-[color:var(--explorer-cobalt)] hover:text-[color:var(--explorer-cobalt)]",
+                      ? "border-[color:var(--ok-accent)] bg-[color:var(--ok-accent)] text-[var(--ok-accent-fill-ink)] shadow-[0_10px_22px_rgba(56,84,165,0.25)]"
+                      : "border-[color:var(--explorer-border-strong)] bg-card text-[color:var(--explorer-muted)] hover:border-[color:var(--ok-accent)] hover:text-[color:var(--ok-accent)]",
                   )}
                 >
                   <Check className="h-4 w-4" />
@@ -315,7 +315,7 @@ export function DocumentRows({
                   </span>
                 ) : null}
                 {document.metadata.intelligence?.routing?.documentType ? (
-                  <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-2.5 py-1 ok-eyebrow text-[color:var(--explorer-cobalt)]">
+                  <span className="rounded-full bg-[color:var(--ok-accent-soft)] px-2.5 py-1 ok-eyebrow text-[color:var(--ok-accent)]">
                     {document.metadata.intelligence.routing.documentType}
                   </span>
                 ) : null}
@@ -346,7 +346,7 @@ export function DocumentRows({
                     className={cn(
                       "rounded-full px-2.5 py-1 ok-eyebrow",
                       isSelected
-                        ? "bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)]"
+                        ? "bg-[color:var(--ok-accent)] text-[var(--ok-accent-fill-ink)]"
                         : "bg-card text-[color:var(--explorer-muted)]",
                     )}
                   >
@@ -397,7 +397,7 @@ export function DocumentRows({
 export function LoadingBlock({ label }: { label: string }) {
   return (
     <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
-      <div className="h-9 w-9 animate-spin rounded-full border-2 border-[color:var(--explorer-border-strong)] border-t-[color:var(--explorer-cobalt)]" />
+      <div className="h-9 w-9 animate-spin rounded-full border-2 border-[color:var(--explorer-border-strong)] border-t-[color:var(--ok-accent)]" />
       <p className="text-sm text-[color:var(--explorer-muted)]">{label}</p>
     </div>
   );
@@ -412,7 +412,7 @@ export function ErrorBlock({
 }) {
   return (
     <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] text-center">
-      <AlertCircle className="h-8 w-8 text-[color:var(--explorer-rust)]" />
+      <AlertCircle className="h-8 w-8 text-[color:var(--ok-amber)]" />
       <p className="max-w-md text-sm text-[color:var(--explorer-muted)]">{label}</p>
       {action}
     </div>

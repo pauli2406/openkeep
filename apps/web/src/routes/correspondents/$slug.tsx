@@ -124,7 +124,7 @@ function CorrespondentDetailPage() {
         <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
           Relationship Overview
         </p>
-        <div className="mt-4 rounded-[var(--r-lg)] bg-[color:var(--explorer-paper-strong)] px-5 py-5">
+        <div className="mt-4 rounded-[var(--r-lg)] bg-[color:var(--ok-raised)] px-5 py-5">
           {intelligenceStatus === "ready" && intelligence?.overview ? (
             <div className="space-y-4">
               <p className="max-w-4xl text-base leading-relaxed text-[color:var(--explorer-ink)]">
@@ -195,7 +195,7 @@ function CorrespondentDetailPage() {
                 Monthly Activity
               </p>
               <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-                Rhythm
+                Documents per month
               </h2>
             </div>
             <Orbit className="h-5 w-5 text-[color:var(--explorer-muted)]" />

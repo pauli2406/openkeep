@@ -13,7 +13,7 @@ function DocumentsExplorerPage() {
 
   return (
     <ExplorerSurface
-      eyebrow="Archive Explorer"
+      eyebrow="Documents"
       title="Documents"
       description=""
       search={search}
