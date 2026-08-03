@@ -229,6 +229,7 @@ type TranslationKey =
   | "import.done"
   | "import.duplicate"
   | "import.failed"
+  | "import.embeddingFailed"
   | "import.review"
   | "import.retry"
   | "import.clearFinished"
@@ -768,6 +769,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.done": "Done",
     "import.duplicate": "Duplicate",
     "import.failed": "Failed",
+    "import.embeddingFailed": "Indexing for search failed",
     "import.review": "Review",
     "import.retry": "Retry",
     "import.clearFinished": "Clear finished",
@@ -1306,6 +1308,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.done": "Fertig",
     "import.duplicate": "Duplikat",
     "import.failed": "Fehlgeschlagen",
+    "import.embeddingFailed": "Indexierung für die Suche fehlgeschlagen",
     "import.review": "Prüfung",
     "import.retry": "Erneut versuchen",
     "import.clearFinished": "Fertige entfernen",

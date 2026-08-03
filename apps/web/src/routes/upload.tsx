@@ -125,8 +125,17 @@ function ImportPage() {
   const [isDragging, setIsDragging] = useState(false);
   const queueRef = useRef(queue);
   queueRef.current = queue;
+  // Bumped by "Cancel all". Workers compare the generation they started in
+  // against this before taking the next file, so clearing the list actually
+  // stops the uploads instead of only hiding their rows.
+  const generationRef = useRef(0);
 
   // Dry-run scan: read-only plan, used for the watch-folder status line.
+  // There is no side-effect-free way to read watch-folder status: the only
+  // endpoint is the scan itself, and even a dry run walks the folder and
+  // writes an `archive.watch_folder_scanned` audit entry. So run it at most
+  // once per mount, never on refocus, and ignore dry runs when reporting
+  // what the watch folder has actually imported. Tracked in #91.
   const watchQuery = useQuery({
     queryKey: ["archive", "watch-folder", "status"],
     queryFn: async () => {
@@ -139,7 +148,9 @@ function ImportPage() {
         history?: Array<{ scannedAt: string; imported: number; dryRun: boolean }>;
       };
     },
-    staleTime: 60_000,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false,
   });
 
@@ -159,10 +170,11 @@ function ImportPage() {
           method: "POST",
           body: formData,
         });
-        if (response.status === 409) {
-          patch(item.id, { stage: "duplicate" });
-          return;
-        }
+        // Note: re-uploading content already in the archive does NOT 409.
+        // The API deduplicates the stored file by checksum but deliberately
+        // creates a second document, so a duplicate arrives as a normal 201.
+        // A 409 here is a real storage conflict and belongs in the failed
+        // branch below. Surfacing duplicates needs an API signal — see #92.
         if (!response.ok) {
           const body = await response.text();
           let message = `Upload failed (${response.status})`;
@@ -191,6 +203,36 @@ function ImportPage() {
     [patch],
   );
 
+  /**
+   * Retry after a failure. Once the document exists, the failure was in
+   * processing, not transfer — re-POSTing the binary would leave the failed
+   * document in the archive and add a second one beside it, because the
+   * upload API deliberately creates a new document even when the file record
+   * is deduplicated by checksum. Reprocess that document instead.
+   */
+  const retry = useCallback(
+    async (item: QueuedFile) => {
+      if (!item.documentId) {
+        await uploadOne(item);
+        return;
+      }
+      patch(item.id, { stage: "ocr", errorMessage: undefined });
+      try {
+        const response = await authFetch(
+          `/api/documents/${item.documentId}/reprocess`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+        );
+        if (!response.ok) throw new Error(await response.text());
+      } catch (err) {
+        patch(item.id, {
+          stage: "failed",
+          errorMessage: err instanceof Error ? err.message : t("import.failed"),
+        });
+      }
+    },
+    [patch, uploadOne, t],
+  );
+
   const addFiles = useCallback(
     (files: FileList | File[]) => {
       const accepted = Array.from(files).filter(
@@ -211,9 +253,11 @@ function ImportPage() {
       setQueue((current) => [...current, ...items]);
       // Bounded concurrency: three uploads in flight.
       const work = [...items];
+      const generation = generationRef.current;
       void Promise.all(
         Array.from({ length: Math.min(3, work.length) }, async () => {
           for (let item = work.shift(); item; item = work.shift()) {
+            if (generationRef.current !== generation) return;
             await uploadOne(item);
           }
         }),
@@ -250,11 +294,16 @@ function ImportPage() {
                 errorMessage: doc.lastProcessingError ?? t("import.failed"),
               });
             } else if (doc.status === "ready") {
+              // The API's embedding vocabulary is not_configured | queued |
+              // indexing | ready | stale | failed. Checking for "pending" or
+              // "processing" matched nothing, so the row jumped to done and
+              // stopped polling before the Embed stage was ever shown.
               const embedding =
-                doc.embeddingStatus === "pending" ||
-                doc.embeddingStatus === "processing";
+                doc.embeddingStatus === "queued" || doc.embeddingStatus === "indexing";
+              const embeddingFailed = doc.embeddingStatus === "failed";
               patch(item.id, {
-                stage: embedding ? "embed" : "done",
+                stage: embeddingFailed ? "failed" : embedding ? "embed" : "done",
+                errorMessage: embeddingFailed ? t("import.embeddingFailed") : undefined,
                 typeName: doc.documentType?.name ?? null,
                 needsReview: doc.reviewStatus === "pending",
                 pageCount: doc.metadata?.pageCount ?? null,
@@ -278,7 +327,9 @@ function ImportPage() {
     failed: queue.filter((item) => item.stage === "failed").length,
   };
 
-  const lastScan = watchQuery.data?.history?.[0];
+  // history[0] is the dry run this page just triggered, which says nothing
+  // about the watch folder — report the last real scan.
+  const lastScan = (watchQuery.data?.history ?? []).find((entry) => !entry.dryRun);
   const pickedUpToday = (watchQuery.data?.history ?? [])
     .filter(
       (entry) =>
@@ -433,7 +484,7 @@ function ImportPage() {
                 <StageBar item={item} />
                 <div className="w-24 flex-shrink-0 text-right">
                   {item.stage === "failed" ? (
-                    <Button variant="outline" size="sm" onClick={() => void uploadOne(item)}>
+                    <Button variant="outline" size="sm" onClick={() => void retry(item)}>
                       {t("import.retry")}
                     </Button>
                   ) : item.stage === "done" && item.needsReview ? (
@@ -456,7 +507,13 @@ function ImportPage() {
           </div>
 
           <div className="mt-3 flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => setQueue([])}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                generationRef.current += 1;
+                setQueue([]);
+              }}
+            >
               {t("import.cancelAll")}
             </Button>
             <Button onClick={() => navigate({ to: "/documents" })}>
