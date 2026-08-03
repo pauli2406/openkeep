@@ -62,6 +62,8 @@ export function useTheme() {
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
+    // Guard: test environments and old engines return partial objects.
+    if (!query?.addEventListener) return;
     const onChange = (event: MediaQueryListEvent) => {
       if (storedTheme() === null) setThemeState(event.matches ? "dark" : "light");
     };

@@ -157,10 +157,13 @@ export function TimelineView({
   // Newest first, flattened so a year of months reads as one column.
   const rows = timeline.years
     .flatMap((yearBucket) =>
-      yearBucket.months.map((monthBucket) => ({
-        year: yearBucket.year,
-        ...monthBucket,
-      })),
+      yearBucket.months
+        // guard: an out-of-range month would render an undefined label
+        .filter((monthBucket) => monthBucket.month >= 1 && monthBucket.month <= 12)
+        .map((monthBucket) => ({
+          year: yearBucket.year,
+          ...monthBucket,
+        })),
     )
     .sort((a, b) => b.year - a.year || b.month - a.month);
 

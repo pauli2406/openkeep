@@ -14,5 +14,9 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // The smoke tests drive real interactions through MSW and Radix portals.
+    // They finish in ~2s on an idle machine but sit close to the 5s default
+    // when `turbo test` runs every package at once.
+    testTimeout: 20_000,
   },
 });

@@ -69,6 +69,9 @@ export function renderApp(options: RenderAppOptions = {}) {
 
   return {
     user: userEvent.setup(),
+    // Memory history, so `window.location` never moves — tests that care
+    // where a control navigated read this instead.
+    router: appInstance.router,
     ...render(
       <QueryClientProvider client={appInstance.queryClient}>
         <AuthProvider>
@@ -124,6 +127,9 @@ export function renderAuthenticatedApp(
 
   return {
     user: userEvent.setup(),
+    // Memory history, so `window.location` never moves — tests that care
+    // where a control navigated read this instead.
+    router: appInstance.router,
     ...render(
       <QueryClientProvider client={appInstance.queryClient}>
         <AuthContext.Provider value={authenticatedState}>

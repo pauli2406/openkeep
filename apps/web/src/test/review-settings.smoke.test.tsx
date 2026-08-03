@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { apiUrl } from "./api-url";
@@ -6,6 +6,7 @@ import { renderAuthenticatedApp } from "./render-app";
 import {
   makeDocument,
   makeUser,
+    makeHealthProvidersResponse,
     makeHealthResponse,
     makeProcessingStatusResponse,
     makeReadinessResponse,
@@ -15,7 +16,7 @@ import {
 import { server } from "./msw-server";
 
 describe("review smoke", () => {
-  it("renders the review queue and sends resolve/requeue actions through typed endpoints", async () => {
+  it("works one document at a time: confirm files the first, reprocess requeues the next", async () => {
     const resolveCalls: unknown[] = [];
     const requeueCalls: unknown[] = [];
 
@@ -116,28 +117,38 @@ describe("review smoke", () => {
       route: "/review",
     });
 
-    expect(
-      await screen.findByRole("heading", { name: /review queue/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Review Invoice")).toBeInTheDocument();
+    // Queue on the left, the first document opened on the right.
+    expect(await screen.findByText("Review Invoice")).toBeInTheDocument();
     expect(screen.getByText("Requeue Invoice")).toBeInTheDocument();
-    expect(screen.getByText("Classification Ambiguous")).toBeInTheDocument();
-    expect(screen.getByText("invoice")).toBeInTheDocument();
-    expect(screen.getAllByText(/verify extracted fields/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Due Date").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Reference Number").length).toBeGreaterThan(0);
     expect(
-      screen.getByText("Supplier invoice with unclear classification confidence."),
+      screen.getByRole("heading", { name: /Acme Corp — Review Invoice/ }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Confirm fields")).toBeInTheDocument();
+    expect(screen.getByText("Due date")).toBeInTheDocument();
+    expect(screen.getByText("Reference number")).toBeInTheDocument();
+    // The reason chips in the header strip filter the queue and toggle back.
+    const [ambiguousChip] = screen.getAllByRole("button", {
+      name: /classification ambiguous/i,
+    });
+    await user.click(ambiguousChip);
+    expect(screen.queryByText("Requeue Invoice")).not.toBeInTheDocument();
+    await user.click(ambiguousChip);
+    expect(screen.getByText("Requeue Invoice")).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: /^resolve$/i })[0]);
+    // Confirm files the open document and moves on. Nothing was edited, so
+    // only the resolve call goes out.
+    await user.click(screen.getByRole("button", { name: /confirm and file/i }));
     await waitFor(() => {
       expect(resolveCalls).toEqual([
         { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", body: {} },
       ]);
     });
 
-    await user.click(screen.getAllByRole("button", { name: /^requeue$/i })[1]);
+    // The queue advances to the next document; Reprocess requeues that one.
+    expect(
+      await screen.findByRole("heading", { name: /Requeue Invoice/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^reprocess$/i }));
     await waitFor(() => {
       expect(requeueCalls).toEqual([
         {
@@ -186,6 +197,19 @@ function settingsHandlers(overrides?: {
     ),
     http.get(apiUrl("/api/health/ready"), () =>
       HttpResponse.json(makeReadinessResponse()),
+    ),
+    http.get(apiUrl("/api/health/providers"), () =>
+      HttpResponse.json(makeHealthProvidersResponse()),
+    ),
+    http.get(apiUrl("/api/documents/facets"), () =>
+      HttpResponse.json({
+        years: [],
+        correspondents: [{ id: "2", name: "Acme Corp", count: 4 }],
+        documentTypes: [{ id: "3", name: "Invoice", count: 4 }],
+        tags: [{ id: "1", name: "Important", count: 2 }],
+        amountRange: { min: null, max: null },
+        statuses: [],
+      }),
     ),
     http.get(apiUrl("/api/documents/:id"), ({ params }) =>
       HttpResponse.json(
@@ -237,32 +261,54 @@ function settingsHandlers(overrides?: {
 }
 
 describe("settings smoke", () => {
-  it("renders processing activity and system health data without raw object output", async () => {
+  it("renders the general settings page and its system health data", async () => {
     server.use(...settingsHandlers());
 
     renderAuthenticatedApp({
       route: "/settings",
     });
 
-    expect(
-      await screen.findByRole("heading", { name: /settings/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Processing Activity")).toBeInTheDocument();
-    expect(screen.getByText("System Health")).toBeInTheDocument();
-    expect(screen.getByText("Taxonomy Management")).toBeInTheDocument();
+    // Settings is a shell with a left nav; the general page holds language,
+    // archive and health. Taxonomy and providers are their own routes.
+    expect(await screen.findByRole("link", { name: "General" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tags & taxonomy" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "AI providers" })).toBeInTheDocument();
+
+    expect(screen.getByText("Language Preferences")).toBeInTheDocument();
     expect(screen.getByText("Archive Portability")).toBeInTheDocument();
-    expect(await screen.findByText("OCR Queue")).toBeInTheDocument();
+    expect(screen.getByText("System Health")).toBeInTheDocument();
     expect(await screen.findByText("Readiness Checks")).toBeInTheDocument();
     expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();
   });
 
-  it("shows a stable error state when processing status fails to load", async () => {
+  it("renders queue depth and provider rows on the AI providers page", async () => {
+    server.use(...settingsHandlers());
+
+    renderAuthenticatedApp({
+      route: "/settings/providers",
+    });
+
+    expect(await screen.findByText("Processing queue")).toBeInTheDocument();
+    // Scoped to the page: "Chat" is also a top-nav destination.
+    const page = within(screen.getByRole("main"));
+    expect(page.getByText("Embedding queue")).toBeInTheDocument();
+    expect(page.getByText("Failed recently")).toBeInTheDocument();
+    // One row per pipeline stage, each naming the provider actually in use.
+    expect(page.getByText("Parsing")).toBeInTheDocument();
+    expect(page.getByText("Embeddings")).toBeInTheDocument();
+    expect(page.getByText("Chat")).toBeInTheDocument();
+    expect(page.getAllByText("Local OCR").length).toBeGreaterThan(0);
+    expect(page.getByText("Recent jobs")).toBeInTheDocument();
+    expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();
+  });
+
+  it("shows a stable error state when the provider status fails to load", async () => {
     server.use(
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
       http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json([])),
-      http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([])),
-      http.get(apiUrl("/api/taxonomies/correspondents"), () => HttpResponse.json([])),
-      http.get(apiUrl("/api/taxonomies/document-types"), () => HttpResponse.json([])),
+      http.get(apiUrl("/api/health/providers"), () =>
+        HttpResponse.json(makeHealthProvidersResponse()),
+      ),
       http.get(apiUrl("/api/health/status"), () =>
         HttpResponse.json(
           { message: "Processing status failed" },
@@ -275,11 +321,11 @@ describe("settings smoke", () => {
     );
 
     renderAuthenticatedApp({
-      route: "/settings",
+      route: "/settings/providers",
     });
 
     expect(
-      await screen.findByText("Failed to load processing status."),
+      await screen.findByText("Failed to load provider status."),
     ).toBeInTheDocument();
   });
 
@@ -313,7 +359,7 @@ describe("settings smoke", () => {
     await user.click(screen.getByText(/inspect extracted fields/i));
 
     expect(await screen.findByText("Found values")).toBeInTheDocument();
-    expect(screen.getAllByText("Acme Corp").length).toBeGreaterThan(1);
+    expect(screen.getByText("Acme Corp")).toBeInTheDocument();
     expect(screen.getByText("123.45 EUR")).toBeInTheDocument();
     expect(screen.getByText("Missing key fields")).toBeInTheDocument();
     expect(screen.getByText("Due Date")).toBeInTheDocument();
@@ -362,9 +408,12 @@ describe("settings smoke", () => {
       },
     });
 
-    expect(await screen.findByRole("heading", { name: "Einstellungen" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: "Allgemein" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Tags & Taxonomie" })).toBeInTheDocument();
     expect(screen.getByText("Spracheinstellungen")).toBeInTheDocument();
-    expect(screen.getByText("Benutzerprofil")).toBeInTheDocument();
+    expect(screen.getByText("Archiv-Portabilität")).toBeInTheDocument();
   });
 
   it("creates a new tag via taxonomy management", async () => {
@@ -384,14 +433,16 @@ describe("settings smoke", () => {
     );
 
     const { user } = renderAuthenticatedApp({
-      route: "/settings",
+      route: "/settings/taxonomy",
     });
 
-    expect(await screen.findByText("Taxonomy Management")).toBeInTheDocument();
+    // One list with a kind switcher, not three stacked cards.
+    expect(
+      await screen.findByRole("button", { name: "Correspondents" }),
+    ).toBeInTheDocument();
 
-    const tagInputs = await screen.findAllByPlaceholderText(/enter a name/i);
-    await user.type(tagInputs[0], "Urgent");
-    await user.click(screen.getAllByRole("button", { name: /add/i })[0]);
+    await user.type(await screen.findByPlaceholderText("New entry…"), "Urgent");
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(createCalls).toEqual([{ name: "Urgent" }]);
@@ -410,18 +461,16 @@ describe("settings smoke", () => {
     );
 
     const { user } = renderAuthenticatedApp({
-      route: "/settings",
+      route: "/settings/taxonomy",
     });
 
-    expect(await screen.findByText("Acme Corp")).toBeInTheDocument();
+    // The list opens on tags; switch kinds, select the row, then act on the
+    // selection through the bulk bar.
+    await user.click(await screen.findByRole("button", { name: "Correspondents" }));
+    await user.click(await screen.findByRole("checkbox", { name: "Acme Corp" }));
+    expect(screen.getByText("selected")).toHaveTextContent("1 selected");
 
-    // Find the delete button within the correspondents section
-    const deleteButtons = screen.getAllByRole("button", { name: /delete/i });
-    // The correspondents delete button — Acme Corp is the second taxonomy section
-    // Each taxonomy item has Edit, Merge, Delete buttons
-    // Tags section has "Important" with 3 buttons, correspondents section has "Acme Corp" with 3 buttons
-    // We need the delete button for "Acme Corp"
-    await user.click(deleteButtons[1]);
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
 
     await waitFor(() => {
       expect(deleteCalls).toEqual(["2"]);

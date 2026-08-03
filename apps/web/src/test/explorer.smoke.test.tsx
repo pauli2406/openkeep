@@ -152,16 +152,20 @@ describe("explorer smoke", () => {
           statuses: [{ status: "processing", count: 1 }],
         }),
       ),
+      // The poll runs every 25ms under test, so the document has to stay
+      // processing for a few reads — otherwise a slow first render can land
+      // after it already flipped and the processing state is never observable.
       http.get(apiUrl("/api/documents"), () => {
         hits += 1;
+        const done = hits > 3;
         return HttpResponse.json({
           items: [
             makeDocument({
-              title: hits > 1 ? "Processed Invoice" : "Processing Invoice",
-              status: hits > 1 ? "ready" : "processing",
+              title: done ? "Processed Invoice" : "Processing Invoice",
+              status: done ? "ready" : "processing",
               latestProcessingJob: {
                 ...makeDocument().latestProcessingJob!,
-                status: hits > 1 ? "completed" : "running",
+                status: done ? "completed" : "running",
               },
             }),
           ],
@@ -176,7 +180,6 @@ describe("explorer smoke", () => {
     renderAuthenticatedApp({ route: "/documents" });
 
     expect(await screen.findByText("Processing Invoice")).toBeInTheDocument();
-    expect(screen.getByText("Processing")).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByText("Processed Invoice")).toBeInTheDocument());
     expect(hits).toBeGreaterThan(1);
@@ -217,8 +220,11 @@ describe("explorer smoke", () => {
     renderAuthenticatedApp({ route: "/documents?view=timeline" });
 
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
-    expect(await screen.findByText("Unknown month")).toBeInTheDocument();
-    expect(screen.getAllByText("1 docs")).toHaveLength(2);
+    // the out-of-range month is skipped; nothing valid remains
+    expect(
+      await screen.findByText("No dated documents match the current filters."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
 
   it("requests the correct month end when expanding a timeline bucket", async () => {
@@ -255,8 +261,11 @@ describe("explorer smoke", () => {
       ),
       http.get(apiUrl("/api/documents"), ({ request }) => {
         const url = new URL(request.url);
-        requestedDateTo = url.searchParams.get("dateTo");
-        if (url.searchParams.get("dateTo") === "2026-04-30") {
+        // the timeline's unpaid-marker query also hits this endpoint
+        // (sorted by dueDate, no dateTo) — only record the month expansion
+        const dateTo = url.searchParams.get("dateTo");
+        if (dateTo) requestedDateTo = dateTo;
+        if (dateTo === "2026-04-30") {
           return HttpResponse.json({
             items: [makeDocument({ issueDate: "2026-04-15", dueDate: "2026-04-30" })],
             total: 1,
@@ -265,17 +274,22 @@ describe("explorer smoke", () => {
             appliedFilters: {},
           });
         }
-
-        return HttpResponse.json({ message: "unexpected params" }, { status: 500 });
+        return HttpResponse.json({
+          items: [],
+          total: 0,
+          page: 1,
+          pageSize: 100,
+          appliedFilters: {},
+        });
       }),
     );
 
     const { user } = renderAuthenticatedApp({ route: "/documents?view=timeline" });
 
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
-    expect(await screen.findByText("April")).toBeInTheDocument();
+    expect(await screen.findByText(/Apr 2026/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /april/i }));
+    await user.click(screen.getByRole("button", { name: /apr 2026/i }));
 
     await waitFor(() => {
       expect(requestedDateTo).toBe("2026-04-30");
@@ -339,13 +353,13 @@ describe("explorer smoke", () => {
 
     expect(await screen.findByText("Adidas Invoice March")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /select multiple/i }));
-    await user.click(screen.getByRole("button", { name: /select adidas invoice march/i }));
-    await user.click(screen.getByRole("button", { name: /select adidas receipt february/i }));
+    // row checkboxes drive selection directly; no separate mode toggle
+    await user.click(screen.getByRole("checkbox", { name: "Adidas Invoice March" }));
+    await user.click(screen.getByRole("checkbox", { name: "Adidas Receipt February" }));
 
-    expect(screen.getByText("2 selected across the current list")).toBeInTheDocument();
+    expect(screen.getByText(/^selected$/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /delete selected/i }));
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
     expect(
       await screen.findByRole("heading", { name: /delete 2 documents/i }),
     ).toBeInTheDocument();

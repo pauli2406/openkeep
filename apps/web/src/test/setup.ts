@@ -1,7 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { server } from "./msw-server";
+
+// findBy* defaults to 1s, which these suites exceed when `turbo test` runs
+// every package at once — the same contention the raised testTimeout covers.
+configure({ asyncUtilTimeout: 5_000 });
 
 // Node v25 ships a built-in `localStorage` global that is an empty stub (methods
 // are undefined). When vitest runs with jsdom, jsdom provides its own Storage
@@ -134,6 +138,22 @@ beforeAll(() => {
     writable: true,
     value: ResizeObserverMock,
   });
+
+  // jsdom lays nothing out, so every element measures 0x0. TanStack Virtual
+  // sizes its scroll element from offsetWidth/offsetHeight, so a 0-height
+  // container yields an empty visible range and virtualised lists (taxonomy,
+  // documents) look empty to a test. Give elements a viewport-sized box.
+  for (const [property, size] of [
+    ["offsetWidth", 1280],
+    ["offsetHeight", 800],
+    ["clientWidth", 1280],
+    ["clientHeight", 800],
+  ] as const) {
+    Object.defineProperty(HTMLElement.prototype, property, {
+      configurable: true,
+      get: () => size,
+    });
+  }
 });
 
 afterEach(() => {
