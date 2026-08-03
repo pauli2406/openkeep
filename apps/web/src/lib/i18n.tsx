@@ -257,6 +257,12 @@ type TranslationKey =
   | "today.documentType"
   | "today.previewUnavailable"
   | "documents.bulkUnavailable"
+  | "timeline.monthError"
+  | "timeline.empty"
+  | "timeline.emptyMonth"
+  | "timeline.loadingMonth"
+  | "timeline.unpaid"
+  | "timeline.caption"
   | "documents.reprocess"
   | "documents.date"
   | "documents.selectAll"
@@ -706,6 +712,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.documentType": "Document type",
     "today.previewUnavailable": "No preview available",
     "documents.bulkUnavailable": "Not available yet",
+    "timeline.monthError": "Could not load this month.",
+    "timeline.empty": "No dated documents match the current filters.",
+    "timeline.emptyMonth": "No documents in this month.",
+    "timeline.loadingMonth": "Loading month",
+    "timeline.unpaid": "unpaid",
+    "timeline.caption": "Bar length is document count; the amber marker flags months with unpaid deadlines.",
     "documents.reprocess": "Reprocess",
     "documents.date": "Date",
     "documents.selectAll": "Select all",
@@ -1154,6 +1166,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.documentType": "Dokumententyp",
     "today.previewUnavailable": "Keine Vorschau verfügbar",
     "documents.bulkUnavailable": "Noch nicht verfügbar",
+    "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
+    "timeline.empty": "Keine datierten Dokumente passen zu den Filtern.",
+    "timeline.emptyMonth": "Keine Dokumente in diesem Monat.",
+    "timeline.loadingMonth": "Monat wird geladen",
+    "timeline.unpaid": "offen",
+    "timeline.caption": "Die Balkenlänge zeigt die Anzahl der Dokumente; die gelbe Markierung kennzeichnet Monate mit offenen Fristen.",
     "documents.reprocess": "Neu verarbeiten",
     "documents.date": "Datum",
     "documents.selectAll": "Alle auswählen",

@@ -51,7 +51,13 @@ are selected, with the actions available for them:
 
 ### Timeline View
 
-Use timeline view when you want to browse by year and month.
+Use timeline view to see how much arrived when. It shows one row per month,
+newest first, with a bar whose length is the number of documents in that month,
+the count, and the kinds of document it contained. Months holding an unpaid
+deadline carry an amber marker.
+
+Select a month to expand it in place and list its documents; select a document
+to open it.
 
 This is useful for:
 
