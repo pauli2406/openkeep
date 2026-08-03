@@ -24,7 +24,8 @@ import {
   updateTaxonomy,
 } from "./taxonomy-api";
 
-type Row = { id: string; name: string; slug: string; count: number };
+/** `count` is null until the facets request lands — unknown, not zero. */
+type Row = { id: string; name: string; slug: string; count: number | null };
 type QuickFilter = "all" | "unused" | "duplicates";
 type SortKey = "count" | "name";
 
@@ -46,7 +47,9 @@ function computeSuggestions(rows: Row[]): Map<string, Row> {
     suggestions.set(source.id, target);
   };
   const better = (a: Row, b: Row) =>
-    a.count !== b.count ? a.count > b.count : a.name.length < b.name.length;
+    (a.count ?? 0) !== (b.count ?? 0)
+      ? (a.count ?? 0) > (b.count ?? 0)
+      : a.name.length < b.name.length;
 
   // exact case-insensitive duplicates
   for (const group of byLower.values()) {
@@ -92,6 +95,7 @@ export function TaxonomyManagementSection() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmMergeId, setConfirmMergeId] = useState<string | null>(null);
   const [bulkTargetId, setBulkTargetId] = useState<string>("");
+  const [bulkTargetQuery, setBulkTargetQuery] = useState("");
   const [renameValue, setRenameValue] = useState("");
   const [createValue, setCreateValue] = useState("");
   const anchorId = useRef<string | null>(null);
@@ -122,6 +126,9 @@ export function TaxonomyManagementSection() {
           newEntry: "Neuer Eintrag…",
           empty: "Keine Einträge.",
           loadError: "Liste konnte nicht geladen werden.",
+          actionFailed: "Aktion fehlgeschlagen.",
+          countsUnavailable:
+            "Dokumentanzahlen konnten nicht geladen werden — „Unbenutzt“ ist deaktiviert.",
         }
       : {
           tags: "Tags",
@@ -146,6 +153,9 @@ export function TaxonomyManagementSection() {
           newEntry: "New entry…",
           empty: "No entries.",
           loadError: "Failed to load the list.",
+          actionFailed: "The action failed.",
+          countsUnavailable:
+            "Document counts could not be loaded — “Unused” is unavailable.",
         };
 
   const listQuery = useQuery({
@@ -206,15 +216,20 @@ export function TaxonomyManagementSection() {
     return new Map((source ?? []).map((entry) => [entry.id, entry.count]));
   }, [facetsQuery.data, kind]);
 
+  // Until the facets request succeeds we do not know how many documents use
+  // an entry. Reporting that as 0 would make the Unused filter offer to
+  // delete the entire taxonomy, attached entries included.
+  const countsKnown = facetsQuery.isSuccess;
+
   const allRows = useMemo<Row[]>(
     () =>
       (listQuery.data ?? []).map((entry) => ({
         id: entry.id,
         name: entry.name,
         slug: entry.slug,
-        count: facetCounts.get(entry.id) ?? 0,
+        count: countsKnown ? (facetCounts.get(entry.id) ?? 0) : null,
       })),
-    [listQuery.data, facetCounts],
+    [listQuery.data, facetCounts, countsKnown],
   );
 
   const suggestions = useMemo(() => computeSuggestions(allRows), [allRows]);
@@ -224,16 +239,21 @@ export function TaxonomyManagementSection() {
     let out = allRows;
     if (needle) out = out.filter((row) => row.name.toLowerCase().includes(needle));
     if (quick === "unused") out = out.filter((row) => row.count === 0);
+
     if (quick === "duplicates") out = out.filter((row) => suggestions.has(row.id));
     return [...out].sort((a, b) => {
       const cmp =
-        sortKey === "count" ? a.count - b.count : a.name.localeCompare(b.name);
+        sortKey === "count"
+          ? (a.count ?? 0) - (b.count ?? 0)
+          : a.name.localeCompare(b.name);
       return sortAsc ? cmp : -cmp;
     });
   }, [allRows, filter, quick, suggestions, sortKey, sortAsc]);
 
-  const maxCount = Math.max(...allRows.map((row) => row.count), 1);
-  const unusedCount = allRows.filter((row) => row.count === 0).length;
+  const maxCount = Math.max(...allRows.map((row) => row.count ?? 0), 1);
+  const unusedCount = countsKnown
+    ? allRows.filter((row) => row.count === 0).length
+    : 0;
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -273,7 +293,22 @@ export function TaxonomyManagementSection() {
     setFilter("");
   };
 
+  const mutationError =
+    mergeMutation.error ??
+    deleteMutation.error ??
+    renameMutation.error ??
+    createMutation.error;
+
   const selectedRows = rows.filter((row) => selectedIds.includes(row.id));
+  const bulkTargetNeedle = bulkTargetQuery.trim().toLowerCase();
+  const bulkTargetOptions = allRows
+    .filter(
+      (row) =>
+        !selectedIds.includes(row.id) &&
+        (bulkTargetNeedle === "" ||
+          row.name.toLowerCase().includes(bulkTargetNeedle)),
+    )
+    .slice(0, 50);
   const busy =
     mergeMutation.isPending || deleteMutation.isPending || renameMutation.isPending;
 
@@ -306,7 +341,14 @@ export function TaxonomyManagementSection() {
             ["duplicates", copy.duplicates],
           ] as Array<[QuickFilter, string]>
         ).map(([value, label]) => (
-          <Chip key={value} active={quick === value} onClick={() => setQuick(value)}>
+          <Chip
+            key={value}
+            active={quick === value}
+            // "Unused" is derived from document counts; without them every
+            // entry would look unused.
+            disabled={value === "unused" && !countsKnown}
+            onClick={() => setQuick(value)}
+          >
             {label}
           </Chip>
         ))}
@@ -346,14 +388,27 @@ export function TaxonomyManagementSection() {
               <SelectValue placeholder={copy.bulkMerge} />
             </SelectTrigger>
             <SelectContent>
-              {allRows
-                .filter((row) => !selectedIds.includes(row.id))
-                .slice(0, 50)
-                .map((row) => (
-                  <SelectItem key={row.id} value={row.id}>
-                    {row.name}
-                  </SelectItem>
-                ))}
+              {/* Filter the list rather than truncating it: with 1000 entries
+                  a flat top-50 makes most merge targets unreachable. */}
+              <div className="p-1">
+                <Input
+                  value={bulkTargetQuery}
+                  onChange={(event) => setBulkTargetQuery(event.target.value)}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  placeholder={copy.filter}
+                  className="h-[26px]"
+                />
+              </div>
+              {bulkTargetOptions.map((row) => (
+                <SelectItem key={row.id} value={row.id}>
+                  {row.name}
+                </SelectItem>
+              ))}
+              {bulkTargetOptions.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                  {copy.empty}
+                </p>
+              ) : null}
             </SelectContent>
           </Select>
           <Button
@@ -469,6 +524,19 @@ export function TaxonomyManagementSection() {
         </span>
       </div>
 
+      {/* A failed create, rename, merge or delete used to leave no trace at
+          all — the list simply did not change. */}
+      {mutationError ? (
+        <p className="border-b bg-[var(--ok-red-soft)] px-3 py-1.5 text-sm text-[var(--ok-red)]">
+          {mutationError instanceof Error ? mutationError.message : copy.actionFailed}
+        </p>
+      ) : null}
+      {!countsKnown && facetsQuery.isError ? (
+        <p className="border-b bg-[var(--ok-amber-soft)] px-3 py-1.5 text-xs text-[var(--ok-amber)]">
+          {copy.countsUnavailable}
+        </p>
+      ) : null}
+
       {/* Virtualised rows — never all 1000 at once */}
       {listQuery.isLoading ? (
         <div className="flex h-40 items-center justify-center">
@@ -518,12 +586,16 @@ export function TaxonomyManagementSection() {
                     className="h-2 w-2 flex-shrink-0 rounded-full bg-[var(--ok-accent)]"
                     style={{
                       opacity:
-                        row.count === 0 ? 0.15 : 0.3 + 0.7 * (row.count / maxCount),
+                        row.count == null
+                          ? 0.15
+                          : row.count === 0
+                            ? 0.15
+                            : 0.3 + 0.7 * (row.count / maxCount),
                     }}
                   />
                   <span className="min-w-0 flex-1 truncate text-sm">{row.name}</span>
                   <span className="ok-num w-20 flex-shrink-0 text-right text-sm text-muted-foreground">
-                    {row.count}
+                    {row.count ?? "—"}
                   </span>
                   <span className="flex w-56 flex-shrink-0 items-center justify-end gap-1">
                     {target ? (

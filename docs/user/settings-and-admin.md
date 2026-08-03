@@ -39,22 +39,40 @@ Important:
 - a newly created token is only shown once
 - store it securely when it is generated
 
-## Taxonomy Management
+## Tags and Taxonomy
 
-OpenKeep lets you curate the labels used across the archive.
+`Settings -> Tags & taxonomy` curates the labels used across the archive.
+One list serves all three kinds — switch between `Tags`, `Correspondents` and
+`Types` at the top.
 
-Current taxonomy sections:
+The list is built for large archives: it filters as you type, virtualises the
+rows, and shows how many documents use each entry. Sort by name or by
+document count.
 
-- Tags
-- Correspondents
-- Document Types
+### Quick Filters
 
-For each taxonomy, you can:
+- `All` — everything
+- `Unused` — entries no document uses. Only available once document counts
+  have loaded; if the count request fails, the filter is disabled and the
+  counts show as `—` rather than pretending every entry is unused.
+- `Duplicates` — entries OpenKeep believes are the same thing, such as a
+  case-only difference, a singular and its plural, or a name that is a prefix
+  of another. Each carries a one-click `merge into <name>` suggestion.
 
-- create entries
-- rename entries
-- merge duplicate entries
-- delete entries
+### Acting on Entries
+
+Type a name and press `Add` to create an entry.
+
+Tick one or more rows to open the action bar, which offers:
+
+- merge the selection into another entry — the target picker filters as you
+  type, so it reaches every entry, not only the first page
+- rename, when exactly one row is selected
+- delete the selection
+
+Deleting an entry removes the label, not the documents.
+
+If an action fails, the reason is shown above the list.
 
 Use this to keep the archive consistent when AI-generated labels drift or duplicate.
 
