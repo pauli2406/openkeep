@@ -5,6 +5,8 @@ import { AccessAuthGuard } from "../auth/access-auth.guard";
 import { CurrentPrincipal } from "../auth/current-principal.decorator";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { ArchiveService } from "./archive.service";
+import { ArchiveImportDto, WatchFolderScanDto } from "./dto/archive.dto";
+import { ValidatedBody } from "../common/validated-params";
 
 @ApiTags("archive")
 @ApiBearerAuth()
@@ -22,20 +24,20 @@ export class ArchiveController {
   @Post("import")
   @ApiCreatedResponse({ description: "Import result summary" })
   async importArchive(
-    @Body() body: { snapshot: unknown; mode?: "replace" | "merge" },
+    @ValidatedBody(ArchiveImportDto) body: ArchiveImportDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
-    return this.archiveService.importSnapshot(body.snapshot, principal, body.mode ?? "replace");
+    return this.archiveService.importSnapshot(body.snapshot, principal, body.mode);
   }
 
   @Post("watch-folder/scan")
   @ApiCreatedResponse({ description: "Watch folder scan result" })
   async scanWatchFolder(
-    @Body() body: { dryRun?: boolean } = {},
+    @ValidatedBody(WatchFolderScanDto) body: WatchFolderScanDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.archiveService.scanWatchFolder(principal, {
-      dryRun: body.dryRun ?? false,
+      dryRun: body.dryRun,
     });
   }
 }

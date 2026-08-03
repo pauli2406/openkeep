@@ -33,6 +33,7 @@ import {
 import { AccessAuthGuard } from "./access-auth.guard";
 import { AuthService } from "./auth.service";
 import type { AuthenticatedPrincipal } from "./auth.types";
+import { ValidatedBody } from "../common/validated-params";
 
 // Strict per-IP limits for credential-handling endpoints: 10 requests per
 // minute. This blunts brute-force attempts and bcrypt-based CPU exhaustion.
@@ -47,7 +48,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: "Create the initial owner account" })
   @ApiCreatedResponse({ description: "Owner account created" })
-  async setup(@Body() body: SetupOwnerDto) {
+  async setup(@ValidatedBody(SetupOwnerDto) body: SetupOwnerDto) {
     return this.authService.setupOwner(body);
   }
 
@@ -55,7 +56,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: "Login with the owner account" })
   @ApiCreatedResponse({ description: "Login response with tokens or a 2FA challenge" })
-  async login(@Body() body: LoginDto) {
+  async login(@ValidatedBody(LoginDto) body: LoginDto) {
     return this.authService.login(body);
   }
 
@@ -63,7 +64,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: "Complete a two-factor login challenge" })
   @ApiCreatedResponse({ description: "Login response with tokens" })
-  async loginTwoFactor(@Body() body: TwoFactorLoginDto) {
+  async loginTwoFactor(@ValidatedBody(TwoFactorLoginDto) body: TwoFactorLoginDto) {
     return this.authService.completeTwoFactorLogin(body);
   }
 
@@ -71,7 +72,7 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: "Refresh an expired access token" })
   @ApiCreatedResponse({ description: "Refreshed tokens" })
-  async refresh(@Body() body: RefreshDto) {
+  async refresh(@ValidatedBody(RefreshDto) body: RefreshDto) {
     return this.authService.refresh(body.refreshToken);
   }
 
@@ -79,7 +80,7 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: "Revoke a refresh session" })
   @ApiOkResponse({ description: "Session revoked" })
-  async logout(@Body() body: RefreshDto) {
+  async logout(@ValidatedBody(RefreshDto) body: RefreshDto) {
     await this.authService.logout(body.refreshToken);
     return { success: true };
   }
@@ -98,7 +99,7 @@ export class AuthController {
   @ApiOkResponse({ description: "Updated current user preferences" })
   async updatePreferences(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: UpdateUserLanguagePreferencesDto,
+    @ValidatedBody(UpdateUserLanguagePreferencesDto) body: UpdateUserLanguagePreferencesDto,
   ) {
     return this.authService.updatePreferences(principal, body);
   }
@@ -121,7 +122,7 @@ export class AuthController {
   @ApiCreatedResponse({ description: "Two-factor enabled; returns recovery codes" })
   async enableTwoFactor(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: EnableTwoFactorDto,
+    @ValidatedBody(EnableTwoFactorDto) body: EnableTwoFactorDto,
   ) {
     return this.authService.enableTwoFactor(principal, body);
   }
@@ -134,7 +135,7 @@ export class AuthController {
   @ApiOkResponse({ description: "Two-factor disabled" })
   async disableTwoFactor(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: DisableTwoFactorDto,
+    @ValidatedBody(DisableTwoFactorDto) body: DisableTwoFactorDto,
   ) {
     await this.authService.disableTwoFactor(principal, body);
     return { success: true };
@@ -154,7 +155,7 @@ export class AuthController {
   @ApiCreatedResponse({ description: "Newly created API token" })
   async createToken(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: CreateApiTokenDto,
+    @ValidatedBody(CreateApiTokenDto) body: CreateApiTokenDto,
   ) {
     return this.authService.createApiToken(principal, body);
   }

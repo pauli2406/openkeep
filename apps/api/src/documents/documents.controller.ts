@@ -36,11 +36,13 @@ import {
   RequeueDocumentProcessingResponseDto,
   ReprocessDocumentDto,
   ResolveReviewDto,
+  SaveDocumentQaEntryDto,
   ReviewDocumentsQueryDto,
   SearchDocumentsQueryDto,
   UpdateDocumentDto,
 } from "./dto/document.dto";
 import { DocumentsService } from "./documents.service";
+import { BooleanFlagQuery, ValidatedBody, ValidatedQuery } from "../common/validated-params";
 
 @ApiTags("documents")
 @ApiBearerAuth()
@@ -99,7 +101,7 @@ export class DocumentsController {
   @Get()
   @ApiOkResponse({ description: "List documents with structured and full-text filters" })
   async listDocuments(
-    @Query() query: SearchDocumentsQueryDto,
+    @ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.listDocuments(
@@ -136,7 +138,7 @@ export class DocumentsController {
   @Get("review")
   @ApiOperation({ summary: "List documents currently waiting for review" })
   @ApiOkResponse({ description: "Review queue response" })
-  async listReviewDocuments(@Query() query: ReviewDocumentsQueryDto) {
+  async listReviewDocuments(@ValidatedQuery(ReviewDocumentsQueryDto) query: ReviewDocumentsQueryDto) {
     return this.documentsService.listReviewDocuments({
       processingStatus: query.processingStatus,
       reason: query.reason,
@@ -184,7 +186,7 @@ export class DocumentsController {
   @ApiOkResponse({ description: "Updated document" })
   async updateDocument(
     @Param("id") id: string,
-    @Body() body: UpdateDocumentDto,
+    @ValidatedBody(UpdateDocumentDto) body: UpdateDocumentDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.updateDocument(id, body, principal);
@@ -204,7 +206,7 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: "Updated document after review resolution" })
   async resolveReview(
     @Param("id") id: string,
-    @Body() body: ResolveReviewDto,
+    @ValidatedBody(ResolveReviewDto) body: ResolveReviewDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.resolveReview(id, body, principal);
@@ -215,7 +217,7 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: "Queued processing job metadata" })
   async requeueReview(
     @Param("id") id: string,
-    @Body() body: RequeueDocumentProcessingDto,
+    @ValidatedBody(RequeueDocumentProcessingDto) body: RequeueDocumentProcessingDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.requeueReview(id, body, principal);
@@ -226,7 +228,7 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: "Queued processing job metadata" })
   async reprocessDocument(
     @Param("id") id: string,
-    @Body() body: ReprocessDocumentDto,
+    @ValidatedBody(ReprocessDocumentDto) body: ReprocessDocumentDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.reprocessDocument(id, principal, body?.parseProvider);
@@ -236,7 +238,7 @@ export class DocumentsController {
   @ApiOperation({ summary: "Reprocess multiple documents by selection, filter, or full archive scope" })
   @ApiCreatedResponse({ description: "Bulk reprocess queue result" })
   async batchReprocessDocuments(
-    @Body() body: BatchReprocessDocumentsDto,
+    @ValidatedBody(BatchReprocessDocumentsDto) body: BatchReprocessDocumentsDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<BatchReprocessDocumentsResponseDto> {
     return this.documentsService.batchReprocessDocuments(body, principal);
@@ -256,12 +258,11 @@ export class DocumentsController {
   async streamDocumentSummary(
     @Param("id") id: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Query("force") force: string | undefined,
+    @BooleanFlagQuery("force") force: boolean,
     @Res() reply: FastifyReply,
   ) {
-    const forceRegenerate = force === "true" || force === "1";
     await streamSseResponse(reply, (signal) =>
-      this.documentsService.streamDocumentSummary(id, principal, forceRegenerate, signal),
+      this.documentsService.streamDocumentSummary(id, principal, force, signal),
     );
   }
 
@@ -270,7 +271,7 @@ export class DocumentsController {
   @ApiCreatedResponse({ description: "SSE stream of answer tokens" })
   async streamDocumentAnswer(
     @Param("id") id: string,
-    @Body() body: DocumentAskDto,
+    @ValidatedBody(DocumentAskDto) body: DocumentAskDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res() reply: FastifyReply,
   ) {
@@ -302,13 +303,7 @@ export class DocumentsController {
   async saveQaEntry(
     @Param("id") id: string,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @Body() body: { question: string; answer: string; citations: Array<{
-      chunkIndex: number;
-      pageFrom: number | null;
-      pageTo: number | null;
-      quote: string;
-      score: number;
-    }> },
+    @ValidatedBody(SaveDocumentQaEntryDto) body: SaveDocumentQaEntryDto,
   ) {
     return this.documentsService.saveDocumentQaEntry(
       id,

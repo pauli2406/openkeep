@@ -1176,6 +1176,25 @@ export const DocumentAskRequestSchema = z.object({
   question: z.string().trim().min(1).max(2000),
 });
 
+/**
+ * Body of the deprecated `POST /documents/:id/qa` endpoint. Kept only so the
+ * legacy path is validated like every other route; the stream endpoint
+ * persists its own entry now.
+ */
+export const SaveDocumentQaEntryRequestSchema = z.object({
+  question: z.string().trim().min(1).max(2000),
+  answer: z.string().max(20000),
+  citations: z.array(
+    z.object({
+      chunkIndex: z.number().int().nonnegative(),
+      pageFrom: z.number().int().positive().nullable(),
+      pageTo: z.number().int().positive().nullable(),
+      quote: z.string(),
+      score: z.number(),
+    }),
+  ),
+});
+
 export const DocumentAskCitationSchema = z.object({
   chunkIndex: z.number().int().nonnegative(),
   pageFrom: z.number().int().positive().nullable(),
@@ -1545,6 +1564,7 @@ export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
 export type DocumentAskRequest = z.infer<typeof DocumentAskRequestSchema>;
 export type DocumentAskCitation = z.infer<typeof DocumentAskCitationSchema>;
+export type SaveDocumentQaEntryRequest = z.infer<typeof SaveDocumentQaEntryRequestSchema>;
 export type DocumentAskResponse = z.infer<typeof DocumentAskResponseSchema>;
 export type DocumentSummaryResponse = z.infer<typeof DocumentSummaryResponseSchema>;
 export type ArchiveTag = z.infer<typeof ArchiveTagSchema>;

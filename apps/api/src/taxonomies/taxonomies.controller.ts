@@ -19,6 +19,7 @@ import {
   UpdateTagDto,
 } from "./dto/taxonomy.dto";
 import { TaxonomiesService } from "./taxonomies.service";
+import { ValidatedBody } from "../common/validated-params";
 
 @ApiTags("taxonomies")
 @ApiBearerAuth()
@@ -36,7 +37,7 @@ export class TaxonomiesController {
   @Post("tags")
   @ApiCreatedResponse({ description: "Created tag" })
   async createTag(
-    @Body() body: CreateTagDto,
+    @ValidatedBody(CreateTagDto) body: CreateTagDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.createTag(body, principal);
@@ -46,7 +47,7 @@ export class TaxonomiesController {
   @ApiOkResponse({ description: "Updated tag" })
   async updateTag(
     @Param("id") id: string,
-    @Body() body: UpdateTagDto,
+    @ValidatedBody(UpdateTagDto) body: UpdateTagDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.updateTag(id, body, principal);
@@ -65,7 +66,7 @@ export class TaxonomiesController {
   @ApiCreatedResponse({ description: "Merged tag" })
   async mergeTag(
     @Param("id") id: string,
-    @Body() body: MergeTaxonomyDto,
+    @ValidatedBody(MergeTaxonomyDto) body: MergeTaxonomyDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.mergeTag(id, body, principal);
@@ -80,7 +81,7 @@ export class TaxonomiesController {
   @Post("correspondents")
   @ApiCreatedResponse({ description: "Created correspondent" })
   async createCorrespondent(
-    @Body() body: CreateCorrespondentDto,
+    @ValidatedBody(CreateCorrespondentDto) body: CreateCorrespondentDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.createCorrespondent(body, principal);
@@ -90,7 +91,7 @@ export class TaxonomiesController {
   @ApiOkResponse({ description: "Updated correspondent" })
   async updateCorrespondent(
     @Param("id") id: string,
-    @Body() body: UpdateCorrespondentDto,
+    @ValidatedBody(UpdateCorrespondentDto) body: UpdateCorrespondentDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.updateCorrespondent(id, body, principal);
@@ -109,7 +110,7 @@ export class TaxonomiesController {
   @ApiCreatedResponse({ description: "Merged correspondent" })
   async mergeCorrespondent(
     @Param("id") id: string,
-    @Body() body: MergeTaxonomyDto,
+    @ValidatedBody(MergeTaxonomyDto) body: MergeTaxonomyDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.mergeCorrespondent(id, body, principal);
@@ -124,7 +125,7 @@ export class TaxonomiesController {
   @Post("document-types")
   @ApiCreatedResponse({ description: "Created document type" })
   async createDocumentType(
-    @Body() body: CreateDocumentTypeDto,
+    @ValidatedBody(CreateDocumentTypeDto) body: CreateDocumentTypeDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.createDocumentType(body, principal);
@@ -134,7 +135,7 @@ export class TaxonomiesController {
   @ApiOkResponse({ description: "Updated document type" })
   async updateDocumentType(
     @Param("id") id: string,
-    @Body() body: UpdateDocumentTypeDto,
+    @ValidatedBody(UpdateDocumentTypeDto) body: UpdateDocumentTypeDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.updateDocumentType(id, body, principal);
@@ -153,7 +154,7 @@ export class TaxonomiesController {
   @ApiCreatedResponse({ description: "Merged document type" })
   async mergeDocumentType(
     @Param("id") id: string,
-    @Body() body: MergeTaxonomyDto,
+    @ValidatedBody(MergeTaxonomyDto) body: MergeTaxonomyDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.mergeDocumentType(id, body, principal);
