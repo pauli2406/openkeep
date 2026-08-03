@@ -24,8 +24,11 @@ VERSION="$(node -p "require('$WEB_DIR/node_modules/@playwright/test/package.json
 IMAGE="mcr.microsoft.com/playwright:v${VERSION}-noble"
 
 if [ ! -f "$WEB_DIR/dist/index.html" ]; then
-  echo "no build found — running the web build first" >&2
-  (cd "$REPO_DIR" && pnpm --filter @openkeep/web build)
+  # Through Turbo, not `pnpm --filter`: the web build needs @openkeep/types and
+  # @openkeep/sdk built first, and only Turbo knows that. `pnpm --filter` runs
+  # the package script alone and fails on a clean checkout.
+  echo "no build found — building the web app and its dependencies" >&2
+  (cd "$REPO_DIR" && pnpm exec turbo run build --filter=@openkeep/web)
 fi
 
 exec docker run --rm \
