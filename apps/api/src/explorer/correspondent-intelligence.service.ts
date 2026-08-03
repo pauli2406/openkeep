@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, forwardRef } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import {
   CorrespondentIntelligenceSchema,
   type CorrespondentIntelligence,
@@ -8,7 +8,8 @@ import { correspondents } from "@openkeep/db";
 import { eq } from "drizzle-orm";
 
 import { DatabaseService } from "../common/db/database.service";
-import { DocumentsService } from "../documents/documents.service";
+import type { DocumentsService } from "../documents/documents.service";
+import { DOCUMENTS_SERVICE } from "../documents/documents.tokens";
 import {
   CORRESPONDENT_INTELLIGENCE_QUEUE,
   CORRESPONDENT_SUMMARY_QUEUE,
@@ -40,7 +41,9 @@ export class CorrespondentIntelligenceService {
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(BossService) private readonly bossService: BossService,
     @Inject(LlmService) private readonly llmService: LlmService,
-    @Inject(forwardRef(() => DocumentsService))
+    // Token, not the class: importing DocumentsService here would close a
+    // runtime cycle (documents -> correspondent-intelligence -> documents).
+    @Inject(DOCUMENTS_SERVICE)
     private readonly documentsService: DocumentsService,
   ) {}
 
