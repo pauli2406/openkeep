@@ -288,7 +288,10 @@ export function Omnibar() {
       (list ?? []).filter((entry) => entry.name.toLowerCase().includes(needle)).slice(0, 4);
 
     for (const correspondent of matches(facets?.correspondents)) {
-      const to = `/documents?correspondentIds=%5B%22${correspondent.id}%22%5D`;
+      // The explorer parses these as CSV (see parseExplorerSearch), so a
+      // JSON-encoded array would arrive as the literal `["id"]` and match
+      // nothing. Send the bare id.
+      const to = `/documents?correspondentIds=${encodeURIComponent(correspondent.id)}`;
       rows.push({
         id: `c-${correspondent.id}`,
         section: "documents",
@@ -299,7 +302,7 @@ export function Omnibar() {
       });
     }
     for (const documentType of matches(facets?.documentTypes)) {
-      const to = `/documents?documentTypeIds=%5B%22${documentType.id}%22%5D`;
+      const to = `/documents?documentTypeIds=${encodeURIComponent(documentType.id)}`;
       rows.push({
         id: `t-${documentType.id}`,
         section: "documents",
@@ -310,7 +313,7 @@ export function Omnibar() {
       });
     }
     for (const tag of matches(facets?.tags)) {
-      const to = `/documents?tags=%5B%22${tag.id}%22%5D`;
+      const to = `/documents?tags=${encodeURIComponent(tag.id)}`;
       rows.push({
         id: `g-${tag.id}`,
         section: "documents",
