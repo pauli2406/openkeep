@@ -95,8 +95,57 @@ jobs:
             --tag "ghcr.io/$OWNER/openkeep-worker-base:$VERSION" \
             "ghcr.io/$OWNER/openkeep-worker-base:latest"
 
+      # Preferred path: pin IMAGE_TAG to this release and deploy through the Dokploy API,
+      # so the deployed images are immutable and reproducible. Skipped when
+      # DOKPLOY_API_KEY is absent — then the webhook step below runs instead.
+      - name: Pin IMAGE_TAG and deploy via Dokploy API
+        id: api_deploy
+        if: inputs.deploy && env.DOKPLOY_API_KEY != ''
+        env:
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          DOKPLOY_BASE_URL: ${{ secrets.DOKPLOY_BASE_URL }}
+          COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          api="${DOKPLOY_BASE_URL%/}"
+          auth=(-H "x-api-key: $DOKPLOY_API_KEY"
+                -H "CF-Access-Client-Id: $CF_ID"
+                -H "CF-Access-Client-Secret: $CF_SECRET")
+
+          echo "reading current environment…"
+          current=$(curl -sS "${auth[@]}" "$api/api/compose.one?composeId=$COMPOSE_ID")
+          env_str=$(printf '%s' "$current" | jq -r '.env // ""')
+
+          # Safety net: never write back an environment that lost its secrets.
+          # If the read failed (auth/Access problem) we abort instead of clobbering.
+          for key in POSTGRES_PASSWORD MISTRAL_API_KEY JWT_ACCESS_SECRET OWNER_PASSWORD; do
+            printf '%s\n' "$env_str" | grep -q "^${key}=" || {
+              echo "::error::refusing to update Dokploy: '$key' missing from the environment that was read back. Check DOKPLOY_API_KEY / Access path for /api/compose.*"
+              exit 1
+            }
+          done
+
+          new_env=$(printf '%s\n' "$env_str" | grep -v '^IMAGE_TAG=' || true)
+          new_env="${new_env}"$'\n'"IMAGE_TAG=${VERSION}"
+
+          echo "pinning IMAGE_TAG=$VERSION…"
+          jq -nc --arg id "$COMPOSE_ID" --arg env "$new_env" '{composeId:$id, env:$env}' > /tmp/update.json
+          curl -sS -f -X POST "$api/api/compose.update" "${auth[@]}" \
+            -H 'Content-Type: application/json' --data @/tmp/update.json > /dev/null
+          rm -f /tmp/update.json
+
+          echo "triggering deployment…"
+          curl -sS -f -X POST "$api/api/compose.deploy" "${auth[@]}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"composeId\":\"$COMPOSE_ID\",\"title\":\"Release $VERSION\"}" > /dev/null
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "deployment triggered with IMAGE_TAG=$VERSION"
+
       - name: Trigger Dokploy deployment
-        if: inputs.deploy
+        if: inputs.deploy && steps.api_deploy.outputs.deployed != 'true'
         env:
           WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
           CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

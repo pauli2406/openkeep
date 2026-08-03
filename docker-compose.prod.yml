@@ -87,6 +87,8 @@ services:
 
   migrate:
     image: ghcr.io/pauli2406/openkeep-migrate:${IMAGE_TAG:-latest}
+    # Always re-pull: a moving tag like :latest is otherwise served from the local cache.
+    pull_policy: always
     restart: "no"
     depends_on:
       postgres:
@@ -98,6 +100,8 @@ services:
 
   api:
     image: ghcr.io/pauli2406/openkeep-api:${IMAGE_TAG:-latest}
+    # Always re-pull: a moving tag like :latest is otherwise served from the local cache.
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       postgres:
@@ -123,6 +127,8 @@ services:
 
   worker:
     image: ghcr.io/pauli2406/openkeep-worker:${IMAGE_TAG:-latest}
+    # Always re-pull: a moving tag like :latest is otherwise served from the local cache.
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       postgres:
