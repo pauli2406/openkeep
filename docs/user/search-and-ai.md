@@ -16,7 +16,7 @@ For the broader archive workflow, see [Core Workflows](./core-workflows.md).
 
 ## Search Basics
 
-Open the `Search` page and enter a query.
+Open `Chat` and ask a question.
 
 OpenKeep runs hybrid search, which combines:
 
@@ -65,9 +65,10 @@ This path is best for questions like:
 - Which documents still need review?
 - Which contracts expire soon?
 
-## AI Answer for Archive-Wide Questions
+## Ask Your Archive
 
-On the Search page, use the `AI Answer` panel to ask your archive a question.
+`Chat` is a conversation, not a one-shot search box. Type a question in the
+composer at the bottom and press `Enter`; `Shift+Enter` inserts a newline.
 
 Examples:
 
@@ -85,6 +86,24 @@ When successful, OpenKeep shows:
 - structured item cards for operational answers
 
 If the evidence is too weak, OpenKeep may refuse to answer confidently.
+
+### Conversations
+
+Every question you ask joins the conversation open in the left rail. Use
+`New conversation` to start a fresh thread, and pick an earlier one from
+`Recent` to reread it.
+
+Conversations are stored in your browser, not on the server, so they stay on
+the machine you asked them from and are not part of an archive export.
+
+### Citations
+
+Click a citation marker in an answer to open the quoted passage beside it.
+From there you can copy the quote or jump straight to that place in the
+source document.
+
+Only extracted text is ever sent to the chat provider — never the original
+file.
 
 ## How to Judge an AI Answer
 
