@@ -8,7 +8,7 @@ import {
   redirect,
 } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Upload, Settings, LogOut, Moon, Sun, User } from "lucide-react";
+import { Search, Upload, Settings, Moon, Sun, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -96,11 +96,6 @@ function RootComponent() {
 
   if (!isAuthed) {
     return <Navigate to="/login" replace />;
-  }
-
-  function handleLogout() {
-    auth.logout();
-    navigate({ to: "/" });
   }
 
   const path = location.pathname;
@@ -206,10 +201,7 @@ function RootComponent() {
                     {t("root.nav.profile")}
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut />
-                  {t("root.nav.logout")}
-                </DropdownMenuItem>
+
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
