@@ -4,6 +4,7 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { AccessAuthGuard } from "../auth/access-auth.guard";
 import { ReindexEmbeddingsDto } from "./dto/document.dto";
 import { DocumentsService } from "./documents.service";
+import { ValidatedBody } from "../common/validated-params";
 
 @ApiTags("embeddings")
 @ApiBearerAuth()
@@ -13,7 +14,7 @@ export class EmbeddingsController {
   constructor(@Inject(DocumentsService) private readonly documentsService: DocumentsService) {}
 
   @Post("reindex")
-  async reindexEmbeddings(@Body() body: ReindexEmbeddingsDto) {
+  async reindexEmbeddings(@ValidatedBody(ReindexEmbeddingsDto) body: ReindexEmbeddingsDto) {
     return this.documentsService.reindexEmbeddings(body);
   }
 }

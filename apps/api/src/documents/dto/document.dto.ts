@@ -15,6 +15,7 @@ import {
   RequeueDocumentProcessingRequestSchema,
   RequeueDocumentProcessingResponseSchema,
   ResolveReviewRequestSchema,
+  SaveDocumentQaEntryRequestSchema,
   ReviewReasonSchema,
   SearchDocumentsResponseSchema,
   SemanticSearchResponseSchema,
@@ -90,6 +91,7 @@ export class DocumentResponseDto extends createZodDto(DocumentSchema) {}
 export class DocumentTextResponseDto extends createZodDto(DocumentTextResponseSchema) {}
 export class DocumentHistoryResponseDto extends createZodDto(DocumentHistoryResponseSchema) {}
 export class ResolveReviewDto extends createZodDto(ResolveReviewRequestSchema) {}
+export class SaveDocumentQaEntryDto extends createZodDto(SaveDocumentQaEntryRequestSchema) {}
 export class RequeueDocumentProcessingDto extends createZodDto(
   RequeueDocumentProcessingRequestSchema,
 ) {}

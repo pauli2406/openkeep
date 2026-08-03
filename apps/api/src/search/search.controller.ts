@@ -19,6 +19,7 @@ import {
 } from "../documents/dto/document.dto";
 import { DocumentsService } from "../documents/documents.service";
 import { SearchOrchestratorService } from "./search-orchestrator.service";
+import { ValidatedBody, ValidatedQuery } from "../common/validated-params";
 
 @ApiTags("search")
 @ApiBearerAuth()
@@ -34,7 +35,7 @@ export class SearchController {
   @Get("documents")
   @ApiOkResponse({ description: "Paginated search results" })
   async searchDocuments(
-    @Query() query: SearchDocumentsQueryDto,
+    @ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.listDocuments(
@@ -61,7 +62,7 @@ export class SearchController {
   @Post("semantic")
   @ApiCreatedResponse({ description: "Semantic search results" })
   async semanticSearch(
-    @Body() body: SemanticSearchDto,
+    @ValidatedBody(SemanticSearchDto) body: SemanticSearchDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.documentsService.semanticSearch(body, principal.userId);
@@ -70,7 +71,7 @@ export class SearchController {
   @Post("answer")
   @ApiCreatedResponse({ description: "Extractive answer with citations" })
   async answerQuery(
-    @Body() body: AnswerQueryDto,
+    @ValidatedBody(AnswerQueryDto) body: AnswerQueryDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.searchOrchestratorService.answerQuery(body, principal);
@@ -80,7 +81,7 @@ export class SearchController {
   @ApiOperation({ summary: "Stream an LLM-generated answer for a search query via SSE" })
   @ApiCreatedResponse({ description: "SSE stream of answer tokens" })
   async streamAnswer(
-    @Body() body: AnswerQueryDto,
+    @ValidatedBody(AnswerQueryDto) body: AnswerQueryDto,
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res() reply: FastifyReply,
   ) {

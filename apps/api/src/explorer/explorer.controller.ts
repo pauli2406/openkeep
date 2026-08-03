@@ -5,6 +5,7 @@ import type { SearchDocumentsRequest } from "@openkeep/types";
 import { AccessAuthGuard } from "../auth/access-auth.guard";
 import { SearchDocumentsQueryDto } from "../documents/dto/document.dto";
 import { ExplorerService } from "./explorer.service";
+import { ValidatedQuery } from "../common/validated-params";
 
 type DocumentFilters = SearchDocumentsRequest["filters"];
 const DOCUMENT_STATUSES = ["pending", "processing", "ready", "failed"] as const;
@@ -76,13 +77,13 @@ export class ExplorerController {
 
   @Get("documents/projection")
   @ApiOkResponse({ description: "Semantic projection for filtered documents" })
-  async getDocumentsProjection(@Query() query: SearchDocumentsQueryDto) {
+  async getDocumentsProjection(@ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto) {
     return this.explorerService.getDocumentsProjection(toFilters(query));
   }
 
   @Get("documents/timeline")
   @ApiOkResponse({ description: "Timeline buckets for filtered documents" })
-  async getDocumentsTimeline(@Query() query: SearchDocumentsQueryDto) {
+  async getDocumentsTimeline(@ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto) {
     return this.explorerService.getDocumentsTimeline(toFilters(query));
   }
 }
