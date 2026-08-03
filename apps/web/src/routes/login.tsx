@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/use-auth";
+import { AuthPanel, FieldError } from "@/components/auth/auth-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardHeader,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { OpenKeepLogo } from "@/components/brand/openkeep-logo";
+import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/login")({
@@ -25,7 +18,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const auth = useAuth();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,12 +26,45 @@ function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [twoFactorToken, setTwoFactorToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+
+  const copy =
+    language === "de"
+      ? {
+          signIn: "Anmelden",
+          subtitle: "Dein Archiv läuft auf dieser Maschine.",
+          twoFactorTitle: "Zwei-Faktor-Code",
+          twoFactorSubtitle: "Der 6-stellige Code aus deiner Authenticator-App.",
+          recoverySubtitle: "Einer deiner Wiederherstellungscodes.",
+          codeLabel: "Code",
+          recoveryLabel: "Wiederherstellungscode",
+          useRecovery: "Stattdessen Wiederherstellungscode verwenden",
+          useTotp: "Stattdessen Authenticator-Code verwenden",
+          verify: "Bestätigen",
+          back: "Zurück zur Anmeldung",
+          loginFailed: "Anmeldung fehlgeschlagen",
+          invalidCode: "Ungültiger Code",
+        }
+      : {
+          signIn: "Sign in",
+          subtitle: "Your archive runs on this machine.",
+          twoFactorTitle: "Two-factor code",
+          twoFactorSubtitle: "The 6-digit code from your authenticator app.",
+          recoverySubtitle: "One of your recovery codes.",
+          codeLabel: "Code",
+          recoveryLabel: "Recovery code",
+          useRecovery: "Use a recovery code instead",
+          useTotp: "Use an authenticator code instead",
+          verify: "Verify",
+          back: "Back to login",
+          loginFailed: "Login failed",
+          invalidCode: "Invalid code",
+        };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setIsSubmitting(true);
-
     try {
       const result = await auth.login(email, password);
       if (result.requiresTwoFactor) {
@@ -47,7 +73,7 @@ function LoginPage() {
       }
       await navigate({ to: "/" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : copy.loginFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -58,12 +84,11 @@ function LoginPage() {
     if (!twoFactorToken) return;
     setError("");
     setIsSubmitting(true);
-
     try {
       await auth.completeTwoFactorLogin(twoFactorToken, code.trim());
       await navigate({ to: "/" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid authentication code");
+      setError(err instanceof Error ? err.message : copy.invalidCode);
     } finally {
       setIsSubmitting(false);
     }
@@ -71,107 +96,107 @@ function LoginPage() {
 
   if (twoFactorToken) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
-            <div className="mb-4 flex justify-center">
-              <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-lg" />
-            </div>
-            <CardDescription>
-              Enter the 6-digit code from your authenticator app, or a recovery code.
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={handleTwoFactorSubmit}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Authentication code</Label>
-                <Input
-                  id="code"
-                  inputMode="text"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  placeholder="123456"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </CardContent>
-            <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? t("login.signingIn") : "Verify"}
-              </Button>
-              <button
-                type="button"
-                className="text-center text-sm text-muted-foreground underline-offset-4 hover:underline"
-                onClick={() => {
-                  setTwoFactorToken(null);
-                  setCode("");
-                  setError("");
-                }}
-              >
-                Back to login
-              </button>
-            </CardFooter>
-          </form>
-        </Card>
-      </div>
+      <AuthPanel
+        title={copy.twoFactorTitle}
+        subtitle={useRecoveryCode ? copy.recoverySubtitle : copy.twoFactorSubtitle}
+      >
+        <form onSubmit={handleTwoFactorSubmit} className="flex flex-col gap-3">
+          <div>
+            <Label htmlFor="code" className="text-xs text-muted-foreground">
+              {useRecoveryCode ? copy.recoveryLabel : copy.codeLabel}
+            </Label>
+            <Input
+              id="code"
+              inputMode={useRecoveryCode ? "text" : "numeric"}
+              maxLength={useRecoveryCode ? undefined : 6}
+              autoComplete="one-time-code"
+              autoFocus
+              placeholder={useRecoveryCode ? "xxxx-xxxx" : "123456"}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+              className="ok-num mt-1"
+            />
+            <FieldError>{error}</FieldError>
+          </div>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {copy.verify}
+          </Button>
+          <button
+            type="button"
+            className="text-center text-xs font-semibold text-[var(--ok-accent)] hover:underline"
+            onClick={() => {
+              setUseRecoveryCode((current) => !current);
+              setCode("");
+              setError("");
+            }}
+          >
+            {useRecoveryCode ? copy.useTotp : copy.useRecovery}
+          </button>
+          <button
+            type="button"
+            className="text-center text-xs text-muted-foreground hover:underline"
+            onClick={() => {
+              setTwoFactorToken(null);
+              setCode("");
+              setError("");
+            }}
+          >
+            {copy.back}
+          </button>
+        </form>
+      </AuthPanel>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <div className="mb-4 flex justify-center">
-            <OpenKeepLogo markClassName="h-10 w-10" wordmarkClassName="text-lg" />
-          </div>
-          <CardDescription>{t("login.description")}</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("login.email")}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{t("login.password")}</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? t("login.signingIn") : t("login.signIn")}
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              {t("login.needSetup")} {" "}
-              <Link
-                to="/setup"
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                {t("login.goToSetup")}
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
+    <AuthPanel
+      title={copy.signIn}
+      subtitle={copy.subtitle}
+      footer={
+        <>
+          <span className="text-muted-foreground">
+            {t("login.needSetup")}{" "}
+            <Link to="/setup" className="font-semibold text-[var(--ok-accent)] hover:underline">
+              {t("login.goToSetup")}
+            </Link>
+          </span>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div>
+          <Label htmlFor="email" className="text-xs text-muted-foreground">
+            {t("login.email")}
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label htmlFor="password" className="text-xs text-muted-foreground">
+            {t("login.password")}
+          </Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="mt-1"
+          />
+          <FieldError>{error}</FieldError>
+        </div>
+        <Button type="submit" className="mt-1 w-full" disabled={isSubmitting}>
+          {isSubmitting ? t("login.signingIn") : copy.signIn}
+        </Button>
+      </form>
+    </AuthPanel>
   );
 }
