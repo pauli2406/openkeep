@@ -14,23 +14,6 @@ export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
-function monthLabel(month: string, language: string): string {
-  const [year, monthPart] = month.split("-");
-  const date = new Date(Number(year), Number(monthPart) - 1, 1);
-  return date.toLocaleDateString(language === "de" ? "de-DE" : "en-GB", {
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function archiveAge(firstMonth: string): string {
-  const [year, month] = firstMonth.split("-").map(Number);
-  const start = new Date(year, month - 1, 1);
-  const months = Math.max(0, (Date.now() - start.getTime()) / (30.44 * 86_400_000));
-  const years = Math.floor(months / 12);
-  const rest = Math.round(months % 12);
-  return years > 0 ? `${years}y ${rest}m` : `${rest}m`;
-}
 
 function ProfilePage() {
   const { language } = useI18n();
@@ -43,12 +26,10 @@ function ProfilePage() {
           owner: "Inhaber",
           signOut: "Abmelden",
           documents: "Dokumente",
-          since: "seit",
-          reviewed: "Von dir geprüft",
-          stillOpen: (n: number) => `${n} noch offen`,
+          reviewed: "Nicht in Prüfung",
+          stillOpen: (n: number) => `${n} warten auf Prüfung`,
           correspondents: "Korrespondenten",
-          archiveAge: "Archivalter",
-          firstImport: "erster Import",
+          documentTypes: "Dokumententypen",
           yourData: "Deine Daten",
           exportArchive: "Archiv exportieren",
           exportNote:
@@ -58,12 +39,10 @@ function ProfilePage() {
           owner: "Owner",
           signOut: "Sign out",
           documents: "Documents",
-          since: "since",
-          reviewed: "Reviewed by you",
-          stillOpen: (n: number) => `${n} still open`,
+          reviewed: "Not awaiting review",
+          stillOpen: (n: number) => `${n} waiting for review`,
           correspondents: "Correspondents",
-          archiveAge: "Archive age",
-          firstImport: "first import",
+          documentTypes: "Document types",
           yourData: "Your data",
           exportArchive: "Export archive",
           exportNote:
@@ -86,8 +65,9 @@ function ProfilePage() {
       .join("") || "?";
 
   const stats = insightsQuery.data?.stats;
-  const firstMonth = insightsQuery.data?.monthlyActivity?.[0]?.month ?? null;
-  const reviewed =
+  // Not "reviewed by you": `not_required` documents are in here too, and the
+  // API exposes no resolved-review count. Say what the number is instead.
+  const notAwaitingReview =
     stats != null ? Math.max(0, stats.totalDocuments - stats.pendingReview) : null;
 
   async function exportArchive() {
@@ -138,13 +118,11 @@ function ProfilePage() {
           {
             label: copy.documents,
             value: stats?.totalDocuments?.toLocaleString() ?? "—",
-            note: firstMonth
-              ? `${copy.since} ${monthLabel(firstMonth, language)}`
-              : null,
+            note: null,
           },
           {
             label: copy.reviewed,
-            value: reviewed?.toLocaleString() ?? "—",
+            value: notAwaitingReview?.toLocaleString() ?? "—",
             note: stats ? copy.stillOpen(stats.pendingReview) : null,
           },
           {
@@ -153,11 +131,9 @@ function ProfilePage() {
             note: null,
           },
           {
-            label: copy.archiveAge,
-            value: firstMonth ? archiveAge(firstMonth) : "—",
-            note: firstMonth
-              ? `${copy.firstImport} ${monthLabel(firstMonth, language)}`
-              : null,
+            label: copy.documentTypes,
+            value: stats?.documentTypesCount?.toLocaleString() ?? "—",
+            note: null,
           },
         ].map((stat) => (
           <div
