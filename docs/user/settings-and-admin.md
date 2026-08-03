@@ -108,34 +108,50 @@ The page can show:
 
 Dry-run mode is useful when you want to inspect what would happen without importing anything yet.
 
-## Processing Activity
+## AI Providers
 
-The processing activity section gives you a live view of the system.
+`Settings -> AI providers` is the single place to see both what is configured
+and what the pipeline is doing. Processing activity used to be a separate
+section; it now lives here.
 
-It includes:
+### At a Glance
 
-- OCR queue depth
+Four numbers across the top:
+
+- processing queue depth
 - embedding queue depth
-- total document count
-- pending review count
-- document status breakdown
-- recent processing jobs
+- failures among the recent jobs
+- average time per document
 
-Use this page when uploads appear delayed or when you want to confirm that a reprocess or embed job has been queued.
+Note that the failure count and the average cover the recent-jobs window the
+server returns, not the whole archive.
 
-## AI and Providers
+### The Three Stages
 
-The AI and Providers section shows which providers are configured and available.
+One row each for `Parsing`, `Embeddings` and `Chat`, listing every provider
+OpenKeep knows about and marking:
 
-This includes:
+- `Active` — the one in use
+- `Fallback` — used when the active one cannot handle a document
+- `Available` — configured and ready, but not selected
+- `No model set` — credentials present, but no model configured
+- `Not configured` — no credentials
 
-- chat providers
-- embedding providers
-- parse providers
-- active provider markers
-- fallback provider markers where applicable
+Each row also says whether the provider runs on this machine or is a cloud
+service that documents leave the machine for.
 
-Use this page to confirm whether a missing AI feature is caused by configuration rather than by a document problem.
+These states describe your **configuration**, not a live connection test.
+OpenKeep does not currently probe providers, so a provider whose credentials
+are valid but whose service is down still shows as available.
+
+### Recent Jobs
+
+The list below shows the newest jobs across both queues with their status —
+queued, running, done or failed — and how long each took.
+
+Use this page when uploads appear delayed, when you want to confirm a
+reprocess or embed job was queued, or to check whether a missing AI feature
+is a configuration problem rather than a document problem.
 
 ## System Health
 
