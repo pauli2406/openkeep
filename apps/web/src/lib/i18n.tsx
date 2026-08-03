@@ -304,7 +304,6 @@ type TranslationKey =
   | "groups.empty"
   | "groups.groupedBy"
   | "groups.caption"
-  | "groups.captionUnfiltered"
   | "timeline.empty"
   | "timeline.emptyMonth"
   | "timeline.loadingMonth"
@@ -836,7 +835,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "groups.empty": "No correspondents match the current filters.",
     "groups.groupedBy": "Grouped by correspondent",
     "groups.caption": "Block size is document count.",
-    "groups.captionUnfiltered": "Block size is document count, across the whole archive — these totals ignore the active filters.",
     "timeline.empty": "No dated documents match the current filters.",
     "timeline.emptyMonth": "No documents in this month.",
     "timeline.loadingMonth": "Loading month",
@@ -1367,7 +1365,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "groups.empty": "Keine Korrespondenten passen zu den Filtern.",
     "groups.groupedBy": "Nach Korrespondent gruppiert",
     "groups.caption": "Die Blockgröße zeigt die Anzahl der Dokumente.",
-    "groups.captionUnfiltered": "Die Blockgröße zeigt die Anzahl der Dokumente im gesamten Archiv — diese Summen ignorieren die aktiven Filter.",
     "timeline.empty": "Keine datierten Dokumente passen zu den Filtern.",
     "timeline.emptyMonth": "Keine Dokumente in diesem Monat.",
     "timeline.loadingMonth": "Monat wird geladen",

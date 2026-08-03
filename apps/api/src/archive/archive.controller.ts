@@ -30,6 +30,16 @@ export class ArchiveController {
     return this.archiveService.importSnapshot(body.snapshot, principal, body.mode);
   }
 
+  @Get("watch-folder")
+  @ApiOkResponse({
+    description:
+      "Watch folder status and scan history. Read-only: unlike the scan " +
+      "endpoint it does not walk the folder or record an audit event.",
+  })
+  async getWatchFolderStatus() {
+    return this.archiveService.getWatchFolderStatus();
+  }
+
   @Post("watch-folder/scan")
   @ApiCreatedResponse({ description: "Watch folder scan result" })
   async scanWatchFolder(

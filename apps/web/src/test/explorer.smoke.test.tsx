@@ -371,4 +371,73 @@ describe("explorer smoke", () => {
     });
     expect(screen.getByText("Archive Export")).toBeInTheDocument();
   });
+
+  it("sends the active filters to the facets endpoint and labels groups with the dominant type", async () => {
+    const facetUrls: string[] = [];
+
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), ({ request }) => {
+        facetUrls.push(new URL(request.url).search);
+        return HttpResponse.json({
+          years: [{ year: 2026, count: 2 }],
+          correspondents: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              name: "Stadtwerke",
+              slug: "stadtwerke",
+              count: 84,
+              dominantTypeName: "Utility Bill",
+            },
+            {
+              id: "44444444-4444-4444-4444-444444444444",
+              name: "Finanzamt",
+              slug: "finanzamt",
+              count: 12,
+              // Correspondents with no typed documents still render (#74).
+              dominantTypeName: null,
+            },
+          ],
+          documentTypes: [],
+          tags: [],
+          amountRange: { min: null, max: null },
+          statuses: [],
+        });
+      }),
+      http.get(apiUrl("/api/documents"), () =>
+        HttpResponse.json({
+          items: [],
+          total: 0,
+          page: 1,
+          pageSize: 20,
+          appliedFilters: {},
+        }),
+      ),
+    );
+
+    renderAuthenticatedApp({
+      route: "/documents?view=groups&statuses=ready",
+    });
+
+    // The sidebar lists correspondents too, so scope to the groups blocks.
+    const block = (await screen.findAllByRole("button", { name: /Stadtwerke/ })).find(
+      (candidate) => candidate.textContent?.includes("84"),
+    );
+    expect(block).toBeDefined();
+    // #74: the dominant type is shown per block, no longer capped at four.
+    expect(block!.textContent).toContain("Utility Bill");
+    expect(
+      screen.getAllByRole("button", { name: /Finanzamt/ }).some((candidate) =>
+        candidate.textContent?.includes("12"),
+      ),
+    ).toBe(true);
+
+    // #73: facet counts are scoped to the active filters, so the request has
+    // to carry them. Paging is meaningless for an aggregate and is stripped.
+    await waitFor(() => expect(facetUrls.length).toBeGreaterThan(0));
+    expect(facetUrls[0]).toContain("statuses=ready");
+    expect(facetUrls[0]).not.toContain("pageSize");
+
+    // The caption no longer warns that totals ignore the filters.
+    expect(screen.queryByText(/ignore the active filters/i)).not.toBeInTheDocument();
+  });
 });

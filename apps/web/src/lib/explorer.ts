@@ -29,7 +29,14 @@ export type ExplorerSearch = {
 
 export type ExplorerFacets = {
   years: Array<{ year: number; count: number }>;
-  correspondents: Array<{ id: string; name: string; slug: string; count: number }>;
+  correspondents: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    count: number;
+    /** the type most of this correspondent's filtered documents carry */
+    dominantTypeName: string | null;
+  }>;
   documentTypes: Array<{ id: string; name: string; slug: string; count: number }>;
   tags: Array<{ id: string; name: string; slug: string; count: number }>;
   amountRange: { min: number | null; max: number | null };
@@ -132,24 +139,12 @@ function setParam(
   }
 
   if (Array.isArray(value)) {
-    // Repeated bare keys. Encodings measured against the running API:
-    //   ?k=a      -> 500  (arrives as a string, never reaches the DTO's CSV
-    //                      preprocess, fails in Postgres with
-    //                      `Array value must start with "{"`)
-    //   ?k=a,b    -> 500  (same reason)
-    //   ?k[]=a    -> 200 but UNFILTERED — the bracketed key is not in the
-    //                      query schema and is silently discarded
-    //   ?k=a&k=b  -> 200 and correctly filtered
-    // Only a repeated key parses into an array, so a lone value is sent
-    // twice; `IN (a, a)` is equivalent to `IN (a)`.
-    const items = value.filter(
-      (item) => item !== undefined && item !== null && item !== "",
-    );
-    if (items.length === 1) {
-      params.append(key, String(items[0]));
-      params.append(key, String(items[0]));
-    } else {
-      for (const item of items) params.append(key, String(item));
+    // Repeated keys, which the API's CSV preprocess also accepts. Until #76
+    // was fixed a lone value had to be sent twice, because a single value
+    // arrived as a string and blew up in Postgres; that is no longer needed.
+    for (const item of value) {
+      if (item === undefined || item === null || item === "") continue;
+      params.append(key, String(item));
     }
     return;
   }
@@ -179,8 +174,22 @@ export function nextExplorerSearch(
   ) as ExplorerSearch;
 }
 
-export async function fetchExplorerFacets(): Promise<ExplorerFacets> {
-  const response = await authFetch("/api/documents/facets");
+/**
+ * Facet counts. Passing the active search narrows every dimension except the
+ * one being counted, so a selected value does not collapse its own group.
+ * Called with no search it aggregates the whole archive.
+ */
+export async function fetchExplorerFacets(
+  search?: ExplorerSearch,
+): Promise<ExplorerFacets> {
+  const params = search ? explorerSearchToParams(search) : new URLSearchParams();
+  // Paging is meaningless for an aggregate and only invites validation errors.
+  params.delete("page");
+  params.delete("pageSize");
+  params.delete("sort");
+  params.delete("direction");
+  const suffix = params.toString();
+  const response = await authFetch(`/api/documents/facets${suffix ? `?${suffix}` : ""}`);
   if (!response.ok) {
     throw new Error("Failed to load explorer facets");
   }

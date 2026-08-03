@@ -3,14 +3,11 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type GroupsViewProps = {
-  /**
-   * Archive-wide: `/api/documents/facets` accepts no query, so these counts
-   * do not narrow with the sidebar. The caption says so.
-   */
+  /** Counts narrow with the sidebar since #73; the dominant type comes from
+   *  the same filtered set since #74. */
   facets: ExplorerFacets | undefined;
   selectedCorrespondentIds: string[];
   onSelectCorrespondent: (correspondentId: string) => void;
-  hasFilters?: boolean;
 };
 
 /**
@@ -21,7 +18,6 @@ export function GroupsView({
   facets,
   selectedCorrespondentIds,
   onSelectCorrespondent,
-  hasFilters = false,
 }: GroupsViewProps) {
   const { t } = useI18n();
 
@@ -42,7 +38,7 @@ export function GroupsView({
       <p className="mb-3 text-sm">
         <span className="font-semibold text-foreground">{t("groups.groupedBy")}</span>{" "}
         <span className="text-muted-foreground">
-          {hasFilters ? t("groups.captionUnfiltered") : t("groups.caption")}
+          {t("groups.caption")}
         </span>
       </p>
 
@@ -63,8 +59,15 @@ export function GroupsView({
               )}
             >
               <span className="truncate text-sm text-foreground">{group.name}</span>
-              <span className="ok-num text-xl font-semibold text-foreground">
-                {group.count}
+              <span className="flex items-baseline gap-1.5">
+                <span className="ok-num text-xl font-semibold text-foreground">
+                  {group.count}
+                </span>
+                {group.dominantTypeName ? (
+                  <span className="truncate text-xs text-muted-foreground">
+                    {group.dominantTypeName}
+                  </span>
+                ) : null}
               </span>
             </button>
           );

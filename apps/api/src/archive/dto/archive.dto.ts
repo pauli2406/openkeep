@@ -4,6 +4,7 @@ import {
   ArchiveSnapshotSchema,
   WatchFolderScanRequestSchema,
   WatchFolderScanResponseSchema,
+  WatchFolderStatusResponseSchema,
 } from "@openkeep/types";
 import { createZodDto } from "nestjs-zod";
 
@@ -12,3 +13,4 @@ export class WatchFolderScanDto extends createZodDto(WatchFolderScanRequestSchem
 export class ArchiveSnapshotDto extends createZodDto(ArchiveSnapshotSchema) {}
 export class ArchiveImportResultDto extends createZodDto(ArchiveImportResultSchema) {}
 export class WatchFolderScanResponseDto extends createZodDto(WatchFolderScanResponseSchema) {}
+export class WatchFolderStatusResponseDto extends createZodDto(WatchFolderStatusResponseSchema) {}

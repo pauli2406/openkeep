@@ -30,6 +30,7 @@ import {
   type WatchFolderScanHistoryItem,
   WatchFolderScanItem,
   WatchFolderScanRequest,
+  WatchFolderStatusResponse,
   WatchFolderScanResponse,
   type WatchFolderScanSummary,
 } from "@openkeep/types";
@@ -378,6 +379,29 @@ export class ArchiveService {
     }
 
     return normalized;
+  }
+
+  /**
+   * Watch-folder status without side effects.
+   *
+   * The only way to read this used to be a dry-run scan, which walks the
+   * folder recursively and writes an `archive.watch_folder_scanned` audit
+   * entry — so merely opening the import page polluted the history and then
+   * reported its own dry run as the last scan (#91). This reads the recorded
+   * history instead and touches nothing.
+   */
+  async getWatchFolderStatus(): Promise<WatchFolderStatusResponse> {
+    const configuredPath = this.configService.get("WATCH_FOLDER_PATH") ?? null;
+    const history = await this.listWatchFolderScanHistory();
+
+    return {
+      configured: Boolean(configuredPath),
+      configuredPath,
+      lastScan: history[0] ?? null,
+      // What the folder actually brought in, ignoring dry runs.
+      lastImport: history.find((entry) => !entry.dryRun) ?? null,
+      history,
+    };
   }
 
   async scanWatchFolder(

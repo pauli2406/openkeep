@@ -165,7 +165,9 @@ export function TaxonomyManagementSection() {
 
   const facetsQuery = useQuery({
     queryKey: ["documents", "facets"],
-    queryFn: fetchExplorerFacets,
+    // Wrapped: fetchExplorerFacets now takes an optional search, and a bare
+    // reference would receive TanStack's query context as that argument.
+    queryFn: () => fetchExplorerFacets(),
     staleTime: 60_000,
   });
 

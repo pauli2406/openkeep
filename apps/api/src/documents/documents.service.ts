@@ -29,6 +29,7 @@ import type {
   BatchReprocessDocumentsResponse,
   DeleteDocumentResponse,
   Document,
+  UploadDocumentResponse,
   DocumentAskResponse,
   DocumentMetadata,
   DocumentSummaryResponse,
@@ -52,7 +53,7 @@ import type {
   UpdateDocumentInput,
   UploadDocumentMetadata,
 } from "@openkeep/types";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHash } from "crypto";
 import { lookup as lookupMimeType } from "mime-types";
 import type { Readable } from "stream";
@@ -164,7 +165,7 @@ export class DocumentsService {
     @Inject(LlmAnswerProvider) private readonly llmAnswerProvider: LlmAnswerProvider,
   ) {}
 
-  async uploadDocument(input: UploadDocumentInput): Promise<Document> {
+  async uploadDocument(input: UploadDocumentInput): Promise<UploadDocumentResponse> {
     if (input.buffer.length === 0) {
       throw new BadRequestException("Uploaded file is empty");
     }
@@ -212,6 +213,21 @@ export class DocumentsService {
 
     const fileRecord = insertedFile;
 
+    // Any document already pointing at this file record means the same bytes
+    // are in the archive. We still create a new document — that is deliberate,
+    // a file can legitimately be filed twice — but the caller has no other way
+    // to know, so the response says so (#92).
+    const [duplicateOf] = await this.databaseService.db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        createdAt: documents.createdAt,
+      })
+      .from(documents)
+      .where(eq(documents.fileId, fileRecord.id))
+      .orderBy(asc(documents.createdAt), asc(documents.id))
+      .limit(1);
+
     const [document] = await this.databaseService.db
       .insert(documents)
       .values({
@@ -236,7 +252,16 @@ export class DocumentsService {
       },
     });
     await this.processingService.enqueueDocumentProcessing(document.id, false);
-    return this.getDocument(document.id);
+    return {
+      ...(await this.getDocument(document.id)),
+      duplicateOf: duplicateOf
+        ? {
+            id: duplicateOf.id,
+            title: duplicateOf.title,
+            createdAt: duplicateOf.createdAt.toISOString(),
+          }
+        : null,
+    };
   }
 
   async listDocuments(
@@ -472,74 +497,143 @@ export class DocumentsService {
     };
   }
 
-  async getBrowseFacets() {
+  /**
+   * Facet counts for the browse UI.
+   *
+   * Counts respect the caller's active filters, with the usual faceting
+   * exception: a dimension never constrains its own counts. Filtering by
+   * correspondent A still returns every correspondent's count, so the sidebar
+   * can offer B — but it does narrow the type, tag, year and status counts to
+   * A's documents. Without that exception, selecting a value would collapse
+   * its own group to a single row.
+   *
+   * Passing no filters reproduces the previous archive-wide behaviour.
+   */
+  async getBrowseFacets(
+    filters: SearchDocumentsRequest["filters"] = {},
+    ownerUserId?: string,
+  ) {
+    // `d` is the alias every clause from buildDocumentFilterQuery expects.
+    const scope = (omit?: keyof NonNullable<SearchDocumentsRequest["filters"]>) => {
+      const applied = { ...(filters ?? {}) };
+      if (omit === "correspondentIds") {
+        delete applied.correspondentIds;
+        delete applied.correspondentId;
+      } else if (omit === "documentTypeIds") {
+        delete applied.documentTypeIds;
+        delete applied.documentTypeId;
+      } else if (omit === "statuses") {
+        delete applied.statuses;
+        delete applied.status;
+      } else if (omit === "tags") {
+        delete applied.tags;
+      } else if (omit === "year") {
+        delete applied.year;
+      }
+      return this.buildDocumentFilterQuery(applied, ownerUserId);
+    };
+
+    const yearScope = scope("year");
+    const correspondentScope = scope("correspondentIds");
+    const typeScope = scope("documentTypeIds");
+    const tagScope = scope("tags");
+    const statusScope = scope("statuses");
+    const amountScope = scope();
+
     const [years, correspondentFacets, typeFacets, tagFacets, amountRange, statusFacets] =
       await Promise.all([
-      this.databaseService.pool.query<{
-        year: string;
-        count: string;
-      }>(
-        `SELECT extract(year from coalesce(issue_date, created_at::date))::int AS year,
-                count(*)::int AS count
-         FROM documents
-         GROUP BY year
-         ORDER BY year DESC`,
-      ),
-      this.databaseService.pool.query<{
-        id: string;
-        name: string;
-        slug: string;
-        count: string;
-      }>(
-        `SELECT c.id, c.name, c.slug, count(*)::int AS count
-         FROM documents d
-         INNER JOIN correspondents c ON c.id = d.correspondent_id
-         GROUP BY c.id
-         ORDER BY count DESC, c.name ASC`,
-      ),
-      this.databaseService.pool.query<{
-        id: string;
-        name: string;
-        slug: string;
-        count: string;
-      }>(
-        `SELECT dt.id, dt.name, dt.slug, count(*)::int AS count
-         FROM documents d
-         INNER JOIN document_types dt ON dt.id = d.document_type_id
-         GROUP BY dt.id
-         ORDER BY count DESC, dt.name ASC`,
-      ),
-      this.databaseService.pool.query<{
-        id: string;
-        name: string;
-        slug: string;
-        count: string;
-      }>(
-        `SELECT t.id, t.name, t.slug, count(*)::int AS count
-         FROM document_tag_links dtl
-         INNER JOIN tags t ON t.id = dtl.tag_id
-         GROUP BY t.id
-         ORDER BY count DESC, t.name ASC`,
-      ),
-      this.databaseService.pool.query<{
-        min_amount: string | null;
-        max_amount: string | null;
-      }>(
-        `SELECT min(amount)::text AS min_amount,
-                max(amount)::text AS max_amount
-         FROM documents
-         WHERE amount IS NOT NULL`,
-      ),
-      this.databaseService.pool.query<{
-        status: string;
-        count: string;
-      }>(
-        `SELECT status::text AS status, count(*)::int AS count
-         FROM documents
-         GROUP BY status
-         ORDER BY status ASC`,
-      ),
-    ]);
+        this.databaseService.pool.query<{ year: string; count: string }>(
+          `SELECT extract(year from coalesce(d.issue_date, d.created_at::date))::int AS year,
+                  count(*)::int AS count
+           FROM documents d
+           WHERE ${yearScope.whereSql}
+           GROUP BY year
+           ORDER BY year DESC`,
+          yearScope.params,
+        ),
+        // The dominant type per correspondent comes from the same filtered set
+        // rather than the dashboard's top-4 list, so every block can be
+        // labelled (#74).
+        this.databaseService.pool.query<{
+          id: string;
+          name: string;
+          slug: string;
+          count: string;
+          dominant_type_name: string | null;
+        }>(
+          `WITH filtered AS (
+             SELECT d.correspondent_id, d.document_type_id
+             FROM documents d
+             WHERE ${correspondentScope.whereSql} AND d.correspondent_id IS NOT NULL
+           ),
+           ranked AS (
+             SELECT correspondent_id,
+                    document_type_id,
+                    row_number() OVER (
+                      PARTITION BY correspondent_id
+                      ORDER BY count(*) DESC, document_type_id ASC
+                    ) AS rn
+             FROM filtered
+             WHERE document_type_id IS NOT NULL
+             GROUP BY correspondent_id, document_type_id
+           )
+           SELECT c.id, c.name, c.slug, count(*)::int AS count, dt.name AS dominant_type_name
+           FROM filtered f
+           INNER JOIN correspondents c ON c.id = f.correspondent_id
+           LEFT JOIN ranked r ON r.correspondent_id = c.id AND r.rn = 1
+           LEFT JOIN document_types dt ON dt.id = r.document_type_id
+           GROUP BY c.id, c.name, c.slug, dt.name
+           ORDER BY count DESC, c.name ASC`,
+          correspondentScope.params,
+        ),
+        this.databaseService.pool.query<{
+          id: string;
+          name: string;
+          slug: string;
+          count: string;
+        }>(
+          `SELECT dt.id, dt.name, dt.slug, count(*)::int AS count
+           FROM documents d
+           INNER JOIN document_types dt ON dt.id = d.document_type_id
+           WHERE ${typeScope.whereSql}
+           GROUP BY dt.id
+           ORDER BY count DESC, dt.name ASC`,
+          typeScope.params,
+        ),
+        this.databaseService.pool.query<{
+          id: string;
+          name: string;
+          slug: string;
+          count: string;
+        }>(
+          `SELECT t.id, t.name, t.slug, count(*)::int AS count
+           FROM documents d
+           INNER JOIN document_tag_links dtl ON dtl.document_id = d.id
+           INNER JOIN tags t ON t.id = dtl.tag_id
+           WHERE ${tagScope.whereSql}
+           GROUP BY t.id
+           ORDER BY count DESC, t.name ASC`,
+          tagScope.params,
+        ),
+        this.databaseService.pool.query<{
+          min_amount: string | null;
+          max_amount: string | null;
+        }>(
+          `SELECT min(d.amount)::text AS min_amount,
+                  max(d.amount)::text AS max_amount
+           FROM documents d
+           WHERE ${amountScope.whereSql} AND d.amount IS NOT NULL`,
+          amountScope.params,
+        ),
+        this.databaseService.pool.query<{ status: string; count: string }>(
+          `SELECT d.status::text AS status, count(*)::int AS count
+           FROM documents d
+           WHERE ${statusScope.whereSql}
+           GROUP BY d.status
+           ORDER BY d.status ASC`,
+          statusScope.params,
+        ),
+      ]);
 
     return {
       years: years.rows.map((row) => ({
@@ -551,6 +645,7 @@ export class DocumentsService {
         name: row.name,
         slug: row.slug,
         count: Number(row.count),
+        dominantTypeName: row.dominant_type_name,
       })),
       documentTypes: typeFacets.rows.map((row) => ({
         id: row.id,

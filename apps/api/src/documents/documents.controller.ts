@@ -131,8 +131,32 @@ export class DocumentsController {
   }
 
   @Get("facets")
-  async getFacets() {
-    return this.documentsService.getBrowseFacets();
+  @ApiOkResponse({
+    description:
+      "Facet counts, narrowed by the same filters as GET /documents. " +
+      "Each dimension ignores its own selection so its other options stay visible.",
+  })
+  async getFacets(
+    @ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.getBrowseFacets(
+      {
+        year: query.year,
+        dateFrom: query.dateFrom,
+        dateTo: query.dateTo,
+        correspondentId: query.correspondentId,
+        correspondentIds: query.correspondentIds,
+        documentTypeId: query.documentTypeId,
+        documentTypeIds: query.documentTypeIds,
+        status: query.status,
+        statuses: query.statuses,
+        tags: query.tags,
+        amountMin: query.amountMin,
+        amountMax: query.amountMax,
+      },
+      principal.userId,
+    );
   }
 
   @Get("review")
