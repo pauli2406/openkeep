@@ -29,7 +29,7 @@ function formatMonthLabel(month: string): string {
 function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
   if (data.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+      <div className="flex h-32 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
         No monthly activity yet
       </div>
     );
@@ -112,7 +112,7 @@ function ClusterStrip({
   const { t } = useI18n();
   if (items.length === 0) {
     return (
-      <div className="flex min-h-40 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+      <div className="flex min-h-40 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
         No clusters in view
       </div>
     );
@@ -125,7 +125,7 @@ function ClusterStrip({
           key={item.id}
           to="/correspondents/$slug"
           params={{ slug: item.slug }}
-          className="group rounded-[1.7rem] border border-[color:var(--explorer-border)] bg-white/60 p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35"
+          className="group rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/60 p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -174,14 +174,14 @@ function TaskTable({
 
   if (items.length === 0) {
     return (
-      <div className="flex min-h-44 items-center justify-center rounded-[1.6rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+      <div className="flex min-h-44 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
         {t("dashboard.noTasksInView")}
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.7rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
+    <div className="overflow-hidden rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
       <div className="grid grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] gap-4 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper-strong)] px-4 py-3 ok-eyebrow text-[color:var(--explorer-muted)]">
         <span>{t("dashboard.correspondent")}</span>
         <span>{t("dashboard.document")}</span>
@@ -235,7 +235,7 @@ function TaskTable({
                   size="sm"
                   onClick={() => onComplete(item.documentId)}
                   disabled={isCompleting}
-                  className="w-full rounded-full md:w-auto"
+                  className="w-full md:w-auto"
                 >
                   <Check className="h-4 w-4" />
                   {isCompleting ? t("dashboard.saving") : t("dashboard.done")}
@@ -337,7 +337,7 @@ function DashboardPage() {
         ]}
       />
 
-      <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
@@ -347,7 +347,7 @@ function DashboardPage() {
                {t("dashboard.rhythm")}
              </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link to="/documents" search={{ view: "timeline" }}>
               {t("dashboard.openTimeline")}
             </Link>
@@ -356,7 +356,7 @@ function DashboardPage() {
         <HorizontalTimeline data={data.monthlyActivity} />
       </section>
 
-      <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
@@ -366,7 +366,7 @@ function DashboardPage() {
                {t("dashboard.largestClusters")}
              </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link to="/documents" search={{ view: "galaxy" }}>
               <Sparkles className="h-4 w-4" />
               {t("dashboard.openGalaxyView")}
@@ -377,7 +377,7 @@ function DashboardPage() {
         <ClusterStrip items={data.topCorrespondents.slice(0, 4)} />
       </section>
 
-      <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
              {t("dashboard.deadlines")}

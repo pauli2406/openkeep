@@ -89,7 +89,7 @@ function CorrespondentDetailPage() {
 
   return (
     <div className="space-y-8 p-6 md:p-8">
-      <Button variant="ghost" className="rounded-full" onClick={() => navigate({ to: "/" })}>
+      <Button variant="ghost" onClick={() => navigate({ to: "/" })}>
         <ArrowLeft className="h-4 w-4" />
         Back to dashboard
       </Button>
@@ -120,11 +120,11 @@ function CorrespondentDetailPage() {
         ]}
       />
 
-      <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
           Relationship Overview
         </p>
-        <div className="mt-4 rounded-[1.7rem] bg-[color:var(--explorer-paper-strong)] px-5 py-5">
+        <div className="mt-4 rounded-[var(--r-lg)] bg-[color:var(--explorer-paper-strong)] px-5 py-5">
           {intelligenceStatus === "ready" && intelligence?.overview ? (
             <div className="space-y-4">
               <p className="max-w-4xl text-base leading-relaxed text-[color:var(--explorer-ink)]">
@@ -155,7 +155,7 @@ function CorrespondentDetailPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Key Changes
           </p>
@@ -164,7 +164,7 @@ function CorrespondentDetailPage() {
               intelligence!.changes.map((change: CorrespondentIntelligenceChange, index: number) => (
                 <div
                   key={`${change.title}-${index}`}
-                  className="rounded-[1.4rem] border border-[color:var(--explorer-border)] bg-white/60 px-4 py-3"
+                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/60 px-4 py-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">
@@ -188,7 +188,7 @@ function CorrespondentDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
@@ -205,7 +205,7 @@ function CorrespondentDetailPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Current State
           </p>
@@ -214,7 +214,7 @@ function CorrespondentDetailPage() {
               intelligence!.currentState.map((fact: CorrespondentIntelligenceFact) => (
                 <div
                   key={`${fact.label}-${fact.value}`}
-                  className="flex items-start justify-between gap-3 rounded-[1.35rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                  className="flex items-start justify-between gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
                 >
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
@@ -233,7 +233,7 @@ function CorrespondentDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Timeline Highlights
           </p>
@@ -242,7 +242,7 @@ function CorrespondentDetailPage() {
               timelineEvents.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
                 <div
                   key={`${event.title}-${index}`}
-                  className="rounded-[1.4rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">{event.title}</p>
@@ -261,7 +261,7 @@ function CorrespondentDetailPage() {
       </div>
 
       {intelligence?.domainInsights.insurance ? (
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(236,241,255,0.68))] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(236,241,255,0.68))] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Insurance Lens
           </p>
@@ -302,7 +302,7 @@ function CorrespondentDetailPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Type Breakdown
           </p>
@@ -310,7 +310,7 @@ function CorrespondentDetailPage() {
             {data.documentTypeBreakdown.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center justify-between rounded-[1.35rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
+                className="flex items-center justify-between rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-3"
               >
                 <span className="text-sm font-medium text-[color:var(--explorer-ink)]">{item.name}</span>
                 <span className="ok-num text-sm text-[color:var(--explorer-muted)]">{item.count}</span>
@@ -319,11 +319,11 @@ function CorrespondentDetailPage() {
           </div>
         </section>
 
-        <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             Legacy Summary
           </p>
-          <div className="mt-4 rounded-[1.6rem] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-4">
+          <div className="mt-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/55 px-4 py-4">
             <p className="text-sm leading-relaxed text-[color:var(--explorer-muted)]">
               {data.summary ?? intelligence?.profile?.narrative ?? "No summary available yet."}
             </p>
@@ -331,7 +331,7 @@ function CorrespondentDetailPage() {
         </section>
       </div>
 
-      <section className="space-y-5 rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
+      <section className="space-y-5 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
@@ -341,7 +341,7 @@ function CorrespondentDetailPage() {
               Documents from {data.correspondent.name}
             </h2>
           </div>
-          <Button asChild variant="ghost" className="rounded-full">
+          <Button asChild variant="ghost">
             <Link
               to="/documents"
               search={{
@@ -432,7 +432,7 @@ function findCurrentStateFact(
 
 function FactPanel({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[1.45rem] border border-[color:var(--explorer-border)] bg-white/65 px-4 py-4">
+    <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/65 px-4 py-4">
       <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
         {label}
       </p>
@@ -451,7 +451,7 @@ function Chip({ children }: { children: string }) {
 
 function EmptyCard({ label }: { label: string }) {
   return (
-    <div className="flex min-h-28 items-center justify-center rounded-[1.5rem] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
+    <div className="flex min-h-28 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
       {label}
     </div>
   );

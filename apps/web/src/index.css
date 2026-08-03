@@ -250,6 +250,26 @@
     font-feature-settings: "tnum";
   }
 
+  /* ─── Table rows (#42) ───
+     There is no Table primitive in this app; rows are composed per
+     screen. These give every screen the same density to inherit. */
+
+  .ok-row {
+    display: flex;
+    align-items: center;
+    min-height: 34px;
+    border-bottom: 1px solid var(--ok-border-soft);
+  }
+
+  /* A row carrying a second line (title + subtitle). */
+  .ok-row-2 {
+    min-height: 48px;
+  }
+
+  .ok-row:hover {
+    background: var(--ok-bar);
+  }
+
   /* ─── Omnibar Animations ─── */
 
   .omnibar-backdrop {

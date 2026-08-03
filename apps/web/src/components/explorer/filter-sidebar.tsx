@@ -86,7 +86,7 @@ export function FilterSidebar({
   return (
     <aside
       className={cn(
-        "rounded-[2rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5 shadow-[0_24px_80px_rgba(39,33,22,0.08)]",
+        "rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5 shadow-[0_24px_80px_rgba(39,33,22,0.08)]",
         className,
       )}
     >
@@ -103,7 +103,7 @@ export function FilterSidebar({
         <Button
           variant="ghost"
           size="sm"
-          className="rounded-full text-[color:var(--explorer-muted)]"
+          className="text-[color:var(--explorer-muted)]"
           onClick={() =>
             onSearchChange({
               query: undefined,
