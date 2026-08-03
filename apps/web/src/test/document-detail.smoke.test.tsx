@@ -32,15 +32,17 @@ describe("document detail smoke", () => {
   it("polls document detail until processing completes", async () => {
     let documentHits = 0;
     let textHits = 0;
+    let processingFinished = false;
 
     server.use(
       ...taxonomyHandlers(),
-      // The document only finishes on the fourth read so both dependent
-      // queries get a chance to poll while it is still processing — the
-      // text query stops as soon as the document reports `ready`.
+      // The test decides when processing finishes, rather than counting a
+      // fixed number of polls. Tying it to a poll count made this racy under
+      // load: the transition could land before the processing state was ever
+      // observable, or after the wait window closed.
       http.get(apiUrl(`/api/documents/${documentId}`), () => {
         documentHits += 1;
-        const done = documentHits > 3;
+        const done = processingFinished;
         return HttpResponse.json(
           makeDocument({
             id: documentId,
@@ -87,12 +89,22 @@ describe("document detail smoke", () => {
 
     renderAuthenticatedApp({ route: `/documents/${documentId}` });
 
-    await waitFor(
-      () => expect(screen.getAllByText("Processed March Invoice").length).toBeGreaterThan(0),
-      { timeout: 3000 },
+    // The processing state is on screen ...
+    expect(
+      (await screen.findAllByText("Processing March Invoice")).length,
+    ).toBeGreaterThan(0);
+
+    // ... and both queries keep polling while it lasts. These conditions
+    // recur until they hold, so no wait depends on a poll landing inside a
+    // particular window.
+    await waitFor(() => expect(documentHits).toBeGreaterThan(1));
+    await waitFor(() => expect(textHits).toBeGreaterThan(1));
+
+    // Let processing finish; the next poll picks it up.
+    processingFinished = true;
+    await waitFor(() =>
+      expect(screen.getAllByText("Processed March Invoice").length).toBeGreaterThan(0),
     );
-    await waitFor(() => expect(documentHits).toBeGreaterThan(1), { timeout: 3000 });
-    await waitFor(() => expect(textHits).toBeGreaterThan(1), { timeout: 3000 });
   });
 
   it("loads the detail page and reprocesses with the selected OCR provider", async () => {
