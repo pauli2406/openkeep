@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FilterSidebar } from "./filter-sidebar";
+import { ActiveFilters } from "./active-filters";
 import { GroupsView } from "./groups-view";
 import {
   ErrorBlock,
@@ -321,6 +322,14 @@ export function ExplorerSurface({
         ) : null}
 
         <div className="space-y-5">
+          <ActiveFilters
+            facets={facetsQuery.data}
+            search={search}
+            onSearchChange={(updates) =>
+              onSearchChange(nextExplorerSearch(search, updates))
+            }
+          />
+
           {activeView === "list" ? (
             documentsQuery.isLoading ? (
               <LoadingBlock label="Loading filtered documents" />

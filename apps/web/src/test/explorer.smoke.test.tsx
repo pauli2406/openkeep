@@ -53,7 +53,7 @@ describe("explorer smoke", () => {
     renderAuthenticatedApp({ route: "/documents" });
 
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
-    expect(screen.getByText("Explorer Filters")).toBeInTheDocument();
+    expect(screen.getByText("Filters")).toBeInTheDocument();
     expect(await screen.findByText("Adidas Invoice March")).toBeInTheDocument();
     expect(screen.getByText("Adidas")).toBeInTheDocument();
   });
