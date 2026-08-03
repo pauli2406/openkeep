@@ -349,6 +349,9 @@ type TranslationKey =
   | "omnibar.footerOpen"
   | "omnibar.footerAsk"
   | "omnibar.footerCommands"
+  | "settingsNav.general"
+  | "settingsNav.taxonomy"
+  | "settingsNav.providers"
   | "documents.reprocess"
   | "documents.date"
   | "documents.selectAll"
@@ -889,6 +892,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.footerOpen": "open",
     "omnibar.footerAsk": "ask",
     "omnibar.footerCommands": "commands",
+    "settingsNav.general": "General",
+    "settingsNav.taxonomy": "Tags & taxonomy",
+    "settingsNav.providers": "AI providers",
     "documents.reprocess": "Reprocess",
     "documents.date": "Date",
     "documents.selectAll": "Select all",
@@ -1428,6 +1434,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.footerOpen": "öffnen",
     "omnibar.footerAsk": "fragen",
     "omnibar.footerCommands": "Befehle",
+    "settingsNav.general": "Allgemein",
+    "settingsNav.taxonomy": "Tags & Taxonomie",
+    "settingsNav.providers": "KI-Anbieter",
     "documents.reprocess": "Neu verarbeiten",
     "documents.date": "Datum",
     "documents.selectAll": "Alle auswählen",

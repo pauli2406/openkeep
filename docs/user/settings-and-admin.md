@@ -5,9 +5,13 @@ description: Manage tokens, taxonomies, portability, provider visibility, and sy
 
 # Settings and Admin
 
-The `Settings` page is the administrative control area for OpenKeep.
+The `Settings` page is the administrative control area for OpenKeep. It has
+three sections in its left navigation: `General` (language preferences, watch
+folder, archive import/export, system health), `Tags & taxonomy`, and
+`AI providers`.
 
-It is where you manage access, taxonomy curation, archive portability, provider visibility, and system health.
+Account management — your profile, two-factor authentication and API tokens —
+moved to the `Profile` page, opened from the avatar menu in the top bar.
 
 For operator-focused guidance outside the UI, see [Operations Overview](../operations/README.md).
 
