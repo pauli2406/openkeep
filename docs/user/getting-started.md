@@ -20,7 +20,10 @@ OpenKeep stores your documents, extracts text and metadata from them, and helps 
 
 ## First-Time Setup
 
-If the archive has not been initialized yet, open the app and complete the setup screen.
+If the archive has not been initialized yet, open the app and complete the
+setup wizard. It has three steps.
+
+### Step 1 — Owner Account
 
 You will be asked for:
 
@@ -32,7 +35,24 @@ Current password requirement:
 
 - at least 12 characters
 
-After setup, OpenKeep creates the initial owner account and signs you in.
+There is exactly one owner account. Creating it signs you in.
+
+### Step 2 — Document Language
+
+Choose the language OCR and extraction should read your documents in. This
+sets your AI processing and chat language; you can change it later under
+`Settings -> General`.
+
+You can skip this step and keep the default.
+
+### Step 3 — Watch Folder
+
+An optional folder OpenKeep imports from automatically. It is configured on
+the server through the `WATCH_FOLDER_PATH` environment variable rather than
+in the app, so this step only tells you where it will appear — on the Import
+page — once that variable is set.
+
+Choosing `Done` finishes setup and lands you on Today.
 
 ## Signing In
 
