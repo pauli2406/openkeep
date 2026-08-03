@@ -77,6 +77,41 @@ The current smoke suite covers:
 - review/settings flows
 - document detail workflows
 
+### Visual Regression
+
+Primary command:
+
+- `pnpm --filter @openkeep/web test:visual`
+- `pnpm --filter @openkeep/web test:visual:update` to re-bless intended changes
+
+Not part of `pnpm test`: it needs a Chromium binary, installed deliberately
+with `pnpm --filter @openkeep/web exec playwright install chromium`.
+
+It screenshots each redesigned screen in **both themes at 1280 and 1024** — the
+same matrix the redesign was reviewed against by hand — and compares against
+baselines in `apps/web/visual/__screenshots__`. 44 screenshots in total.
+
+Everything the images depend on is pinned, so a diff means the rendering
+changed and nothing else:
+
+- a fixed mock API (`visual/mock-api.mjs`), no database and no seeded data
+- a frozen clock, so relative labels like "3 days overdue" are stable
+- animations and transitions disabled, spinners hidden
+- a fixed device scale, and the production build rather than the dev server
+
+The tolerance is a small absolute pixel budget rather than a ratio. On a fixed
+Chromium build these screens render bit-identical between runs; a percentage
+tolerance was loose enough that changing the entire accent colour still passed
+on most screens.
+
+**Requires network access.** `index.css` pulls Public Sans and IBM Plex Mono
+from Google Fonts, and text metrics drive every box on the page. The suite
+asserts the font actually loaded and fails with that explanation rather than
+producing thousands of unexplained pixel diffs.
+
+Baselines are captured on Linux. Another platform rasterises text differently
+and will diff on every snapshot.
+
 ## Mocking Strategy
 
 The web test stack currently uses:
@@ -109,9 +144,14 @@ That document is currently the main bridge between automated validation and oper
 
 The repo still has room to improve in areas such as:
 
+- **no CI workflow runs lint, tests or the build.** `.github/workflows` covers
+  image builds and docs search reindexing only, so every suite described here
+  is run by hand
 - broader end-to-end archive workflow automation
 - retrieval quality benchmarking as a first-class operator workflow
 - richer regression coverage for cross-provider behavior in production-like environments
+- the visual suite covers screens at rest; interactive states (menus open,
+  rows selected, validation errors) are not captured
 
 ## Recommended Contributor Workflow
 
@@ -121,7 +161,8 @@ For most product changes, the practical validation path is:
 2. run backend typecheck
 3. run web typecheck
 4. run web smoke tests
-5. use the manual smoke checklist when the change affects user-facing archive flows
+5. run the visual suite when the change touches styling, layout or tokens
+6. use the manual smoke checklist when the change affects user-facing archive flows
 
 ## Related Documents
 
