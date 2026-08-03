@@ -69,9 +69,10 @@ Search combines keyword matching, semantic search, and structured archive answer
 
 The Review queue shows documents that need manual attention.
 
-### Upload
+### Import
 
-The Upload page lets you add files directly to the archive.
+The Import page lets you add files directly to the archive. It is the `Import`
+button on the right of the top bar.
 
 ### Settings
 

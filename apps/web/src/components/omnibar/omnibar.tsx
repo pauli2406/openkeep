@@ -133,6 +133,13 @@ interface TextBlock {
 // Main Omnibar
 // ---------------------------------------------------------------------------
 
+/** Fired by the top bar's search field; the Omnibar keeps owning its state. */
+export const OMNIBAR_OPEN_EVENT = "openkeep:omnibar-open";
+
+export function openOmnibar() {
+  window.dispatchEvent(new Event(OMNIBAR_OPEN_EVENT));
+}
+
 export function Omnibar() {
   const location = useLocation();
   const [screen, setScreen] = useState<OmnibarScreen>("idle");
@@ -261,6 +268,12 @@ export function Omnibar() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, open, close, stepBack]);
 
+  // The top bar's search field opens the omnibar without owning its state.
+  useEffect(() => {
+    window.addEventListener(OMNIBAR_OPEN_EVENT, open);
+    return () => window.removeEventListener(OMNIBAR_OPEN_EVENT, open);
+  }, [open]);
+
   // ─── Scroll lock when open ───
 
   useEffect(() => {
@@ -289,25 +302,7 @@ export function Omnibar() {
 
   return (
     <>
-      {/* ─── Resting Trigger ─── */}
-      {!isOpen && (
-        <div className="fixed right-4 top-20 z-40 md:right-6 md:top-6">
-          <button
-            type="button"
-            onClick={open}
-            aria-label="Open archive search"
-            className="omnibar-rest group flex h-12 items-center gap-2 rounded-2xl border border-[color:var(--explorer-border)] bg-white/90 px-3 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.05)] backdrop-blur-sm transition-all duration-200 hover:border-[color:var(--explorer-border-strong)] hover:shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08)]"
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-[color:var(--explorer-paper)] text-[color:var(--explorer-muted)] transition-colors group-hover:bg-[color:var(--explorer-cobalt-soft)] group-hover:text-[color:var(--explorer-cobalt)]">
-              <Search className="h-4 w-4" />
-            </span>
-            <kbd className="hidden items-center gap-1 rounded-lg border border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper)] px-2 py-1 text-[11px] font-medium text-[color:var(--explorer-muted)] sm:flex">
-              <Command className="h-3 w-3" />
-              <span>K</span>
-            </kbd>
-          </button>
-        </div>
-      )}
+      {/* The resting trigger lives in the top bar now (#43). */}
 
       {/* ─── Overlay ─── */}
       {isOpen && (
