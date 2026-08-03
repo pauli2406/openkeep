@@ -73,6 +73,12 @@ type FieldsRailProps = {
   tags: TaxonomyTag[];
   onCreateTag: (name: string) => void;
   createTagPending: boolean;
+  onCreateCorrespondent: (name: string) => void;
+  createCorrespondentPending: boolean;
+  /** manually overridden fields, e.g. ["issueDate", "amount"] */
+  lockedFields?: string[];
+  /** clears the manual override on the given fields in one request */
+  onUnlockFields?: (fields: string[]) => void;
   onSave: () => void;
   onReset: () => void;
   saving: boolean;
@@ -122,14 +128,28 @@ function FieldRow({
   display,
   dirty,
   mono = false,
+  locked = false,
+  blurCloses = true,
+  onUnlock,
   children,
 }: {
   label: string;
   display: string;
   dirty: boolean;
   mono?: boolean;
+  /** the field carries a manual override that pins it against reprocessing */
+  locked?: boolean;
+  /**
+   * Rows whose editor owns a portalled popup (the selects) opt out: the popup
+   * takes focus outside this element, so a blur handler would tear the editor
+   * down the moment the dropdown opened. Those rows close themselves through
+   * the popup's own open state instead.
+   */
+  blurCloses?: boolean;
+  onUnlock?: () => void;
   children: (close: () => void) => React.ReactNode;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
 
   return (
@@ -143,7 +163,18 @@ function FieldRow({
         {label}
       </span>
       {editing ? (
-        <div className="min-w-0 flex-1" onBlur={() => setEditing(false)}>
+        <div
+          className="min-w-0 flex-1"
+          // Only leave edit mode when focus lands outside the editor — the
+          // amount row holds two inputs and tabbing between them would
+          // otherwise close it mid-edit.
+          onBlur={(event) => {
+            if (!blurCloses) return;
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setEditing(false);
+            }
+          }}
+        >
           {children(() => setEditing(false))}
         </div>
       ) : (
@@ -160,6 +191,17 @@ function FieldRow({
           {display}
         </button>
       )}
+      {locked && onUnlock ? (
+        <button
+          type="button"
+          aria-label={`${t("documentDetail.unlock")} ${label}`}
+          title={`${t("documentDetail.unlock")} ${label}`}
+          onClick={onUnlock}
+          className="flex-shrink-0 rounded-[var(--r-sm)] border border-[var(--ok-amber)]/40 bg-[var(--ok-amber-soft)] px-1.5 text-[10px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
+        >
+          {t("documentDetail.unlock")}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -173,6 +215,10 @@ export function FieldsRail({
   tags,
   onCreateTag,
   createTagPending,
+  onCreateCorrespondent,
+  createCorrespondentPending,
+  lockedFields = [],
+  onUnlockFields,
   onSave,
   onReset,
   saving,
@@ -186,8 +232,22 @@ export function FieldsRail({
 }: FieldsRailProps) {
   const { t } = useI18n();
   const [tagQuery, setTagQuery] = useState("");
+  const [correspondentQuery, setCorrespondentQuery] = useState("");
   const [moreOpen, setMoreOpen] = useState(false);
   const [processingOpen, setProcessingOpen] = useState(false);
+
+  /**
+   * Every field the API can pin needs its own unlock control. A row may own
+   * more than one lockable field (amount carries currency), so this takes a
+   * list and clears them in a single request.
+   */
+  const unlockProps = (...fields: string[]) => {
+    const locked = fields.filter((field) => lockedFields.includes(field));
+    return {
+      locked: locked.length > 0,
+      onUnlock: onUnlockFields ? () => onUnlockFields(locked) : undefined,
+    };
+  };
 
   const correspondentName = (id: string) =>
     correspondents.find((entry) => entry.id === id)?.name ?? "—";
@@ -228,6 +288,20 @@ export function FieldsRail({
     (tag) => tag.name.trim().toLowerCase() === tagFilter,
   );
 
+  const correspondentFilter = correspondentQuery.trim().toLowerCase();
+  const correspondentMatches = (
+    correspondentFilter
+      ? correspondents.filter((entry) =>
+          entry.name.toLowerCase().includes(correspondentFilter),
+        )
+      : correspondents
+  ).slice(0, 6);
+  const canCreateCorrespondent =
+    correspondentFilter.length > 0 &&
+    !correspondents.some(
+      (entry) => entry.name.trim().toLowerCase() === correspondentFilter,
+    );
+
   const reviewReasons = doc.reviewReasons ?? [];
   const confidencePct =
     doc.confidence != null ? Math.round(doc.confidence * 100) : null;
@@ -238,8 +312,21 @@ export function FieldsRail({
         {/* Fields */}
         <section className="border-b px-3.5 py-3">
           <p className="ok-eyebrow mb-2">{t("documentDetail.fields")}</p>
+          {lockedFields.length > 0 ? (
+            <p className="mb-1.5 text-xs text-[var(--ok-amber)]">
+              <span className="ok-num">{lockedFields.length}</span>{" "}
+              {lockedFields.length === 1
+                ? t("documentDetail.fieldLocked")
+                : t("documentDetail.fieldsLocked")}
+            </p>
+          ) : null}
           <div className="flex flex-col gap-0.5">
-            <FieldRow label={t("documentDetail.title")} display={form.title || "—"} dirty={dirty.title}>
+            <FieldRow
+              label={t("documentDetail.title")}
+              display={form.title || "—"}
+              dirty={dirty.title}
+              {...unlockProps("title")}
+            >
               {(close) => (
                 <Input
                   autoFocus
@@ -251,6 +338,9 @@ export function FieldsRail({
               )}
             </FieldRow>
 
+            {/* Correspondent: search-and-create, the same shape as tags below.
+                A plain select would strand you when the correspondent this
+                document needs does not exist yet. */}
             <FieldRow
               label={t("dashboard.correspondent")}
               display={
@@ -259,24 +349,63 @@ export function FieldsRail({
                   : correspondentName(form.correspondentId)
               }
               dirty={dirty.correspondent}
+              {...unlockProps("correspondentId")}
             >
-              {() => (
-                <Select
-                  value={form.correspondentId}
-                  onValueChange={(value) => onFormChange({ correspondentId: value })}
-                >
-                  <SelectTrigger className="h-[26px]" autoFocus>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={EMPTY_SELECT_VALUE}>—</SelectItem>
-                    {correspondents.map((entry) => (
-                      <SelectItem key={entry.id} value={entry.id}>
+              {(close) => (
+                <div className="min-w-0">
+                  <Input
+                    autoFocus
+                    value={correspondentQuery}
+                    onChange={(event) => setCorrespondentQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") close();
+                    }}
+                    placeholder={t("documentDetail.searchCorrespondent")}
+                    className="h-[26px]"
+                  />
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFormChange({ correspondentId: EMPTY_SELECT_VALUE });
+                        setCorrespondentQuery("");
+                        close();
+                      }}
+                      className="rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
+                    >
+                      —
+                    </button>
+                    {correspondentMatches.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => {
+                          onFormChange({ correspondentId: entry.id });
+                          setCorrespondentQuery("");
+                          close();
+                        }}
+                        className="rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
+                      >
                         {entry.name}
-                      </SelectItem>
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
+                    {canCreateCorrespondent ? (
+                      <button
+                        type="button"
+                        disabled={createCorrespondentPending}
+                        onClick={() => {
+                          onCreateCorrespondent(correspondentQuery.trim());
+                          setCorrespondentQuery("");
+                          close();
+                        }}
+                        className="inline-flex items-center gap-1 rounded-[var(--r-pill)] border border-dashed px-2 py-0.5 text-xs text-[var(--ok-accent)] hover:bg-secondary"
+                      >
+                        <Plus className="h-3 w-3" />
+                        {correspondentQuery.trim()}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               )}
             </FieldRow>
 
@@ -288,13 +417,19 @@ export function FieldsRail({
                   : typeName(form.documentTypeId)
               }
               dirty={dirty.type}
+              blurCloses={false}
+              {...unlockProps("documentTypeId")}
             >
-              {() => (
+              {(close) => (
                 <Select
+                  defaultOpen
                   value={form.documentTypeId}
                   onValueChange={(value) => onFormChange({ documentTypeId: value })}
+                  onOpenChange={(open) => {
+                    if (!open) close();
+                  }}
                 >
-                  <SelectTrigger className="h-[26px]" autoFocus>
+                  <SelectTrigger className="h-[26px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,6 +449,7 @@ export function FieldsRail({
               display={formatRailDate(form.issueDate || null)}
               dirty={dirty.issueDate}
               mono
+              {...unlockProps("issueDate")}
             >
               {(close) => (
                 <Input
@@ -332,6 +468,7 @@ export function FieldsRail({
               display={formatRailDate(form.dueDate || null)}
               dirty={dirty.dueDate}
               mono
+              {...unlockProps("dueDate")}
             >
               {(close) => (
                 <Input
@@ -355,6 +492,7 @@ export function FieldsRail({
               }
               dirty={dirty.amount || dirty.currency}
               mono
+              {...unlockProps("amount", "currency")}
             >
               {(close) => (
                 <div className="flex gap-1">
@@ -386,6 +524,7 @@ export function FieldsRail({
               display={form.referenceNumber || "—"}
               dirty={dirty.reference}
               mono
+              {...unlockProps("referenceNumber")}
             >
               {(close) => (
                 <Input
@@ -411,6 +550,17 @@ export function FieldsRail({
             <span className="text-xs text-muted-foreground">
               {t("documentDetail.tags")}
             </span>
+            {lockedFields.includes("tagIds") && onUnlockFields ? (
+              <button
+                type="button"
+                aria-label={`${t("documentDetail.unlock")} ${t("documentDetail.tags")}`}
+                title={`${t("documentDetail.unlock")} ${t("documentDetail.tags")}`}
+                onClick={() => onUnlockFields(["tagIds"])}
+                className="ml-1.5 rounded-[var(--r-sm)] border border-[var(--ok-amber)]/40 bg-[var(--ok-amber-soft)] px-1.5 text-[10px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
+              >
+                {t("documentDetail.unlock")}
+              </button>
+            ) : null}
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {selectedTags.map((tag) => (
                 <span
@@ -491,6 +641,7 @@ export function FieldsRail({
                 display={formatRailDate(form.expiryDate || null)}
                 dirty={dirty.expiryDate}
                 mono
+                {...unlockProps("expiryDate")}
               >
                 {(close) => (
                   <Input
@@ -507,6 +658,7 @@ export function FieldsRail({
                 label={t("documentDetail.holderName")}
                 display={form.holderName || "—"}
                 dirty={dirty.holderName}
+                {...unlockProps("holderName")}
               >
                 {(close) => (
                   <Input
@@ -522,6 +674,7 @@ export function FieldsRail({
                 label={t("documentDetail.issuingAuthority")}
                 display={form.issuingAuthority || "—"}
                 dirty={dirty.issuingAuthority}
+                {...unlockProps("issuingAuthority")}
               >
                 {(close) => (
                   <Input

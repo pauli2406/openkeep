@@ -41,7 +41,9 @@ export function DetailHeader({
         {t("documentDetail.documents")}
       </Link>
       <span className="text-sm text-[var(--ok-faint)]">/</span>
-      <span className="min-w-0 truncate text-sm font-semibold">{doc.title}</span>
+      {/* The breadcrumb doubles as the page heading — it is the only thing
+          naming this document to a screen reader. */}
+      <h1 className="min-w-0 truncate text-sm font-semibold">{doc.title}</h1>
 
       {doc.status === "failed" ? (
         <Badge variant="bad">{doc.status}</Badge>

@@ -291,6 +291,9 @@ type TranslationKey =
   | "documentDetail.fields"
   | "documentDetail.removeTag"
   | "documentDetail.addTag"
+  | "documentDetail.searchCorrespondent"
+  | "documentDetail.fieldLocked"
+  | "documentDetail.fieldsLocked"
   | "documentDetail.moreFields"
   | "documentDetail.whyReview"
   | "documentDetail.processing"
@@ -785,6 +788,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.fields": "Fields",
     "documentDetail.removeTag": "Remove tag",
     "documentDetail.addTag": "Add tag…",
+    "documentDetail.searchCorrespondent": "Search or add…",
+    "documentDetail.fieldLocked": "field locked",
+    "documentDetail.fieldsLocked": "fields locked",
     "documentDetail.moreFields": "More fields",
     "documentDetail.whyReview": "Why it needs review",
     "documentDetail.processing": "Processing",
@@ -1278,6 +1284,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.fields": "Felder",
     "documentDetail.removeTag": "Schlagwort entfernen",
     "documentDetail.addTag": "Schlagwort hinzufügen…",
+    "documentDetail.searchCorrespondent": "Suchen oder anlegen…",
+    "documentDetail.fieldLocked": "Feld gesperrt",
+    "documentDetail.fieldsLocked": "Felder gesperrt",
     "documentDetail.moreFields": "Weitere Felder",
     "documentDetail.whyReview": "Warum Prüfung nötig ist",
     "documentDetail.processing": "Verarbeitung",

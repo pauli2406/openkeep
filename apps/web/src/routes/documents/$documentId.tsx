@@ -558,7 +558,6 @@ function DocumentDetailPage() {
     page: (n: number) => `${t("documentDetail.pageWord")} ${n}`,
   };
 
-  const [isEditing, setIsEditing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
@@ -566,8 +565,6 @@ function DocumentDetailPage() {
   const [previewZoom, setPreviewZoom] = useState(100);
   const [previewPage, setPreviewPage] = useState(1);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
-  const [tagQuery, setTagQuery] = useState("");
-  const [newCorrespondentName, setNewCorrespondentName] = useState("");
   const [editForm, setEditForm] = useState({
     title: "",
     issueDate: "",
@@ -743,7 +740,6 @@ function DocumentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document", documentId] });
       queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-      setIsEditing(false);
     },
   });
 
@@ -763,7 +759,6 @@ function DocumentDetailPage() {
         ...current,
         tagIds: current.tagIds.includes(tag.id) ? current.tagIds : [...current.tagIds, tag.id],
       }));
-      setTagQuery("");
     },
   });
 
@@ -790,7 +785,6 @@ function DocumentDetailPage() {
         ...current,
         correspondentId: correspondent.id,
       }));
-      setNewCorrespondentName("");
     },
   });
 
@@ -844,10 +838,11 @@ function DocumentDetailPage() {
   });
 
   const clearOverrideMutation = useMutation({
-    mutationFn: async (field: ManualOverrideField) => {
+    mutationFn: async (fields: ManualOverrideField[]) => {
+      if (fields.length === 0) return null;
       const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
-        body: { clearLockedFields: [field] },
+        body: { clearLockedFields: fields },
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToClearOverride")));
@@ -888,11 +883,11 @@ function DocumentDetailPage() {
 
   // --- Handlers ---
 
-  const seedForm = useCallback(() => {
+  /** The editable fields of the server copy, in the form's own shape. */
+  const serverForm = useMemo(() => {
     const doc = documentQuery.data;
-    if (!doc) return;
-    setTagQuery("");
-    setEditForm({
+    if (!doc) return null;
+    return {
       title: doc.title,
       issueDate: doc.issueDate ?? "",
       dueDate: doc.dueDate ?? "",
@@ -905,20 +900,56 @@ function DocumentDetailPage() {
       correspondentId: doc.correspondent?.id ?? EMPTY_SELECT_VALUE,
       documentTypeId: doc.documentType?.id ?? EMPTY_SELECT_VALUE,
       tagIds: doc.tags.map((tag) => tag.id),
-    });
+    };
   }, [documentQuery.data]);
 
-  // The rail edits in place, so the form follows the document: seeded on
-  // load and re-seeded when the server copy actually changes.
-  useEffect(() => {
-    seedForm();
-    setPreviewPage(1);
-  }, [seedForm]);
+  // What the form was last seeded from. Kept so a poll can tell an edit the
+  // user made apart from a value the server changed underneath them.
+  const seededFrom = useRef<typeof serverForm>(null);
 
-  function cancelEditing() {
-    setTagQuery("");
-    setIsEditing(false);
-  }
+  const seedForm = useCallback(() => {
+    if (!serverForm) return;
+    seededFrom.current = serverForm;
+    setEditForm(serverForm);
+  }, [serverForm]);
+
+  // The rail edits in place, and a pending or processing document is polled
+  // every few seconds, so a plain re-seed would wipe unsaved edits mid-type.
+  // Adopt server values only for fields the user has not touched.
+  useEffect(() => {
+    if (!serverForm) return;
+    const previous = seededFrom.current;
+    if (!previous) {
+      seededFrom.current = serverForm;
+      setEditForm(serverForm);
+      setPreviewPage(1);
+      return;
+    }
+    setEditForm((current) => {
+      const next = { ...current };
+      for (const key of Object.keys(serverForm) as Array<keyof typeof serverForm>) {
+        if (key === "tagIds") {
+          const serverChanged = !sameTagIds(previous.tagIds, serverForm.tagIds);
+          const userEdited = !sameTagIds(previous.tagIds, current.tagIds);
+          if (serverChanged && !userEdited) next.tagIds = serverForm.tagIds;
+          continue;
+        }
+        const serverChanged = previous[key] !== serverForm[key];
+        const userEdited = previous[key] !== current[key];
+        if (serverChanged && !userEdited) {
+          (next[key] as string) = serverForm[key] as string;
+        }
+      }
+      return next;
+    });
+    seededFrom.current = serverForm;
+  }, [serverForm]);
+
+  // A different document is a fresh start, dirty or not.
+  useEffect(() => {
+    seededFrom.current = null;
+    setPreviewPage(1);
+  }, [documentId]);
 
   function saveEdits() {
     const body: Record<string, unknown> = {};
@@ -980,21 +1011,9 @@ function DocumentDetailPage() {
       body.tagIds = editForm.tagIds;
     }
 
-    if (Object.keys(body).length === 0) {
-      setIsEditing(false);
-      return;
-    }
+    if (Object.keys(body).length === 0) return;
 
     updateMutation.mutate(body);
-  }
-
-  function toggleEditTag(tagId: string) {
-    setEditForm((current) => ({
-      ...current,
-      tagIds: current.tagIds.includes(tagId)
-        ? current.tagIds.filter((id) => id !== tagId)
-        : [...current.tagIds, tagId],
-    }));
   }
 
   async function handleDownload(variant: "original" | "searchable") {
@@ -1054,74 +1073,60 @@ function DocumentDetailPage() {
   const doc = documentQuery.data;
   const manualOverrides = doc.metadata.manual;
   const lockedFields = manualOverrides?.lockedFields ?? [];
+  // The rail edits in place — there is no edit mode to gate this on, so the
+  // pending locks follow the form/document diff directly.
   const pendingLockedFields: ManualOverrideField[] = [];
-  if (isEditing) {
-    if ((doc.issueDate ?? "") !== editForm.issueDate) {
-      pendingLockedFields.push("issueDate");
-    }
-    if ((doc.dueDate ?? "") !== editForm.dueDate) {
-      pendingLockedFields.push("dueDate");
-    }
-    if ((doc.expiryDate ?? "") !== editForm.expiryDate) {
-      pendingLockedFields.push("expiryDate");
-    }
+  if ((doc.issueDate ?? "") !== editForm.issueDate) {
+    pendingLockedFields.push("issueDate");
+  }
+  if ((doc.dueDate ?? "") !== editForm.dueDate) {
+    pendingLockedFields.push("dueDate");
+  }
+  if ((doc.expiryDate ?? "") !== editForm.expiryDate) {
+    pendingLockedFields.push("expiryDate");
+  }
 
-    const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
-    if (doc.amount !== nextAmount) {
-      pendingLockedFields.push("amount");
-    }
+  const nextAmount = editForm.amount.trim() ? Number(editForm.amount) : null;
+  if (doc.amount !== nextAmount) {
+    pendingLockedFields.push("amount");
+  }
 
-    const nextCurrency = editForm.currency.trim() || null;
-    if ((doc.currency ?? null) !== nextCurrency) {
-      pendingLockedFields.push("currency");
-    }
+  const nextCurrency = editForm.currency.trim() || null;
+  if ((doc.currency ?? null) !== nextCurrency) {
+    pendingLockedFields.push("currency");
+  }
 
-    const nextReferenceNumber = editForm.referenceNumber.trim() || null;
-    if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
-      pendingLockedFields.push("referenceNumber");
-    }
+  const nextReferenceNumber = editForm.referenceNumber.trim() || null;
+  if ((doc.referenceNumber ?? null) !== nextReferenceNumber) {
+    pendingLockedFields.push("referenceNumber");
+  }
 
-    const nextHolderName = editForm.holderName.trim() || null;
-    if ((doc.holderName ?? null) !== nextHolderName) {
-      pendingLockedFields.push("holderName");
-    }
+  const nextHolderName = editForm.holderName.trim() || null;
+  if ((doc.holderName ?? null) !== nextHolderName) {
+    pendingLockedFields.push("holderName");
+  }
 
-    const nextIssuingAuthority = editForm.issuingAuthority.trim() || null;
-    if ((doc.issuingAuthority ?? null) !== nextIssuingAuthority) {
-      pendingLockedFields.push("issuingAuthority");
-    }
+  const nextIssuingAuthority = editForm.issuingAuthority.trim() || null;
+  if ((doc.issuingAuthority ?? null) !== nextIssuingAuthority) {
+    pendingLockedFields.push("issuingAuthority");
+  }
 
-    const nextCorrespondentId =
-      editForm.correspondentId === EMPTY_SELECT_VALUE ? null : editForm.correspondentId;
-    if ((doc.correspondent?.id ?? null) !== nextCorrespondentId) {
-      pendingLockedFields.push("correspondentId");
-    }
+  const nextCorrespondentIdForLock =
+    editForm.correspondentId === EMPTY_SELECT_VALUE ? null : editForm.correspondentId;
+  if ((doc.correspondent?.id ?? null) !== nextCorrespondentIdForLock) {
+    pendingLockedFields.push("correspondentId");
+  }
 
-    const nextDocumentTypeId =
-      editForm.documentTypeId === EMPTY_SELECT_VALUE ? null : editForm.documentTypeId;
-    if ((doc.documentType?.id ?? null) !== nextDocumentTypeId) {
-      pendingLockedFields.push("documentTypeId");
-    }
+  const nextDocumentTypeIdForLock =
+    editForm.documentTypeId === EMPTY_SELECT_VALUE ? null : editForm.documentTypeId;
+  if ((doc.documentType?.id ?? null) !== nextDocumentTypeIdForLock) {
+    pendingLockedFields.push("documentTypeId");
+  }
 
-    if (!sameTagIds(doc.tags.map((tag) => tag.id), editForm.tagIds)) {
-      pendingLockedFields.push("tagIds");
-    }
+  if (!sameTagIds(doc.tags.map((tag) => tag.id), editForm.tagIds)) {
+    pendingLockedFields.push("tagIds");
   }
   const pendingNewLocks = pendingLockedFields.filter((field) => !lockedFields.includes(field));
-  const tagFilter = tagQuery.trim().toLowerCase();
-  const filteredTags = (tagsQuery.data ?? []).filter((tag) =>
-    tagFilter.length === 0
-      ? true
-      : `${tag.name} ${tag.slug}`.toLowerCase().includes(tagFilter),
-  );
-  const selectedTags = (tagsQuery.data ?? []).filter((tag) => editForm.tagIds.includes(tag.id));
-  const availableTags = filteredTags.filter((tag) => !editForm.tagIds.includes(tag.id));
-  const exactTagMatch = (tagsQuery.data ?? []).some((tag) => {
-    const normalizedName = tag.name.trim().toLowerCase();
-    const normalizedSlug = tag.slug.trim().toLowerCase();
-    return normalizedName === tagFilter || normalizedSlug === tagFilter;
-  });
-  const canCreateTag = tagFilter.length > 0 && !exactTagMatch;
   const intelligence = doc.metadata.intelligence;
   const extractionFields = intelligence?.extraction?.fields ?? {};
   const normalizedFields = intelligence?.validation?.normalizedFields ?? {};
@@ -1688,6 +1693,10 @@ function DocumentDetailPage() {
           tags={tagsQuery.data ?? []}
           onCreateTag={(name) => createTagMutation.mutate(name)}
           createTagPending={createTagMutation.isPending}
+          onCreateCorrespondent={(name) => createCorrespondentMutation.mutate(name)}
+          createCorrespondentPending={createCorrespondentMutation.isPending}
+          lockedFields={lockedFields}
+          onUnlockFields={(fields) => clearOverrideMutation.mutate(fields as ManualOverrideField[])}
           onSave={saveEdits}
           onReset={seedForm}
           saving={updateMutation.isPending}

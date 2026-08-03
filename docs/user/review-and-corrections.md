@@ -57,7 +57,11 @@ This is useful when:
 
 ## Correct Metadata on the Document Page
 
-Open a document and use the metadata editor on the right-hand side.
+Open a document and use the fields rail on the right-hand side.
+
+There is no separate edit mode. Click a value to edit it in place, and press
+`Enter` to commit. Changed fields turn amber, and a save bar appears at the
+bottom of the rail with `Save` and `Discard`.
 
 Editable fields include key archive metadata such as:
 
@@ -66,10 +70,15 @@ Editable fields include key archive metadata such as:
 - document type
 - issue date
 - due date
-- expiry date
 - amount and currency
 - reference number
 - tags
+
+Expiry date, holder name and issuing authority sit behind `More fields`.
+
+If the correspondent you need does not exist yet, type its name in the
+correspondent field and pick the dashed `+ <name>` entry to create it without
+leaving the document. Tags work the same way.
 
 ## Manual Overrides
 
@@ -80,7 +89,11 @@ This means:
 - your correction is preserved
 - reprocessing does not overwrite the locked field automatically
 
-You can unlock an overridden field later from the same metadata panel.
+Before you save, the save bar tells you which fields the save will lock.
+
+The rail shows how many fields are currently locked, and every locked field
+carries its own `Unlock` button. Unlocking a field lets the next reprocess
+overwrite it again.
 
 ## When to Use Manual Overrides
 
