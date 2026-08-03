@@ -82,11 +82,14 @@ function ChatPage() {
   const [activeId, setActiveId] = useState<string | null>(conversations[0]?.id ?? null);
   const [draft, setDraft] = useState("");
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  // The conversation the in-flight answer belongs to. Switching conversations
+  // mid-stream must not append the turn to whatever is selected when it lands.
+  const pendingTarget = useRef<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<AnswerCitation | null>(null);
   const [hoveredDocId, setHoveredDocId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
-  const startedFromParam = useRef(false);
+  const startedFromParam = useRef<string | null>(null);
 
   const copy =
     language === "de"
@@ -154,16 +157,19 @@ function ChatPage() {
       if (!trimmed || pendingQuestion) return;
       addSearch(trimmed);
       setDraft("");
+      pendingTarget.current = activeId;
       setPendingQuestion(trimmed);
       void stream.startStream(trimmed);
     },
-    [addSearch, pendingQuestion, stream],
+    [activeId, addSearch, pendingQuestion, stream],
   );
 
-  // Deep link (?q= from the omnibar) starts a conversation once.
+  // Deep link (?q= from the omnibar). The omnibar can be opened again while
+  // already on /search, which updates `q` without remounting this route, so
+  // remember the question consumed rather than latching a one-shot flag.
   useEffect(() => {
-    if (q && !startedFromParam.current) {
-      startedFromParam.current = true;
+    if (q && startedFromParam.current !== q) {
+      startedFromParam.current = q;
       ask(q);
       navigate({ to: "/search", search: {}, replace: true });
     }
@@ -178,12 +184,16 @@ function ChatPage() {
     const structuredRows: StructuredRow[] | null = structured
       ? structured.items.slice(0, 8).map((item) => ({
           title: "title" in item ? item.title : "",
+          // Show the date the result was actually selected on: expiry for
+          // expiring contracts, otherwise the deadline, otherwise issue.
           date:
-            "dueDate" in item && item.dueDate
-              ? item.dueDate
-              : "issueDate" in item
-                ? (item.issueDate ?? null)
-                : null,
+            structured.kind === "expiring_contracts" && "expiryDate" in item
+              ? (item.expiryDate ?? null)
+              : "dueDate" in item && item.dueDate
+                ? item.dueDate
+                : "issueDate" in item
+                  ? (item.issueDate ?? null)
+                  : null,
           amount:
             "amount" in item && item.amount != null
               ? (formatCurrency(item.amount, item.currency ?? "EUR") ?? null)
@@ -204,11 +214,12 @@ function ChatPage() {
       structuredTitle: structured?.title ?? null,
     };
 
+    const target = pendingTarget.current;
     setConversations((current) => {
       let next: Conversation[];
-      if (activeId && current.some((entry) => entry.id === activeId)) {
+      if (target && current.some((entry) => entry.id === target)) {
         next = current.map((entry) =>
-          entry.id === activeId
+          entry.id === target
             ? { ...entry, at: Date.now(), turns: [...entry.turns, turn] }
             : entry,
         );
@@ -218,13 +229,16 @@ function ChatPage() {
           { id, title: pendingQuestion, at: Date.now(), turns: [turn] },
           ...current,
         ];
-        setActiveId(id);
+        // Only follow the new conversation if the user has not moved on to
+        // another one while the answer was streaming.
+        if (activeId === target) setActiveId(id);
       }
       persistConversations(next);
       return next;
     });
 
     if (stream.citations.length > 0) setSelectedCitation(stream.citations[0]);
+    pendingTarget.current = null;
     setPendingQuestion(null);
     stream.reset();
   }, [stream.status]); // eslint-disable-line react-hooks/exhaustive-deps
