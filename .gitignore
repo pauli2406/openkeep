@@ -19,3 +19,9 @@ apps/mobile/android
 *.ipa
 *.apk
 *.aab
+
+# Playwright visual suite output. The baselines under
+# apps/web/visual/__screenshots__ are committed on purpose.
+apps/web/test-results
+apps/web/playwright-report
+apps/web/blob-report
