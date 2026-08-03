@@ -23,6 +23,22 @@ After upload, OpenKeep shows whether each file:
 
 Use `View documents` when the upload is complete.
 
+## Jump Anywhere with the Omnibar
+
+Press `Cmd+K` (`Ctrl+K` on Windows and Linux) from any screen to open the
+omnibar. Start typing and it offers, in order:
+
+- asking your archive the question you typed
+- correspondents, document types and tags matching it, which open the
+  `Documents` page filtered to that entry
+- the screens themselves
+
+Use the arrow keys to move, `Enter` to go, and `Cmd+Enter` to open in a new
+tab. `Esc` closes it.
+
+Type `>` first to switch to command mode, which lists actions such as
+importing a document or toggling the theme rather than archive content.
+
 ## Browse the Archive
 
 Open `Documents` to browse your archive.

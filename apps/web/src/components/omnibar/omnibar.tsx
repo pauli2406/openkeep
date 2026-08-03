@@ -6,13 +6,11 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import Markdown from "react-markdown";
 import {
   Search,
-  Clock,
-  Sparkles,
   X,
   Loader2,
   FileText,
@@ -27,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAnswerStream, linkifyCitations } from "@/hooks/use-answer-stream";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
+import { useI18n } from "@/lib/i18n";
 import {
   fetchExplorerFacets,
   fetchDashboardInsights,
@@ -149,8 +148,7 @@ export function Omnibar() {
   const panelRef = useRef<HTMLDivElement>(null);
 
   const answerStream = useAnswerStream();
-  const { recentSearches, addSearch, removeSearch, clearAll } =
-    useRecentSearches();
+  const { recentSearches, addSearch } = useRecentSearches();
 
   const isOpen = screen !== "idle";
   const isOnSearchPage = location.pathname === "/search";
@@ -224,6 +222,116 @@ export function Omnibar() {
     [addSearch, answerStream],
   );
 
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // The palette rows the arrows walk. `>` switches to command mode.
+  const paletteRows = useMemo<PaletteRow[]>(() => {
+    const rows: PaletteRow[] = [];
+    const go = (to: string) => () => {
+      close();
+      navigate({ to });
+    };
+    const tab = (to: string) => () => window.open(to, "_blank");
+    const commandMode = query.startsWith(">");
+    const needle = (commandMode ? query.slice(1) : query).trim().toLowerCase();
+
+    const jump: PaletteRow[] = [
+      { id: "go-today", section: "jump", label: t("omnibar.goToday"), hint: "T", run: go("/"), newTab: tab("/") },
+      { id: "go-documents", section: "jump", label: t("omnibar.goDocuments"), hint: "D", run: go("/documents"), newTab: tab("/documents") },
+      {
+        id: "go-review",
+        section: "jump",
+        label: `${t("omnibar.goReview")}${insightsQuery.data?.stats.pendingReview ? ` · ${insightsQuery.data.stats.pendingReview}` : ""}`,
+        hint: "R",
+        run: go("/review"),
+        newTab: tab("/review"),
+      },
+      { id: "go-import", section: "jump", label: t("omnibar.goImport"), hint: "U", run: go("/upload"), newTab: tab("/upload") },
+      { id: "go-settings", section: "jump", label: t("omnibar.goSettings"), run: go("/settings"), newTab: tab("/settings") },
+    ];
+
+    if (commandMode) {
+      return jump
+        .map((row) => ({ ...row, section: "actions" as const }))
+        .filter((row) => !needle || row.label.toLowerCase().includes(needle));
+    }
+
+    if (!needle) {
+      const asks = [
+        ...suggestions.slice(0, 3),
+        ...recentSearches.slice(0, 2).map((entry) => entry.query),
+      ];
+      return [
+        ...[...new Set(asks)].map((text, index) => ({
+          id: `ask-${index}`,
+          section: "ask" as const,
+          label: text,
+          run: () => submitQuery(text),
+        })),
+        ...jump.slice(0, 4),
+      ];
+    }
+
+    // Type-ahead: ask row first, then matching taxonomy entries and routes.
+    rows.push({
+      id: "ask-query",
+      section: "ask",
+      label: query,
+      run: () => submitQuery(query),
+      newTab: () => window.open(`/search?q=${encodeURIComponent(query)}`, "_blank"),
+    });
+
+    const facets = facetsQuery.data;
+    const matches = <T extends { name: string }>(list: T[] | undefined) =>
+      (list ?? []).filter((entry) => entry.name.toLowerCase().includes(needle)).slice(0, 4);
+
+    for (const correspondent of matches(facets?.correspondents)) {
+      // The explorer parses these as CSV (see parseExplorerSearch), so a
+      // JSON-encoded array would arrive as the literal `["id"]` and match
+      // nothing. Send the bare id.
+      const to = `/documents?correspondentIds=${encodeURIComponent(correspondent.id)}`;
+      rows.push({
+        id: `c-${correspondent.id}`,
+        section: "documents",
+        label: correspondent.name,
+        hint: t("omnibar.kindCorrespondent"),
+        run: go(to),
+        newTab: tab(to),
+      });
+    }
+    for (const documentType of matches(facets?.documentTypes)) {
+      const to = `/documents?documentTypeIds=${encodeURIComponent(documentType.id)}`;
+      rows.push({
+        id: `t-${documentType.id}`,
+        section: "documents",
+        label: documentType.name,
+        hint: t("omnibar.kindType"),
+        run: go(to),
+        newTab: tab(to),
+      });
+    }
+    for (const tag of matches(facets?.tags)) {
+      const to = `/documents?tags=${encodeURIComponent(tag.id)}`;
+      rows.push({
+        id: `g-${tag.id}`,
+        section: "documents",
+        label: tag.name,
+        hint: t("omnibar.kindTag"),
+        run: go(to),
+        newTab: tab(to),
+      });
+    }
+    rows.push(...jump.filter((row) => row.label.toLowerCase().includes(needle)));
+    return rows;
+  }, [query, suggestions, recentSearches, facetsQuery.data, insightsQuery.data, close, navigate, submitQuery, t]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query, screen]);
+
+
   // ─── Open citation preview ───
 
   const openCitation = useCallback((target: CitationTarget) => {
@@ -290,9 +398,30 @@ export function Omnibar() {
   // ─── Input key handler ───
 
   const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (screen !== "zero-state") {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitQuery(query);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      submitQuery(query);
+      setSelectedIndex((index) => Math.min(index + 1, paletteRows.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSelectedIndex((index) => Math.max(index - 1, 0));
+    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      // ⌘↵: ask the archive with the raw query (new tab when a row offers one).
+      const row = paletteRows[selectedIndex];
+      if (row?.newTab) row.newTab();
+      else submitQuery(query);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const row = paletteRows[selectedIndex];
+      if (row) row.run();
+      else submitQuery(query);
     }
   };
 
@@ -317,10 +446,12 @@ export function Omnibar() {
           <div
             ref={panelRef}
             className={cn(
-              "omnibar-panel relative mt-6 flex max-h-[min(600px,calc(100vh-3rem))] flex-col overflow-hidden rounded-2xl border border-[color:var(--explorer-border)] bg-card shadow-[0_20px_40px_-10px_rgba(0,0,0,0.08)]",
+              "omnibar-panel relative mt-6 flex max-h-[min(600px,calc(100vh-3rem))] flex-col overflow-hidden rounded-[var(--r-lg)] border bg-card shadow-[0_16px_40px_rgba(0,0,0,0.16)]",
               screen === "citation-preview"
-                ? "w-[min(1200px,calc(100vw-2rem))]"
-                : "w-[min(720px,calc(100vw-2rem))]",
+                ? "w-[min(1100px,calc(100vw-2rem))]"
+                : screen === "zero-state"
+                  ? "w-[min(560px,calc(100vw-2rem))]"
+                  : "w-[min(720px,calc(100vw-2rem))]",
             )}
           >
             {screen === "citation-preview" && citation ? (
@@ -344,8 +475,8 @@ export function Omnibar() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleInputKeyDown}
-                    placeholder="Ask the archive..."
-                    className="h-16 flex-1 bg-transparent text-lg text-[color:var(--explorer-ink)] placeholder-[color:var(--explorer-muted)] outline-none"
+                    placeholder={t("omnibar.placeholder")}
+                    className="h-12 flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
                     autoFocus
                   />
                   {query.length > 0 && (
@@ -362,23 +493,25 @@ export function Omnibar() {
                       <X className="h-4 w-4" />
                     </button>
                   )}
-                  <kbd className="hidden items-center gap-0.5 rounded-md border border-[color:var(--explorer-border)] px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--explorer-muted)] sm:flex">
-                    <CornerDownLeft className="h-2.5 w-2.5" />
+                  <kbd className="ok-num hidden rounded-[3px] border px-1.5 py-0.5 text-[10px] text-muted-foreground sm:flex">
+                    ESC
                   </kbd>
                 </div>
 
                 {/* Content area */}
                 <div className="flex-1 overflow-y-auto">
                   {screen === "zero-state" && (
-                    <ZeroState
-                      recentSearches={recentSearches}
-                      suggestions={suggestions}
-                      suggestionsLoading={
-                        facetsQuery.isLoading || insightsQuery.isLoading
-                      }
-                      onSelectQuery={submitQuery}
-                      onRemoveRecent={removeSearch}
-                      onClearAll={clearAll}
+                    <Palette
+                      rows={paletteRows}
+                      selectedIndex={selectedIndex}
+                      onHover={setSelectedIndex}
+                      onRun={(row) => row.run()}
+                      sectionLabels={{
+                        ask: t("omnibar.sectionAsk"),
+                        documents: t("omnibar.sectionDocuments"),
+                        actions: t("omnibar.sectionActions"),
+                        jump: t("omnibar.sectionJump"),
+                      }}
                     />
                   )}
 
@@ -395,6 +528,15 @@ export function Omnibar() {
                     />
                   )}
                 </div>
+
+                {screen === "zero-state" ? (
+                  <div className="ok-num flex flex-shrink-0 items-center gap-3 border-t bg-[var(--ok-bar)] px-4 py-1.5 text-[10.5px] text-muted-foreground">
+                    <span>↑↓ {t("omnibar.footerNavigate")}</span>
+                    <span>↵ {t("omnibar.footerOpen")}</span>
+                    <span>⌘↵ {t("omnibar.footerAsk")}</span>
+                    <span className="ml-auto">&gt; {t("omnibar.footerCommands")}</span>
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -405,123 +547,81 @@ export function Omnibar() {
 }
 
 // ---------------------------------------------------------------------------
-// Zero State
+// Palette (zero state + type-ahead)
 // ---------------------------------------------------------------------------
 
-function ZeroState({
-  recentSearches,
-  suggestions,
-  suggestionsLoading,
-  onSelectQuery,
-  onRemoveRecent,
-  onClearAll,
+export type PaletteRow = {
+  id: string;
+  section: "jump" | "documents" | "actions" | "ask";
+  label: string;
+  hint?: string;
+  run: () => void;
+  newTab?: () => void;
+};
+
+function Palette({
+  rows,
+  selectedIndex,
+  onHover,
+  onRun,
+  sectionLabels,
 }: {
-  recentSearches: Array<{ query: string; timestamp: number }>;
-  suggestions: string[];
-  suggestionsLoading: boolean;
-  onSelectQuery: (query: string) => void;
-  onRemoveRecent: (query: string) => void;
-  onClearAll: () => void;
+  rows: PaletteRow[];
+  selectedIndex: number;
+  onHover: (index: number) => void;
+  onRun: (row: PaletteRow) => void;
+  sectionLabels: Record<PaletteRow["section"], string>;
 }) {
-  const safeRecentSearches = recentSearches ?? [];
-  const safeSuggestions = suggestions ?? [];
+  const sections: Array<PaletteRow["section"]> = ["ask", "documents", "actions", "jump"];
+  let flatIndex = -1;
 
   return (
-    <div className="py-2">
-      {/* Recent Searches */}
-      {safeRecentSearches.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between px-5 py-3">
-            <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
-              Recent Searches
-            </h3>
-            <button
-              type="button"
-              onClick={onClearAll}
-              className="text-[0.68rem] font-medium text-[color:var(--explorer-muted)] transition-colors hover:text-[color:var(--explorer-rust)]"
-            >
-              Clear all
-            </button>
-          </div>
-          <div>
-            {safeRecentSearches.map((item) => (
-              <div
-                key={item.query}
-                className="group flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-[color:var(--explorer-paper)]"
-              >
-                <Clock className="h-4 w-4 shrink-0 text-[color:var(--explorer-muted)]/60" />
+    <div className="py-1">
+      {sections.map((section) => {
+        const sectionRows = rows.filter((row) => row.section === section);
+        if (sectionRows.length === 0) return null;
+        return (
+          <div key={section} className="px-2 pb-1">
+            <p className="ok-eyebrow px-2 pb-1 pt-2">{sectionLabels[section]}</p>
+            {sectionRows.map((row) => {
+              flatIndex += 1;
+              const index = rows.indexOf(row);
+              const active = index === selectedIndex;
+              return (
                 <button
+                  key={row.id}
                   type="button"
-                  onClick={() => onSelectQuery(item.query)}
-                  className="flex-1 truncate text-left text-[14px] text-[color:var(--explorer-ink)]"
+                  onMouseEnter={() => onHover(index)}
+                  onClick={() => onRun(row)}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2 py-1.5 text-left text-sm",
+                    active ? "bg-accent text-accent-foreground" : "text-foreground",
+                  )}
                 >
-                  {item.query}
+                  {section === "ask" ? (
+                    <CornerDownLeft className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{row.label}</span>
+                  {row.hint ? (
+                    <kbd className="ok-num flex-shrink-0 rounded-[3px] border px-1 text-[10px] text-muted-foreground">
+                      {row.hint}
+                    </kbd>
+                  ) : null}
                 </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveRecent(item.query);
-                  }}
-                  className="rounded p-0.5 text-[color:var(--explorer-muted)] opacity-0 transition-all hover:text-[color:var(--explorer-rust)] group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </section>
-      )}
-
-      {/* Suggestions */}
-      <section>
-        <div className="px-5 py-3">
-          <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Suggested for you
-          </h3>
-        </div>
-
-        {suggestionsLoading ? (
-          <div className="space-y-1 px-5 pb-3">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 py-2.5"
-              >
-                <div className="h-4 w-4 animate-pulse rounded bg-[color:var(--explorer-paper-strong)]" />
-                <div
-                  className="h-4 animate-pulse rounded bg-[color:var(--explorer-paper-strong)]"
-                  style={{ width: `${55 + i * 10}%` }}
-                />
-              </div>
-            ))}
-          </div>
-        ) : safeSuggestions.length > 0 ? (
-          <div>
-            {safeSuggestions.map((suggestion) => (
-              <button
-                key={suggestion}
-                type="button"
-                onClick={() => onSelectQuery(suggestion)}
-                className="group flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-[color:var(--explorer-paper)]"
-              >
-                <Sparkles className="h-4 w-4 shrink-0 text-[color:var(--explorer-cobalt)]/50 transition-colors group-hover:text-[color:var(--explorer-cobalt)]" />
-                <span className="flex-1 truncate text-[14px] text-[color:var(--explorer-ink)]">
-                  {suggestion}
-                </span>
-                <ArrowRight className="h-3 w-3 text-[color:var(--explorer-muted)] opacity-0 transition-all group-hover:opacity-100" />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="px-5 pb-4 text-sm text-[color:var(--explorer-muted)]">
-            No suggestions available yet. Upload some documents to get started.
-          </div>
-        )}
-      </section>
+        );
+      })}
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-muted-foreground">—</p>
+      ) : null}
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Results Pane
@@ -579,7 +679,7 @@ function ResultsPane({
           to="/search"
           search={{ q: query }}
           onClick={onOpenFullPage}
-          className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
+          className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
         >
           Open full search
         </Link>
@@ -587,20 +687,20 @@ function ResultsPane({
 
       {/* Error state */}
       {answerStream.status === "error" && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-[color:var(--explorer-rust-soft)] bg-[color:var(--explorer-rust-soft)] px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--explorer-rust)]" />
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-[color:var(--ok-amber-soft)] bg-[color:var(--ok-amber-soft)] px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--ok-amber)]" />
           <div className="flex-1">
-            <p className="text-sm font-medium text-[color:var(--explorer-rust)]">
+            <p className="text-sm font-medium text-[color:var(--ok-amber)]">
               Archive retrieval failed
             </p>
-            <p className="mt-0.5 text-xs text-[color:var(--explorer-rust)]/80">
+            <p className="mt-0.5 text-xs text-[color:var(--ok-amber)]/80">
               {answerStream.errorMessage ?? "Try rephrasing your question."}
             </p>
           </div>
           <button
             type="button"
             onClick={onRetry}
-            className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
+            className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
           >
             Retry
           </button>
@@ -612,7 +712,7 @@ function ResultsPane({
         <div className="space-y-4">
           <div className="flex items-center gap-2.5">
             <div className="relative flex h-6 w-6 items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-[color:var(--explorer-cobalt)]" />
+              <Loader2 className="h-5 w-5 animate-spin text-[color:var(--ok-accent)]" />
             </div>
             <span className="text-sm text-[color:var(--explorer-muted)]">
               Searching your archive...
@@ -623,7 +723,7 @@ function ResultsPane({
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-4 animate-pulse rounded bg-[color:var(--explorer-paper-strong)]"
+                className="h-4 animate-pulse rounded bg-[color:var(--ok-raised)]"
                 style={{
                   width: `${85 - i * 15}%`,
                   animationDelay: `${i * 150}ms`,
@@ -636,7 +736,7 @@ function ResultsPane({
             {[...Array(2)].map((_, i) => (
               <div
                 key={i}
-                className="h-20 animate-pulse rounded-xl border border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper)]"
+                className="h-20 animate-pulse rounded-xl border border-[color:var(--explorer-border)] bg-[color:var(--ok-app)]"
                 style={{ animationDelay: `${i * 200 + 400}ms` }}
               />
             ))}
@@ -649,7 +749,7 @@ function ResultsPane({
         answerStream.status === "done") && (
         <div className="space-y-4">
           {/* AI Summary box */}
-          <div className="rounded-xl border border-[color:var(--explorer-cobalt-soft)] bg-[color:var(--explorer-cobalt-soft)]/40 px-4 py-3">
+          <div className="rounded-xl border border-[color:var(--ok-accent-soft)] bg-[color:var(--ok-accent-soft)]/40 px-4 py-3">
             <div className="prose prose-sm max-w-none text-[color:var(--explorer-ink)] prose-headings:font-semibold prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-[color:var(--explorer-ink)]">
               <Markdown
                 components={{
@@ -663,7 +763,7 @@ function ResultsPane({
                           className="no-underline"
                           title={title}
                         >
-                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--explorer-rust)] transition-colors hover:bg-[color:var(--explorer-rust)] hover:text-[var(--ok-accent-fill-ink)]">
+                          <span className="inline-flex items-center rounded bg-[color:var(--ok-amber-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--ok-amber)] transition-colors hover:bg-[color:var(--ok-amber)] hover:text-[var(--ok-accent-fill-ink)]">
                             {children}
                           </span>
                         </Link>
@@ -689,7 +789,7 @@ function ResultsPane({
                 )}
               </Markdown>
               {answerStream.status === "streaming" && (
-                <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[color:var(--explorer-cobalt)]" />
+                <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[color:var(--ok-accent)]" />
               )}
             </div>
           </div>
@@ -715,9 +815,9 @@ function ResultsPane({
                         pageTo: cit.pageTo,
                       })
                     }
-                    className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
+                    className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/35 hover:shadow-sm"
                   >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[color:var(--explorer-rust-soft)] text-[10px] font-bold text-[color:var(--explorer-rust)]">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[color:var(--ok-amber-soft)] text-[10px] font-bold text-[color:var(--ok-amber)]">
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -763,7 +863,7 @@ function ResultsPane({
                           quote: result.matchedChunks[0]?.text,
                         })
                       }
-                      className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35 hover:shadow-sm"
+                      className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/35 hover:shadow-sm"
                     >
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--explorer-muted)]" />
                       <div className="min-w-0 flex-1">
@@ -802,7 +902,7 @@ function ResultsPane({
                     key={fu}
                     type="button"
                     onClick={() => onFollowUp(fu)}
-                    className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-all hover:border-[color:var(--explorer-cobalt)]/35 hover:bg-[color:var(--explorer-cobalt-soft)]"
+                    className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-all hover:border-[color:var(--ok-accent)]/35 hover:bg-[color:var(--ok-accent-soft)]"
                   >
                     {fu}
                   </button>
@@ -950,7 +1050,7 @@ function CitationPreviewPane({
                           className="no-underline"
                           title={title}
                         >
-                          <span className="inline-flex items-center rounded bg-[color:var(--explorer-rust-soft)] px-1 py-0.5 text-[10px] font-bold text-[color:var(--explorer-rust)]">
+                          <span className="inline-flex items-center rounded bg-[color:var(--ok-amber-soft)] px-1 py-0.5 text-[10px] font-bold text-[color:var(--ok-amber)]">
                             {children}
                           </span>
                         </Link>
@@ -987,11 +1087,11 @@ function CitationPreviewPane({
                   className={cn(
                     "flex items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
                     cit.documentId === citation.documentId
-                      ? "bg-[color:var(--explorer-cobalt-soft)] border border-[color:var(--explorer-cobalt)]/20"
-                      : "hover:bg-[color:var(--explorer-paper)]",
+                      ? "bg-[color:var(--ok-accent-soft)] border border-[color:var(--ok-accent)]/20"
+                      : "hover:bg-[color:var(--ok-app)]",
                   )}
                 >
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold bg-[color:var(--explorer-rust-soft)] text-[color:var(--explorer-rust)]">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold bg-[color:var(--ok-amber-soft)] text-[color:var(--ok-amber)]">
                     {i + 1}
                   </span>
                   <p className="truncate text-xs font-medium text-[color:var(--explorer-ink)]">
@@ -1028,7 +1128,7 @@ function CitationPreviewPane({
             <Link
               to="/documents/$documentId"
               params={{ documentId: citation.documentId }}
-              className="rounded-lg border border-[color:var(--explorer-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--explorer-paper)]"
+              className="rounded-lg border border-[color:var(--explorer-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
             >
               Open full
             </Link>
@@ -1050,7 +1150,7 @@ function CitationPreviewPane({
               Loading document...
             </div>
           ) : documentQuery.isError ? (
-            <div className="py-8 text-center text-sm text-[color:var(--explorer-rust)]">
+            <div className="py-8 text-center text-sm text-[color:var(--ok-amber)]">
               Failed to load document
             </div>
           ) : pages.length === 0 ? (
@@ -1060,7 +1160,7 @@ function CitationPreviewPane({
                 <Link
                   to="/documents/$documentId"
                   params={{ documentId: citation.documentId }}
-                  className="text-[color:var(--explorer-cobalt)] hover:underline"
+                  className="text-[color:var(--ok-accent)] hover:underline"
                 >
                   Open the full document view
                 </Link>
@@ -1089,7 +1189,7 @@ function CitationPreviewPane({
                           className={cn(
                             "text-sm leading-relaxed text-[color:var(--explorer-ink)]",
                             isHighlighted &&
-                              "rounded bg-[color:var(--explorer-rust-soft)] px-1.5 py-0.5 ring-1 ring-[color:var(--explorer-rust)]/20",
+                              "rounded bg-[color:var(--ok-amber-soft)] px-1.5 py-0.5 ring-1 ring-[color:var(--ok-amber)]/20",
                           )}
                         >
                           {block.text}

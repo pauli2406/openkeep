@@ -306,6 +306,23 @@ type TranslationKey =
   | "documentDetail.zoomIn"
   | "documentDetail.zoomOut"
   | "documentDetail.qa"
+  | "omnibar.placeholder"
+  | "omnibar.sectionAsk"
+  | "omnibar.sectionDocuments"
+  | "omnibar.sectionActions"
+  | "omnibar.sectionJump"
+  | "omnibar.goToday"
+  | "omnibar.goDocuments"
+  | "omnibar.goReview"
+  | "omnibar.goImport"
+  | "omnibar.goSettings"
+  | "omnibar.kindCorrespondent"
+  | "omnibar.kindType"
+  | "omnibar.kindTag"
+  | "omnibar.footerNavigate"
+  | "omnibar.footerOpen"
+  | "omnibar.footerAsk"
+  | "omnibar.footerCommands"
   | "documents.reprocess"
   | "documents.date"
   | "documents.selectAll"
@@ -803,6 +820,23 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.zoomIn": "Zoom in",
     "documentDetail.zoomOut": "Zoom out",
     "documentDetail.qa": "Q&A",
+    "omnibar.placeholder": "Search, ask, or jump to…",
+    "omnibar.sectionAsk": "Ask the archive",
+    "omnibar.sectionDocuments": "Documents",
+    "omnibar.sectionActions": "Actions",
+    "omnibar.sectionJump": "Jump to",
+    "omnibar.goToday": "Today",
+    "omnibar.goDocuments": "Documents",
+    "omnibar.goReview": "Review queue",
+    "omnibar.goImport": "Import files",
+    "omnibar.goSettings": "Settings",
+    "omnibar.kindCorrespondent": "correspondent",
+    "omnibar.kindType": "type",
+    "omnibar.kindTag": "tag",
+    "omnibar.footerNavigate": "navigate",
+    "omnibar.footerOpen": "open",
+    "omnibar.footerAsk": "ask",
+    "omnibar.footerCommands": "commands",
     "documents.reprocess": "Reprocess",
     "documents.date": "Date",
     "documents.selectAll": "Select all",
@@ -1299,6 +1333,23 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.zoomIn": "Vergrößern",
     "documentDetail.zoomOut": "Verkleinern",
     "documentDetail.qa": "Q&A",
+    "omnibar.placeholder": "Suchen, fragen oder springen…",
+    "omnibar.sectionAsk": "Das Archiv fragen",
+    "omnibar.sectionDocuments": "Dokumente",
+    "omnibar.sectionActions": "Aktionen",
+    "omnibar.sectionJump": "Springen zu",
+    "omnibar.goToday": "Heute",
+    "omnibar.goDocuments": "Dokumente",
+    "omnibar.goReview": "Prüfungswarteschlange",
+    "omnibar.goImport": "Dateien importieren",
+    "omnibar.goSettings": "Einstellungen",
+    "omnibar.kindCorrespondent": "Korrespondent",
+    "omnibar.kindType": "Typ",
+    "omnibar.kindTag": "Schlagwort",
+    "omnibar.footerNavigate": "navigieren",
+    "omnibar.footerOpen": "öffnen",
+    "omnibar.footerAsk": "fragen",
+    "omnibar.footerCommands": "Befehle",
     "documents.reprocess": "Neu verarbeiten",
     "documents.date": "Datum",
     "documents.selectAll": "Alle auswählen",
