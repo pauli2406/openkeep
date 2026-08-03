@@ -25,35 +25,50 @@ Typical reasons include:
 
 ## Open the Review Queue
 
-Go to `Review` to see documents waiting for attention.
+Go to `Review`. The screen shows one document at a time: the queue on the
+left, the fields to confirm in the middle, and a preview on the right.
 
-For each document, you may see:
+The queue lists every document waiting for attention, with its confidence and
+review reasons. Chips at the top of the screen filter it by reason.
 
-- review reason badges
-- confidence percentage
-- routing or intelligence badges
-- a short summary of what OpenKeep inferred
+## Confirm One Document
 
-You can also filter the queue by review reason.
+The middle column lists the fields that matter, with the uncertain ones
+highlighted in amber and annotated with why they need a look — `not found`,
+`low confidence`, or `confident`.
 
-## Resolve vs Requeue
+Correct anything that is wrong, then choose:
 
-Each review item offers two main actions.
+- `Confirm and file` — saves your corrections, resolves the review, and moves
+  to the next document
+- `Reprocess` — sends the document back through processing, for when
+  extraction looks wrong or you changed the provider
+- `Skip` — moves on without deciding
 
-### Resolve
+## Keyboard
 
-Use `Resolve` when the document is acceptable as it is, or after you have checked and corrected it.
+The queue is built to be worked through without the mouse:
 
-### Requeue
+| Key | Action |
+| --- | --- |
+| `Enter` | confirm and file |
+| `j` / `k` | next / previous document |
+| `e` | jump to the first field needing attention |
+| `s` | skip |
 
-Use `Requeue` when you want OpenKeep to process the document again.
+`Enter` only confirms when no button or menu has focus, so activating a
+control never files a document by accident.
 
-This is useful when:
+## Confirm a Batch
 
-- extraction looks wrong
-- the provider choice should change
-- the document was updated externally
-- you want a fresh processing attempt after a failure
+When several documents are above a confidence threshold, a
+`Confirm N above X%` button appears. Choose the threshold next to it.
+
+Batch confirmation only ever includes documents whose review reasons are
+about confidence — low confidence, ambiguous classification, or an unresolved
+correspondent. A document flagged for a concrete defect, such as missing
+fields, an unsupported format, or a processing or validation failure, is
+never confirmed in bulk, however high its score.
 
 ## Correct Metadata on the Document Page
 

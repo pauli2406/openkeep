@@ -38,6 +38,30 @@ function formatReviewReason(reason: string): string {
   return reason.replace(/_/g, " ");
 }
 
+/**
+ * Reasons a confidence score actually speaks to. The others describe a
+ * concrete defect — OCR produced nothing, a required field is absent, the
+ * format is unsupported, processing or validation failed — and a document
+ * can carry one of those while still scoring high overall. Bulk-confirming
+ * on confidence alone would mark those resolved without anyone looking.
+ */
+const CONFIDENCE_ONLY_REASONS = new Set([
+  "low_confidence",
+  "ocr_low_confidence",
+  "classification_ambiguous",
+  "correspondent_unresolved",
+]);
+
+function isBulkEligible(
+  item: { confidence: number | null; reviewReasons?: string[] },
+  threshold: number,
+): boolean {
+  if ((item.confidence ?? 0) * 100 < threshold) return false;
+  const reasons = item.reviewReasons ?? [];
+  if (reasons.length === 0) return false;
+  return reasons.every((reason) => CONFIDENCE_ONLY_REASONS.has(reason));
+}
+
 function formatShortDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -136,13 +160,28 @@ function ReviewPage() {
   // --- Data (query keys unchanged) ---
 
   const reviewQuery = useQuery({
-    queryKey: ["documents", "review", 1],
+    queryKey: ["documents", "review", "all"],
+    // The screen walks the whole queue with j/k and has no pagination
+    // control, so anything past the first page would be unreachable. Follow
+    // `total` and collect every page instead.
     queryFn: async () => {
-      const { data, error, response } = await api.GET("/api/documents/review", {
-        params: { query: { page: 1, pageSize: 100 } },
+      const pageSize = 100;
+      const first = await api.GET("/api/documents/review", {
+        params: { query: { page: 1, pageSize } },
       });
-      if (!response.ok || error || !data) throw new Error(copy.fetchError);
-      return data;
+      if (!first.response.ok || first.error || !first.data) {
+        throw new Error(copy.fetchError);
+      }
+      const collected = [...first.data.items];
+      const pages = Math.ceil((first.data.total ?? collected.length) / pageSize);
+      for (let page = 2; page <= pages; page += 1) {
+        const next = await api.GET("/api/documents/review", {
+          params: { query: { page, pageSize } },
+        });
+        if (!next.response.ok || next.error || !next.data) break;
+        collected.push(...next.data.items);
+      }
+      return { ...first.data, items: collected };
     },
     refetchInterval: (query) =>
       processingRefetchInterval(query.state.data, (data) => data?.items),
@@ -305,9 +344,7 @@ function ReviewPage() {
   }, [selected, form, updateMutation, resolveMutation, advance]);
 
   const bulkConfirm = useCallback(async () => {
-    const eligible = queue.filter(
-      (item) => (item.confidence ?? 0) * 100 >= bulkThreshold,
-    );
+    const eligible = queue.filter((item) => isBulkEligible(item, bulkThreshold));
     if (eligible.length === 0) return;
     setBulkRunning(true);
     try {
@@ -330,6 +367,13 @@ function ReviewPage() {
       if (queue.length === 0 || !selected) return;
 
       if (event.key === "Enter") {
+        // Enter is the confirm shortcut, but it is also how you activate a
+        // focused button, link or select. Filing the document instead would
+        // be a destructive surprise, so only claim Enter when nothing
+        // interactive has focus.
+        if (target?.closest("button, a, [role='button'], [role='combobox'], summary")) {
+          return;
+        }
         event.preventDefault();
         void confirmSelected();
         return;
@@ -382,8 +426,8 @@ function ReviewPage() {
   const oldestDays = items.length
     ? Math.max(...items.map((item) => daysSince(item.createdAt)))
     : 0;
-  const bulkEligible = queue.filter(
-    (item) => (item.confidence ?? 0) * 100 >= bulkThreshold,
+  const bulkEligible = queue.filter((item) =>
+    isBulkEligible(item, bulkThreshold),
   ).length;
 
   const fieldConfidence: Record<string, number> =
