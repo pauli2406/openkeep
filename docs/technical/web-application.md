@@ -42,7 +42,18 @@ Primary navigation surfaces:
 - chat
 - import
 - settings
-- account menu (profile, sign out)
+- account menu (opens the profile page)
+
+Sign out moved off the account menu onto the profile page itself, next to the
+identity header, so the destructive action sits with the account it affects
+rather than one hover away from every screen.
+
+`/profile` carries the identity header, four archive statistics, the archive
+export, two-factor setup and API tokens. The statistics are derived from
+`/api/dashboard/insights`: total documents, documents not awaiting review
+(total minus pending — note this includes documents that never required
+review, since the API exposes no resolved count), correspondents and document
+types.
 
 ## Theming
 
