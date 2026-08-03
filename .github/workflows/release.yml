@@ -1,0 +1,169 @@
+name: Release
+
+# Manually triggered release:
+#   1. resolves the commit to release and verifies its images exist in GHCR
+#   2. re-tags those images as the release version (no rebuild) and moves `latest`
+#   3. triggers the Dokploy deployment via its webhook (through Cloudflare Access
+#      using a service token scoped to the deploy path)
+#   4. smoke-tests the public health endpoint
+#   5. creates an annotated git tag + GitHub Release
+#
+# Required repository secrets:
+#   DOKPLOY_DEPLOY_WEBHOOK_URL  full webhook URL from Dokploy (Deployments tab)
+#   CF_ACCESS_CLIENT_ID         Cloudflare Access service token client id (…\.access)
+#   CF_ACCESS_CLIENT_SECRET     Cloudflare Access service token client secret
+# Optional:
+#   HEALTHCHECK_URL_APP         public health URL to smoke-test (default https://openkeep.de/api/health)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. v1.2.0"
+        required: true
+        type: string
+      ref:
+        description: "Commit SHA, branch or tag to release"
+        required: false
+        default: main
+        type: string
+      deploy:
+        description: "Deploy to production after tagging"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          echo "${{ inputs.version }}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::version must look like v1.2.3"; exit 1; }
+
+      - name: Resolve commit
+        id: sha
+        run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify images for this commit exist
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          for img in openkeep-api openkeep-migrate openkeep-worker; do
+            echo "checking ghcr.io/$OWNER/$img:$SHA"
+            docker buildx imagetools inspect "ghcr.io/$OWNER/$img:$SHA" >/dev/null \
+              || { echo "::error::missing image ghcr.io/$OWNER/$img:$SHA — run 'Build & Push Production Images' for this commit first"; exit 1; }
+          done
+
+      - name: Tag images with the release version and move latest
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ steps.sha.outputs.value }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # imagetools creates new tags pointing at the same manifest — no rebuild, no re-upload.
+          for img in openkeep-api openkeep-migrate openkeep-worker; do
+            docker buildx imagetools create \
+              --tag "ghcr.io/$OWNER/$img:$VERSION" \
+              --tag "ghcr.io/$OWNER/$img:latest" \
+              "ghcr.io/$OWNER/$img:$SHA"
+          done
+          # worker-base is only published as :latest — alias it so a release is fully pinned.
+          docker buildx imagetools create \
+            --tag "ghcr.io/$OWNER/openkeep-worker-base:$VERSION" \
+            "ghcr.io/$OWNER/openkeep-worker-base:latest"
+
+      - name: Trigger Dokploy deployment
+        if: inputs.deploy
+        env:
+          WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::DOKPLOY_DEPLOY_WEBHOOK_URL secret is not set"; exit 1
+          fi
+          code=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X POST "$WEBHOOK" \
+            -H "CF-Access-Client-Id: $CF_ID" \
+            -H "CF-Access-Client-Secret: $CF_SECRET")
+          echo "webhook HTTP $code"; cat /tmp/deploy.out || true; echo
+          case "$code" in
+            2*) echo "deployment triggered" ;;
+            30*) echo "::error::got a redirect — the service token is not accepted by Cloudflare Access (check the scoped Access application)"; exit 1 ;;
+            *)  echo "::error::webhook call failed with HTTP $code"; exit 1 ;;
+          esac
+
+      - name: Smoke-test the deployment
+        if: inputs.deploy
+        env:
+          HEALTH_URL: ${{ secrets.HEALTHCHECK_URL_APP || 'https://openkeep.de/api/health' }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          # Dokploy pulls images, runs migrations and restarts the stack — give it time.
+          echo "waiting 60s for the stack to come up…"; sleep 60
+          for attempt in $(seq 1 10); do
+            body=$(curl -sS --max-time 20 "$HEALTH_URL" \
+              -H "CF-Access-Client-Id: $CF_ID" \
+              -H "CF-Access-Client-Secret: $CF_SECRET" || true)
+            if echo "$body" | grep -q '"status":"ok"'; then
+              echo "health ok: $body"; exit 0
+            fi
+            echo "attempt $attempt: not healthy yet"; sleep 20
+          done
+          echo "::error::health endpoint did not report ok — check Dokploy logs before releasing again"
+          exit 1
+
+      - name: Create git tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" "$SHA" -m "Release $VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" --target "$SHA" --generate-notes \
+            --title "$VERSION" --notes-start-tag "$(git describe --tags --abbrev=0 "$VERSION^" 2>/dev/null || echo '')" \
+            || gh release create "$VERSION" --target "$SHA" --generate-notes --title "$VERSION"
+
+      - name: Summary
+        env:
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          {
+            echo "## Release $VERSION"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Deployed | ${{ inputs.deploy }} |"
+            echo "| Images | \`ghcr.io/$OWNER/openkeep-{api,migrate,worker}:$VERSION\` |"
+            echo
+            echo "**Rollback:** set \`IMAGE_TAG\` to a previous version in the Dokploy environment and redeploy."
+          } >> "$GITHUB_STEP_SUMMARY"
