@@ -264,3 +264,38 @@ At a conceptual level, the most important document-related persisted data includ
 - [Architecture Overview](./architecture-overview.md)
 - [Agentic Document Intelligence](./agentic-document-intelligence.md)
 - [Backend Notes](../backend.md)
+
+## Module Graph and Decorator Metadata
+
+NestJS reads a constructor's dependencies from `design:paramtypes`. Any
+transpiler that emits that metadata evaluates the referenced class when the
+decorator runs, at module load — so a runtime import cycle between two
+services makes the API fail to start with
+`Cannot access 'X' before initialization`.
+
+The API transpiles with esbuild (`tsx` in development, `tsup` in the build),
+which does not emit that metadata. Two consequences:
+
+- Providers are injected with an explicit `@Inject(Token)` rather than by
+  constructor type, and request validation names its schema explicitly through
+  `@ValidatedBody(Dto)` / `@ValidatedQuery(Dto)` — see
+  `src/common/validated-params.ts`. The bare `@Body()` / `@Query()` forms rely
+  on the missing metadata and silently validate nothing.
+- Service-level import cycles were invisible, because nothing read the
+  metadata that would have tripped over them.
+
+Those cycles have been removed. Where a service would have to import
+`DocumentsService` back and close a loop, it depends on the `DOCUMENTS_SERVICE`
+token and annotates the type with `import type`, which the transpiler erases.
+`documents.module.ts` aliases the token onto the real provider with
+`useExisting`, so both resolve to the same instance.
+
+`test/import-cycles.spec.ts` fails if a runtime cycle reappears outside
+`*.module.ts`. Module files are exempt: a Nest module has no constructor to
+emit metadata for, and `forwardRef(() => OtherModule)` defers the reference
+past load, which is the framework's documented pattern.
+
+Verified: with SWC configured to emit decorator metadata the API starts
+cleanly and `design:paramtypes` resolves. Adopting such a transpiler is now a
+choice rather than a blocked path; the explicit forms above stay correct
+either way.
