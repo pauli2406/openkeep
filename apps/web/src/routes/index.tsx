@@ -1,283 +1,408 @@
-import { Fragment } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Check, Sparkles } from "lucide-react";
+import { Check, ExternalLink, RotateCw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  ErrorBlock,
-  ExplorerSectionHeader,
-  LoadingBlock,
-  MetricRibbon,
-} from "@/components/explorer/shared";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { Chip } from "@/components/ui/chip";
+import { ErrorBlock, LoadingBlock } from "@/components/explorer/shared";
+import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
-import { fetchDashboardInsights, formatCurrency } from "@/lib/explorer";
+import { fetchFilteredDocuments, formatCurrency } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import type { DashboardDeadlineItem, MonthlyActivityPoint } from "@openkeep/types";
+import type { Document } from "@openkeep/types";
 
 export const Route = createFileRoute("/")({
-  component: DashboardPage,
+  component: TodayPage,
 });
 
-function formatMonthLabel(month: string): string {
-  const [, m] = month.split("-");
-  const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return labels[Number(m) - 1] ?? m;
-}
+type TaskFilter = "open" | "overdue" | "month" | "invoices";
 
-function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="flex h-32 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
-        No monthly activity yet
-      </div>
-    );
+/** A queue row derived from a document with a due date. */
+type TaskItem = {
+  documentId: string;
+  title: string;
+  dueDate: string;
+  amount: number | null;
+  currency: string | null;
+  correspondentName: string | null;
+  documentTypeName: string | null;
+  taskLabel: string;
+  daysUntilDue: number;
+  isOverdue: boolean;
+};
+
+/** Parse `YYYY-MM-DD` in local time; `new Date(str)` treats it as UTC. */
+function parseDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
   }
-
-  const max = Math.max(...data.map((d) => d.count), 1);
-
-  return (
-    <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
-      {data.map((point, i) => {
-        const pct = (point.count / max) * 100;
-        const prevYear = i > 0 ? data[i - 1].month.split("-")[0] : null;
-        const curYear = point.month.split("-")[0];
-        const isYearBoundary = prevYear !== null && prevYear !== curYear;
-
-        return (
-          <Fragment key={point.month}>
-            {isYearBoundary && (
-              <div className="flex flex-col items-center justify-end gap-1.5 px-1 self-stretch">
-                <span className="ok-eyebrow text-[color:var(--explorer-muted)]">
-                  {curYear}
-                </span>
-                <div className="w-px flex-1 bg-[color:var(--explorer-border)]" />
-              </div>
-            )}
-            <Link
-              to="/documents"
-              search={{ view: "timeline" }}
-              className="group flex min-w-[3.5rem] flex-1 flex-col items-center gap-1.5"
-            >
-              <span className="text-[0.65rem] ok-num font-semibold text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover:opacity-100">
-                {point.count}
-              </span>
-              <div className="relative flex w-full justify-center">
-                <div
-                  className="w-full max-w-[2.4rem] rounded-t-[0.6rem] bg-[color:var(--explorer-cobalt)]/25 transition-colors group-hover:bg-[color:var(--explorer-cobalt)]/55"
-                  style={{ height: `${Math.max(pct, 6)}%`, minHeight: "4px", maxHeight: "5rem" }}
-                />
-              </div>
-              <span className="ok-eyebrow text-[color:var(--explorer-muted)]">
-                {formatMonthLabel(point.month)}
-              </span>
-            </Link>
-          </Fragment>
-        );
-      })}
-    </div>
-  );
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function formatTaskDateLabel(date: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
+/** Mirrors the API's buildTaskLabel so rows read the same either way. */
+function taskLabelFor(documentTypeName: string | null, isOverdue: boolean): string {
+  const normalized = documentTypeName?.trim().toLowerCase() ?? "";
+  if (normalized.includes("invoice") || normalized.includes("bill")) {
+    return isOverdue ? "Pay immediately" : "Pay";
+  }
+  if (normalized.includes("contract") || normalized.includes("legal")) {
+    return isOverdue ? "Respond immediately" : "Respond";
+  }
+  if (normalized.includes("insurance")) {
+    return isOverdue ? "Review immediately" : "Review";
+  }
+  return isOverdue ? "Handle immediately" : "Handle";
+}
+
+function toTask(document: Document): TaskItem {
+  const due = parseDateOnly(document.dueDate ?? "");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilDue = due
+    ? Math.round((due.getTime() - today.getTime()) / 86_400_000)
+    : 0;
+  const isOverdue = daysUntilDue < 0;
+  return {
+    documentId: document.id,
+    title: document.title,
+    dueDate: document.dueDate ?? "",
+    amount: document.amount ?? null,
+    currency: document.currency ?? null,
+    correspondentName: document.correspondent?.name ?? null,
+    documentTypeName: document.documentType?.name ?? null,
+    taskLabel: taskLabelFor(document.documentType?.name ?? null, isOverdue),
+    daysUntilDue,
+    isOverdue,
+  };
+}
+
+/** "-4d" when overdue, "6d" otherwise — the design's DUE column. */
+function dueLabel(item: TaskItem): string {
+  return item.isOverdue
+    ? `-${Math.abs(item.daysUntilDue)}d`
+    : `${item.daysUntilDue}d`;
+}
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
-  }).format(new Date(date));
+  });
 }
 
-function buildTaskDescription(item: DashboardDeadlineItem): string {
-  if (item.referenceNumber?.trim()) {
-    return `${item.title} (${item.referenceNumber.trim()})`;
-  }
-  return item.title;
-}
-
-function ClusterStrip({
-  items,
+/** One cell of the extracted-fields grid; `attention` tints it amber. */
+function Field({
+  label,
+  value,
+  attention = false,
 }: {
-  items: Array<{
-    id: string;
-    slug: string;
-    name: string;
-    documentCount: number;
-    documentTypes: Array<{ name: string; count: number }>;
-    latestDocDate: string | null;
-    totalAmount: number | null;
-    currency: string | null;
-  }>;
+  label: string;
+  value: string;
+  attention?: boolean;
 }) {
-  const { t } = useI18n();
-  if (items.length === 0) {
-    return (
-      <div className="flex min-h-40 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
-        No clusters in view
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
-      {items.map((item) => (
-        <Link
-          key={item.id}
-          to="/correspondents/$slug"
-          params={{ slug: item.slug }}
-          className="group rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card p-4 transition hover:-translate-y-0.5 hover:border-[color:var(--explorer-cobalt)]/35"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-                <span className="ok-num">{item.documentCount}</span> docs
-              </p>
-              <h3 className="mt-2 text-xl font-semibold text-[color:var(--explorer-ink)]">
-                {item.name}
-              </h3>
-            </div>
-            <ArrowRight className="mt-1 h-4 w-4 text-[color:var(--explorer-muted)] transition group-hover:translate-x-0.5" />
-          </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {item.documentTypes.map((type) => (
-              <span
-                key={`${item.id}-${type.name}`}
-                className="inline-flex items-center gap-2 rounded-full bg-[color:var(--explorer-paper-strong)] px-3 py-1 text-xs text-[color:var(--explorer-muted)]"
-              >
-                <span className="h-2 w-2 rounded-full bg-[color:var(--explorer-rust)]" />
-                {type.name} · <span className="ok-num">{type.count}</span>
-              </span>
-            ))}
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-[color:var(--explorer-muted)]">
-            <span>{item.latestDocDate ?? "Undated"}</span>
-            <span className="ok-num">{formatCurrency(item.totalAmount, item.currency ?? "EUR") ?? "Mixed"}</span>
-          </div>
-        </Link>
-      ))}
+    <div
+      className={cn(
+        "rounded-[var(--r-md)] border px-2.5 py-1.5",
+        attention
+          ? "border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)]"
+          : "border-border bg-card",
+      )}
+    >
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "truncate text-sm",
+          attention ? "ok-num text-[var(--ok-amber)]" : "text-foreground",
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
-function TaskTable({
-  items,
-  completingId,
-  onComplete,
-  error,
-}: {
-  items: DashboardDeadlineItem[];
-  completingId: string | null;
-  onComplete: (documentId: string) => void;
-  error: string | null;
-}) {
+function TaskPreview({ documentId }: { documentId: string }) {
   const { t } = useI18n();
-
-  if (items.length === 0) {
-    return (
-      <div className="flex min-h-44 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
-        {t("dashboard.noTasksInView")}
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
-      <div className="grid grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] gap-4 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper-strong)] px-4 py-3 ok-eyebrow text-[color:var(--explorer-muted)]">
-        <span>{t("dashboard.correspondent")}</span>
-        <span>{t("dashboard.document")}</span>
-        <span>{t("dashboard.whatToDo")}</span>
-        <span>{t("dashboard.amount")}</span>
-        <span>{t("dashboard.deadline")}</span>
-        <span>{t("dashboard.action")}</span>
-      </div>
-      <div className="divide-y divide-[color:var(--explorer-border)]">
-        {items.map((item) => {
-          const isCompleting = completingId === item.documentId;
-          return (
-            <div
-              key={item.documentId}
-              className={cn(
-                "grid grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] md:items-center md:gap-4",
-                item.isOverdue && "bg-[var(--ok-red-soft)]",
-              )}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">
-                  {item.correspondentName ?? t("dashboard.unfiled")}
-                </p>
-                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[color:var(--explorer-muted)]">
-                  {item.documentTypeName ?? t("dashboard.documentFallback")}
-                </p>
-              </div>
-              <Link
-                to="/documents/$documentId"
-                params={{ documentId: item.documentId }}
-                className="min-w-0 text-sm font-medium text-[color:var(--explorer-ink)] transition hover:text-[color:var(--explorer-cobalt)]"
-              >
-                {buildTaskDescription(item)}
-              </Link>
-              <div className="text-sm text-[color:var(--explorer-ink)]">{item.taskLabel}</div>
-              <div className="text-sm text-[color:var(--explorer-ink)]">
-                <span className="ok-num">{formatCurrency(item.amount, item.currency ?? "EUR") ?? "-"}</span>
-              </div>
-              <div className="text-sm text-[color:var(--explorer-ink)]">
-                <p>{formatTaskDateLabel(item.dueDate)}</p>
-                <p className="mt-1 text-xs text-[color:var(--explorer-muted)]">
-                    {item.isOverdue
-                      ? `${Math.abs(item.daysUntilDue)}${t("dashboard.overdueDays")}`
-                      : `${item.daysUntilDue}${t("dashboard.daysLeft")}`}
-                </p>
-              </div>
-              <div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onComplete(item.documentId)}
-                  disabled={isCompleting}
-                  className="w-full md:w-auto"
-                >
-                  <Check className="h-4 w-4" />
-                  {isCompleting ? t("dashboard.saving") : t("dashboard.done")}
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {error ? (
-        <div className="border-t border-[color:var(--explorer-border)] px-4 py-3 text-sm text-[var(--ok-red)]">
-          {error}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DashboardPage() {
-  const { t } = useI18n();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const insightsQuery = useQuery({
-    queryKey: ["dashboard", "insights"],
-    queryFn: fetchDashboardInsights,
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const documentQuery = useQuery({
+    queryKey: ["document", documentId],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/documents/{id}", {
+        params: { path: { id: documentId } },
+      });
+      if (error) throw new Error(getApiErrorMessage(error, t("today.previewUnavailable")));
+      return data as unknown as Document;
+    },
   });
 
-  const completeTaskMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      const { data, error } = await api.PATCH("/api/documents/{id}", {
+  const previewQuery = useQuery({
+    queryKey: ["document-preview", documentId],
+    queryFn: async () => {
+      const response = await authFetch(`/api/documents/${documentId}/download`);
+      if (!response.ok) throw new Error(t("today.previewUnavailable"));
+      return response.blob();
+    },
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!previewQuery.data) {
+      setPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(previewQuery.data);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [previewQuery.data]);
+
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      // Deadline rows are selected while task_completed_at IS NULL, so
+      // completing the task is what takes the row out of the queue.
+      const { error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: { taskCompletedAt: new Date().toISOString() },
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("dashboard.failedToCompleteTask")));
       }
-      return data;
+      // Resolve the review too, when there is one to resolve.
+      if (needsReview) {
+        await api.POST("/api/documents/{id}/review/resolve", {
+          params: { path: { id: documentId } },
+          body: {},
+        });
+      }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents", "deadlines"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard", "insights"] });
+      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
     },
   });
+
+  const doc = documentQuery.data;
+  const needsReview = doc?.reviewStatus === "pending";
+  const isImage = previewQuery.data?.type.startsWith("image/");
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b px-3.5">
+        <span className="ok-section-title min-w-0 flex-1 truncate">
+          {doc?.title ?? "—"}
+        </span>
+        {needsReview ? <Badge variant="warn">{t("today.needsReview")}</Badge> : null}
+        <button
+          type="button"
+          aria-label={t("today.openDocument")}
+          className="text-muted-foreground transition-colors hover:text-foreground"
+          onClick={() =>
+            navigate({ to: "/documents/$documentId", params: { documentId } })
+          }
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* A scan is a scan: paper stays light, the frame darkens. */}
+      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-[var(--ok-sunken)] p-5">
+        {previewUrl && isImage ? (
+          <img
+            src={previewUrl}
+            alt=""
+            className="max-w-full rounded-[var(--r-sm)] border border-[var(--ok-paper-border)] bg-[var(--ok-paper)]"
+          />
+        ) : previewUrl ? (
+          <iframe
+            src={previewUrl}
+            title={doc?.title ?? ""}
+            className="h-full min-h-[420px] w-full rounded-[var(--r-sm)] border border-[var(--ok-paper-border)] bg-[var(--ok-paper)]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+            {previewQuery.isLoading ? "…" : t("today.previewUnavailable")}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-shrink-0 border-t px-3.5 py-3">
+        <div className="ok-eyebrow mb-2">{t("today.extractedFields")}</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field
+            label={t("dashboard.correspondent")}
+            value={doc?.correspondent?.name ?? t("dashboard.unfiled")}
+          />
+          <Field
+            label={t("today.documentType")}
+            value={doc?.documentType?.name ?? "—"}
+          />
+          <Field label={t("today.issueDate")} value={formatDate(doc?.issueDate)} />
+          <Field
+            label={t("dashboard.deadline")}
+            value={formatDate(doc?.dueDate)}
+            attention={Boolean(doc?.dueDate)}
+          />
+          <Field
+            label={t("dashboard.amount")}
+            value={
+              doc?.amount != null
+                ? (formatCurrency(doc.amount, doc.currency ?? "EUR") ?? "—")
+                : "—"
+            }
+          />
+          <Field
+            label={t("today.reference")}
+            value={doc?.referenceNumber ?? "—"}
+            attention={!doc?.referenceNumber}
+          />
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <Button
+            onClick={() => confirmMutation.mutate()}
+            disabled={confirmMutation.isPending}
+          >
+            <Check />
+            {t("today.confirmAndFile")}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate({ to: "/documents/$documentId", params: { documentId } })
+            }
+          >
+            <RotateCw />
+            {t("today.openDocument")}
+          </Button>
+          <span className="ok-num ml-auto text-[10.5px] text-muted-foreground">
+            ↵ {t("today.openHint")} · ⇥ {t("today.nextHint")}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TodayPage() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<TaskFilter>("open");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // The insights endpoint caps deadlines at 6 overdue + 6 upcoming, which is
+  // not a queue. Take them from the documents endpoint sorted by due date and
+  // derive the queue fields the design needs.
+  const insightsQuery = useQuery({
+    queryKey: ["documents", "deadlines"],
+    queryFn: () =>
+      fetchFilteredDocuments({
+        sort: "dueDate",
+        direction: "asc",
+        page: 1,
+        pageSize: 100,
+      }),
+    refetchInterval: (query) =>
+      processingRefetchInterval(query.state.data, (data) => data?.items),
+  });
+
+  const allTasks = useMemo(() => {
+    const items = insightsQuery.data?.items ?? [];
+    return items
+      .filter((document) => document.dueDate && !document.taskCompletedAt)
+      .map(toTask)
+      .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+  }, [insightsQuery.data]);
+
+  const tasks = useMemo(() => {
+    switch (filter) {
+      case "overdue":
+        return allTasks.filter((item) => item.isOverdue);
+      case "month": {
+        // Calendar month, matching the API's current-month semantics —
+        // not "within 31 days", which would sweep in old overdue items.
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return allTasks.filter((item) => {
+          const due = parseDateOnly(item.dueDate);
+          return due !== null && due >= start && due <= end;
+        });
+      }
+      case "invoices":
+        // Same family the API's invoiceOnly predicate recognises.
+        return allTasks.filter((item) => {
+          const name = (item.documentTypeName ?? "").toLowerCase();
+          return (
+            name.includes("invoice") ||
+            name.includes("bill") ||
+            name.includes("rechnung")
+          );
+        });
+      default:
+        return allTasks;
+    }
+  }, [allTasks, filter]);
+
+  const overdueCount = allTasks.filter((item) => item.isOverdue).length;
+
+  // Keep a selection so the right rail always has something to show.
+  useEffect(() => {
+    if (tasks.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !tasks.some((item) => item.documentId === selectedId)) {
+      setSelectedId(tasks[0].documentId);
+    }
+  }, [tasks, selectedId]);
+
+  const selectedIndex = tasks.findIndex((item) => item.documentId === selectedId);
+
+  // Row click selects; ↵ opens; ↑/↓ and ⇥ move.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      // Never hijack a focused control: Enter belongs to it, not the queue.
+      if (
+        target &&
+        (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(target.tagName) ||
+          target.isContentEditable ||
+          target.closest("[role='dialog']"))
+      ) {
+        return;
+      }
+      if (tasks.length === 0) return;
+
+      if (event.key === "ArrowDown" || event.key === "Tab") {
+        event.preventDefault();
+        const next = tasks[Math.min(selectedIndex + 1, tasks.length - 1)];
+        if (next) setSelectedId(next.documentId);
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        const prev = tasks[Math.max(selectedIndex - 1, 0)];
+        if (prev) setSelectedId(prev.documentId);
+      } else if (event.key === "Enter" && selectedId) {
+        event.preventDefault();
+        navigate({ to: "/documents/$documentId", params: { documentId: selectedId } });
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [tasks, selectedIndex, selectedId, navigate]);
 
   if (insightsQuery.isLoading) {
     return <LoadingBlock label={t("dashboard.loadingAtlas")} />;
@@ -285,7 +410,7 @@ function DashboardPage() {
 
   if (insightsQuery.isError || !insightsQuery.data) {
     return (
-      <div className="p-6 md:p-8">
+      <div className="p-6">
         <ErrorBlock
           label={t("dashboard.failedToLoadInsights")}
           action={
@@ -298,101 +423,120 @@ function DashboardPage() {
     );
   }
 
-  const data = insightsQuery.data;
-  const taskItems =
-    data.overdueItems.length > 0
-      ? [...data.overdueItems, ...data.upcomingDeadlines].slice(0, 6)
-      : data.upcomingDeadlines;
-
   return (
-    <div className="space-y-8 p-6 md:p-8">
-      <ExplorerSectionHeader
-        eyebrow={t("dashboard.eyebrow")}
-        title="Dashboard"
-        description={t("dashboard.description")}
-      />
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Filter strip */}
+      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b px-4">
+        <Chip active={filter === "open"} onClick={() => setFilter("open")}>
+          {t("today.openTasks")}
+        </Chip>
+        <Chip active={filter === "overdue"} onClick={() => setFilter("overdue")}>
+          {t("today.overdue")} · <span className="ok-num">{overdueCount}</span>
+        </Chip>
+        <Chip active={filter === "month"} onClick={() => setFilter("month")}>
+          {t("today.thisMonth")}
+        </Chip>
+        <Chip active={filter === "invoices"} onClick={() => setFilter("invoices")}>
+          {t("today.invoices")}
+        </Chip>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {t("today.sortedBy")}{" "}
+          <span className="font-semibold text-foreground">{t("today.dueDate")}</span> ·{" "}
+          <span className="ok-num">{tasks.length}</span> {t("today.openCount")}
+        </span>
+      </div>
 
-      <MetricRibbon
-        items={[
-          {
-            label: t("dashboard.totalDocuments"),
-            value: data.stats.totalDocuments.toLocaleString(),
-            tone: "neutral",
-          },
-          {
-            label: t("dashboard.pendingReview"),
-            value: data.stats.pendingReview.toLocaleString(),
-            tone: data.stats.pendingReview > 0 ? "rust" : "neutral",
-          },
-          {
-            label: t("dashboard.documentTypes"),
-            value: data.stats.documentTypesCount.toLocaleString(),
-            tone: "cobalt",
-          },
-          {
-            label: t("dashboard.correspondents"),
-            value: data.stats.correspondentsCount.toLocaleString(),
-            tone: "neutral",
-          },
-        ]}
-      />
-
-      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-               {t("dashboard.intakeTrend")}
-             </p>
-             <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-               {t("dashboard.rhythm")}
-             </h2>
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_minmax(340px,480px)]">
+        {/* Left: what needs you */}
+        <div ref={listRef} className="min-h-0 overflow-auto">
+          <div className="flex h-8 items-center border-b bg-[var(--ok-bar)] px-4">
+            <span className="ok-eyebrow w-16">{t("today.due")}</span>
+            <span className="ok-eyebrow flex-1">{t("dashboard.document")}</span>
+            <span className="ok-eyebrow w-40">{t("today.task")}</span>
+            <span className="ok-eyebrow w-24 text-right">{t("dashboard.amount")}</span>
           </div>
-          <Button asChild variant="ghost">
-            <Link to="/documents" search={{ view: "timeline" }}>
-              {t("dashboard.openTimeline")}
-            </Link>
-          </Button>
-        </div>
-        <HorizontalTimeline data={data.monthlyActivity} />
-      </section>
 
-      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-               {t("dashboard.correspondents")}
-             </p>
-             <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-               {t("dashboard.largestClusters")}
-             </h2>
-          </div>
-          <Button asChild variant="ghost">
-            <Link to="/documents" search={{ view: "galaxy" }}>
-              <Sparkles className="h-4 w-4" />
-              {t("dashboard.openGalaxyView")}
-            </Link>
-          </Button>
+          {tasks.length === 0 ? (
+            <div className="p-10 text-center text-sm text-muted-foreground">
+              {t("today.nothingDue")}
+            </div>
+          ) : (
+            tasks.map((item) => {
+              const active = item.documentId === selectedId;
+              return (
+                <button
+                  key={item.documentId}
+                  type="button"
+                  onClick={() => {
+                    // The preview rail is hidden below lg, so on narrow
+                    // screens a tap has to go straight to the document.
+                    if (
+                      typeof window !== "undefined" &&
+                      !window.matchMedia("(min-width: 1024px)").matches
+                    ) {
+                      navigate({
+                        to: "/documents/$documentId",
+                        params: { documentId: item.documentId },
+                      });
+                      return;
+                    }
+                    setSelectedId(item.documentId);
+                  }}
+                  onDoubleClick={() =>
+                    navigate({
+                      to: "/documents/$documentId",
+                      params: { documentId: item.documentId },
+                    })
+                  }
+                  className={cn(
+                    "ok-row ok-row-2 w-full px-4 text-left",
+                    active && "bg-accent shadow-[inset_2px_0_0_var(--ok-accent)]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "ok-num w-16 text-sm",
+                      item.isOverdue
+                        ? "font-semibold text-[var(--ok-red)]"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {dueLabel(item)}
+                  </span>
+                  <span className="min-w-0 flex-1 pr-3">
+                    <span className="block truncate text-sm text-foreground">
+                      {item.title}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {item.correspondentName ?? t("dashboard.unfiled")}
+                      {item.documentTypeName ? ` · ${item.documentTypeName}` : ""}
+                    </span>
+                  </span>
+                  <span className="w-40 truncate text-sm text-muted-foreground">
+                    {item.taskLabel}
+                  </span>
+                  <span className="ok-num w-24 text-right text-sm text-foreground">
+                    {item.amount != null
+                      ? (formatCurrency(item.amount, item.currency ?? "EUR") ?? "—")
+                      : "—"}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
 
-        <ClusterStrip items={data.topCorrespondents.slice(0, 4)} />
-      </section>
-
-      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <div className="mb-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-             {t("dashboard.deadlines")}
-           </p>
-           <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-             {t("dashboard.upcomingTasks")}
-           </h2>
+        {/* Right: live preview of the selection */}
+        <div className="hidden min-h-0 border-l lg:block">
+          {selectedId ? (
+            <TaskPreview key={selectedId} documentId={selectedId} />
+          ) : (
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+              {t("today.selectPrompt")}
+            </div>
+          )}
         </div>
-        <TaskTable
-          items={taskItems}
-          completingId={completeTaskMutation.isPending ? completeTaskMutation.variables ?? null : null}
-          onComplete={(documentId) => completeTaskMutation.mutate(documentId)}
-          error={completeTaskMutation.isError ? completeTaskMutation.error.message : null}
-        />
-      </section>
+      </div>
     </div>
   );
 }

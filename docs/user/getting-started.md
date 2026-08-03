@@ -38,20 +38,26 @@ After setup, OpenKeep creates the initial owner account and signs you in.
 
 Use the login page with the email and password you created during setup.
 
-After signing in, you land on the dashboard.
+After signing in, you land on Today.
 
 ## Main Areas of the App
 
-### Dashboard
+### Today
 
-The dashboard gives you a quick overview of the archive:
+Today answers "what do I have to do", as a working queue rather than an
+overview. It lists everything with an open deadline, soonest first: how many
+days until it is due (overdue shown in red), the document, the task, and the
+amount.
 
-- total documents
-- pending review count
-- top correspondents
-- upcoming deadlines and overdue items
-- recent documents
-- monthly intake trend
+Selecting a row previews that document beside the list with its extracted
+fields, so you can check it without leaving the queue. `Confirm and file`
+marks the task done and removes it from the queue.
+
+Filter the queue with the chips above it: `Open tasks`, `Overdue`,
+`This month` or `Invoices`.
+
+Keyboard: `↑`/`↓` move through the queue, `Enter` opens the selected
+document.
 
 ### Documents
 

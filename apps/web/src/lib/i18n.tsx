@@ -232,6 +232,30 @@ type TranslationKey =
   | "upload.failed"
   | "upload.viewDocuments"
   | "upload.uploadMore"
+  | "today.title"
+  | "today.due"
+  | "today.task"
+  | "today.openTasks"
+  | "today.overdue"
+  | "today.thisMonth"
+  | "today.invoices"
+  | "today.addFilter"
+  | "today.sortedBy"
+  | "today.dueDate"
+  | "today.openCount"
+  | "today.nothingDue"
+  | "today.selectPrompt"
+  | "today.extractedFields"
+  | "today.needsReview"
+  | "today.confirmAndFile"
+  | "today.openDocument"
+  | "today.openHint"
+  | "today.confirmHint"
+  | "today.nextHint"
+  | "today.issueDate"
+  | "today.reference"
+  | "today.documentType"
+  | "today.previewUnavailable"
   | "dashboard.noTasksInView"
   | "dashboard.correspondent"
   | "dashboard.document"
@@ -644,6 +668,30 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "upload.failed": "failed",
     "upload.viewDocuments": "View documents",
     "upload.uploadMore": "Upload more",
+    "today.title": "Today",
+    "today.due": "Due",
+    "today.task": "Task",
+    "today.openTasks": "Open tasks",
+    "today.overdue": "Overdue",
+    "today.thisMonth": "This month",
+    "today.invoices": "Invoices",
+    "today.addFilter": "+ Filter",
+    "today.sortedBy": "Sorted by",
+    "today.dueDate": "due date",
+    "today.openCount": "open",
+    "today.nothingDue": "Nothing needs you right now",
+    "today.selectPrompt": "Select a task to see the document",
+    "today.extractedFields": "Extracted fields",
+    "today.needsReview": "Needs review",
+    "today.confirmAndFile": "Confirm and file",
+    "today.openDocument": "Open document",
+    "today.openHint": "open",
+    "today.confirmHint": "confirm",
+    "today.nextHint": "next",
+    "today.issueDate": "Issue date",
+    "today.reference": "Reference",
+    "today.documentType": "Document type",
+    "today.previewUnavailable": "No preview available",
     "dashboard.noTasksInView": "No tasks in view",
     "dashboard.correspondent": "Correspondent",
     "dashboard.document": "Document",
@@ -1055,6 +1103,30 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "upload.failed": "fehlgeschlagen",
     "upload.viewDocuments": "Dokumente ansehen",
     "upload.uploadMore": "Mehr hochladen",
+    "today.title": "Heute",
+    "today.due": "Fällig",
+    "today.task": "Aufgabe",
+    "today.openTasks": "Offene Aufgaben",
+    "today.overdue": "Überfällig",
+    "today.thisMonth": "Diesen Monat",
+    "today.invoices": "Rechnungen",
+    "today.addFilter": "+ Filter",
+    "today.sortedBy": "Sortiert nach",
+    "today.dueDate": "Fälligkeit",
+    "today.openCount": "offen",
+    "today.nothingDue": "Im Moment ist nichts zu tun",
+    "today.selectPrompt": "Aufgabe auswählen, um das Dokument zu sehen",
+    "today.extractedFields": "Erkannte Felder",
+    "today.needsReview": "Prüfung nötig",
+    "today.confirmAndFile": "Bestätigen und ablegen",
+    "today.openDocument": "Dokument öffnen",
+    "today.openHint": "öffnen",
+    "today.confirmHint": "bestätigen",
+    "today.nextHint": "weiter",
+    "today.issueDate": "Ausstellungsdatum",
+    "today.reference": "Referenz",
+    "today.documentType": "Dokumententyp",
+    "today.previewUnavailable": "Keine Vorschau verfügbar",
     "dashboard.noTasksInView": "Keine Aufgaben in Ansicht",
     "dashboard.correspondent": "Korrespondenz",
     "dashboard.document": "Dokument",
