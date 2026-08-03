@@ -14,9 +14,17 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
 
+/**
+ * Creating the owner authenticates them, and `AppRouter` invalidates the
+ * router as soon as that happens — which re-runs this guard while the user is
+ * still on step 1. Without this flag the wizard would bounce to "/" and the
+ * language and watch-folder steps would be unreachable.
+ */
+let wizardInProgress = false;
+
 export const Route = createFileRoute("/setup")({
   beforeLoad: ({ context }) => {
-    if (context.auth.isAuthenticated) {
+    if (context.auth.isAuthenticated && !wizardInProgress) {
       throw redirect({ to: "/" });
     }
   },
@@ -83,10 +91,12 @@ function SetupPage() {
       return;
     }
     setIsSubmitting(true);
+    wizardInProgress = true;
     try {
       await auth.setup(email, password, displayName);
       setStep(2);
     } catch (err) {
+      wizardInProgress = false;
       setError(err instanceof Error ? err.message : "Setup failed");
     } finally {
       setIsSubmitting(false);
@@ -151,7 +161,13 @@ function SetupPage() {
             <code className="ok-num text-foreground">WATCH_FOLDER_PATH</code>
             {copy.step3Body.split("WATCH_FOLDER_PATH")[1]}
           </p>
-          <Button className="w-full" onClick={() => void navigate({ to: "/" })}>
+          <Button
+            className="w-full"
+            onClick={() => {
+              wizardInProgress = false;
+              void navigate({ to: "/" });
+            }}
+          >
             {copy.done}
           </Button>
         </div>
