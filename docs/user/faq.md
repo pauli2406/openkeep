@@ -13,7 +13,7 @@ Possible reasons:
 - OCR is taking longer on a large or poor-quality file
 - an external provider is slow
 
-Check `Settings` -> `Processing Activity`.
+Check `Settings` -> `AI providers`, which shows the queue depths and the most recent processing jobs.
 
 ## Why did a document enter the review queue?
 

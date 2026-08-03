@@ -14,7 +14,13 @@ import {
   PARSE_PROVIDER_LABELS,
 } from "./shared";
 
-type Tone = "active" | "fallback" | "available" | "offline" | "unconfigured";
+type Tone =
+  | "active"
+  | "fallback"
+  | "available"
+  | "incomplete"
+  | "unconfigured"
+  | "failed";
 
 type ProviderRow = {
   id: string;
@@ -30,11 +36,13 @@ function StatusDot({ tone }: { tone: Tone }) {
       aria-hidden="true"
       className={cn(
         "h-2 w-2 flex-shrink-0 rounded-full",
-        tone === "offline"
+        tone === "failed"
           ? "bg-[var(--ok-red)]"
-          : tone === "unconfigured"
-            ? "bg-[var(--ok-border-strong)]"
-            : "bg-[var(--ok-green)]",
+          : tone === "incomplete"
+            ? "bg-[var(--ok-amber)]"
+            : tone === "unconfigured"
+              ? "bg-[var(--ok-border-strong)]"
+              : "bg-[var(--ok-green)]",
       )}
     />
   );
@@ -54,7 +62,7 @@ export function AiProvidersSection() {
       ? {
           processingQueue: "Verarbeitungswarteschlange",
           embeddingQueue: "Embedding-Warteschlange",
-          failedToday: "Heute fehlgeschlagen",
+          failedToday: "Zuletzt fehlgeschlagen",
           avgPerDoc: "Ø pro Dokument",
           parsing: "Parsing",
           parsingSub: "OCR und Textextraktion",
@@ -65,7 +73,7 @@ export function AiProvidersSection() {
           active: "Aktiv",
           fallback: "Fallback",
           available: "Verfügbar",
-          offline: "Offline",
+          incomplete: "Unvollständig",
           notConfigured: "Nicht konfiguriert",
           activeSummary: (n: string) => `${n} aktiv`,
           none: "keiner aktiv",
@@ -76,7 +84,7 @@ export function AiProvidersSection() {
           keyStored: "Schlüssel hinterlegt",
           noKey: "Kein Schlüssel hinterlegt",
           onlyText: "Nur extrahierter Text wird gesendet",
-          running: "läuft",
+          running: "Läuft",
           done: "Fertig",
           failed: "Fehlgeschlagen",
           queued: "Wartend",
@@ -86,7 +94,7 @@ export function AiProvidersSection() {
       : {
           processingQueue: "Processing queue",
           embeddingQueue: "Embedding queue",
-          failedToday: "Failed today",
+          failedToday: "Failed recently",
           avgPerDoc: "Avg. per document",
           parsing: "Parsing",
           parsingSub: "OCR and text extraction",
@@ -97,7 +105,7 @@ export function AiProvidersSection() {
           active: "Active",
           fallback: "Fallback",
           available: "Available",
-          offline: "Offline",
+          incomplete: "No model set",
           notConfigured: "Not configured",
           activeSummary: (n: string) => `${n} active`,
           none: "none active",
@@ -108,7 +116,7 @@ export function AiProvidersSection() {
           keyStored: "Key stored",
           noKey: "No key stored",
           onlyText: "Only extracted text is sent",
-          running: "running",
+          running: "Running",
           done: "Done",
           failed: "Failed",
           queued: "Queued",
@@ -163,10 +171,9 @@ export function AiProvidersSection() {
   }
 
   // ---- the four numbers ----
-  const today = new Date().toDateString();
-  const failedToday = status.recentJobs.filter(
-    (job) => job.status === "failed" && new Date(job.createdAt).toDateString() === today,
-  ).length;
+  // /api/health/status returns only the newest jobs, so this counts failures
+  // in that window, not "today" across the archive. The label says so.
+  const failedToday = status.recentJobs.filter((job) => job.status === "failed").length;
   const durations = status.recentJobs
     .map((job) => jobDuration(job.startedAt, job.finishedAt))
     .filter((ms): ms is number => ms !== null);
@@ -188,7 +195,7 @@ export function AiProvidersSection() {
     const tone: Tone = !configured
       ? "unconfigured"
       : !provider.available
-        ? "offline"
+        ? "incomplete"
         : provider.id === providers.activeParseProvider
           ? "active"
           : provider.id === providers.fallbackParseProvider
@@ -214,7 +221,7 @@ export function AiProvidersSection() {
     const tone: Tone = !configured
       ? "unconfigured"
       : !provider.available
-        ? "offline"
+        ? "incomplete"
         : provider.id === providers.activeEmbeddingProvider
           ? "active"
           : "available";
@@ -291,9 +298,9 @@ export function AiProvidersSection() {
     ) : null;
 
   const availabilityFor = (tone: Tone) =>
-    tone === "offline" ? (
-      <span className="rounded-[var(--r-sm)] bg-[var(--ok-red-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-red)]">
-        {copy.offline}
+    tone === "incomplete" ? (
+      <span className="rounded-[var(--r-sm)] bg-[var(--ok-amber-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-amber)]">
+        {copy.incomplete}
       </span>
     ) : tone === "unconfigured" ? (
       <span className="rounded-[var(--r-sm)] border px-[7px] py-px text-[11px] font-semibold text-muted-foreground">
@@ -404,7 +411,7 @@ export function AiProvidersSection() {
                 <StatusDot
                   tone={
                     job.status === "failed"
-                      ? "offline"
+                      ? "failed"
                       : job.status === "completed"
                         ? "available"
                         : "active"
@@ -433,7 +440,9 @@ export function AiProvidersSection() {
                     ? copy.failed
                     : job.status === "completed"
                       ? copy.done
-                      : copy.queued}
+                      : job.status === "running"
+                        ? copy.running
+                        : copy.queued}
                 </span>
               </div>
             );
