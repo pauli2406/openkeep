@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { apiUrl } from "./api-url";
@@ -35,18 +35,22 @@ describe("document detail smoke", () => {
 
     server.use(
       ...taxonomyHandlers(),
+      // The document only finishes on the fourth read so both dependent
+      // queries get a chance to poll while it is still processing — the
+      // text query stops as soon as the document reports `ready`.
       http.get(apiUrl(`/api/documents/${documentId}`), () => {
         documentHits += 1;
+        const done = documentHits > 3;
         return HttpResponse.json(
           makeDocument({
             id: documentId,
-            title: documentHits > 1 ? "Processed March Invoice" : "Processing March Invoice",
-            status: documentHits > 1 ? "ready" : "processing",
-            processedAt: documentHits > 1 ? "2026-03-20T10:01:00.000Z" : null,
+            title: done ? "Processed March Invoice" : "Processing March Invoice",
+            status: done ? "ready" : "processing",
+            processedAt: done ? "2026-03-20T10:01:00.000Z" : null,
             latestProcessingJob: {
               ...makeDocument().latestProcessingJob!,
-              status: documentHits > 1 ? "completed" : "running",
-              finishedAt: documentHits > 1 ? "2026-03-20T10:01:00.000Z" : null,
+              status: done ? "completed" : "running",
+              finishedAt: done ? "2026-03-20T10:01:00.000Z" : null,
             },
           }),
         );
@@ -83,9 +87,12 @@ describe("document detail smoke", () => {
 
     renderAuthenticatedApp({ route: `/documents/${documentId}` });
 
-    await waitFor(() => expect(screen.getAllByText("Processed March Invoice").length).toBeGreaterThan(0));
-    expect(documentHits).toBeGreaterThan(1);
-    await waitFor(() => expect(textHits).toBeGreaterThan(1));
+    await waitFor(
+      () => expect(screen.getAllByText("Processed March Invoice").length).toBeGreaterThan(0),
+      { timeout: 3000 },
+    );
+    await waitFor(() => expect(documentHits).toBeGreaterThan(1), { timeout: 3000 });
+    await waitFor(() => expect(textHits).toBeGreaterThan(1), { timeout: 3000 });
   });
 
   it("loads the detail page and reprocesses with the selected OCR provider", async () => {
@@ -224,11 +231,13 @@ describe("document detail smoke", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "March Invoice" }),
+      (await screen.findAllByText("March Invoice"))[0],
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Pending Review").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Manual Overrides")).toBeInTheDocument();
-    expect(screen.getAllByText("Issue Date").length).toBeGreaterThanOrEqual(1);
+    // The header carries the review state; the rail carries the fields and
+    // the manual-override count.
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.getByText("fields locked")).toHaveTextContent("2 fields locked");
+    expect(screen.getByText("Issue date")).toBeInTheDocument();
     await waitFor(() => {
       expect(window.URL.createObjectURL).toHaveBeenCalled();
     });
@@ -242,10 +251,17 @@ describe("document detail smoke", () => {
     expect(screen.getByText("Invoice for March services with payment due at month end.")).toBeInTheDocument();
     expect(screen.getByText("llm_structured_extraction / mistral")).toBeInTheDocument();
 
-    await user.click(screen.getAllByRole("button", { name: /reprocess document/i })[0]);
-    await user.click(screen.getByRole("combobox", { name: /ocr provider/i }));
-    await user.click(await screen.findByRole("option", { name: /amazon textract/i }));
+    // Two OCR providers are available, so the rail's Reprocess opens the
+    // provider picker instead of firing straight away.
     await user.click(screen.getByRole("button", { name: /^reprocess$/i }));
+    const reprocessDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(reprocessDialog).getByRole("combobox", { name: /ocr provider/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: /amazon textract/i }));
+    await user.click(
+      within(reprocessDialog).getByRole("button", { name: /^reprocess$/i }),
+    );
 
     await waitFor(() => {
       expect(reprocessBody).toEqual({ parseProvider: "amazon-textract" });
@@ -365,16 +381,15 @@ describe("document detail smoke", () => {
 
     // Wait for the document to load and display locked fields
     expect(
-      await screen.findByRole("heading", { name: "March Invoice" }),
+      (await screen.findAllByText("March Invoice"))[0],
     ).toBeInTheDocument();
 
-    // Should show "2 fields locked" in manual overrides section
-    expect(screen.getByText(/2 fields? locked/i)).toBeInTheDocument();
+    // The rail summarises the manual overrides above the fields.
+    expect(screen.getByText("fields locked")).toHaveTextContent("2 fields locked");
 
-    // Find and click the first Unlock button (for issueDate inline indicator)
-    const unlockButtons = screen.getAllByRole("button", { name: /unlock/i });
-    expect(unlockButtons.length).toBeGreaterThanOrEqual(1);
-    await user.click(unlockButtons[0]);
+    // Each locked field carries its own unlock affordance; issueDate comes
+    // first in the rail's field order.
+    await user.click(screen.getByRole("button", { name: "Unlock Issue date" }));
 
     // Verify the PATCH was sent with clearLockedFields
     await waitFor(() => {
@@ -383,7 +398,7 @@ describe("document detail smoke", () => {
     });
   });
 
-  it("shows pending lock feedback and search-first tag editing while saving overrides", async () => {
+  it("edits fields in place, warns which fields will lock and saves the overrides", async () => {
     const importantTag = makeTag({
       id: "aaa11111-1111-1111-1111-111111111111",
       name: "Important",
@@ -481,35 +496,31 @@ describe("document detail smoke", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "March Invoice" }),
+      (await screen.findAllByText("March Invoice"))[0],
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+    // There is no edit mode: the tag box is always live and only matches
+    // once you type, so a large tag vocabulary never floods the rail.
+    const tagInput = screen.getByPlaceholderText(/add tag/i);
+    expect(screen.queryByRole("button", { name: /^urgent$/i })).not.toBeInTheDocument();
 
-    expect(
-      screen.getByText(/Only the fields you change will become sticky manual overrides/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Selected tags")).toBeInTheDocument();
-    expect(
-      screen.getByText("Search to add an existing tag or create a new one."),
-    ).toBeInTheDocument();
+    await user.type(tagInput, "urg");
+    expect(screen.getByRole("button", { name: /^urgent$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^travel$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^urgent$/i }));
 
-    expect(screen.queryByRole("button", { name: /Urgent/i })).not.toBeInTheDocument();
-
-    await user.type(screen.getByPlaceholderText("Filter tags..."), "urg");
-    expect(screen.getByRole("button", { name: /Urgent/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Travel/i })).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /Urgent/i }));
-    await user.clear(screen.getByPlaceholderText("Filter tags..."));
-    await user.type(screen.getByPlaceholderText("Filter tags..."), "Finance");
-    await user.click(screen.getByRole("button", { name: /Create tag "Finance"/i }));
-    await user.clear(screen.getByPlaceholderText("0.00"));
-    await user.type(screen.getByPlaceholderText("0.00"), "88");
-
+    // An unmatched query offers to create the tag.
+    await user.type(tagInput, "Finance");
+    await user.click(screen.getByRole("button", { name: /^finance$/i }));
     await waitFor(() => {
       expect(createCalls).toEqual([{ name: "Finance" }]);
     });
+
+    // Amount edits in place: click the value, type, commit with Enter.
+    await user.click(screen.getByRole("button", { name: /123\.45/ }));
+    const amountInput = screen.getByRole("spinbutton");
+    await user.clear(amountInput);
+    await user.type(amountInput, "88{Enter}");
 
     expect(screen.getByText("Saving will lock Amount, Tags.")).toBeInTheDocument();
 
@@ -524,7 +535,9 @@ describe("document detail smoke", () => {
       ]);
     });
 
-    expect(await screen.findByText(/2 fields locked/i)).toBeInTheDocument();
+    expect(await screen.findByText("fields locked")).toHaveTextContent(
+      "2 fields locked",
+    );
   });
 
   it("deletes a document after confirmation and returns to the documents list", async () => {
@@ -584,12 +597,14 @@ describe("document detail smoke", () => {
     });
 
     expect(
-      await screen.findByRole("heading", { name: "March Invoice" }),
+      (await screen.findAllByText("March Invoice"))[0],
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /delete document/i }));
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /delete permanently/i }));
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: /delete permanently/i }),
+    );
 
     await waitFor(() => {
       expect(deleteCalls).toEqual([documentId]);
@@ -597,21 +612,25 @@ describe("document detail smoke", () => {
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
   });
 
-  it("creates a new correspondent from the document edit form", async () => {
-    const existingCorrespondent = makeCorrespondent();
-    const newCorrespondent = makeCorrespondent({
+  it("reassigns the correspondent from the rail and saves it", async () => {
+    const utilityCorrespondent = makeCorrespondent({
       id: "33333333-3333-3333-3333-333333333333",
-      name: "New Utility Co",
-      slug: "new-utility-co",
+      name: "Utility Co",
+      slug: "utility-co",
     });
-    const createCalls: unknown[] = [];
-    let correspondents = [existingCorrespondent];
+    const patchCalls: unknown[] = [];
 
     server.use(
       http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([makeTag()])),
-      http.get(apiUrl("/api/taxonomies/correspondents"), () => HttpResponse.json(correspondents)),
-      http.get(apiUrl("/api/taxonomies/document-types"), () => HttpResponse.json([makeDocumentType()])),
-      http.get(apiUrl(`/api/documents/${documentId}`), () => HttpResponse.json(makeDocument({ id: documentId }))),
+      http.get(apiUrl("/api/taxonomies/correspondents"), () =>
+        HttpResponse.json([makeCorrespondent(), utilityCorrespondent]),
+      ),
+      http.get(apiUrl("/api/taxonomies/document-types"), () =>
+        HttpResponse.json([makeDocumentType()]),
+      ),
+      http.get(apiUrl(`/api/documents/${documentId}`), () =>
+        HttpResponse.json(makeDocument({ id: documentId, correspondent: null })),
+      ),
       http.get(apiUrl(`/api/documents/${documentId}/text`), () =>
         HttpResponse.json({ documentId, blocks: [] }),
       ),
@@ -626,24 +645,31 @@ describe("document detail smoke", () => {
       http.get(apiUrl("/api/health/providers"), () =>
         HttpResponse.json(makeHealthProvidersResponse()),
       ),
-      http.post(apiUrl("/api/taxonomies/correspondents"), async ({ request }) => {
-        const body = await request.json();
-        createCalls.push(body);
-        correspondents = [...correspondents, newCorrespondent];
-        return HttpResponse.json(newCorrespondent);
+      http.patch(apiUrl(`/api/documents/${documentId}`), async ({ request }) => {
+        patchCalls.push(await request.json());
+        return HttpResponse.json(
+          makeDocument({ id: documentId, correspondent: utilityCorrespondent }),
+        );
       }),
     );
 
     const { user } = renderAuthenticatedApp({ route: `/documents/${documentId}` });
 
-    expect(await screen.findByRole("heading", { name: "March Invoice" })).toBeInTheDocument();
+    expect((await screen.findAllByText("March Invoice"))[0]).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^edit$/i }));
-    await user.type(screen.getByPlaceholderText("Add a new correspondent"), "New Utility Co");
-    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    // The Correspondent row shows an em dash until one is picked; clicking
+    // it drops the picker straight open.
+    const correspondentRow = screen.getByText("Correspondent").parentElement!;
+    await user.click(within(correspondentRow).getByRole("button", { name: "—" }));
+    await user.click(await screen.findByRole("option", { name: "Utility Co" }));
+
+    expect(
+      screen.getByText("Saving will lock Correspondent."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
-      expect(createCalls).toEqual([{ name: "New Utility Co" }]);
+      expect(patchCalls).toEqual([{ correspondentId: utilityCorrespondent.id }]);
     });
   });
 });

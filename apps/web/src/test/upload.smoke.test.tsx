@@ -3,23 +3,37 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
+import { makeDocument } from "./fixtures";
 import { server } from "./msw-server";
 
+// The import screen uploads as soon as files are picked and shows a
+// per-file stage row; the watch-folder line hides when unconfigured.
+function mockImportBasics() {
+  server.use(
+    http.post(apiUrl("/api/archive/watch-folder/scan"), () =>
+      HttpResponse.json(
+        { message: "WATCH_FOLDER_PATH is not configured" },
+        { status: 409 },
+      ),
+    ),
+    http.get(apiUrl("/api/documents/:id"), () =>
+      HttpResponse.json(makeDocument({ status: "pending" })),
+    ),
+  );
+}
+
 describe("upload smoke", () => {
-  it("queues files, sends multipart uploads with auth, and shows success state", async () => {
+  it("queues files, sends multipart uploads with auth, and shows a processing row", async () => {
     const originalFetch = globalThis.fetch;
     const fetchCalls: Array<{
       authorization: string | null;
-      title: string | null;
       fileName: string | null;
     }> = [];
 
+    mockImportBasics();
     server.use(
       http.post(apiUrl("/api/documents"), () =>
-        HttpResponse.json(
-          { id: "uploaded-document-id" },
-          { status: 201 },
-        ),
+        HttpResponse.json({ id: "11111111-1111-1111-1111-111111111111" }, { status: 201 }),
       ),
     );
 
@@ -29,24 +43,17 @@ describe("upload smoke", () => {
         const body = init?.body;
         const formData = body instanceof FormData ? body : null;
         const file = formData?.get("file");
-
         fetchCalls.push({
           authorization: headers.get("authorization"),
-          title: typeof formData?.get("title") === "string"
-            ? (formData.get("title") as string)
-            : null,
           fileName: file instanceof File ? file.name : null,
         });
       }
-
       return originalFetch(input, init);
     });
 
-    const { container, user } = renderAuthenticatedApp({
-      route: "/upload",
-    });
+    const { container } = renderAuthenticatedApp({ route: "/upload" });
 
-    await screen.findByRole("heading", { name: /upload documents/i });
+    await screen.findByRole("heading", { name: /import documents/i });
 
     const input = container.querySelector('input[type="file"]');
     expect(input).not.toBeNull();
@@ -57,76 +64,59 @@ describe("upload smoke", () => {
       },
     });
 
-    await user.type(
-      screen.getByLabelText(/title override \(optional\)/i),
-      "Custom Invoice",
-    );
-    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
-
+    // upload starts immediately — no separate button
     await waitFor(() => {
       expect(fetchCalls).toHaveLength(1);
     });
-
-    expect(await screen.findByText("Upload complete")).toBeInTheDocument();
-
     expect(fetchCalls[0]).toEqual({
       authorization: "Bearer access-token",
-      title: "Custom Invoice",
       fileName: "invoice.pdf",
     });
+
+    // the file gets its own queue row with a stage badge
+    expect(await screen.findByText("invoice.pdf")).toBeInTheDocument();
+    expect(await screen.findByText("Processing")).toBeInTheDocument();
   });
 
-  it("shows per-file error messages when an upload fails", async () => {
+  it("shows per-file error messages with a Retry when an upload fails", async () => {
+    mockImportBasics();
     server.use(
       http.post(apiUrl("/api/documents"), () =>
-        HttpResponse.json(
-          { message: ["Unsupported file type"] },
-          { status: 400 },
-        ),
+        HttpResponse.json({ message: ["Unsupported file type"] }, { status: 400 }),
       ),
     );
 
-    const { container, user } = renderAuthenticatedApp({
-      route: "/upload",
-    });
+    const { container } = renderAuthenticatedApp({ route: "/upload" });
 
-    await screen.findByRole("heading", { name: /upload documents/i });
+    await screen.findByRole("heading", { name: /import documents/i });
 
-    const input = container.querySelector('input[type="file"]');
-    expect(input).not.toBeNull();
-
-    fireEvent.change(input as HTMLInputElement, {
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
       target: {
         files: [new File(["bad"], "bad.pdf", { type: "application/pdf" })],
       },
     });
-    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
 
     expect(await screen.findByText("Unsupported file type")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 
   it("shows payload-too-large errors from the API", async () => {
+    mockImportBasics();
     server.use(
       http.post(apiUrl("/api/documents"), () =>
         HttpResponse.text("request file too large", { status: 413 }),
       ),
     );
 
-    const { container, user } = renderAuthenticatedApp({
-      route: "/upload",
-    });
+    const { container } = renderAuthenticatedApp({ route: "/upload" });
 
-    await screen.findByRole("heading", { name: /upload documents/i });
+    await screen.findByRole("heading", { name: /import documents/i });
 
-    const input = container.querySelector('input[type="file"]');
-    expect(input).not.toBeNull();
-
-    fireEvent.change(input as HTMLInputElement, {
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
       target: {
         files: [new File(["large"], "large.pdf", { type: "application/pdf" })],
       },
     });
-    await user.click(screen.getByRole("button", { name: /upload 1 file/i }));
 
     expect(await screen.findByText("request file too large")).toBeInTheDocument();
   });

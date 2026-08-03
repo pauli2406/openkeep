@@ -13,6 +13,9 @@ import { api, syncTokensFromStorage } from "@/lib/api";
 
 function mockDashboardData() {
   server.use(
+    http.get(apiUrl("/api/documents"), () =>
+      HttpResponse.json({ items: [], total: 0, page: 1, pageSize: 100 }),
+    ),
     http.get(apiUrl("/api/dashboard/insights"), () =>
       HttpResponse.json(
         {
@@ -64,7 +67,7 @@ describe("auth smoke", () => {
     renderApp({ route: "/" });
 
     expect(
-      await screen.findByText("Sign in to your document archive"),
+      await screen.findByText("Your archive runs on this machine."),
     ).toBeInTheDocument();
   });
 
@@ -98,7 +101,7 @@ describe("auth smoke", () => {
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     expect(
-      await screen.findByText(/a high-level reading room for your archive/i),
+      await screen.findByText(/sorted by/i),
     ).toBeInTheDocument();
     expect(localStorage.getItem("openkeep.access-token")).toBe("access-token");
     expect(localStorage.getItem("openkeep.refresh-token")).toBe("refresh-token");
@@ -118,10 +121,10 @@ describe("auth smoke", () => {
     });
 
     expect(
-      await screen.findByText(/a high-level reading room for your archive/i),
+      await screen.findByText(/sorted by/i),
     ).toBeInTheDocument();
-    expect(screen.getByText("Upcoming tasks")).toBeInTheDocument();
-    expect(screen.queryByText("Sign in to your document archive")).not.toBeInTheDocument();
+    expect(screen.getByText("Open tasks")).toBeInTheDocument();
+    expect(screen.queryByText("Your archive runs on this machine.")).not.toBeInTheDocument();
   });
 
   it("clears stored tokens and returns to the login flow when refresh fails", async () => {
@@ -138,7 +141,7 @@ describe("auth smoke", () => {
     });
 
     expect(
-      await screen.findByText("Sign in to your document archive"),
+      await screen.findByText("Your archive runs on this machine."),
     ).toBeInTheDocument();
 
     await waitFor(() => {

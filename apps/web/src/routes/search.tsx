@@ -266,7 +266,7 @@ function ChatPage() {
 
   // Keep the thread pinned to the bottom while streaming.
   useEffect(() => {
-    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
+    threadRef.current?.scrollTo?.({ top: threadRef.current.scrollHeight });
   }, [active?.turns.length, stream.answerText]);
 
   const chatModel = providersQuery.data?.activeChatProvider ?? null;

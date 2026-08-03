@@ -134,6 +134,22 @@ beforeAll(() => {
     writable: true,
     value: ResizeObserverMock,
   });
+
+  // jsdom lays nothing out, so every element measures 0x0. TanStack Virtual
+  // sizes its scroll element from offsetWidth/offsetHeight, so a 0-height
+  // container yields an empty visible range and virtualised lists (taxonomy,
+  // documents) look empty to a test. Give elements a viewport-sized box.
+  for (const [property, size] of [
+    ["offsetWidth", 1280],
+    ["offsetHeight", 800],
+    ["clientWidth", 1280],
+    ["clientHeight", 800],
+  ] as const) {
+    Object.defineProperty(HTMLElement.prototype, property, {
+      configurable: true,
+      get: () => size,
+    });
+  }
 });
 
 afterEach(() => {
