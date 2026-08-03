@@ -101,18 +101,42 @@ jobs:
           WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
           CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # Dokploy compares the branch in the push payload with the branch configured
+          # on the compose service; it answers "Branch Not Match" if they differ.
+          DEPLOY_BRANCH: ${{ vars.DOKPLOY_DEPLOY_BRANCH || 'main' }}
         run: |
           if [ -z "$WEBHOOK" ]; then
             echo "::error::DOKPLOY_DEPLOY_WEBHOOK_URL secret is not set"; exit 1
           fi
-          code=$(curl -sS -o /tmp/deploy.out -w '%{http_code}' -X POST "$WEBHOOK" \
+
+          out=$(curl -sS -o /tmp/deploy.out -w '%{http_code}|%{redirect_url}' -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: push" \
             -H "CF-Access-Client-Id: $CF_ID" \
-            -H "CF-Access-Client-Secret: $CF_SECRET")
-          echo "webhook HTTP $code"; cat /tmp/deploy.out || true; echo
+            -H "CF-Access-Client-Secret: $CF_SECRET" \
+            -d "{\"ref\":\"refs/heads/${DEPLOY_BRANCH}\"}")
+          code="${out%%|*}"
+          redirect="${out#*|}"
+          body="$(cat /tmp/deploy.out 2>/dev/null || true)"
+          echo "webhook HTTP $code"
+          echo "response: $body"
+
+          # A redirect to the Access login means the service token was rejected.
+          case "$redirect$body" in
+            *cloudflareaccess.com*)
+              echo "::error::Cloudflare Access rejected the service token — check the scoped Access application for the deploy path"
+              exit 1 ;;
+          esac
+
+          case "$body" in
+            *"Branch Not Match"*)
+              echo "::error::Dokploy rejected the branch '$DEPLOY_BRANCH'. It must match the branch configured on the compose service (Dokploy → service → General → Branch). Override with the repository variable DOKPLOY_DEPLOY_BRANCH."
+              exit 1 ;;
+          esac
+
           case "$code" in
             2*) echo "deployment triggered" ;;
-            30*) echo "::error::got a redirect — the service token is not accepted by Cloudflare Access (check the scoped Access application)"; exit 1 ;;
-            *)  echo "::error::webhook call failed with HTTP $code"; exit 1 ;;
+            *)  echo "::error::webhook call failed with HTTP $code: $body"; exit 1 ;;
           esac
 
       - name: Smoke-test the deployment
