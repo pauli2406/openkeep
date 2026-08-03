@@ -29,7 +29,7 @@ export function OpenKeepLogo({
       />
       <span
         className={cn(
-          "font-[var(--font-display)] text-2xl tracking-tight text-[color:var(--explorer-ink)]",
+          "font-bold tracking-tight text-[color:var(--explorer-ink)]",
           wordmarkClassName,
         )}
       >

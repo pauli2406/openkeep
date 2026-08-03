@@ -142,7 +142,7 @@ function SearchPage() {
     <div className="mx-auto max-w-5xl space-y-5 p-6 pb-20">
       {/* ─── Header ─── */}
       <header>
-        <h1 className="flex items-center gap-2.5 text-3xl font-bold tracking-tight">
+        <h1 className="flex items-center gap-2.5 ok-page-title">
           <SearchIcon className="h-7 w-7 text-[var(--explorer-cobalt)]" />
            {copy.title}
          </h1>
@@ -317,7 +317,7 @@ function SearchPage() {
                                 className="no-underline"
                                 title={title}
                               >
-                                <span className="inline-flex items-center rounded bg-[var(--explorer-cobalt-soft)] px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-[var(--explorer-cobalt)] transition-colors hover:bg-[var(--explorer-cobalt)] hover:text-white">
+                                <span className="inline-flex items-center rounded bg-[var(--explorer-cobalt-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[var(--explorer-cobalt)] transition-colors hover:bg-[var(--explorer-cobalt)] hover:text-white">
                                   {children}
                                 </span>
                               </Link>
@@ -481,7 +481,7 @@ function SearchPage() {
                   {/* Sources */}
                   {answerStream.citations.length > 0 && (
                     <div className="space-y-2.5 border-t border-[var(--explorer-border)] pt-4">
-                      <p className="flex items-center gap-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <p className="flex items-center gap-1.5 ok-eyebrow text-muted-foreground">
                         <Quote className="h-3 w-3" />
                         {copy.sources}
                       </p>

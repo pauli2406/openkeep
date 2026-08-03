@@ -333,7 +333,7 @@ function ReviewPage() {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 ok-page-title">
             <ClipboardCheck className="h-7 w-7" />
             {copy.title}
           </h1>
@@ -438,7 +438,7 @@ function ReviewPage() {
                       <>
                         <span className="text-muted-foreground/50">|</span>
                         <span>
-                          {format(new Date(item.createdAt), "MMM d, yyyy")}
+                          <span className="ok-num">{format(new Date(item.createdAt), "MMM d, yyyy")}</span>
                         </span>
                       </>
                     )}
@@ -492,7 +492,7 @@ function ReviewPage() {
                 ))}
                 {item.confidence !== null && item.confidence !== undefined && (
                   <Badge variant="secondary">
-                    {copy.confidence}: {Math.round(item.confidence * 100)}%
+                    {copy.confidence}: <span className="ok-num">{Math.round(item.confidence * 100)}%</span>
                   </Badge>
                 )}
                 {item.metadata?.intelligence?.routing?.documentType && (

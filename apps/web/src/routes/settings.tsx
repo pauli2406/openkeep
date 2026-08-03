@@ -257,7 +257,7 @@ function SettingsPage() {
     <div className="mx-auto max-w-3xl space-y-8 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t("settings.title")}</h1>
+        <h1 className="ok-page-title">{t("settings.title")}</h1>
         <p className="text-muted-foreground">
           {t("settings.subtitle")}
         </p>
@@ -1010,14 +1010,14 @@ function ApiTokensSection() {
                     {token.lastUsedAt && (
                       <span>
                         {t("settings.lastUsed")}:{" "}
-                        {format(new Date(token.lastUsedAt), "MMM d, yyyy")}
+                        <span className="ok-num">{format(new Date(token.lastUsedAt), "MMM d, yyyy")}</span>
                       </span>
                     )}
                     {!token.lastUsedAt && <span>{t("settings.neverUsed")}</span>}
                     {token.expiresAt && (
                       <span>
                         {t("settings.expires")}:{" "}
-                        {format(new Date(token.expiresAt), "MMM d, yyyy")}
+                        <span className="ok-num">{format(new Date(token.expiresAt), "MMM d, yyyy")}</span>
                       </span>
                     )}
                     {!token.expiresAt && <span>{t("settings.noExpiry")}</span>}
@@ -1743,7 +1743,7 @@ function ArchiveOperationsSection() {
                     >
                       <div>
                         <p className="text-sm font-medium">
-                          {format(new Date(entry.scannedAt), "MMM d, yyyy HH:mm")}
+                          <span className="ok-num">{format(new Date(entry.scannedAt), "MMM d, yyyy HH:mm")}</span>
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {entry.dryRun ? t("settings.dryRunEnabled") : t("settings.liveScan")}
@@ -1915,7 +1915,7 @@ function ProcessingActivitySection() {
                           {status}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {count}
+                          <span className="ok-num">{count}</span>
                         </span>
                       </div>
                     ),
@@ -1959,7 +1959,7 @@ function ProcessingActivitySection() {
                         <p className="text-xs text-muted-foreground font-mono">
                           {job.documentId.slice(0, 8)}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="ok-num text-xs text-muted-foreground">
                           {formatJobTime(job.createdAt, language, t)}
                         </p>
                       </div>
@@ -1997,7 +1997,7 @@ function QueueCard({
       }`}
     >
       <p
-        className={`text-2xl font-bold tabular-nums ${
+        className={`ok-num text-xl font-semibold ${
           active
             ? variant === "warning"
               ? "text-amber-600"
@@ -2138,12 +2138,12 @@ function WatchFolderFieldReview({
           <span>
             {t("settings.confidence")}:{" "}
             <span className={confidenceTextClass(document.metadata.reviewEvidence.confidence)}>
-              {(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%
+              <span className="ok-num">{(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%</span>
             </span>
           </span>
           {document.metadata.reviewEvidence.confidenceThreshold != null && (
             <span>
-              {t("settings.threshold")}: {(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%
+              {t("settings.threshold")}: <span className="ok-num">{(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%</span>
             </span>
           )}
         </div>

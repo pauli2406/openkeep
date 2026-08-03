@@ -209,7 +209,7 @@ function UploadPage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+        <h1 className="flex items-center gap-2 ok-page-title">
           <UploadIcon className="h-7 w-7" />
           Upload Documents
         </h1>

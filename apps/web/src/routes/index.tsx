@@ -49,7 +49,7 @@ function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
           <Fragment key={point.month}>
             {isYearBoundary && (
               <div className="flex flex-col items-center justify-end gap-1.5 px-1 self-stretch">
-                <span className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
+                <span className="ok-eyebrow text-[color:var(--explorer-muted)]">
                   {curYear}
                 </span>
                 <div className="w-px flex-1 bg-[color:var(--explorer-border)]" />
@@ -60,7 +60,7 @@ function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
               search={{ view: "timeline" }}
               className="group flex min-w-[3.5rem] flex-1 flex-col items-center gap-1.5"
             >
-              <span className="text-[0.65rem] font-semibold tabular-nums text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="text-[0.65rem] ok-num font-semibold text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover:opacity-100">
                 {point.count}
               </span>
               <div className="relative flex w-full justify-center">
@@ -69,7 +69,7 @@ function HorizontalTimeline({ data }: { data: MonthlyActivityPoint[] }) {
                   style={{ height: `${Math.max(pct, 6)}%`, minHeight: "4px", maxHeight: "5rem" }}
                 />
               </div>
-              <span className="text-[0.62rem] uppercase tracking-[0.14em] text-[color:var(--explorer-muted)]">
+              <span className="ok-eyebrow text-[color:var(--explorer-muted)]">
                 {formatMonthLabel(point.month)}
               </span>
             </Link>
@@ -129,8 +129,8 @@ function ClusterStrip({
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                {item.documentCount} docs
+              <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
+                <span className="ok-num">{item.documentCount}</span> docs
               </p>
               <h3 className="mt-2 text-xl font-semibold text-[color:var(--explorer-ink)]">
                 {item.name}
@@ -145,13 +145,13 @@ function ClusterStrip({
                 className="inline-flex items-center gap-2 rounded-full bg-[color:var(--explorer-paper-strong)] px-3 py-1 text-xs text-[color:var(--explorer-muted)]"
               >
                 <span className="h-2 w-2 rounded-full bg-[color:var(--explorer-rust)]" />
-                {type.name} · {type.count}
+                {type.name} · <span className="ok-num">{type.count}</span>
               </span>
             ))}
           </div>
           <div className="mt-4 flex items-center justify-between text-sm text-[color:var(--explorer-muted)]">
             <span>{item.latestDocDate ?? "Undated"}</span>
-            <span>{formatCurrency(item.totalAmount, item.currency ?? "EUR") ?? "Mixed"}</span>
+            <span className="ok-num">{formatCurrency(item.totalAmount, item.currency ?? "EUR") ?? "Mixed"}</span>
           </div>
         </Link>
       ))}
@@ -182,7 +182,7 @@ function TaskTable({
 
   return (
     <div className="overflow-hidden rounded-[1.7rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]">
-      <div className="grid grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] gap-4 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper-strong)] px-4 py-3 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]">
+      <div className="grid grid-cols-[1.1fr_2fr_1.1fr_0.9fr_0.9fr_0.8fr] gap-4 border-b border-[color:var(--explorer-border)] bg-[color:var(--explorer-paper-strong)] px-4 py-3 ok-eyebrow text-[color:var(--explorer-muted)]">
         <span>{t("dashboard.correspondent")}</span>
         <span>{t("dashboard.document")}</span>
         <span>{t("dashboard.whatToDo")}</span>
@@ -218,7 +218,7 @@ function TaskTable({
               </Link>
               <div className="text-sm text-[color:var(--explorer-ink)]">{item.taskLabel}</div>
               <div className="text-sm text-[color:var(--explorer-ink)]">
-                {formatCurrency(item.amount, item.currency ?? "EUR") ?? "-"}
+                <span className="ok-num">{formatCurrency(item.amount, item.currency ?? "EUR") ?? "-"}</span>
               </div>
               <div className="text-sm text-[color:var(--explorer-ink)]">
                 <p>{formatTaskDateLabel(item.dueDate)}</p>
@@ -340,10 +340,10 @@ function DashboardPage() {
       <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
                {t("dashboard.intakeTrend")}
              </p>
-             <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+             <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
                {t("dashboard.rhythm")}
              </h2>
           </div>
@@ -359,10 +359,10 @@ function DashboardPage() {
       <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
                {t("dashboard.correspondents")}
              </p>
-             <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+             <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
                {t("dashboard.largestClusters")}
              </h2>
           </div>
@@ -379,10 +379,10 @@ function DashboardPage() {
 
       <section className="rounded-[2.1rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
         <div className="mb-5">
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
              {t("dashboard.deadlines")}
            </p>
-           <h2 className="mt-2 font-[var(--font-display)] text-3xl text-[color:var(--explorer-ink)]">
+           <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
              {t("dashboard.upcomingTasks")}
            </h2>
         </div>

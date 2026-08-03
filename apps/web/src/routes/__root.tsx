@@ -72,7 +72,7 @@ function RootComponent() {
     <>
       {/* Brand */}
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="text-2xl" />
+        <OpenKeepLogo markClassName="h-8 w-8" wordmarkClassName="text-base" />
       </div>
 
       <Separator />

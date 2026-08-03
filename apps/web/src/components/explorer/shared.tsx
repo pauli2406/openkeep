@@ -36,11 +36,11 @@ export function ExplorerSectionHeader({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-[color:var(--explorer-muted)]">
+      <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
         {eyebrow}
       </p>
       <div className="space-y-1">
-        <h1 className="font-[var(--font-display)] text-4xl leading-none text-[color:var(--explorer-ink)] md:text-5xl">
+        <h1 className="ok-page-title text-[color:var(--explorer-ink)]">
           {title}
         </h1>
         {description ? (
@@ -73,10 +73,10 @@ export function MetricRibbon({
               "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]",
           )}
         >
-          <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
             {item.label}
           </p>
-          <p className="mt-3 font-[var(--font-display)] text-4xl text-[color:var(--explorer-ink)]">
+          <p className="mt-3 ok-num text-xl text-[color:var(--explorer-ink)]">
             {item.value}
           </p>
         </div>
@@ -192,12 +192,12 @@ export function DeadlineList({
                 {item.title}
               </p>
               <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                {item.correspondentName ?? "Unfiled"} · due {format(new Date(item.dueDate), "MMM d")}
+                {item.correspondentName ?? "Unfiled"} · due <span className="ok-num">{format(new Date(item.dueDate), "MMM d")}</span>
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm font-medium text-[color:var(--explorer-ink)]">
-                {formatCurrency(item.amount, item.currency ?? "EUR") ?? "Open"}
+                <span className="ok-num">{formatCurrency(item.amount, item.currency ?? "EUR") ?? "Open"}</span>
               </p>
               <p className="text-xs text-[color:var(--explorer-muted)]">
                 {item.isOverdue
@@ -270,7 +270,7 @@ export function DocumentRows({
               <div className="min-w-0 space-y-2">
             <div
               className={cn(
-                "flex items-center gap-2 text-[0.72rem] uppercase tracking-[0.2em] text-[color:var(--explorer-muted)]",
+                "flex items-center gap-2 ok-eyebrow text-[color:var(--explorer-muted)]",
                 selectionMode && "pl-11",
               )}
             >
@@ -300,29 +300,29 @@ export function DocumentRows({
                   )}
                 </span>
                 {document.amount !== null ? (
-                  <span>{formatCurrency(document.amount, document.currency ?? "EUR")}</span>
+                  <span className="ok-num">{formatCurrency(document.amount, document.currency ?? "EUR")}</span>
                 ) : null}
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {document.reviewReasons.includes("classification_ambiguous") ? (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-800">
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 ok-eyebrow text-amber-800">
                     Classification Ambiguous
                   </span>
                 ) : null}
                 {document.reviewReasons.includes("correspondent_unresolved") ? (
-                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-rose-800">
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 ok-eyebrow text-rose-800">
                     Correspondent Unresolved
                   </span>
                 ) : null}
                 {document.metadata.intelligence?.routing?.documentType ? (
-                  <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--explorer-cobalt)]">
+                  <span className="rounded-full bg-[color:var(--explorer-cobalt-soft)] px-2.5 py-1 ok-eyebrow text-[color:var(--explorer-cobalt)]">
                     {document.metadata.intelligence.routing.documentType}
                   </span>
                 ) : null}
                 {(document.metadata.intelligence?.validation?.warnings ?? []).slice(0, 2).map((warning) => (
                   <span
                     key={warning}
-                    className="rounded-full border border-[color:var(--explorer-border)] bg-white/80 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--explorer-muted)]"
+                    className="rounded-full border border-[color:var(--explorer-border)] bg-white/80 px-2.5 py-1 ok-eyebrow text-[color:var(--explorer-muted)]"
                   >
                     {formatSignal(warning)}
                   </span>
@@ -344,7 +344,7 @@ export function DocumentRows({
                 {selectionMode ? (
                   <span
                     className={cn(
-                      "rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em]",
+                      "rounded-full px-2.5 py-1 ok-eyebrow",
                       isSelected
                         ? "bg-[color:var(--explorer-cobalt)] text-white"
                         : "bg-white/80 text-[color:var(--explorer-muted)]",

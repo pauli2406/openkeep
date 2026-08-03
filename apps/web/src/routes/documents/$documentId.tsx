@@ -1144,7 +1144,7 @@ function DocumentDetailPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <FileText className="h-6 w-6 shrink-0 text-muted-foreground" />
-          <h1 className="text-2xl font-semibold tracking-tight truncate">{doc.title}</h1>
+          <h1 className="ok-page-title truncate">{doc.title}</h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant={statusVariant(doc.status)}>{doc.status}</Badge>
@@ -1376,7 +1376,7 @@ function DocumentDetailPage() {
                             <p className="text-sm font-medium">{t("documentDetail.routing")}</p>
                             {intelligence.routing?.confidence != null && (
                               <span className={`text-xs font-medium ${confidenceColor(intelligence.routing.confidence)}`}>
-                                {(intelligence.routing.confidence * 100).toFixed(0)}%
+                                <span className="ok-num">{(intelligence.routing.confidence * 100).toFixed(0)}%</span>
                               </span>
                             )}
                           </div>
@@ -1453,7 +1453,7 @@ function DocumentDetailPage() {
                                     </div>
                                     {confidence != null && (
                                       <Badge variant="outline" className="text-xs">
-                                        {(confidence * 100).toFixed(0)}%
+                                        <span className="ok-num">{(confidence * 100).toFixed(0)}%</span>
                                       </Badge>
                                     )}
                                   </div>
@@ -1614,7 +1614,7 @@ function DocumentDetailPage() {
                           </p>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {formatDateTime(event.createdAt)}
+                          <span className="ok-num">{formatDateTime(event.createdAt)}</span>
                         </p>
                       </div>
                       {Object.keys(event.payload ?? {}).length > 0 && (
@@ -1890,7 +1890,7 @@ function DocumentDetailPage() {
                       )}
                     </>
                   ) : (
-                    <p className="text-sm font-medium">{formatDate(doc.issueDate)}</p>
+                    <p className="ok-num text-sm font-medium">{formatDate(doc.issueDate)}</p>
                   )}
                 </div>
               </div>
@@ -1932,7 +1932,7 @@ function DocumentDetailPage() {
                       )}
                     </>
                   ) : (
-                    <p className="text-sm font-medium">{formatDate(doc.dueDate)}</p>
+                    <p className="ok-num text-sm font-medium">{formatDate(doc.dueDate)}</p>
                   )}
                 </div>
               </div>
@@ -1974,7 +1974,7 @@ function DocumentDetailPage() {
                       )}
                     </>
                   ) : (
-                    <p className="text-sm font-medium">{formatDate(doc.expiryDate)}</p>
+                    <p className="ok-num text-sm font-medium">{formatDate(doc.expiryDate)}</p>
                   )}
                 </div>
               </div>
@@ -2333,7 +2333,7 @@ function DocumentDetailPage() {
                   </div>
                   {manualOverrides?.updatedAt && (
                     <span className="text-xs text-muted-foreground">
-                      {formatDateTime(manualOverrides.updatedAt)}
+                      <span className="ok-num">{formatDateTime(manualOverrides.updatedAt)}</span>
                     </span>
                   )}
                 </div>
@@ -2388,7 +2388,7 @@ function DocumentDetailPage() {
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${confidenceBg(doc.confidence)} ${confidenceColor(doc.confidence)}`}
                   >
-                    {(doc.confidence * 100).toFixed(0)}%
+                    <span className="ok-num">{(doc.confidence * 100).toFixed(0)}%</span>
                   </span>
                 </div>
               )}
@@ -2441,12 +2441,12 @@ function DocumentDetailPage() {
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div className="flex justify-between">
                   <span>{t("documentDetail.created")}</span>
-                  <span>{formatDateTime(doc.createdAt)}</span>
+                  <span className="ok-num">{formatDateTime(doc.createdAt)}</span>
                 </div>
                 {doc.processedAt && (
                   <div className="flex justify-between">
                     <span>{t("documentDetail.processed")}</span>
-                    <span>{formatDateTime(doc.processedAt)}</span>
+                    <span className="ok-num">{formatDateTime(doc.processedAt)}</span>
                   </div>
                 )}
               </div>
@@ -2509,10 +2509,10 @@ function DocumentDetailPage() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">{t("documentDetail.confidence")}</span>
                         <span className={`font-medium ${confidenceColor(doc.metadata.reviewEvidence.confidence)}`}>
-                          {(doc.metadata.reviewEvidence.confidence * 100).toFixed(0)}%
+                          <span className="ok-num">{(doc.metadata.reviewEvidence.confidence * 100).toFixed(0)}%</span>
                           {doc.metadata.reviewEvidence.confidenceThreshold != null && (
                             <span className="text-muted-foreground font-normal">
-                              {` (${t("documentDetail.threshold")}: `}{(doc.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%)
+                              {` (${t("documentDetail.threshold")}: `}<span className="ok-num">{(doc.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%</span>)
                             </span>
                           )}
                         </span>

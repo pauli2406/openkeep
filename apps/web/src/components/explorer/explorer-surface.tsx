@@ -297,7 +297,7 @@ export function ExplorerSurface({
       {activeView === "list" && selectionMode ? (
         <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-[1.8rem] border border-[color:var(--explorer-cobalt)]/20 bg-[linear-gradient(135deg,rgba(244,238,225,0.94),rgba(231,239,255,0.98))] px-5 py-4 shadow-[0_24px_50px_rgba(56,84,165,0.16)] backdrop-blur">
           <div className="space-y-1">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-[color:var(--explorer-cobalt)]">
+            <p className="ok-eyebrow text-[color:var(--explorer-cobalt)]">
               Archive Curation Mode
             </p>
             <p className="text-sm text-[color:var(--explorer-ink)]">
@@ -315,7 +315,7 @@ export function ExplorerSurface({
                   ? clearVisible()
                   : selectVisible()
               }
-              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
+              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 ok-eyebrow text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
             >
               {selectedVisibleCount === visibleDocumentIds.length && visibleDocumentIds.length > 0
                 ? "Clear visible"
@@ -324,7 +324,7 @@ export function ExplorerSurface({
             <button
               type="button"
               onClick={() => setSelectedIds([])}
-              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--explorer-muted)] transition hover:text-[color:var(--explorer-ink)]"
+              className="rounded-full border border-[color:var(--explorer-border)] bg-white/75 px-3 py-2 ok-eyebrow text-[color:var(--explorer-muted)] transition hover:text-[color:var(--explorer-ink)]"
             >
               Reset
             </button>
@@ -444,7 +444,7 @@ export function ExplorerSurface({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="border-[color:var(--explorer-border)] bg-[linear-gradient(180deg,#fffaf1,#f8f0df)] text-[color:var(--explorer-ink)] sm:rounded-[1.6rem]">
           <DialogHeader>
-            <DialogTitle className="font-[var(--font-display)] text-3xl">
+            <DialogTitle className="ok-page-title">
               Delete {selectedIds.length} document{selectedIds.length === 1 ? "" : "s"}?
             </DialogTitle>
             <DialogDescription className="text-sm text-[color:var(--explorer-muted)]">

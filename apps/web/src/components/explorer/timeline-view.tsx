@@ -120,10 +120,10 @@ export function TimelineView({
         <section key={yearBucket.year} className="rounded-[2rem] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <p className="text-[0.72rem] uppercase tracking-[0.22em] text-[color:var(--explorer-muted)]">
+              <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
                 Archive Year
               </p>
-              <h2 className="font-[var(--font-display)] text-4xl text-[color:var(--explorer-ink)]">
+              <h2 className="ok-num text-xl text-[color:var(--explorer-ink)]">
                 {yearBucket.year}
               </h2>
             </div>
