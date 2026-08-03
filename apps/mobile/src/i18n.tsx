@@ -190,7 +190,7 @@ const messages = {
     "documentDetail.loadDetailFailed": "Failed to load document detail.",
     "documentDetail.loadOcrFailed": "Failed to load OCR text.",
     "documentDetail.loadHistoryFailed": "Failed to load document history.",
-    "documentDetail.loadFacetsFailed": "Failed to load archive facets.",
+    "documentDetail.loadTaxonomiesFailed": "Failed to load correspondents, document types and tags.",
     "documentDetail.loadProvidersFailed": "Failed to load providers.",
     "documentDetail.loadQaHistoryFailed": "Failed to load Q&A history.",
     "documentDetail.preview.type": "Type: ",
@@ -572,7 +572,8 @@ const messages = {
     "documentDetail.loadDetailFailed": "Dokumentdetail konnte nicht geladen werden.",
     "documentDetail.loadOcrFailed": "OCR-Text konnte nicht geladen werden.",
     "documentDetail.loadHistoryFailed": "Dokumentverlauf konnte nicht geladen werden.",
-    "documentDetail.loadFacetsFailed": "Archivfacetten konnten nicht geladen werden.",
+    "documentDetail.loadTaxonomiesFailed":
+      "Korrespondenten, Dokumenttypen und Tags konnten nicht geladen werden.",
     "documentDetail.loadProvidersFailed": "Anbieter konnten nicht geladen werden.",
     "documentDetail.loadQaHistoryFailed": "Fragen-und-Antworten-Verlauf konnte nicht geladen werden.",
     "documentDetail.preview.type": "Typ: ",

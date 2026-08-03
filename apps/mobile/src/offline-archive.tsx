@@ -9,6 +9,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -195,13 +196,19 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     fileStorageBytes: 0,
     updatedAt: null,
   });
+  const cacheSummaryRef = useRef(cacheSummary);
 
   const refreshCacheSummary = useCallback(async () => {
     const stats = await getCacheStats();
-    const next = {
-      ...stats,
-      updatedAt: new Date().toISOString(),
-    };
+    const current = cacheSummaryRef.current;
+    // `updatedAt` feeds query keys, so only move it when the cache really changed. Bumping it on
+    // every housekeeping call would re-key live queries and unmount whatever they render.
+    const unchanged =
+      current.updatedAt !== null &&
+      current.documentCount === stats.documentCount &&
+      current.fileStorageBytes === stats.fileStorageBytes;
+    const next = unchanged ? current : { ...stats, updatedAt: new Date().toISOString() };
+    cacheSummaryRef.current = next;
     setCacheSummary(next);
     return next;
   }, []);
@@ -224,9 +231,8 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     async function bootstrap() {
       await ensureCacheDirs();
       await clearLegacyOfflineState();
-      const next = await refreshCacheSummary();
+      await refreshCacheSummary();
       if (isMounted) {
-        setCacheSummary(next);
         setIsReady(true);
       }
     }

@@ -472,6 +472,43 @@ export type FacetsResponse = {
 };
 
 // ---------------------------------------------------------------------------
+// Taxonomy types
+// ---------------------------------------------------------------------------
+
+/**
+ * An entry of the taxonomy tables themselves. Unlike the facet lists these also cover entries
+ * that are not assigned to any document yet, so they are the correct source for edit pickers.
+ */
+export type TaxonomyOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type TaxonomyKind = "correspondents" | "document-types" | "tags";
+
+/** Query key for a taxonomy list, shared by every screen that reads it. */
+export function taxonomyQueryKey(apiUrl: string, kind: TaxonomyKind) {
+  return ["taxonomies", apiUrl, kind] as const;
+}
+
+export async function fetchTaxonomy(
+  authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+  kind: TaxonomyKind,
+  errorMessage: string,
+): Promise<TaxonomyOption[]> {
+  const response = await authFetch(`/api/taxonomies/${kind}`);
+  if (!response.ok) {
+    throw new Error(errorMessage);
+  }
+  return (await response.json()) as TaxonomyOption[];
+}
+
+export function sortTaxonomyOptions<T extends { name: string }>(options: T[]): T[] {
+  return [...options].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+// ---------------------------------------------------------------------------
 // Correspondent Dossier types
 // ---------------------------------------------------------------------------
 

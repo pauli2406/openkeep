@@ -1,6 +1,6 @@
 import * as Sharing from "expo-sharing";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -36,10 +36,13 @@ import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { colors, shadow } from "../theme";
 import {
+  fetchTaxonomy,
   formatCurrency,
   formatDate,
   responseToMessage,
   saveDownloadToFile,
+  sortTaxonomyOptions,
+  taxonomyQueryKey,
   toneForStatus,
   titleForDocument,
   type ArchiveDocument,
@@ -48,6 +51,7 @@ import {
   type HealthProvidersResponse,
   type ParseProvider,
   type QaHistoryEntry,
+  type TaxonomyOption,
 } from "../lib";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +59,8 @@ import {
 // ---------------------------------------------------------------------------
 
 type TabKey = "preview" | "overview" | "insights" | "activity";
+
+const TAXONOMY_KINDS = ["correspondents", "document-types", "tags"] as const;
 
 // ---------------------------------------------------------------------------
 // Main screen
@@ -70,6 +76,10 @@ export function DocumentDetailScreen() {
   const documentId = route.params.documentId;
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
   const cacheOpenedDocument = offline.cacheOpenedDocument;
+  // Only queries that actually read the offline cache should re-key when it changes. Online
+  // queries fetch from the network, so a cache refresh must not discard their entry — that would
+  // unmount the metadata form mid-edit.
+  const cacheRevision = shouldUseCache ? offline.cacheSummary.updatedAt : null;
 
   const [activeTab, setActiveTab] = useState<TabKey>("preview");
 
@@ -86,7 +96,7 @@ export function DocumentDetailScreen() {
 
   // ---- Core queries ----
   const documentQuery = useQuery({
-    queryKey: ["document", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["document", documentId, shouldUseCache, cacheRevision],
     queryFn: async () => {
       if (shouldUseCache) {
         const record = await offline.loadCachedDocument(documentId);
@@ -104,7 +114,7 @@ export function DocumentDetailScreen() {
   });
 
   const textQuery = useQuery({
-    queryKey: ["document-text", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["document-text", documentId, shouldUseCache, cacheRevision],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
       if (shouldUseCache) {
@@ -122,7 +132,7 @@ export function DocumentDetailScreen() {
   });
 
   const historyQuery = useQuery({
-    queryKey: ["document-history", documentId, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["document-history", documentId, shouldUseCache, cacheRevision],
     enabled: documentQuery.isSuccess,
     queryFn: async () => {
       if (shouldUseCache) {
@@ -139,19 +149,27 @@ export function DocumentDetailScreen() {
       : () => processingRefetchInterval(documentQuery.data, (data) => data),
   });
 
-  const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
-    enabled: documentQuery.isSuccess && !shouldUseCache,
-    queryFn: async () => {
-      const response = await auth.authFetch("/api/documents/facets");
-      if (!response.ok) throw new Error(t("documentDetail.loadFacetsFailed"));
-      return (await response.json()) as {
-        correspondents: Array<{ id: string; name: string; slug: string }>;
-        documentTypes: Array<{ id: string; name: string; slug: string }>;
-        tags: Array<{ id: string; name: string; slug: string }>;
-      };
-    },
+  // The pickers must offer every taxonomy entry, including ones not yet used by any document.
+  // `/api/documents/facets` aggregates over documents and would hide freshly created entries.
+  const taxonomyQueries = useQueries({
+    queries: TAXONOMY_KINDS.map((kind) => ({
+      queryKey: taxonomyQueryKey(auth.apiUrl, kind),
+      enabled: documentQuery.isSuccess && !shouldUseCache,
+      queryFn: () =>
+        fetchTaxonomy(auth.authFetch, kind, t("documentDetail.loadTaxonomiesFailed")),
+    })),
   });
+  const [correspondentsResult, documentTypesResult, tagsResult] = taxonomyQueries;
+  const taxonomies = useMemo(() => {
+    if (!correspondentsResult.data || !documentTypesResult.data || !tagsResult.data) {
+      return null;
+    }
+    return {
+      correspondents: correspondentsResult.data,
+      documentTypes: documentTypesResult.data,
+      tags: tagsResult.data,
+    };
+  }, [correspondentsResult.data, documentTypesResult.data, tagsResult.data]);
 
   const providersQuery = useQuery({
     queryKey: ["health-providers", auth.apiUrl],
@@ -246,7 +264,8 @@ export function DocumentDetailScreen() {
           authFetch={auth.authFetch}
           queryClient={queryClient}
           documentId={documentId}
-          facets={facetsQuery.data ?? null}
+          apiUrl={auth.apiUrl}
+          taxonomies={taxonomies}
           providers={providersQuery.data ?? null}
           navigation={navigation}
           offlineReadOnly={shouldUseCache}
@@ -426,12 +445,46 @@ function PreviewTab({
 // TAB: Overview (metadata editing + actions)
 // ===========================================================================
 
+type MetadataForm = {
+  title: string;
+  issueDate: string;
+  dueDate: string;
+  expiryDate: string;
+  amount: string;
+  currency: string;
+  referenceNumber: string;
+  holderName: string;
+  issuingAuthority: string;
+  correspondentId: string;
+  documentTypeId: string;
+  tagIds: string[];
+};
+
+function isSameForm(left: MetadataForm, right: MetadataForm) {
+  return (
+    left.title === right.title &&
+    left.issueDate === right.issueDate &&
+    left.dueDate === right.dueDate &&
+    left.expiryDate === right.expiryDate &&
+    left.amount === right.amount &&
+    left.currency === right.currency &&
+    left.referenceNumber === right.referenceNumber &&
+    left.holderName === right.holderName &&
+    left.issuingAuthority === right.issuingAuthority &&
+    left.correspondentId === right.correspondentId &&
+    left.documentTypeId === right.documentTypeId &&
+    left.tagIds.length === right.tagIds.length &&
+    left.tagIds.every((id, index) => id === right.tagIds[index])
+  );
+}
+
 function OverviewTab({
   document,
   authFetch,
   queryClient,
   documentId,
-  facets,
+  apiUrl,
+  taxonomies,
   providers,
   navigation,
   offlineReadOnly,
@@ -440,10 +493,11 @@ function OverviewTab({
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   queryClient: ReturnType<typeof useQueryClient>;
   documentId: string;
-  facets: {
-    correspondents: Array<{ id: string; name: string; slug: string }>;
-    documentTypes: Array<{ id: string; name: string; slug: string }>;
-    tags: Array<{ id: string; name: string; slug: string }>;
+  apiUrl: string;
+  taxonomies: {
+    correspondents: TaxonomyOption[];
+    documentTypes: TaxonomyOption[];
+    tags: TaxonomyOption[];
   } | null;
   providers: HealthProvidersResponse | null;
   navigation: NativeStackNavigationProp<AppStackParamList>;
@@ -470,7 +524,21 @@ function OverviewTab({
     [document],
   );
   const [form, setForm] = useState(initialForm);
-  useEffect(() => setForm(initialForm), [initialForm]);
+  // Snapshot of the server state the form was last synced with, so unsaved edits can be told
+  // apart from incoming server changes.
+  const syncedFormRef = useRef(initialForm);
+  useEffect(() => {
+    if (isSameForm(form, initialForm)) {
+      syncedFormRef.current = initialForm;
+      return;
+    }
+    if (!isSameForm(form, syncedFormRef.current)) {
+      // The user has unsaved edits — a background refetch must not discard them.
+      return;
+    }
+    syncedFormRef.current = initialForm;
+    setForm(initialForm);
+  }, [form, initialForm]);
 
   const [reprocessProvider, setReprocessProvider] = useState<ParseProvider | "default">("default");
   const [newCorrespondentName, setNewCorrespondentName] = useState("");
@@ -481,6 +549,8 @@ function OverviewTab({
       queryClient.invalidateQueries({ queryKey: ["documents"] }),
       queryClient.invalidateQueries({ queryKey: ["review"] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      // Assigning a taxonomy entry changes the facet counts shown elsewhere.
+      queryClient.invalidateQueries({ queryKey: ["document-facets"] }),
     ]);
   };
 
@@ -543,10 +613,21 @@ function OverviewTab({
         body: JSON.stringify({ name }),
       });
       if (!response.ok) throw new Error(await responseToMessage(response));
-      return (await response.json()) as { id: string; name: string; slug: string };
+      return (await response.json()) as TaxonomyOption;
     },
     onSuccess: async (correspondent) => {
-      await queryClient.invalidateQueries({ queryKey: ["document-facets"] });
+      // Insert into the cached list right away so the new entry is selectable regardless of
+      // refetch timing. The API returns the existing row for a duplicate name, hence the filter.
+      const correspondentsKey = taxonomyQueryKey(apiUrl, "correspondents");
+      queryClient.setQueryData(correspondentsKey, (current: TaxonomyOption[] | undefined) =>
+        current
+          ? sortTaxonomyOptions([
+              ...current.filter((item) => item.id !== correspondent.id),
+              correspondent,
+            ])
+          : current,
+      );
+      await queryClient.invalidateQueries({ queryKey: correspondentsKey });
       setForm((current) => ({ ...current, correspondentId: correspondent.id }));
       setNewCorrespondentName("");
     },
@@ -589,8 +670,8 @@ function OverviewTab({
   const lockedFields = manualOverrides?.lockedFields ?? [];
 
   // ---- Correspondent picker ----
-  const correspondentName = facets?.correspondents.find((c) => c.id === form.correspondentId)?.name ?? "";
-  const docTypeName = facets?.documentTypes.find((d) => d.id === form.documentTypeId)?.name ?? "";
+  const correspondentName = taxonomies?.correspondents.find((c) => c.id === form.correspondentId)?.name ?? "";
+  const docTypeName = taxonomies?.documentTypes.find((d) => d.id === form.documentTypeId)?.name ?? "";
 
   // ---- Available providers ----
   const availableProviders = providers?.parseProviders?.filter((p) => p.available) ?? [];
@@ -719,11 +800,11 @@ function OverviewTab({
         />
 
         {/* Correspondent picker */}
-        {facets && (
+        {taxonomies && (
           <PickerField
             label={`${t("documentDetail.overview.correspondent")}${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
             selectedId={form.correspondentId}
-            options={facets.correspondents.map((c) => ({ id: c.id, label: c.name }))}
+            options={taxonomies.correspondents.map((c) => ({ id: c.id, label: c.name }))}
             onSelect={(id) => setForm((s) => ({ ...s, correspondentId: id }))}
             placeholder={t("documentDetail.overview.selectCorrespondent")}
             createValue={newCorrespondentName}
@@ -741,22 +822,22 @@ function OverviewTab({
         )}
 
         {/* Document type picker */}
-        {facets && (
+        {taxonomies && (
           <PickerField
             label={`${t("documentDetail.overview.documentType")}${lockedFields.includes("documentTypeId") ? " \uD83D\uDD12" : ""}`}
             selectedId={form.documentTypeId}
-            options={facets.documentTypes.map((d) => ({ id: d.id, label: d.name }))}
+            options={taxonomies.documentTypes.map((d) => ({ id: d.id, label: d.name }))}
             onSelect={(id) => setForm((s) => ({ ...s, documentTypeId: id }))}
             placeholder={t("documentDetail.overview.selectDocumentType")}
           />
         )}
 
         {/* Tags picker */}
-        {facets && (
+        {taxonomies && (
           <TagsPicker
             label={t("documentDetail.overview.tags")}
             selectedIds={form.tagIds}
-            options={facets.tags.map((t) => ({ id: t.id, label: t.name }))}
+            options={taxonomies.tags.map((t) => ({ id: t.id, label: t.name }))}
             onToggle={(id) =>
               setForm((s) => ({
                 ...s,
