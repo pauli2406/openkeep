@@ -1,41 +1,10 @@
-import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
-  Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
-  ProviderConfig,
-  ReadinessResponse,
-  Tag,
-  WatchFolderScanResponse,
-} from "@openkeep/types";
-import { api, authFetch, getApiErrorMessage } from "@/lib/api";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { ArrowDown, ArrowUp, Check, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -43,14 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Plus,
-  Trash2,
-  Loader2,
-  Layers,
-  Edit2,
-  } from "lucide-react";
+import { fetchExplorerFacets } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import {
   type TaxonomyKind,
   createTaxonomy,
@@ -60,320 +24,614 @@ import {
   updateTaxonomy,
 } from "./taxonomy-api";
 
-export function TaxonomyManagementSection() {
-  const { t } = useI18n();
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Layers className="h-5 w-5" />
-          {t("settings.taxonomyManagement")}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {t("settings.taxonomyManagementDescription")}
-        </p>
-      </div>
+/** `count` is null until the facets request lands — unknown, not zero. */
+type Row = { id: string; name: string; slug: string; count: number | null };
+type QuickFilter = "all" | "unused" | "duplicates";
+type SortKey = "count" | "name";
 
-      <div className="space-y-4">
-        <TaxonomySection
-          kind="tags"
-          title={t("settings.tags")}
-          description={t("settings.tagsDescription")}
-        />
-        <TaxonomySection
-          kind="correspondents"
-          title={t("settings.correspondents")}
-          description={t("settings.correspondentsDescription")}
-        />
-        <TaxonomySection
-          kind="document-types"
-          title={t("settings.documentTypes")}
-          description={t("settings.documentTypesDescription")}
-        />
-      </div>
-    </div>
-  );
+const ROW_HEIGHT = 30;
+
+/**
+ * Client-side merge suggestions: case-insensitive matches, singular/plural
+ * pairs and common-prefix pairs. The suggested target is the busier entry.
+ */
+function computeSuggestions(rows: Row[]): Map<string, Row> {
+  const byLower = new Map<string, Row[]>();
+  for (const row of rows) {
+    const key = row.name.trim().toLowerCase();
+    byLower.set(key, [...(byLower.get(key) ?? []), row]);
+  }
+  const suggestions = new Map<string, Row>();
+  const suggest = (source: Row, target: Row) => {
+    if (source.id === target.id || suggestions.has(source.id)) return;
+    suggestions.set(source.id, target);
+  };
+  const better = (a: Row, b: Row) =>
+    (a.count ?? 0) !== (b.count ?? 0)
+      ? (a.count ?? 0) > (b.count ?? 0)
+      : a.name.length < b.name.length;
+
+  // exact case-insensitive duplicates
+  for (const group of byLower.values()) {
+    if (group.length < 2) continue;
+    const target = [...group].sort((a, b) => (better(a, b) ? -1 : 1))[0];
+    for (const row of group) suggest(row, target);
+  }
+  // singular/plural pairs
+  for (const key of byLower.keys()) {
+    for (const plural of [`${key}s`, `${key}es`, `${key}en`]) {
+      const a = byLower.get(key)?.[0];
+      const b = byLower.get(plural)?.[0];
+      if (a && b) (better(a, b) ? suggest(b, a) : suggest(a, b));
+    }
+  }
+  // common-prefix pairs (Energie / Energie-Abschlag)
+  for (const a of rows) {
+    const prefix = a.name.trim().toLowerCase();
+    for (const b of rows) {
+      if (a.id === b.id) continue;
+      const name = b.name.trim().toLowerCase();
+      if (
+        name.length > prefix.length + 1 &&
+        name.startsWith(prefix) &&
+        ["-", " ", "_", "/"].includes(name[prefix.length])
+      ) {
+        // the more specific entry merges into the broader one
+        suggest(b, a);
+      }
+    }
+  }
+  return suggestions;
 }
 
-function TaxonomySection({
-  kind,
-  title,
-  description,
-}: {
-  kind: TaxonomyKind;
-  title: string;
-  description: string;
-}) {
-  const { t } = useI18n();
+export function TaxonomyManagementSection() {
+  const { language, t } = useI18n();
   const queryClient = useQueryClient();
-  const [newName, setNewName] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
-  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [kind, setKind] = useState<TaxonomyKind>("tags");
+  const [filter, setFilter] = useState("");
+  const [quick, setQuick] = useState<QuickFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("count");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmMergeId, setConfirmMergeId] = useState<string | null>(null);
+  const [bulkTargetId, setBulkTargetId] = useState<string>("");
+  const [bulkTargetQuery, setBulkTargetQuery] = useState("");
+  const [renameValue, setRenameValue] = useState("");
+  const [createValue, setCreateValue] = useState("");
+  const anchorId = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const copy =
+    language === "de"
+      ? {
+          tags: "Tags",
+          correspondents: "Korrespondenten",
+          types: "Typen",
+          filter: "Filtern…",
+          all: "Alle",
+          unused: "Unbenutzt",
+          duplicates: "Duplikate",
+          name: "Name",
+          docs: "Dokumente",
+          suggestion: "Vorschlag",
+          mergeInto: (n: string) => `In „${n}" zusammenführen`,
+          confirmMerge: "Bestätigen",
+          selected: "ausgewählt",
+          bulkMerge: "Zusammenführen",
+          rename: "Umbenennen",
+          del: "Löschen",
+          clear: "Aufheben",
+          deleteAllUnused: (n: number) => `Alle ${n} unbenutzten löschen`,
+          add: "Hinzufügen",
+          newEntry: "Neuer Eintrag…",
+          empty: "Keine Einträge.",
+          loadError: "Liste konnte nicht geladen werden.",
+          actionFailed: "Aktion fehlgeschlagen.",
+          countsUnavailable:
+            "Dokumentanzahlen konnten nicht geladen werden — „Unbenutzt“ ist deaktiviert.",
+        }
+      : {
+          tags: "Tags",
+          correspondents: "Correspondents",
+          types: "Types",
+          filter: "Filter…",
+          all: "All",
+          unused: "Unused",
+          duplicates: "Duplicates",
+          name: "Name",
+          docs: "Documents",
+          suggestion: "Suggestion",
+          mergeInto: (n: string) => `merge into ${n}`,
+          confirmMerge: "Confirm",
+          selected: "selected",
+          bulkMerge: "Merge into…",
+          rename: "Rename",
+          del: "Delete",
+          clear: "Clear",
+          deleteAllUnused: (n: number) => `Delete all ${n} unused`,
+          add: "Add",
+          newEntry: "New entry…",
+          empty: "No entries.",
+          loadError: "Failed to load the list.",
+          actionFailed: "The action failed.",
+          countsUnavailable:
+            "Document counts could not be loaded — “Unused” is unavailable.",
+        };
 
   const listQuery = useQuery({
     queryKey: ["taxonomies", kind],
     queryFn: () => listTaxonomy(kind, t),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (name: string) => createTaxonomy(kind, name, t),
-    onSuccess: () => {
-      setNewName("");
-      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
-    },
+  const facetsQuery = useQuery({
+    queryKey: ["documents", "facets"],
+    queryFn: fetchExplorerFacets,
+    staleTime: 60_000,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: (params: { id: string; name: string }) =>
-      updateTaxonomy(kind, params.id, params.name, t),
-    onSuccess: () => {
-      setEditingId(null);
-      setEditingName("");
-      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteTaxonomy(kind, id, t),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
-    },
-  });
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["taxonomies"] });
+    queryClient.invalidateQueries({ queryKey: ["documents", "facets"] });
+    queryClient.invalidateQueries({ queryKey: ["documents"] });
+  }, [queryClient]);
 
   const mergeMutation = useMutation({
-    mutationFn: (params: { id: string; targetId: string }) =>
-      mergeTaxonomy(kind, params.id, params.targetId, t),
+    mutationFn: async ({ sourceId, targetId }: { sourceId: string; targetId: string }) =>
+      mergeTaxonomy(kind, sourceId, targetId, t),
+    onSuccess: invalidate,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) await deleteTaxonomy(kind, id, t);
+    },
     onSuccess: () => {
-      setMergeSourceId(null);
-      setMergeTargetId("");
-      queryClient.invalidateQueries({ queryKey: ["taxonomies", kind] });
+      setSelectedIds([]);
+      invalidate();
+    },
+  });
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) =>
+      updateTaxonomy(kind, id, name, t),
+    onSuccess: () => {
+      setRenameValue("");
+      invalidate();
+    },
+  });
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => createTaxonomy(kind, name, t),
+    onSuccess: () => {
+      setCreateValue("");
+      invalidate();
     },
   });
 
-  const items = listQuery.data ?? [];
+  const facetCounts = useMemo(() => {
+    const facets = facetsQuery.data;
+    const source =
+      kind === "tags"
+        ? facets?.tags
+        : kind === "correspondents"
+          ? facets?.correspondents
+          : facets?.documentTypes;
+    return new Map((source ?? []).map((entry) => [entry.id, entry.count]));
+  }, [facetsQuery.data, kind]);
+
+  // Until the facets request succeeds we do not know how many documents use
+  // an entry. Reporting that as 0 would make the Unused filter offer to
+  // delete the entire taxonomy, attached entries included.
+  const countsKnown = facetsQuery.isSuccess;
+
+  const allRows = useMemo<Row[]>(
+    () =>
+      (listQuery.data ?? []).map((entry) => ({
+        id: entry.id,
+        name: entry.name,
+        slug: entry.slug,
+        count: countsKnown ? (facetCounts.get(entry.id) ?? 0) : null,
+      })),
+    [listQuery.data, facetCounts, countsKnown],
+  );
+
+  const suggestions = useMemo(() => computeSuggestions(allRows), [allRows]);
+
+  const rows = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    let out = allRows;
+    if (needle) out = out.filter((row) => row.name.toLowerCase().includes(needle));
+    if (quick === "unused") out = out.filter((row) => row.count === 0);
+
+    if (quick === "duplicates") out = out.filter((row) => suggestions.has(row.id));
+    return [...out].sort((a, b) => {
+      const cmp =
+        sortKey === "count"
+          ? (a.count ?? 0) - (b.count ?? 0)
+          : a.name.localeCompare(b.name);
+      return sortAsc ? cmp : -cmp;
+    });
+  }, [allRows, filter, quick, suggestions, sortKey, sortAsc]);
+
+  const maxCount = Math.max(...allRows.map((row) => row.count ?? 0), 1);
+  const unusedCount = countsKnown
+    ? allRows.filter((row) => row.count === 0).length
+    : 0;
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  });
+
+  const toggleRow = (index: number, shiftKey: boolean) => {
+    const row = rows[index];
+    if (!row) return;
+    const anchorIndex = anchorId.current
+      ? rows.findIndex((entry) => entry.id === anchorId.current)
+      : -1;
+    if (shiftKey && anchorIndex !== -1) {
+      const [from, to] = [anchorIndex, index].sort((a, b) => a - b);
+      const range = rows.slice(from, to + 1).map((entry) => entry.id);
+      const turningOn = !selectedIds.includes(row.id);
+      const next = new Set(selectedIds);
+      for (const id of range) (turningOn ? next.add(id) : next.delete(id));
+      setSelectedIds([...next]);
+      return;
+    }
+    anchorId.current = row.id;
+    setSelectedIds((current) =>
+      current.includes(row.id)
+        ? current.filter((id) => id !== row.id)
+        : [...current, row.id],
+    );
+  };
+
+  const switchKind = (next: TaxonomyKind) => {
+    setKind(next);
+    setSelectedIds([]);
+    setConfirmMergeId(null);
+    setQuick("all");
+    setFilter("");
+  };
+
+  const mutationError =
+    mergeMutation.error ??
+    deleteMutation.error ??
+    renameMutation.error ??
+    createMutation.error;
+
+  const selectedRows = rows.filter((row) => selectedIds.includes(row.id));
+  const bulkTargetNeedle = bulkTargetQuery.trim().toLowerCase();
+  const bulkTargetOptions = allRows
+    .filter(
+      (row) =>
+        !selectedIds.includes(row.id) &&
+        (bulkTargetNeedle === "" ||
+          row.name.toLowerCase().includes(bulkTargetNeedle)),
+    )
+    .slice(0, 50);
+  const busy =
+    mergeMutation.isPending || deleteMutation.isPending || renameMutation.isPending;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!newName.trim()) {
-              return;
-            }
-            createMutation.mutate(newName.trim());
-          }}
-        >
+    <div className="rounded-[var(--r-lg)] border bg-card">
+      {/* Kind switcher + filters */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b bg-[var(--ok-bar)] px-3 py-2">
+        {(
+          [
+            ["tags", copy.tags],
+            ["correspondents", copy.correspondents],
+            ["document-types", copy.types],
+          ] as Array<[TaxonomyKind, string]>
+        ).map(([value, label]) => (
+          <Chip key={value} active={kind === value} onClick={() => switchKind(value)}>
+            {label}
+            {kind === value ? <span className="ok-num"> {allRows.length}</span> : null}
+          </Chip>
+        ))}
+        <Input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder={copy.filter}
+          className="ml-2 h-[26px] w-40"
+        />
+        {(
+          [
+            ["all", copy.all],
+            ["unused", copy.unused],
+            ["duplicates", copy.duplicates],
+          ] as Array<[QuickFilter, string]>
+        ).map(([value, label]) => (
+          <Chip
+            key={value}
+            active={quick === value}
+            // "Unused" is derived from document counts; without them every
+            // entry would look unused.
+            disabled={value === "unused" && !countsKnown}
+            onClick={() => setQuick(value)}
+          >
+            {label}
+          </Chip>
+        ))}
+        <div className="ml-auto flex items-center gap-1.5">
           <Input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder={t("settings.createItemPlaceholder")}
+            value={createValue}
+            onChange={(event) => setCreateValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && createValue.trim()) {
+                createMutation.mutate(createValue.trim());
+              }
+            }}
+            placeholder={copy.newEntry}
+            className="h-[26px] w-36"
           />
           <Button
-            type="submit"
-            disabled={createMutation.isPending || !newName.trim()}
+            size="sm"
+            variant="outline"
+            disabled={!createValue.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate(createValue.trim())}
           >
-            {createMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Plus className="h-4 w-4" />
-                {t("settings.add")}
-              </>
-            )}
+            <Plus />
+            {copy.add}
           </Button>
-        </form>
+        </div>
+      </div>
 
-        {createMutation.isError && (
-          <p className="text-sm text-destructive">
-            {createMutation.error instanceof Error
-              ? createMutation.error.message
-              : t("settings.createItemFailed")}
-          </p>
-        )}
-
-        {listQuery.isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {listQuery.isError && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {t("settings.loadItemsFailed")}
-          </div>
-        )}
-
-        {listQuery.isSuccess && items.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            {t("settings.noItemsCreated")}
-          </p>
-        )}
-
-        {items.length > 0 && (
-          <div className="space-y-2">
-            {items.map((item) => (
-              <div key={item.id} className="rounded-lg border p-3">
-                {editingId === item.id ? (
-                  <div className="space-y-3">
-                    <Input
-                      value={editingName}
-                      onChange={(event) => setEditingName(event.target.value)}
-                      aria-label={`${title} ${t("settings.nameSuffix")}`}
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          updateMutation.mutate({
-                            id: item.id,
-                            name: editingName.trim(),
-                          })
-                        }
-                        disabled={updateMutation.isPending || !editingName.trim()}
-                      >
-                        {updateMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          t("settings.save")
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingId(null);
-                          setEditingName("");
-                        }}
-                      >
-                        {t("settings.cancel")}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.slug}
-                        {"description" in item && item.description
-                          ? ` · ${item.description}`
-                          : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingId(item.id);
-                          setEditingName(item.name);
-                        }}
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                        {t("settings.edit")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMergeSourceId(item.id);
-                          setMergeTargetId(
-                            items.find((candidate) => candidate.id !== item.id)?.id ?? "",
-                          );
-                        }}
-                        disabled={items.length < 2}
-                      >
-                        {t("settings.merge")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteMutation.mutate(item.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {t("settings.delete")}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {mergeSourceId === item.id && editingId !== item.id && (
-                  <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
-                    <div className="space-y-2">
-                      <Label>{t("settings.mergeInto")}</Label>
-                      <Select value={mergeTargetId} onValueChange={setMergeTargetId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t("settings.selectTarget")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {items
-                            .filter((candidate) => candidate.id !== item.id)
-                            .map((candidate) => (
-                              <SelectItem key={candidate.id} value={candidate.id}>
-                                {candidate.name}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          mergeMutation.mutate({
-                            id: item.id,
-                            targetId: mergeTargetId,
-                          })
-                        }
-                        disabled={mergeMutation.isPending || !mergeTargetId}
-                      >
-                        {mergeMutation.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          t("settings.confirmMerge")
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMergeSourceId(null);
-                          setMergeTargetId("");
-                        }}
-                      >
-                        {t("settings.cancel")}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+      {/* Bulk bar / unused sweep */}
+      {selectedIds.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border-b bg-accent px-3 py-1.5">
+          <span className="text-sm text-accent-foreground">
+            <span className="ok-num font-semibold">{selectedIds.length}</span>{" "}
+            {copy.selected}
+          </span>
+          <Select value={bulkTargetId} onValueChange={setBulkTargetId}>
+            <SelectTrigger className="h-[26px] w-52">
+              <SelectValue placeholder={copy.bulkMerge} />
+            </SelectTrigger>
+            <SelectContent>
+              {/* Filter the list rather than truncating it: with 1000 entries
+                  a flat top-50 makes most merge targets unreachable. */}
+              <div className="p-1">
+                <Input
+                  value={bulkTargetQuery}
+                  onChange={(event) => setBulkTargetQuery(event.target.value)}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  placeholder={copy.filter}
+                  className="h-[26px]"
+                />
               </div>
-            ))}
-          </div>
-        )}
+              {bulkTargetOptions.map((row) => (
+                <SelectItem key={row.id} value={row.id}>
+                  {row.name}
+                </SelectItem>
+              ))}
+              {bulkTargetOptions.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                  {copy.empty}
+                </p>
+              ) : null}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!bulkTargetId || busy}
+            onClick={async () => {
+              for (const id of selectedIds) {
+                await mergeMutation.mutateAsync({ sourceId: id, targetId: bulkTargetId });
+              }
+              setSelectedIds([]);
+              setBulkTargetId("");
+            }}
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <Check />}
+            {copy.bulkMerge}
+          </Button>
+          {selectedIds.length === 1 ? (
+            <>
+              <Input
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                placeholder={selectedRows[0]?.name ?? copy.rename}
+                className="h-[26px] w-40"
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!renameValue.trim() || busy}
+                onClick={() =>
+                  renameMutation.mutate({ id: selectedIds[0], name: renameValue.trim() })
+                }
+              >
+                {copy.rename}
+              </Button>
+            </>
+          ) : null}
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-[var(--ok-red)]"
+            disabled={busy}
+            onClick={() => deleteMutation.mutate(selectedIds)}
+          >
+            <Trash2 />
+            {copy.del}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={() => setSelectedIds([])}
+          >
+            <X />
+            {copy.clear}
+          </Button>
+        </div>
+      ) : quick === "unused" && unusedCount > 0 ? (
+        <div className="flex items-center border-b bg-[var(--ok-amber-soft)] px-3 py-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() =>
+              deleteMutation.mutate(
+                allRows.filter((row) => row.count === 0).map((row) => row.id),
+              )
+            }
+          >
+            <Trash2 />
+            {copy.deleteAllUnused(unusedCount)}
+          </Button>
+        </div>
+      ) : null}
 
-        {(updateMutation.isError || deleteMutation.isError || mergeMutation.isError) && (
-          <p className="text-sm text-destructive">
-            {updateMutation.error instanceof Error
-              ? updateMutation.error.message
-              : deleteMutation.error instanceof Error
-                ? deleteMutation.error.message
-                : mergeMutation.error instanceof Error
-                  ? mergeMutation.error.message
-                  : t("settings.updateItemFailed")}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      {/* Column header */}
+      <div className="flex h-8 items-center gap-3 border-b bg-[var(--ok-bar)] px-3">
+        <span className="w-3 flex-shrink-0" />
+        <button
+          type="button"
+          className={cn(
+            "ok-eyebrow inline-flex items-center gap-1 hover:text-foreground",
+            sortKey === "name" && "text-foreground",
+          )}
+          onClick={() => {
+            setSortKey("name");
+            setSortAsc(sortKey === "name" ? !sortAsc : true);
+          }}
+        >
+          {copy.name}
+          {sortKey === "name" ? (
+            sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "ok-eyebrow ml-auto inline-flex w-20 items-center justify-end gap-1 hover:text-foreground",
+            sortKey === "count" && "text-foreground",
+          )}
+          onClick={() => {
+            setSortKey("count");
+            setSortAsc(sortKey === "count" ? !sortAsc : false);
+          }}
+        >
+          {copy.docs}
+          {sortKey === "count" ? (
+            sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+          ) : null}
+        </button>
+        <span className="ok-eyebrow w-56 flex-shrink-0 text-right">
+          {copy.suggestion}
+        </span>
+      </div>
+
+      {/* A failed create, rename, merge or delete used to leave no trace at
+          all — the list simply did not change. */}
+      {mutationError ? (
+        <p className="border-b bg-[var(--ok-red-soft)] px-3 py-1.5 text-sm text-[var(--ok-red)]">
+          {mutationError instanceof Error ? mutationError.message : copy.actionFailed}
+        </p>
+      ) : null}
+      {!countsKnown && facetsQuery.isError ? (
+        <p className="border-b bg-[var(--ok-amber-soft)] px-3 py-1.5 text-xs text-[var(--ok-amber)]">
+          {copy.countsUnavailable}
+        </p>
+      ) : null}
+
+      {/* Virtualised rows — never all 1000 at once */}
+      {listQuery.isLoading ? (
+        <div className="flex h-40 items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : listQuery.isError ? (
+        <p className="px-3 py-6 text-center text-sm text-[var(--ok-red)]">
+          {copy.loadError}
+        </p>
+      ) : rows.length === 0 ? (
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+          {copy.empty}
+        </p>
+      ) : (
+        <div ref={listRef} className="overflow-auto" style={{ maxHeight: 420 }}>
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              const target = suggestions.get(row.id);
+              const selected = selectedIds.includes(row.id);
+              return (
+                <div
+                  key={row.id}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: ROW_HEIGHT,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 border-b border-[var(--ok-border-soft)] px-3",
+                    selected && "bg-accent",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={row.name}
+                    checked={selected}
+                    onClick={(event) => toggleRow(virtualRow.index, event.shiftKey)}
+                    onChange={() => {}}
+                    className="h-3 w-3 flex-shrink-0 accent-[var(--ok-accent)]"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="h-2 w-2 flex-shrink-0 rounded-full bg-[var(--ok-accent)]"
+                    style={{
+                      opacity:
+                        row.count == null
+                          ? 0.15
+                          : row.count === 0
+                            ? 0.15
+                            : 0.3 + 0.7 * (row.count / maxCount),
+                    }}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm">{row.name}</span>
+                  <span className="ok-num w-20 flex-shrink-0 text-right text-sm text-muted-foreground">
+                    {row.count ?? "—"}
+                  </span>
+                  <span className="flex w-56 flex-shrink-0 items-center justify-end gap-1">
+                    {target ? (
+                      confirmMergeId === row.id ? (
+                        <Button
+                          size="sm"
+                          className="h-[22px]"
+                          disabled={busy}
+                          onClick={() => {
+                            mergeMutation.mutate({
+                              sourceId: row.id,
+                              targetId: target.id,
+                            });
+                            setConfirmMergeId(null);
+                          }}
+                        >
+                          <Check />
+                          {copy.confirmMerge}
+                        </Button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmMergeId(row.id)}
+                          className="max-w-full truncate rounded-[var(--r-sm)] bg-[var(--ok-amber-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
+                        >
+                          {copy.mergeInto(target.name)}
+                        </button>
+                      )
+                    ) : null}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
-
