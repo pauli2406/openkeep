@@ -10,11 +10,15 @@ import { server } from "./msw-server";
 // per-file stage row; the watch-folder line hides when unconfigured.
 function mockImportBasics() {
   server.use(
-    http.post(apiUrl("/api/archive/watch-folder/scan"), () =>
-      HttpResponse.json(
-        { message: "WATCH_FOLDER_PATH is not configured" },
-        { status: 409 },
-      ),
+    // #91: status comes from a read-only endpoint now, not a dry-run scan.
+    http.get(apiUrl("/api/archive/watch-folder"), () =>
+      HttpResponse.json({
+        configured: false,
+        configuredPath: null,
+        lastScan: null,
+        lastImport: null,
+        history: [],
+      }),
     ),
     http.get(apiUrl("/api/documents/:id"), () =>
       HttpResponse.json(makeDocument({ status: "pending" })),
@@ -119,5 +123,75 @@ describe("upload smoke", () => {
     });
 
     expect(await screen.findByText("request file too large")).toBeInTheDocument();
+  });
+
+  it("reads watch-folder status without triggering a scan, and shows the path", async () => {
+    const scanCalls: string[] = [];
+    server.use(
+      http.get(apiUrl("/api/documents/:id"), () =>
+        HttpResponse.json(makeDocument({ status: "pending" })),
+      ),
+      // #91: the page must never reach for the scan endpoint, which walks the
+      // folder and writes an audit entry.
+      http.post(apiUrl("/api/archive/watch-folder/scan"), () => {
+        scanCalls.push("scan");
+        return HttpResponse.json({});
+      }),
+      http.get(apiUrl("/api/archive/watch-folder"), () =>
+        HttpResponse.json({
+          configured: true,
+          configuredPath: "/srv/watch",
+          lastScan: { scannedAt: "2026-03-22T09:00:00.000Z", imported: 3, dryRun: false },
+          lastImport: { scannedAt: "2026-03-22T09:00:00.000Z", imported: 3, dryRun: false },
+          history: [
+            { scannedAt: "2026-03-22T09:00:00.000Z", imported: 3, dryRun: false },
+          ],
+        }),
+      ),
+    );
+
+    renderAuthenticatedApp({ route: "/upload" });
+
+    expect(await screen.findByText("/srv/watch")).toBeInTheDocument();
+    expect(scanCalls).toEqual([]);
+  });
+
+  it("marks content already in the archive as a duplicate and links to it", async () => {
+    mockImportBasics();
+    server.use(
+      // #92: the upload still creates a document; `duplicateOf` is how the
+      // client learns the same bytes were already filed.
+      http.post(apiUrl("/api/documents"), () =>
+        HttpResponse.json(
+          {
+            id: "99999999-9999-9999-9999-999999999999",
+            duplicateOf: {
+              id: "11111111-1111-1111-1111-111111111111",
+              title: "March Invoice",
+              createdAt: "2026-03-01T09:00:00.000Z",
+            },
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    const { container } = renderAuthenticatedApp({ route: "/upload" });
+    await screen.findByRole("heading", { name: /import documents/i });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File(["dup"], "dup.pdf", { type: "application/pdf" })],
+      },
+    });
+
+    expect(await screen.findByText(/already in/i)).toBeInTheDocument();
+    await waitFor(() => {
+      const link = container.querySelector(
+        'a[href="/documents/11111111-1111-1111-1111-111111111111"]',
+      );
+      expect(link).not.toBeNull();
+    });
   });
 });

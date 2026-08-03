@@ -16,9 +16,16 @@ Select `Import` in the top bar and either:
 
 Each file gets its own row in the queue below the drop zone, moving through
 `Upload → OCR → Extract → Embed` independently — the active stage carries the
-accent colour. Failures turn red with a `Retry`; duplicates already in the
-archive are marked amber. A finished file links straight to its document, or
-shows a `Review` badge when the extraction needs confirming.
+accent colour. `Retry` on a failed row reprocesses the document rather than
+uploading the file again.
+
+If the same content is already in the archive the row is marked amber and
+links to the document that already holds it. OpenKeep still files the new
+document — the same paperwork can legitimately arrive twice — it just tells
+you rather than letting it look like a first import.
+
+A finished file links straight to its document, or shows a `Review` badge when
+the extraction needs confirming.
 
 When a watch folder is configured, its path and last scan appear under the
 drop zone.
@@ -96,7 +103,11 @@ Use groups view to see the archive by correspondent. Each block is one
 correspondent, sized by how many documents they account for. Select a block to
 open the list filtered to that correspondent.
 
-Block totals are archive-wide and do not narrow with the filter sidebar.
+Each block also names the document type that correspondent sends most often.
+
+Block totals follow the filter sidebar: narrowing by year, type, tag or status
+narrows the counts. Selecting correspondents is the one exception — every
+correspondent stays visible so you can still pick another one.
 
 ## Filter the Archive
 

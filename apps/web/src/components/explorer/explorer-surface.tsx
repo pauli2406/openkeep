@@ -111,8 +111,11 @@ export function ExplorerSurface({
   }, [activeView]);
 
   const facetsQuery = useQuery({
-    queryKey: ["documents", "facets"],
-    queryFn: fetchExplorerFacets,
+    // The search is part of the key: counts now depend on it, and the
+    // unfiltered callers (omnibar, taxonomy) keep the bare key so the two
+    // do not overwrite each other in the cache.
+    queryKey: ["documents", "facets", search],
+    queryFn: () => fetchExplorerFacets(search),
   });
   const documentsQuery = useQuery({
     queryKey: ["documents", "explorer", search],
@@ -395,17 +398,6 @@ export function ExplorerSurface({
             <GroupsView
               facets={facetsQuery.data}
               selectedCorrespondentIds={search.correspondentIds ?? []}
-              hasFilters={Boolean(
-                search.query ||
-                  search.year ||
-                  search.statuses?.length ||
-                  search.documentTypeIds?.length ||
-                  search.tags?.length ||
-                  search.dateFrom ||
-                  search.dateTo ||
-                  search.amountMin != null ||
-                  search.amountMax != null,
-              )}
               onSelectCorrespondent={(correspondentId) =>
                 // A group click opens the list for that correspondent, so it
                 // replaces the correspondent filter rather than adding to it.

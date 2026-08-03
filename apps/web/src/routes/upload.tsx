@@ -34,6 +34,8 @@ interface QueuedFile {
   typeName: string | null;
   needsReview: boolean;
   pageCount: number | null;
+  /** set when the same content was already in the archive (#92) */
+  duplicateOfId?: string;
   errorMessage?: string;
 }
 
@@ -130,27 +132,23 @@ function ImportPage() {
   // stops the uploads instead of only hiding their rows.
   const generationRef = useRef(0);
 
-  // Dry-run scan: read-only plan, used for the watch-folder status line.
-  // There is no side-effect-free way to read watch-folder status: the only
-  // endpoint is the scan itself, and even a dry run walks the folder and
-  // writes an `archive.watch_folder_scanned` audit entry. So run it at most
-  // once per mount, never on refocus, and ignore dry runs when reporting
-  // what the watch folder has actually imported. Tracked in #91.
+  // Read-only status (#91). This used to run a dry-run scan, which walked the
+  // folder and wrote an audit entry on every page load, then reported its own
+  // dry run as the last scan. The dedicated endpoint has no side effects, so
+  // it can simply be polled.
   const watchQuery = useQuery({
     queryKey: ["archive", "watch-folder", "status"],
     queryFn: async () => {
-      const { data, error } = await api.POST("/api/archive/watch-folder/scan", {
-        body: { dryRun: true },
-      });
+      const { data, error } = await api.GET("/api/archive/watch-folder");
       if (error) throw new Error("watch");
       return data as unknown as {
-        configuredPath: string;
-        history?: Array<{ scannedAt: string; imported: number; dryRun: boolean }>;
+        configured: boolean;
+        configuredPath: string | null;
+        lastImport: { scannedAt: string; imported: number } | null;
+        history: Array<{ scannedAt: string; imported: number; dryRun: boolean }>;
       };
     },
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 60_000,
     retry: false,
   });
 
@@ -170,11 +168,8 @@ function ImportPage() {
           method: "POST",
           body: formData,
         });
-        // Note: re-uploading content already in the archive does NOT 409.
-        // The API deduplicates the stored file by checksum but deliberately
-        // creates a second document, so a duplicate arrives as a normal 201.
-        // A 409 here is a real storage conflict and belongs in the failed
-        // branch below. Surfacing duplicates needs an API signal — see #92.
+        // A 409 is a real storage conflict, not a duplicate: re-uploading
+        // existing content returns 201 with `duplicateOf` set (#92).
         if (!response.ok) {
           const body = await response.text();
           let message = `Upload failed (${response.status})`;
@@ -191,7 +186,21 @@ function ImportPage() {
           }
           throw new Error(message);
         }
-        const created = (await response.json()) as { id: string };
+        const created = (await response.json()) as {
+          id: string;
+          duplicateOf: { id: string; title: string } | null;
+        };
+        if (created.duplicateOf) {
+          // Same bytes are already filed. The document was still created —
+          // that is deliberate server-side — but say so rather than letting it
+          // look like a fresh import.
+          patch(item.id, {
+            stage: "duplicate",
+            documentId: created.id,
+            duplicateOfId: created.duplicateOf.id,
+          });
+          return;
+        }
         patch(item.id, { stage: "ocr", documentId: created.id });
       } catch (err) {
         patch(item.id, {
@@ -327,9 +336,8 @@ function ImportPage() {
     failed: queue.filter((item) => item.stage === "failed").length,
   };
 
-  // history[0] is the dry run this page just triggered, which says nothing
-  // about the watch folder — report the last real scan.
-  const lastScan = (watchQuery.data?.history ?? []).find((entry) => !entry.dryRun);
+  // The API already excludes dry runs from lastImport.
+  const lastScan = watchQuery.data?.lastImport ?? null;
   const pickedUpToday = (watchQuery.data?.history ?? [])
     .filter(
       (entry) =>
@@ -460,7 +468,7 @@ function ImportPage() {
               >
                 <FileIcon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  {item.documentId && item.stage === "done" ? (
+                  {item.documentId && (item.stage === "done" || item.stage === "duplicate") ? (
                     <Link
                       to="/documents/$documentId"
                       params={{ documentId: item.documentId }}
@@ -494,7 +502,16 @@ function ImportPage() {
                   ) : item.stage === "done" ? (
                     <Badge variant="soft">{t("import.done")}</Badge>
                   ) : item.stage === "duplicate" ? (
-                    <Badge variant="warn">{t("import.duplicate")}</Badge>
+                    item.duplicateOfId ? (
+                      <Link
+                        to="/documents/$documentId"
+                        params={{ documentId: item.duplicateOfId }}
+                      >
+                        <Badge variant="warn">{t("import.duplicate")}</Badge>
+                      </Link>
+                    ) : (
+                      <Badge variant="warn">{t("import.duplicate")}</Badge>
+                    )
                   ) : (
                     <Badge variant="secondary">
                       <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />

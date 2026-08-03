@@ -32,12 +32,14 @@ import {
   RequeueDocumentProcessingResponseSchema,
   ReviewReasonSchema,
   SearchDocumentsResponseSchema,
+  UploadDocumentResponseSchema,
   SearchDocumentsRequestSchema,
   SemanticSearchResponseSchema,
   SuccessResponseSchema,
   TagSchema,
   WatchFolderScanRequestSchema,
   WatchFolderScanResponseSchema,
+  WatchFolderStatusResponseSchema,
 } from "@openkeep/types";
 import { zodToOpenAPI } from "nestjs-zod";
 import { z } from "zod";
@@ -477,6 +479,15 @@ function patchGeneratedDocument(document: Record<string, any>) {
   );
   patchJsonResponse(
     document,
+    "/api/archive/watch-folder",
+    "get",
+    200,
+    "Watch folder status and scan history",
+    "WatchFolderStatusResponse",
+    WatchFolderStatusResponseSchema,
+  );
+  patchJsonResponse(
+    document,
     "/api/documents",
     "get",
     200,
@@ -486,6 +497,12 @@ function patchGeneratedDocument(document: Record<string, any>) {
   );
   patchQueryParameters(document, "/api/documents", "get", [...searchDocumentQueryParameters]);
   patchCsvTagsQuery(document, "/api/documents");
+  // Facets take the same filters as the list (#73), so they get the same
+  // documented query surface.
+  patchQueryParameters(document, "/api/documents/facets", "get", [
+    ...searchDocumentQueryParameters,
+  ]);
+  patchCsvTagsQuery(document, "/api/documents/facets");
   patchJsonResponse(
     document,
     "/api/documents/projection",
@@ -552,6 +569,16 @@ function patchGeneratedDocument(document: Record<string, any>) {
       description: "Page size",
     },
   ]);
+  // The upload response is a Document plus `duplicateOf` (#92).
+  patchJsonResponse(
+    document,
+    "/api/documents",
+    "post",
+    201,
+    "Uploaded document; duplicateOf names existing content with the same checksum",
+    "UploadDocumentResponse",
+    UploadDocumentResponseSchema,
+  );
   patchJsonResponse(
     document,
     "/api/documents/{id}",

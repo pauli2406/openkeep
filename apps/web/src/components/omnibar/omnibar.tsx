@@ -156,7 +156,9 @@ export function Omnibar() {
   // Data for zero state suggestions
   const facetsQuery = useQuery({
     queryKey: ["explorer", "facets"],
-    queryFn: fetchExplorerFacets,
+    // Wrapped: fetchExplorerFacets now takes an optional search, and a bare
+    // reference would receive TanStack's query context as that argument.
+    queryFn: () => fetchExplorerFacets(),
     staleTime: 5 * 60 * 1000,
     enabled: isOpen,
   });

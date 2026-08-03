@@ -573,6 +573,23 @@ export const DocumentSchema = z.object({
   matchingLines: z.array(DocumentTextBlockSchema).optional(),
 });
 
+/**
+ * Upload result. The API deliberately creates a new document even when the
+ * binary is already stored — the file record is deduplicated by checksum, the
+ * document is not — so the response has to say so explicitly for a client to
+ * be able to report it (#92). `duplicateOf` names the oldest existing document
+ * sharing this content, or null on a first import.
+ */
+export const UploadDocumentResponseSchema = DocumentSchema.extend({
+  duplicateOf: z
+    .object({
+      id: z.string().uuid(),
+      title: z.string(),
+      createdAt: z.string(),
+    })
+    .nullable(),
+});
+
 export const SearchDocumentsFiltersSchema = z.object({
   year: z.number().int().min(1970).max(2100).optional(),
   dateFrom: DateOnlySchema.optional(),
@@ -1417,6 +1434,19 @@ export const WatchFolderScanHistoryItemSchema = z.object({
   planned: z.number().int().nonnegative(),
 });
 
+/**
+ * Read-only watch-folder status. `GET /archive/watch-folder` answers this
+ * without walking the folder or writing an audit entry, so a page can poll it
+ * safely; the scan endpoint stays for actually importing.
+ */
+export const WatchFolderStatusResponseSchema = z.object({
+  configured: z.boolean(),
+  configuredPath: z.string().nullable(),
+  lastScan: WatchFolderScanHistoryItemSchema.nullable(),
+  lastImport: WatchFolderScanHistoryItemSchema.nullable(),
+  history: z.array(WatchFolderScanHistoryItemSchema),
+});
+
 export const WatchFolderScanItemSchema = z.object({
   path: z.string().min(1),
   action: z.enum(["imported", "duplicate", "unsupported", "failed", "planned"]),
@@ -1467,6 +1497,7 @@ export type ReviewReason = z.infer<typeof ReviewReasonSchema>;
 export type ProcessingJobStatus = z.infer<typeof ProcessingJobStatusSchema>;
 export type ProcessingJobSummary = z.infer<typeof ProcessingJobSummarySchema>;
 export type Document = z.infer<typeof DocumentSchema>;
+export type UploadDocumentResponse = z.infer<typeof UploadDocumentResponseSchema>;
 export type SearchDocumentsRequest = z.infer<typeof SearchDocumentsRequestSchema>;
 export type SearchDocumentsResponse = z.infer<typeof SearchDocumentsResponseSchema>;
 export type SemanticMatchedChunk = z.infer<typeof SemanticMatchedChunkSchema>;
@@ -1584,6 +1615,7 @@ export type ArchiveSnapshot = z.infer<typeof ArchiveSnapshotSchema>;
 export type ArchiveImportRequest = z.infer<typeof ArchiveImportRequestSchema>;
 export type ArchiveImportResult = z.infer<typeof ArchiveImportResultSchema>;
 export type WatchFolderScanRequest = z.infer<typeof WatchFolderScanRequestSchema>;
+export type WatchFolderStatusResponse = z.infer<typeof WatchFolderStatusResponseSchema>;
 export type WatchFolderScanSummary = z.infer<typeof WatchFolderScanSummarySchema>;
 export type WatchFolderScanHistoryItem = z.infer<typeof WatchFolderScanHistoryItemSchema>;
 export type WatchFolderScanItem = z.infer<typeof WatchFolderScanItemSchema>;
