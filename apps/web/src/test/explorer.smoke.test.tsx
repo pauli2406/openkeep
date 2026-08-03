@@ -152,16 +152,20 @@ describe("explorer smoke", () => {
           statuses: [{ status: "processing", count: 1 }],
         }),
       ),
+      // The poll runs every 25ms under test, so the document has to stay
+      // processing for a few reads — otherwise a slow first render can land
+      // after it already flipped and the processing state is never observable.
       http.get(apiUrl("/api/documents"), () => {
         hits += 1;
+        const done = hits > 3;
         return HttpResponse.json({
           items: [
             makeDocument({
-              title: hits > 1 ? "Processed Invoice" : "Processing Invoice",
-              status: hits > 1 ? "ready" : "processing",
+              title: done ? "Processed Invoice" : "Processing Invoice",
+              status: done ? "ready" : "processing",
               latestProcessingJob: {
                 ...makeDocument().latestProcessingJob!,
-                status: hits > 1 ? "completed" : "running",
+                status: done ? "completed" : "running",
               },
             }),
           ],
