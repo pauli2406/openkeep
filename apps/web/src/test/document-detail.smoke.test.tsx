@@ -612,19 +612,26 @@ describe("document detail smoke", () => {
     expect(await screen.findByRole("heading", { name: /documents/i })).toBeInTheDocument();
   });
 
-  it("reassigns the correspondent from the rail and saves it", async () => {
+  it("creates a correspondent from the rail and saves the assignment", async () => {
     const utilityCorrespondent = makeCorrespondent({
       id: "33333333-3333-3333-3333-333333333333",
       name: "Utility Co",
       slug: "utility-co",
     });
+    const createCalls: unknown[] = [];
     const patchCalls: unknown[] = [];
+    let correspondents = [makeCorrespondent()];
 
     server.use(
       http.get(apiUrl("/api/taxonomies/tags"), () => HttpResponse.json([makeTag()])),
       http.get(apiUrl("/api/taxonomies/correspondents"), () =>
-        HttpResponse.json([makeCorrespondent(), utilityCorrespondent]),
+        HttpResponse.json(correspondents),
       ),
+      http.post(apiUrl("/api/taxonomies/correspondents"), async ({ request }) => {
+        createCalls.push(await request.json());
+        correspondents = [...correspondents, utilityCorrespondent];
+        return HttpResponse.json(utilityCorrespondent);
+      }),
       http.get(apiUrl("/api/taxonomies/document-types"), () =>
         HttpResponse.json([makeDocumentType()]),
       ),
@@ -657,14 +664,24 @@ describe("document detail smoke", () => {
 
     expect((await screen.findAllByText("March Invoice"))[0]).toBeInTheDocument();
 
-    // The Correspondent row shows an em dash until one is picked; clicking
-    // it drops the picker straight open.
+    // The Correspondent row shows an em dash until one is picked. Clicking it
+    // opens a search-and-create field, so a correspondent that does not exist
+    // yet can be added without leaving the document.
     const correspondentRow = screen.getByText("Correspondent").parentElement!;
     await user.click(within(correspondentRow).getByRole("button", { name: "—" }));
-    await user.click(await screen.findByRole("option", { name: "Utility Co" }));
+    await user.type(
+      within(correspondentRow).getByPlaceholderText("Search or add…"),
+      "Utility Co",
+    );
+    await user.click(
+      within(correspondentRow).getByRole("button", { name: "Utility Co" }),
+    );
 
+    await waitFor(() => {
+      expect(createCalls).toEqual([{ name: "Utility Co" }]);
+    });
     expect(
-      screen.getByText("Saving will lock Correspondent."),
+      await screen.findByText("Saving will lock Correspondent."),
     ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 

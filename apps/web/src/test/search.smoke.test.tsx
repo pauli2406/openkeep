@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { apiUrl } from "./api-url";
@@ -145,7 +145,9 @@ describe("search smoke", () => {
       return originalFetch(input, init);
     });
 
-    renderAuthenticatedApp({ route: "/search?q=Wann%20endet%20mein%20Vertrag%3F" });
+    const { user, router } = renderAuthenticatedApp({
+      route: "/search?q=Wann%20endet%20mein%20Vertrag%3F",
+    });
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
     // the answer folds into the thread with its inline [1] marker
@@ -155,8 +157,19 @@ describe("search smoke", () => {
       { timeout: 3000 },
     );
     expect(answers.length).toBeGreaterThanOrEqual(1);
-    // the citation surfaces as a source pill naming the document
-    expect((await screen.findAllByText("Stromvertrag 2026")).length).toBeGreaterThanOrEqual(1);
+    // the citation surfaces as a source pill naming the document, and it has
+    // to lead to the right document — that routing invariant is the point of
+    // this test, so follow it rather than just checking the title renders.
+    const pills = await screen.findAllByRole("button", { name: /Stromvertrag 2026/ });
+    await user.click(pills[0]);
+    await user.click(
+      await screen.findByRole("button", { name: /find in document/i }),
+    );
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(
+        "/documents/22222222-2222-2222-2222-222222222222",
+      );
+    });
     // Exactly one answer stream, and no separate semantic retrieval request.
     expect(streamRequests).toBe(1);
     expect(semanticRequests).toBe(0);

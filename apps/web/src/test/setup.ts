@@ -1,7 +1,11 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { server } from "./msw-server";
+
+// findBy* defaults to 1s, which these suites exceed when `turbo test` runs
+// every package at once — the same contention the raised testTimeout covers.
+configure({ asyncUtilTimeout: 5_000 });
 
 // Node v25 ships a built-in `localStorage` global that is an empty stub (methods
 // are undefined). When vitest runs with jsdom, jsdom provides its own Storage

@@ -310,8 +310,6 @@ type TranslationKey =
   | "timeline.loadingMonth"
   | "timeline.unpaid"
   | "timeline.caption"
-  | "documentDetail.fieldLocked"
-  | "documentDetail.fieldsLocked"
   | "documentDetail.needsReview"
   | "documentDetail.original"
   | "documentDetail.searchablePdf"
@@ -844,8 +842,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "timeline.loadingMonth": "Loading month",
     "timeline.unpaid": "unpaid",
     "timeline.caption": "Bar length is document count; the amber marker flags months with unpaid deadlines.",
-    "documentDetail.fieldLocked": "field locked",
-    "documentDetail.fieldsLocked": "fields locked",
     "documentDetail.needsReview": "Needs review",
     "documentDetail.original": "Original",
     "documentDetail.searchablePdf": "Searchable PDF",
@@ -1377,8 +1373,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "timeline.loadingMonth": "Monat wird geladen",
     "timeline.unpaid": "offen",
     "timeline.caption": "Die Balkenlänge zeigt die Anzahl der Dokumente; die gelbe Markierung kennzeichnet Monate mit offenen Fristen.",
-    "documentDetail.fieldLocked": "Feld gesperrt",
-    "documentDetail.fieldsLocked": "Felder gesperrt",
     "documentDetail.needsReview": "Prüfung nötig",
     "documentDetail.original": "Original",
     "documentDetail.searchablePdf": "Durchsuchbares PDF",

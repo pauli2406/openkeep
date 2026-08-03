@@ -292,7 +292,7 @@ describe("settings smoke", () => {
     // Scoped to the page: "Chat" is also a top-nav destination.
     const page = within(screen.getByRole("main"));
     expect(page.getByText("Embedding queue")).toBeInTheDocument();
-    expect(page.getByText("Failed today")).toBeInTheDocument();
+    expect(page.getByText("Failed recently")).toBeInTheDocument();
     // One row per pipeline stage, each naming the provider actually in use.
     expect(page.getByText("Parsing")).toBeInTheDocument();
     expect(page.getByText("Embeddings")).toBeInTheDocument();
