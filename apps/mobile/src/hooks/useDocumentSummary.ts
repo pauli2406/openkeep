@@ -62,12 +62,17 @@ export function useDocumentSummary(
       });
 
       try {
+        // `force` is a query parameter, not a body field. Sending it in the
+        // body meant the endpoint never saw it and "regenerate" silently
+        // returned the cached summary.
         const response = await streamFetch(
-          `/api/documents/${documentId}/summarize/stream`,
+          `/api/documents/${documentId}/summarize/stream${force ? "?force=true" : ""}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ force }),
+            // Still an empty object rather than no body at all: Fastify
+            // rejects a JSON content-type with an empty payload.
+            body: "{}",
             signal: controller.signal,
           },
         );
