@@ -6,7 +6,6 @@ import {
   Sparkles,
   Rows3,
   CalendarRange,
-  CheckCheck,
   Loader2,
   RefreshCw,
   Trash2,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/explorer";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { authFetch } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,11 +34,11 @@ import {
 import { FilterSidebar } from "./filter-sidebar";
 import { GalaxyCanvas } from "./galaxy-canvas";
 import {
-  DocumentRows,
   ErrorBlock,
   ExplorerSectionHeader,
   LoadingBlock,
 } from "./shared";
+import { DocumentTable, type SortField } from "./document-table";
 import { TimelineView } from "./timeline-view";
 
 type ExplorerSurfaceProps = {
@@ -73,11 +73,30 @@ export function ExplorerSurface({
   forcedView,
 }: ExplorerSurfaceProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [queryDraft, setQueryDraft] = useState(search.query ?? "");
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Bulk export = the existing per-document download endpoint, once per
+  // selection. There is no archive-export endpoint to call here.
+  const exportSelected = async () => {
+    for (const documentId of selectedIds) {
+      const response = await authFetch(`/api/documents/${documentId}/download`);
+      if (!response.ok) continue;
+      // Keep the original filename and extension, as the detail page does.
+      const disposition = response.headers.get("Content-Disposition");
+      const match = disposition?.match(/filename="?([^"]+)"?/);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = match?.[1] ?? documentId;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+  };
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const activeView = forcedView ?? search.view ?? "list";
 
@@ -87,7 +106,6 @@ export function ExplorerSurface({
 
   useEffect(() => {
     if (activeView !== "list") {
-      setSelectionMode(false);
       setSelectedIds([]);
     }
   }, [activeView]);
@@ -116,7 +134,6 @@ export function ExplorerSurface({
     () => (documentsQuery.data?.items ?? []).map((document) => document.id),
     [documentsQuery.data?.items],
   );
-  const selectedVisibleCount = visibleDocumentIds.filter((id) => selectedIds.includes(id)).length;
 
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => visibleDocumentIds.includes(id)));
@@ -136,7 +153,6 @@ export function ExplorerSurface({
     onSuccess: async () => {
       setDeleteDialogOpen(false);
       setSelectedIds([]);
-      setSelectionMode(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents", "explorer"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
@@ -170,7 +186,6 @@ export function ExplorerSurface({
     onSuccess: async () => {
       setReprocessDialogOpen(false);
       setSelectedIds([]);
-      setSelectionMode(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents", "explorer"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
@@ -180,27 +195,8 @@ export function ExplorerSurface({
     },
   });
 
-  const toggleSelect = (documentId: string) => {
-    setSelectedIds((current) =>
-      current.includes(documentId)
-        ? current.filter((id) => id !== documentId)
-        : [...current, documentId],
-    );
-  };
 
-  const selectVisible = () => {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      for (const documentId of visibleDocumentIds) {
-        next.add(documentId);
-      }
-      return [...next];
-    });
-  };
 
-  const clearVisible = () => {
-    setSelectedIds((current) => current.filter((id) => !visibleDocumentIds.includes(id)));
-  };
 
   return (
     <div className="space-y-6 p-6 md:p-8">
@@ -270,80 +266,54 @@ export function ExplorerSurface({
           {sidebarOpen ? "Hide filters" : "Show filters"}
         </Button>
 
-        {activeView === "list" ? (
-          <Button
-            variant={selectionMode ? "default" : "outline"}
-            className={`${
-              selectionMode
-                ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)] hover:bg-[color:var(--explorer-cobalt)]/90"
-                : ""
-            }`}
-            onClick={() => {
-              setSelectionMode((current) => {
-                if (current) {
-                  setSelectedIds([]);
-                }
-                return !current;
-              });
-            }}
-          >
-            <CheckCheck className="h-4 w-4" />
-            {selectionMode ? "Exit selection" : "Select multiple"}
-          </Button>
-        ) : null}
       </div>
 
-      {activeView === "list" && selectionMode ? (
-        <div className="sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-cobalt)]/20 bg-[linear-gradient(135deg,rgba(244,238,225,0.94),rgba(231,239,255,0.98))] px-5 py-4 shadow-[0_24px_50px_rgba(56,84,165,0.16)] backdrop-blur">
-          <div className="space-y-1">
-            <p className="ok-eyebrow text-[color:var(--explorer-cobalt)]">
-              Archive Curation Mode
-            </p>
-            <p className="text-sm text-[color:var(--explorer-ink)]">
-              {selectedIds.length > 0
-                ? `${selectedIds.length} selected across the current list`
-                : "Choose documents to act on them as a group."}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                selectedVisibleCount === visibleDocumentIds.length && visibleDocumentIds.length > 0
-                  ? clearVisible()
-                  : selectVisible()
-              }
-              className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-2 ok-eyebrow text-[color:var(--explorer-ink)] transition hover:border-[color:var(--explorer-cobalt)]/40 hover:text-[color:var(--explorer-cobalt)]"
-            >
-              {selectedVisibleCount === visibleDocumentIds.length && visibleDocumentIds.length > 0
-                ? "Clear visible"
-                : "Select visible"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedIds([])}
-              className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-2 ok-eyebrow text-[color:var(--explorer-muted)] transition hover:text-[color:var(--explorer-ink)]"
-            >
-              Reset
-            </button>
+      {activeView === "list" && selectedIds.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-[var(--r-md)] border border-[var(--ok-accent)]/25 bg-accent px-3 py-2">
+          <span className="text-sm text-accent-foreground">
+            <span className="ok-num font-semibold">{selectedIds.length}</span>{" "}
+            {t("documents.selected")}
+          </span>
+          <div className="ml-2 flex flex-wrap items-center gap-2">
+            {/* No bulk tag / set-type endpoint exists; this ticket is
+                web-only, so these stay disabled rather than faked. */}
             <Button
               variant="outline"
-              disabled={selectedIds.length === 0}
-              onClick={() => setReprocessDialogOpen(true)}
+              size="sm"
+              disabled
+              title={t("documents.bulkUnavailable")}
             >
-              <RefreshCw className="h-4 w-4" />
-              Reprocess selected
+              {t("documents.bulkTag")}
             </Button>
             <Button
-              variant="destructive"
-              disabled={selectedIds.length === 0}
-              onClick={() => setDeleteDialogOpen(true)}
+              variant="outline"
+              size="sm"
+              disabled
+              title={t("documents.bulkUnavailable")}
             >
-              <Trash2 className="h-4 w-4" />
-              Delete selected
+              {t("documents.bulkSetType")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportSelected}>
+              {t("documents.bulkExport")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setReprocessDialogOpen(true)}>
+              <RefreshCw />
+              {t("documents.reprocess")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 />
+              {t("documents.bulkDelete")}
             </Button>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setSelectedIds([])}
+          >
+            <X />
+            {t("documents.clearSelection")}
+          </Button>
         </div>
       ) : null}
 
@@ -372,12 +342,19 @@ export function ExplorerSurface({
                 }
               />
             ) : (
-              <DocumentRows
+              <DocumentTable
                 documents={documentsQuery.data?.items ?? []}
                 emptyLabel="No documents match the current explorer filters."
                 selectedIds={selectedIds}
-                selectionMode={selectionMode}
-                onToggleSelect={toggleSelect}
+                onSelectionChange={setSelectedIds}
+                onOpen={openDocument}
+                sort={(search.sort as SortField) ?? "createdAt"}
+                direction={(search.direction as "asc" | "desc") ?? "desc"}
+                onSortChange={(sort, direction) =>
+                  onSearchChange(
+                    nextExplorerSearch(search, { sort, direction, page: undefined }),
+                  )
+                }
               />
             )
           ) : null}

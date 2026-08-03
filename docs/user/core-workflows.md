@@ -34,13 +34,20 @@ If you want semantic exploration, switch the `Documents` page to galaxy view.
 Use list view when you want to:
 
 - skim many documents quickly
-- inspect titles, snippets, badges, and extracted metadata
+- sort by date or title — select a column heading to sort, and again to
+  reverse it. The sort is part of the address, so a sorted view can be shared
+- inspect titles, badges, and extracted metadata
 - select multiple documents for bulk actions
 
-Available bulk actions in list view:
+Select rows with the checkbox at the left of each row. Hold `Shift` while
+selecting to take a whole range. A bar appears above the list showing how many
+are selected, with the actions available for them:
 
-- reprocess selected documents
-- delete selected documents
+- export the selected documents
+- reprocess the selected documents
+- delete the selected documents
+
+`Tag` and `Set type` appear in that bar but are not available yet.
 
 ### Timeline View
 
@@ -127,7 +134,7 @@ Searchable PDF availability depends on the processing outcome and document type.
 You can delete:
 
 - a single document from its detail page
-- multiple documents from list view selection mode
+- multiple documents by selecting them in list view
 
 Deletion is permanent and removes associated derived data as well.
 
