@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Expand, Orbit, ScanSearch } from "lucide-react";
 import type { DocumentsProjectionResponse } from "@openkeep/types";
 import type { GalaxyColorBy } from "@/lib/explorer";
-import { colorForValue } from "@/lib/explorer";
+import { colorForValue, resolveColor } from "@/lib/explorer";
+import { useTheme } from "@/hooks/use-theme";
 import { Button } from "@/components/ui/button";
 
 type GalaxyCanvasProps = {
@@ -32,6 +33,7 @@ export function GalaxyCanvas({
   onColorByChange,
   onOpenDocument,
 }: GalaxyCanvasProps) {
+  const { theme } = useTheme();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [viewport, setViewport] = useState<Viewport>({
@@ -100,7 +102,8 @@ export function GalaxyCanvas({
     for (const point of projection.points) {
       const x = projectX(point.x, rect.width, viewport);
       const y = projectY(point.y, rect.height, viewport);
-      const color = colorForProjectionPoint(point, colorBy);
+      // Canvas cannot resolve var(); do it before painting.
+      const color = resolveColor(colorForProjectionPoint(point, colorBy));
       const isSelected = selection.includes(point.documentId);
       const isHovered = hoveredPoint?.documentId === point.documentId;
       const radius = isHovered ? 7 : isSelected ? 5 : 3.4;
@@ -137,7 +140,8 @@ export function GalaxyCanvas({
       context.fill();
       context.stroke();
     }
-  }, [colorBy, hoveredPoint, lasso, projection, selection, viewport]);
+    // `theme` is a dependency because the point colors are theme tokens.
+  }, [colorBy, hoveredPoint, lasso, projection, selection, viewport, theme]);
 
   function findNearestPoint(clientX: number, clientY: number) {
     const container = containerRef.current;
@@ -281,7 +285,7 @@ export function GalaxyCanvas({
         }}
       >
         <canvas ref={canvasRef} className="h-full w-full" />
-        <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/80 bg-white/70 px-3 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--explorer-muted)] backdrop-blur">
+        <div className="pointer-events-none absolute left-5 top-5 flex items-center gap-2 rounded-full border border-white/80 bg-card px-3 py-2 text-xs uppercase tracking-[0.2em] text-[color:var(--explorer-muted)] backdrop-blur">
           <ScanSearch className="h-3.5 w-3.5" />
           Drag to lasso · scroll to zoom
         </div>
@@ -289,7 +293,7 @@ export function GalaxyCanvas({
           <Button
             variant="outline"
             size="sm"
-            className="border-white/80 bg-white/70 backdrop-blur"
+            className="border-white/80 bg-card backdrop-blur"
             onClick={() =>
               setViewport({
                 scale: 1,
@@ -303,7 +307,7 @@ export function GalaxyCanvas({
           </Button>
         </div>
         {hoveredPoint ? (
-          <div className="absolute bottom-5 left-5 max-w-sm rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-white/90 px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
+          <div className="absolute bottom-5 left-5 max-w-sm rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3 shadow-[0_18px_60px_rgba(25,23,18,0.16)] backdrop-blur">
             <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
               {hoveredPoint.typeName ?? "Document"}
             </p>

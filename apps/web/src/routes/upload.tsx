@@ -279,7 +279,7 @@ function UploadPage() {
                     <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   )}
                   {item.status === "done" && (
-                    <CheckCircle className="h-5 w-5 text-emerald-500" />
+                    <CheckCircle className="h-5 w-5 text-[var(--ok-green)]" />
                   )}
                   {item.status === "error" && (
                     <AlertCircle className="h-5 w-5 text-destructive" />
@@ -376,7 +376,7 @@ function UploadPage() {
       {allDone && doneCount > 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
-            <CheckCircle className="h-10 w-10 text-emerald-500" />
+            <CheckCircle className="h-10 w-10 text-[var(--ok-green)]" />
             <h3 className="mt-3 text-lg font-semibold">{t("upload.complete")}</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               {doneCount} {doneCount === 1 ? t("upload.documentWas") : t("upload.documentsWere")}{" "}

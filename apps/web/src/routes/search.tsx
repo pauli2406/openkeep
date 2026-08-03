@@ -193,8 +193,8 @@ function SearchPage() {
               className={cn(
                 "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
                 panelExpanded
-                  ? "bg-[var(--explorer-cobalt)] text-white"
-                  : "bg-[var(--explorer-cobalt-soft)] text-[var(--explorer-cobalt)] group-hover:bg-[var(--explorer-cobalt)] group-hover:text-white",
+                  ? "bg-[var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)]"
+                  : "bg-[var(--explorer-cobalt-soft)] text-[var(--explorer-cobalt)] group-hover:bg-[var(--explorer-cobalt)] group-hover:text-[var(--ok-accent-fill-ink)]",
               )}
             >
               <BrainCircuit className="h-4 w-4" />
@@ -317,7 +317,7 @@ function SearchPage() {
                                 className="no-underline"
                                 title={title}
                               >
-                                <span className="inline-flex items-center rounded bg-[var(--explorer-cobalt-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[var(--explorer-cobalt)] transition-colors hover:bg-[var(--explorer-cobalt)] hover:text-white">
+                                <span className="inline-flex items-center rounded bg-[var(--explorer-cobalt-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[var(--explorer-cobalt)] transition-colors hover:bg-[var(--explorer-cobalt)] hover:text-[var(--ok-accent-fill-ink)]">
                                   {children}
                                 </span>
                               </Link>
@@ -356,7 +356,7 @@ function SearchPage() {
                   )}
 
                   {answerStream.lowConfidence && answerStream.status === "done" && (
-                    <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                    <p className="flex items-center gap-1.5 text-xs text-[var(--ok-amber)]">
                       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                       This answer is based on weak evidence — verify it against the cited sources.
                     </p>
@@ -525,7 +525,7 @@ function SearchPage() {
                     (answerStream.answerStatus === "insufficient_evidence" ||
                       !answerStream.answerText) &&
                     !hasStructuredItems && (
-                      <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-900">
+                      <div className="rounded-xl border border-[var(--ok-amber)]/25 bg-[var(--ok-amber-soft)] px-4 py-3 text-sm text-[var(--ok-amber)]">
                         {isInsufficient && answerStream.answerText
                           ? answerStream.answerText
                           : copy.insufficient}

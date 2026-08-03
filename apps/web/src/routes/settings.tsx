@@ -690,7 +690,7 @@ function TwoFactorSection() {
                     <img
                       src={setupData.qrDataUrl}
                       alt="TOTP QR code"
-                      className="h-48 w-48 rounded-md border bg-white p-2"
+                      className="h-48 w-48 rounded-md border bg-card p-2"
                     />
                   </div>
                   <div className="space-y-1">
@@ -737,7 +737,7 @@ function TwoFactorSection() {
                       <span key={rc}>{rc}</span>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  <div className="flex items-center gap-2 rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-sm text-[var(--ok-amber)]">
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     These codes are shown only once.
                   </div>
@@ -890,13 +890,13 @@ function ApiTokensSection() {
                         className="shrink-0"
                       >
                         {copied ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                         ) : (
                           <Copy className="h-4 w-4" />
                         )}
                       </Button>
                     </div>
-                    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    <div className="flex items-center gap-2 rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-sm text-[var(--ok-amber)]">
                       <AlertCircle className="h-4 w-4 shrink-0" />
                       {t("settings.tokenShownOnce")}
                     </div>
@@ -1901,14 +1901,14 @@ function ProcessingActivitySection() {
                         <div
                           className={`h-2 w-2 rounded-full ${
                             status === "ready"
-                              ? "bg-emerald-500"
+                              ? "bg-[var(--ok-green)]"
                               : status === "processing"
-                                ? "bg-amber-500 animate-pulse"
+                                ? "bg-[var(--ok-amber)] animate-pulse"
                                 : status === "pending"
-                                  ? "bg-blue-400"
+                                  ? "bg-[var(--ok-cat-2)]"
                                   : status === "failed"
-                                    ? "bg-red-500"
-                                    : "bg-gray-400"
+                                    ? "bg-[var(--ok-red)]"
+                                    : "bg-[var(--ok-dim)]"
                           }`}
                         />
                         <span className="text-xs font-medium capitalize">
@@ -1991,7 +1991,7 @@ function QueueCard({
       className={`rounded-lg border p-3 text-center transition-colors ${
         active
           ? variant === "warning"
-            ? "border-amber-200 bg-amber-50/50"
+            ? "border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)]"
             : "border-primary/30 bg-primary/5"
           : ""
       }`}
@@ -2000,7 +2000,7 @@ function QueueCard({
         className={`ok-num text-xl font-semibold ${
           active
             ? variant === "warning"
-              ? "text-amber-600"
+              ? "text-[var(--ok-amber)]"
               : "text-primary"
             : "text-foreground"
         }`}
@@ -2190,9 +2190,9 @@ function WatchFolderFieldReview({
 }
 
 function confidenceTextClass(confidence: number): string {
-  if (confidence >= 0.8) return "font-medium text-emerald-600";
-  if (confidence >= 0.5) return "font-medium text-amber-600";
-  return "font-medium text-red-600";
+  if (confidence >= 0.8) return "font-medium text-[var(--ok-green)]";
+  if (confidence >= 0.5) return "font-medium text-[var(--ok-amber)]";
+  return "font-medium text-[var(--ok-red)]";
 }
 
 function formatJobTime(dateStr: string, language: AppLanguage, t: Translate): string {
@@ -2341,7 +2341,7 @@ function AiProvidersSection() {
               {activeChat ? (
                 <div className="flex items-center justify-between rounded-md border px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-emerald-500" />
+                    <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                     <span className="text-sm font-medium">{activeChat.name}</span>
                     {activeChat.model && (
                       <Badge variant="secondary">{activeChat.model}</Badge>
@@ -2368,7 +2368,7 @@ function AiProvidersSection() {
                   >
                     <div className="flex items-center gap-2">
                       {p.hasKey ? (
-                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                        <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                       ) : (
                         <AlertCircle className="h-4 w-4 text-muted-foreground" />
                       )}
@@ -2399,7 +2399,7 @@ function AiProvidersSection() {
                     >
                       <div className="flex items-center gap-2">
                         {ep.available ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         )}
@@ -2438,7 +2438,7 @@ function AiProvidersSection() {
                     >
                       <div className="flex items-center gap-2">
                         {pp.available ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         )}
@@ -2535,8 +2535,8 @@ function SystemHealthSection() {
               className={`h-3 w-3 rounded-full ${
                 healthQuery.data.status === "ok" ||
                 healthQuery.data.status === "healthy"
-                  ? "bg-emerald-500"
-                  : "bg-amber-500"
+                  ? "bg-[var(--ok-green)]"
+                  : "bg-[var(--ok-amber)]"
               }`}
             />
             <div>
@@ -2570,7 +2570,7 @@ function SystemHealthSection() {
                     >
                       <div className="flex items-center gap-2">
                         {healthy ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
                         ) : (
                           <AlertCircle className="h-4 w-4 text-destructive" />
                         )}

@@ -172,9 +172,9 @@ export function DeadlineList({
     <div className="space-y-3">
       {items.map((item) => {
         const tone = item.isOverdue
-          ? "border-[#c45134] bg-[#fff0ea]"
+          ? "border-[var(--ok-red)]/40 bg-[var(--ok-red-soft)]"
           : item.daysUntilDue <= 7
-            ? "border-[#cf9f47] bg-[#fff6e5]"
+            ? "border-[var(--ok-amber)]/40 bg-[var(--ok-amber-soft)]"
             : "border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)]";
 
         return (
@@ -260,8 +260,8 @@ export function DocumentRows({
                   className={cn(
                     "absolute left-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border transition",
                     isSelected
-                      ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-white shadow-[0_10px_22px_rgba(56,84,165,0.25)]"
-                      : "border-[color:var(--explorer-border-strong)] bg-white/85 text-[color:var(--explorer-muted)] hover:border-[color:var(--explorer-cobalt)] hover:text-[color:var(--explorer-cobalt)]",
+                      ? "border-[color:var(--explorer-cobalt)] bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)] shadow-[0_10px_22px_rgba(56,84,165,0.25)]"
+                      : "border-[color:var(--explorer-border-strong)] bg-card text-[color:var(--explorer-muted)] hover:border-[color:var(--explorer-cobalt)] hover:text-[color:var(--explorer-cobalt)]",
                   )}
                 >
                   <Check className="h-4 w-4" />
@@ -305,12 +305,12 @@ export function DocumentRows({
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {document.reviewReasons.includes("classification_ambiguous") ? (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 ok-eyebrow text-amber-800">
+                  <span className="rounded-full bg-[var(--ok-amber-soft)] px-2.5 py-1 ok-eyebrow text-[var(--ok-amber)]">
                     Classification Ambiguous
                   </span>
                 ) : null}
                 {document.reviewReasons.includes("correspondent_unresolved") ? (
-                  <span className="rounded-full bg-rose-100 px-2.5 py-1 ok-eyebrow text-rose-800">
+                  <span className="rounded-full bg-[var(--ok-red-soft)] px-2.5 py-1 ok-eyebrow text-[var(--ok-red)]">
                     Correspondent Unresolved
                   </span>
                 ) : null}
@@ -322,7 +322,7 @@ export function DocumentRows({
                 {(document.metadata.intelligence?.validation?.warnings ?? []).slice(0, 2).map((warning) => (
                   <span
                     key={warning}
-                    className="rounded-full border border-[color:var(--explorer-border)] bg-white/80 px-2.5 py-1 ok-eyebrow text-[color:var(--explorer-muted)]"
+                    className="rounded-full border border-[color:var(--explorer-border)] bg-card px-2.5 py-1 ok-eyebrow text-[color:var(--explorer-muted)]"
                   >
                     {formatSignal(warning)}
                   </span>
@@ -346,8 +346,8 @@ export function DocumentRows({
                     className={cn(
                       "rounded-full px-2.5 py-1 ok-eyebrow",
                       isSelected
-                        ? "bg-[color:var(--explorer-cobalt)] text-white"
-                        : "bg-white/80 text-[color:var(--explorer-muted)]",
+                        ? "bg-[color:var(--explorer-cobalt)] text-[var(--ok-accent-fill-ink)]"
+                        : "bg-card text-[color:var(--explorer-muted)]",
                     )}
                   >
                     {isSelected ? "Selected" : "Select"}
@@ -411,7 +411,7 @@ export function ErrorBlock({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[#d8b7a8] bg-[#fff5f0] text-center">
+    <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-[var(--r-lg)] border border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] text-center">
       <AlertCircle className="h-8 w-8 text-[color:var(--explorer-rust)]" />
       <p className="max-w-md text-sm text-[color:var(--explorer-muted)]">{label}</p>
       {action}

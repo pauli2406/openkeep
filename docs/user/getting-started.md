@@ -78,6 +78,17 @@ button on the right of the top bar.
 
 Settings covers administrative functions such as API tokens, taxonomies, archive import/export, provider availability, and system health.
 
+## Light and Dark Appearance
+
+OpenKeep follows your operating system's light or dark setting by default.
+
+To override it, select the sun or moon icon on the right of the top bar. Your
+choice is remembered in that browser and applies the next time you open
+OpenKeep; until you make a choice, the app keeps following the system setting.
+
+Document previews stay on a light page in both appearances, so a scan always
+looks like the scan.
+
 ## Guide Map
 
 - Learn the day-to-day archive tasks in [Core Workflows](./core-workflows.md)
