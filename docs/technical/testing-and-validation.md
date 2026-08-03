@@ -84,8 +84,18 @@ Primary command:
 - `pnpm --filter @openkeep/web test:visual`
 - `pnpm --filter @openkeep/web test:visual:update` to re-bless intended changes
 
-Not part of `pnpm test`: it needs a Chromium binary, installed deliberately
-with `pnpm --filter @openkeep/web exec playwright install chromium`.
+Both run **inside the pinned Playwright container**, which is what CI uses.
+Text rasterisation depends on the font stack and freetype build: ten of the
+forty-four baselines differed between a developer machine and that container.
+Whichever machine generates the baselines decides where the suite passes, so
+the container decides — always. Docker is therefore required, and
+`test:visual:update` must never be run outside it.
+
+`test:visual:local` runs directly against a locally installed browser. It is
+faster for iterating on a screen, but its results do not correspond to the
+committed baselines and it must not be used to update them.
+
+Not part of `pnpm test`: it needs Docker, and a browser image to pull.
 
 It screenshots each redesigned screen in **both themes at 1280 and 1024** — the
 same matrix the redesign was reviewed against by hand — and compares against
@@ -144,14 +154,45 @@ That document is currently the main bridge between automated validation and oper
 
 The repo still has room to improve in areas such as:
 
-- **no CI workflow runs lint, tests or the build.** `.github/workflows` covers
-  image builds and docs search reindexing only, so every suite described here
-  is run by hand
 - broader end-to-end archive workflow automation
 - retrieval quality benchmarking as a first-class operator workflow
 - richer regression coverage for cross-provider behavior in production-like environments
 - the visual suite covers screens at rest; interactive states (menus open,
   rows selected, validation errors) are not captured
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`.
+Six jobs, in parallel:
+
+| job | what it runs | notes |
+| --- | --- | --- |
+| Typecheck | `pnpm lint` | `tsc --noEmit` across every package |
+| Unit and smoke tests | `pnpm test` | api + web |
+| Build | `pnpm build` | every package |
+| API integration | `pnpm test:api:integration` | Testcontainers starts Postgres and MinIO |
+| Visual regression | `pnpm --filter @openkeep/web test:visual` | runs in the pinned Playwright image |
+| Secret scan | gitleaks | working tree on PRs, full history on `main` |
+
+Typecheck, tests and build are separate jobs rather than one chain, so a type
+error and a failing test surface in the same run instead of one masking the
+other. They share a Turbo cache, so the overlap costs little.
+
+A final `CI` job depends on all six and fails if any did not succeed. Protect
+`main` with that single check; adding a job later then needs no change to
+branch protection.
+
+### Notes
+
+- The secret scan splits by event. Pull requests scan the working tree (~30s);
+  pushes to `main` scan the full history (~3m30s), which is the backstop for a
+  secret that reached a branch and was removed again. Running history on every
+  PR would spend six times the minutes re-scanning what `main` already cleared.
+- On a failed visual job the expected/actual/diff images are uploaded as a
+  `visual-diffs` artifact — reviewing a visual regression from a log line alone
+  is not practical.
+- Node is pinned to a single major and pnpm comes from `packageManager`, so
+  neither can change CI's behaviour without a commit that says so.
 
 ## Recommended Contributor Workflow
 
