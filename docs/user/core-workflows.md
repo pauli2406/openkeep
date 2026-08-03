@@ -14,6 +14,15 @@ Select `Import` in the top bar and either:
 - drag files into the drop zone
 - click the drop zone to choose files manually
 
+Each file gets its own row in the queue below the drop zone, moving through
+`Upload → OCR → Extract → Embed` independently — the active stage carries the
+accent colour. Failures turn red with a `Retry`; duplicates already in the
+archive are marked amber. A finished file links straight to its document, or
+shows a `Review` badge when the extraction needs confirming.
+
+When a watch folder is configured, its path and last scan appear under the
+drop zone.
+
 For each queued file you can optionally set a title override before uploading.
 
 After upload, OpenKeep shows whether each file:

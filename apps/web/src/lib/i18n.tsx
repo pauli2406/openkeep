@@ -218,6 +218,32 @@ type TranslationKey =
   | "settings.readinessChecks"
   | "settings.ok"
   | "settings.fail"
+  | "import.title"
+  | "import.subtitle"
+  | "import.dropHere"
+  | "import.browse"
+  | "import.watchNote"
+  | "import.watchNoteTail"
+  | "import.queue"
+  | "import.processing"
+  | "import.done"
+  | "import.duplicate"
+  | "import.failed"
+  | "import.embeddingFailed"
+  | "import.review"
+  | "import.retry"
+  | "import.clearFinished"
+  | "import.cancelAll"
+  | "import.stageUpload"
+  | "import.stageOcr"
+  | "import.stageExtract"
+  | "import.stageEmbed"
+  | "import.filedAs"
+  | "import.alreadyInArchive"
+  | "import.pages"
+  | "import.page"
+  | "import.lastScan"
+  | "import.pickedUpToday"
   | "upload.remove"
   | "upload.titleOverrideOptional"
   | "upload.autoDetectedFromContent"
@@ -732,6 +758,32 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.readinessChecks": "Readiness Checks",
     "settings.ok": "ok",
     "settings.fail": "fail",
+    "import.title": "Import documents",
+    "import.subtitle": "Files are OCR'd and classified locally. PDF, JPEG, PNG, TIFF, HEIC.",
+    "import.dropHere": "Drop files here or",
+    "import.browse": "browse",
+    "import.watchNote": "The watch folder",
+    "import.watchNoteTail": "imports automatically.",
+    "import.queue": "Queue",
+    "import.processing": "Processing",
+    "import.done": "Done",
+    "import.duplicate": "Duplicate",
+    "import.failed": "Failed",
+    "import.embeddingFailed": "Indexing for search failed",
+    "import.review": "Review",
+    "import.retry": "Retry",
+    "import.clearFinished": "Clear finished",
+    "import.cancelAll": "Cancel all",
+    "import.stageUpload": "Upload",
+    "import.stageOcr": "OCR",
+    "import.stageExtract": "Extract",
+    "import.stageEmbed": "Embed",
+    "import.filedAs": "Filed as",
+    "import.alreadyInArchive": "Already in archive",
+    "import.pages": "pages",
+    "import.page": "page",
+    "import.lastScan": "last scan",
+    "import.pickedUpToday": "picked up today",
     "upload.remove": "Remove",
     "upload.titleOverrideOptional": "Title override (optional)",
     "upload.autoDetectedFromContent": "Auto-detected from content",
@@ -1245,6 +1297,32 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.readinessChecks": "Readiness-Prufungen",
     "settings.ok": "ok",
     "settings.fail": "fehler",
+    "import.title": "Dokumente importieren",
+    "import.subtitle": "Dateien werden lokal per OCR erfasst und klassifiziert. PDF, JPEG, PNG, TIFF, HEIC.",
+    "import.dropHere": "Dateien hier ablegen oder",
+    "import.browse": "durchsuchen",
+    "import.watchNote": "Der Überwachungsordner",
+    "import.watchNoteTail": "importiert automatisch.",
+    "import.queue": "Warteschlange",
+    "import.processing": "Verarbeitung",
+    "import.done": "Fertig",
+    "import.duplicate": "Duplikat",
+    "import.failed": "Fehlgeschlagen",
+    "import.embeddingFailed": "Indexierung für die Suche fehlgeschlagen",
+    "import.review": "Prüfung",
+    "import.retry": "Erneut versuchen",
+    "import.clearFinished": "Fertige entfernen",
+    "import.cancelAll": "Alle abbrechen",
+    "import.stageUpload": "Upload",
+    "import.stageOcr": "OCR",
+    "import.stageExtract": "Extraktion",
+    "import.stageEmbed": "Embedding",
+    "import.filedAs": "Abgelegt als",
+    "import.alreadyInArchive": "Bereits im Archiv",
+    "import.pages": "Seiten",
+    "import.page": "Seite",
+    "import.lastScan": "letzter Scan",
+    "import.pickedUpToday": "heute übernommen",
     "upload.remove": "Entfernen",
     "upload.titleOverrideOptional": "Titeluberschreibung (optional)",
     "upload.autoDetectedFromContent": "Automatisch aus dem Inhalt erkannt",
