@@ -107,13 +107,13 @@ Explorer surface with three views:
 
 - list
 - timeline
-- galaxy
+- groups
 
 This route is backed by shared explorer components and filter state.
 
 ### `/explore`
 
-Standalone semantic galaxy route using the same explorer surface in forced galaxy mode.
+Standalone semantic groups route using the same explorer surface in forced groups mode.
 
 ### `/correspondents/$slug`
 
@@ -175,13 +175,13 @@ It is responsible for:
 - search query input
 - selection mode for list view
 - bulk delete and bulk reprocess flows
-- switching between list, timeline, and galaxy rendering
+- switching between list, timeline, and groups rendering
 
 Supporting components include:
 
 - `filter-sidebar.tsx`
 - `timeline-view.tsx`
-- `galaxy-canvas.tsx`
+- `groups-view.tsx`
 - shared explorer display primitives in `shared.tsx`
 
 ## Document Detail Interaction Model

@@ -69,7 +69,7 @@ Yes. The Documents area supports:
 
 - list view
 - timeline view
-- galaxy view
+- groups view
 
 ## What is the intelligence tab for?
 

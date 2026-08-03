@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Search,
   Sidebar,
-  Sparkles,
+  LayoutGrid,
   Rows3,
   CalendarRange,
   Loader2,
@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import type { ExplorerSearch, ExplorerView } from "@/lib/explorer";
 import {
-  fetchDocumentsProjection,
   fetchDocumentsTimeline,
   fetchExplorerFacets,
   fetchFilteredDocuments,
@@ -32,7 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { FilterSidebar } from "./filter-sidebar";
-import { GalaxyCanvas } from "./galaxy-canvas";
+import { GroupsView } from "./groups-view";
 import {
   ErrorBlock,
   ExplorerSectionHeader,
@@ -59,7 +58,7 @@ const VIEW_OPTIONS: Array<{
 }> = [
   { value: "list", label: "List", icon: Rows3 },
   { value: "timeline", label: "Timeline", icon: CalendarRange },
-  { value: "galaxy", label: "Galaxy", icon: Sparkles },
+  { value: "groups", label: "Groups", icon: LayoutGrid },
 ];
 
 export function ExplorerSurface({
@@ -125,11 +124,6 @@ export function ExplorerSurface({
     queryFn: () => fetchDocumentsTimeline(search),
     enabled: activeView === "timeline",
   });
-  const projectionQuery = useQuery({
-    queryKey: ["documents", "projection", search],
-    queryFn: () => fetchDocumentsProjection(search),
-    enabled: activeView === "galaxy",
-  });
   const visibleDocumentIds = useMemo(
     () => (documentsQuery.data?.items ?? []).map((document) => document.id),
     [documentsQuery.data?.items],
@@ -157,7 +151,6 @@ export function ExplorerSurface({
         queryClient.invalidateQueries({ queryKey: ["documents", "explorer"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "timeline"] }),
-        queryClient.invalidateQueries({ queryKey: ["documents", "projection"] }),
       ]);
     },
   });
@@ -190,7 +183,6 @@ export function ExplorerSurface({
         queryClient.invalidateQueries({ queryKey: ["documents", "explorer"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
         queryClient.invalidateQueries({ queryKey: ["documents", "timeline"] }),
-        queryClient.invalidateQueries({ queryKey: ["documents", "projection"] }),
       ]);
     },
   });
@@ -390,28 +382,33 @@ export function ExplorerSurface({
             )
           ) : null}
 
-          {activeView === "galaxy" ? (
-            projectionQuery.isLoading ? (
-              <LoadingBlock label="Computing semantic projection" />
-            ) : projectionQuery.isError || !projectionQuery.data ? (
-              <ErrorBlock
-                label="Failed to compute the semantic galaxy view."
-                action={
-                  <Button variant="outline" onClick={() => projectionQuery.refetch()}>
-                    Retry
-                  </Button>
-                }
-              />
-            ) : (
-              <GalaxyCanvas
-                projection={projectionQuery.data}
-                colorBy={search.colorBy ?? "correspondent"}
-                onColorByChange={(value) =>
-                  onSearchChange(nextExplorerSearch(search, { colorBy: value }))
-                }
-                onOpenDocument={openDocument}
-              />
-            )
+          {activeView === "groups" ? (
+            <GroupsView
+              facets={facetsQuery.data}
+              selectedCorrespondentIds={search.correspondentIds ?? []}
+              hasFilters={Boolean(
+                search.query ||
+                  search.year ||
+                  search.statuses?.length ||
+                  search.documentTypeIds?.length ||
+                  search.tags?.length ||
+                  search.dateFrom ||
+                  search.dateTo ||
+                  search.amountMin != null ||
+                  search.amountMax != null,
+              )}
+              onSelectCorrespondent={(correspondentId) =>
+                // A group click opens the list for that correspondent, so it
+                // replaces the correspondent filter rather than adding to it.
+                onSearchChange(
+                  nextExplorerSearch(search, {
+                    correspondentIds: [correspondentId],
+                    view: "list",
+                    page: undefined,
+                  }),
+                )
+              }
+            />
           ) : null}
         </div>
       </div>
