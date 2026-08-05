@@ -27,6 +27,7 @@ import { createThemedStyles, useColors } from "../theme";
 import { text } from "../typography";
 import {
   formatCurrency,
+  formatShortDate,
   responseToMessage,
   titleForDocument,
   type ArchiveDocument,
@@ -55,15 +56,7 @@ function dueLabel(item: DeadlineItem, t: Translate) {
   if (item.daysUntilDue === 1) {
     return t("today.dueTomorrow");
   }
-  return shortDate(item.dueDate);
-}
-
-function shortDate(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.`;
+  return formatShortDate(item.dueDate);
 }
 
 /** `06:15` today, `gestern` yesterday, `24.02.` before that. */
@@ -89,7 +82,7 @@ function arrivedLabel(iso: string | null | undefined, t: Translate) {
     return t("today.yesterday");
   }
 
-  return shortDate(iso);
+  return formatShortDate(iso);
 }
 
 function documentMeta(document: ArchiveDocument, t: Translate) {

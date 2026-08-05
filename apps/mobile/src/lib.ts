@@ -643,6 +643,18 @@ export function formatDate(value: string | null | undefined) {
   }
 }
 
+/** `18.03.` — the trailing date on a dense row. */
+export function formatShortDate(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.`;
+}
+
 export function formatCurrency(amount: number | null | undefined, currency = "EUR") {
   if (amount === null || amount === undefined || Number.isNaN(amount)) {
     return "-";

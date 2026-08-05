@@ -224,6 +224,7 @@ export function Row({
   valueTone,
   leading,
   trailing,
+  accessory,
   chevron,
   onPress,
   accessibilityActions,
@@ -245,6 +246,8 @@ export function Row({
   leading?: ReactNode;
   /** Replaces the value column entirely. */
   trailing?: ReactNode;
+  /** Sits after the value column — a status pill, in the documents list. */
+  accessory?: ReactNode;
   chevron?: boolean;
   onPress?: () => void;
   /**
@@ -313,6 +316,7 @@ export function Row({
             ) : null}
           </View>
         ) : null)}
+      {accessory}
       {chevron ? (
         <MaterialCommunityIcons name="chevron-right" size={18} color={colors.faint} />
       ) : null}
