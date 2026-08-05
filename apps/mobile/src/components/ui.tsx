@@ -36,6 +36,7 @@ export function Screen({
   right,
   leading,
   onBack,
+  backIcon = "chevron-left",
   notice,
   contentContainerStyle,
   includeTopSafeArea = true,
@@ -55,6 +56,8 @@ export function Screen({
    * screen would be a dead end.
    */
   onBack?: () => void;
+  /** `close` for a sheet-like screen such as the import draft. */
+  backIcon?: "chevron-left" | "close";
   /** A full-bleed strip between the bar and the body — see `Notice`. */
   notice?: ReactNode;
   contentContainerStyle?: ViewStyle;
@@ -91,7 +94,11 @@ export function Screen({
             hitSlop={12}
             style={({ pressed }) => [styles.backButton, pressed ? styles.backButtonPressed : null]}
           >
-            <MaterialCommunityIcons name="chevron-left" size={22} color={colors.accent} />
+            <MaterialCommunityIcons
+              name={backIcon}
+              size={22}
+              color={backIcon === "close" ? colors.ink : colors.accent}
+            />
           </Pressable>
         ) : null}
         {leading}
@@ -245,6 +252,7 @@ export function Row({
   onAccessibilityAction,
   minHeight,
   titleNumberOfLines = 1,
+  metaMono = false,
   tone = "default",
   pulse = false,
 }: {
@@ -273,6 +281,8 @@ export function Row({
   /** 56 is the default; the design uses 50 for settings and 66 for Today. */
   minHeight?: number;
   titleNumberOfLines?: number;
+  /** The meta line is a size or a count, so set it in mono. */
+  metaMono?: boolean;
   /** `bad` tints the row for a failed document. */
   tone?: "default" | "bad";
   /** A document still being processed breathes, so it reads as in flight. */
@@ -310,7 +320,7 @@ export function Row({
           {title}
         </Text>
         {meta ? (
-          <Text style={styles.rowMeta} numberOfLines={1}>
+          <Text style={[styles.rowMeta, metaMono ? styles.rowMetaMono : null]} numberOfLines={1}>
             {meta}
           </Text>
         ) : null}
@@ -748,6 +758,10 @@ const useStyles = createThemedStyles((c) => ({
     ...text.meta,
     marginTop: 3,
     color: c.dim,
+  },
+  rowMetaMono: {
+    ...text.numericMeta,
+    marginTop: 3,
   },
   rowValueWrap: {
     // Shrinkable and capped, so a long value truncates instead of squeezing the
