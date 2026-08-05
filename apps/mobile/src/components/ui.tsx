@@ -1,72 +1,130 @@
 import type { ReactNode } from "react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useScrollToTop } from "@react-navigation/native";
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, DENSITY_SCALE, radii, useAppearance, useColors } from "../theme";
+import { text } from "../typography";
 
+/**
+ * A screen is an app bar plus a body. The bar is 46pt with the title on the
+ * left and actions on the right; the giant title block is gone.
+ *
+ * `padded` is for screens whose body is cards or a form. Row lists run
+ * edge to edge and pass `padded={false}`.
+ */
 export function Screen({
   title,
-  subtitle,
+  titleMeta,
   children,
   scroll = true,
   right,
+  leading,
+  onBack,
+  backIcon = "chevron-left",
+  notice,
   contentContainerStyle,
-  headerVariant = "default",
   includeTopSafeArea = true,
-  showEyebrow = false,
+  padded = true,
+  footer,
 }: {
   title: string;
-  subtitle?: string;
+  /** A mono sub-line under the bar title — Chat names the scope there. */
+  titleMeta?: string;
   children: ReactNode;
   scroll?: boolean;
   right?: ReactNode;
+  /** Sits left of the title — Today puts the logo mark there. */
+  leading?: ReactNode;
+  /**
+   * A stack screen carries its back affordance in this bar. Every route that
+   * renders a `Screen` has its native header switched off, so without this the
+   * screen would be a dead end.
+   */
+  onBack?: () => void;
+  /** `close` for a sheet-like screen such as the import draft. */
+  backIcon?: "chevron-left" | "close";
+  /** A full-bleed strip between the bar and the body — see `Notice`. */
+  notice?: ReactNode;
   contentContainerStyle?: ViewStyle;
-  headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
-  showEyebrow?: boolean;
+  padded?: boolean;
+  /**
+   * Pinned below the body, outside the scroll area — an action bar that has to
+   * stay reachable however far down the list the user is.
+   */
+  footer?: ReactNode;
 }) {
-  const { t } = useI18n();
+  const styles = useStyles();
+  const colors = useColors();
   const scrollRef = useRef<ScrollView>(null);
 
   useScrollToTop(scrollRef);
 
-  const compact = headerVariant === "compact";
+  // A non-scrolling screen pins things to the bottom, so its body has to fill
+  // the space rather than size to its children.
   const body = (
-    <View style={[styles.content, contentContainerStyle]}>
-      <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
-        <View style={styles.headerTextWrap}>
-          {showEyebrow ? (
-            <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>
-              {t("app.brandMobile")}
-            </Text>
-          ) : null}
-          <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
-          {subtitle ? <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>{subtitle}</Text> : null}
-        </View>
-        {right}
-      </View>
+    <View
+      style={[
+        padded ? styles.contentPadded : styles.content,
+        scroll ? null : styles.contentFlex,
+        contentContainerStyle,
+      ]}
+    >
       {children}
     </View>
   );
 
   return (
     <SafeAreaView edges={includeTopSafeArea ? ["top"] : []} style={styles.safeArea}>
-      <View pointerEvents="none" style={styles.backgroundGlowTop} />
-      <View pointerEvents="none" style={styles.backgroundGlowBottom} />
+      <View style={[styles.appBar, onBack ? styles.appBarWithBack : null]}>
+        {onBack ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onBack}
+            hitSlop={12}
+            style={({ pressed }) => [styles.backButton, pressed ? styles.backButtonPressed : null]}
+          >
+            <MaterialCommunityIcons
+              name={backIcon}
+              size={22}
+              color={backIcon === "close" ? colors.ink : colors.accent}
+            />
+          </Pressable>
+        ) : null}
+        {leading}
+        {titleMeta ? (
+          <View style={styles.appBarTitleWrap}>
+            <Text style={styles.appBarTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.appBarTitleMeta} numberOfLines={1}>
+              {titleMeta}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.appBarTitle} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
+        {right ? <View style={styles.appBarActions}>{right}</View> : null}
+      </View>
+      {notice}
       <KeyboardAvoidingView
         style={styles.flexFill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -84,62 +142,324 @@ export function Screen({
         ) : (
           body
         )}
+        {footer}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
-  return <View style={[styles.card, style]}>{children}</View>;
-}
+export type NoticeTone = "neutral" | "warn" | "bad";
 
-export function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+/**
+ * A one-line strip on the `bar` surface. Offline, read-only and queued all
+ * announce themselves here rather than as a failed request. (#120)
+ */
+export function Notice({
+  label,
+  tone = "neutral",
+  action,
+  onAction,
+}: {
+  label: string;
+  tone?: NoticeTone;
+  action?: string;
+  onAction?: () => void;
+}) {
+  const styles = useStyles();
+  const boxMap: Record<NoticeTone, ViewStyle> = {
+    neutral: styles.noticeNeutral,
+    warn: styles.noticeWarn,
+    bad: styles.noticeBad,
+  };
+  const dotMap: Record<NoticeTone, ViewStyle> = {
+    neutral: styles.dotFaint,
+    warn: styles.dotAmber,
+    bad: styles.dotRed,
+  };
+  const textMap: Record<NoticeTone, TextStyle> = {
+    neutral: styles.noticeTextNeutral,
+    warn: styles.noticeTextWarn,
+    bad: styles.noticeTextBad,
+  };
+
   return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+    <View style={[styles.notice, boxMap[tone]]}>
+      <View style={[styles.noticeDot, dotMap[tone]]} />
+      <Text style={[styles.noticeText, textMap[tone]]} numberOfLines={2}>
+        {label}
+      </Text>
+      {action && onAction ? (
+        <Pressable onPress={onAction} hitSlop={10}>
+          <Text style={styles.noticeAction}>{action}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
+}
+
+/** A bordered surface. Borders, not shadows. */
+export function Panel({
+  children,
+  style,
+  padded = false,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  padded?: boolean;
+}) {
+  const styles = useStyles();
+  return <View style={[styles.panel, padded ? styles.panelPadded : null, style]}>{children}</View>;
+}
+
+/**
+ * The strip above a group of rows: a mono uppercase label on the bar surface,
+ * with an optional count on the right.
+ */
+export function SectionHeader({
+  label,
+  count,
+  right,
+}: {
+  label: string;
+  count?: string | number;
+  right?: ReactNode;
+}) {
+  const styles = useStyles();
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {count !== undefined ? <Text style={styles.sectionHeaderCount}>{count}</Text> : null}
+      {right}
+    </View>
+  );
+}
+
+export type RowDot = "accent" | "amber" | "red" | "green" | "faint";
+
+/**
+ * The workhorse. Every list in the app is a stack of these: an optional
+ * leading dot, a title with an optional meta line, and a trailing value or
+ * chevron.
+ */
+export function Row({
+  title,
+  meta,
+  dot,
+  value,
+  valueMeta,
+  valueTone,
+  leading,
+  trailing,
+  accessory,
+  chevron,
+  onPress,
+  accessibilityActions,
+  onAccessibilityAction,
+  onLongPress,
+  selected = false,
+  minHeight,
+  titleNumberOfLines = 1,
+  metaMono = false,
+  tone = "default",
+  pulse = false,
+}: {
+  title: string;
+  meta?: string;
+  dot?: RowDot;
+  /** Trailing amount or value. Mono, because it is always a number. */
+  value?: string;
+  /** A second, smaller trailing line: a date, a count. */
+  valueMeta?: string;
+  valueTone?: "ink" | "amber" | "red" | "green";
+  /** Replaces the dot with an icon or avatar. */
+  leading?: ReactNode;
+  /** Replaces the value column entirely. */
+  trailing?: ReactNode;
+  /** Sits after the value column — a status pill, in the documents list. */
+  accessory?: ReactNode;
+  chevron?: boolean;
+  onPress?: () => void;
+  /**
+   * A gesture-free route to a swipe action, for VoiceOver / TalkBack / switch
+   * control. Passed straight through to the pressable.
+   */
+  accessibilityActions?: Array<{ name: string; label?: string }>;
+  onAccessibilityAction?: (event: { nativeEvent: { actionName: string } }) => void;
+  /** Enters selection mode in the documents list. */
+  onLongPress?: () => void;
+  selected?: boolean;
+  /** 56 is the default; the design uses 50 for settings and 66 for Today. */
+  minHeight?: number;
+  titleNumberOfLines?: number;
+  /** The meta line is a size or a count, so set it in mono. */
+  metaMono?: boolean;
+  /** `bad` tints the row for a failed document. */
+  tone?: "default" | "bad";
+  /** A document still being processed breathes, so it reads as in flight. */
+  pulse?: boolean;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+  const { density } = useAppearance();
+
+  const dotStyles: Record<RowDot, ViewStyle> = {
+    accent: styles.dotAccent,
+    amber: styles.dotAmber,
+    red: styles.dotRed,
+    green: styles.dotGreen,
+    faint: styles.dotFaint,
+  };
+  const valueTones: Record<"ink" | "amber" | "red" | "green", TextStyle> = {
+    ink: styles.rowValueInk,
+    amber: styles.rowValueAmber,
+    red: styles.rowValueRed,
+    green: styles.rowValueGreen,
+  };
+
+  const body = (
+    <>
+      {leading ??
+        (dot ? (
+          pulse ? (
+            <PulsingDot style={dotStyles[dot]} />
+          ) : (
+            <View style={[styles.dot, dotStyles[dot]]} />
+          )
+        ) : null)}
+      <View style={styles.rowTextWrap}>
+        <Text style={styles.rowTitle} numberOfLines={titleNumberOfLines}>
+          {title}
+        </Text>
+        {meta ? (
+          <Text style={[styles.rowMeta, metaMono ? styles.rowMetaMono : null]} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      {trailing ??
+        (value !== undefined || valueMeta !== undefined ? (
+          <View style={styles.rowValueWrap}>
+            {value !== undefined ? (
+              <Text style={[styles.rowValue, valueTones[valueTone ?? "ink"]]} numberOfLines={1}>
+                {value}
+              </Text>
+            ) : null}
+            {valueMeta !== undefined ? (
+              <Text style={styles.rowValueMeta} numberOfLines={1}>
+                {valueMeta}
+              </Text>
+            ) : null}
+          </View>
+        ) : null)}
+      {accessory}
+      {chevron ? (
+        <MaterialCommunityIcons name="chevron-right" size={18} color={colors.faint} />
+      ) : null}
+    </>
+  );
+
+  // Compact tightens the list but never past the 44pt tap-target floor.
+  const scaled = Math.round((minHeight ?? 56) * DENSITY_SCALE[density]);
+  const sizing = { minHeight: onPress ? Math.max(44, scaled) : scaled };
+  const tinted = selected ? styles.rowSelected : tone === "bad" ? styles.rowBad : null;
+
+  if (!onPress && !onLongPress) {
+    return <View style={[styles.row, sizing, tinted]}>{body}</View>;
+  }
+
+  return (
+    <Pressable
+      // Without a role a screen reader reads the row as text and gives no hint
+      // that it can be opened.
+      accessibilityRole="button"
+      onPress={onPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      onLongPress={onLongPress}
+      delayLongPress={350}
+      style={({ pressed }) => [styles.row, sizing, tinted, pressed ? styles.rowPressed : null]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/** The dot on a row whose document is still being processed. */
+export function PulsingDot({ style }: { style?: StyleProp<ViewStyle> }) {
+  const styles = useStyles();
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return <Animated.View style={[styles.dot, style, { opacity }]} />;
 }
 
 export function Button({
   label,
   onPress,
   variant = "primary",
+  size = "md",
   disabled,
   loading,
 }: {
   label: string;
   onPress?: () => void;
   variant?: "primary" | "secondary" | "danger";
+  size?: "md" | "sm";
   disabled?: boolean;
   loading?: boolean;
 }) {
-  const styleMap = {
+  const styles = useStyles();
+  const colors = useColors();
+
+  const boxMap = {
     primary: styles.primaryButton,
     secondary: styles.secondaryButton,
     danger: styles.dangerButton,
   };
-
   const textMap = {
     primary: styles.primaryButtonText,
     secondary: styles.secondaryButtonText,
     danger: styles.dangerButtonText,
   };
+  // Each spinner matches its label, so a loading button stays legible.
+  const spinnerMap = {
+    primary: colors.accentFillInk,
+    secondary: colors.ink,
+    danger: colors.red,
+  };
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
+      // A small button is 38pt tall because the design says so, which is under
+      // the 44pt tap target. The slop makes the touch area 46 without changing
+      // what is drawn.
+      hitSlop={size === "sm" ? { top: 4, bottom: 4, left: 0, right: 0 } : undefined}
       style={({ pressed }) => [
         styles.button,
-        styleMap[variant],
+        size === "sm" ? styles.buttonSm : null,
+        boxMap[variant],
         (disabled || loading) && styles.buttonDisabled,
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
     >
-      {loading ? <ActivityIndicator color={variant === "secondary" ? colors.primary : "#fff"} /> : null}
-      <Text style={[styles.buttonText, textMap[variant], loading ? styles.loadingButtonText : null]}>{label}</Text>
+      {loading ? <ActivityIndicator size="small" color={spinnerMap[variant]} /> : null}
+      <Text style={[styles.buttonText, textMap[variant]]}>{label}</Text>
     </Pressable>
   );
 }
@@ -163,6 +483,8 @@ export function Field({
   keyboardType?: "default" | "email-address" | "numeric" | "url";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.fieldWrap}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -170,7 +492,7 @@ export function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={colors.dim}
         secureTextEntry={secureTextEntry}
         multiline={multiline}
         keyboardType={keyboardType}
@@ -181,28 +503,27 @@ export function Field({
   );
 }
 
-export function Pill({
-  label,
-  tone = "default",
-}: {
-  label: string;
-  tone?: "default" | "success" | "warning" | "danger";
-}) {
-  const bgMap = {
-    default: styles.pillDefault,
-    success: styles.pillSuccess,
-    warning: styles.pillWarning,
-    danger: styles.pillDanger,
+export type PillTone = "soft" | "warn" | "bad" | "ok" | "outline";
+
+export function Pill({ label, tone = "outline" }: { label: string; tone?: PillTone }) {
+  const styles = useStyles();
+  const boxMap: Record<PillTone, ViewStyle> = {
+    soft: styles.pillSoft,
+    warn: styles.pillWarn,
+    bad: styles.pillBad,
+    ok: styles.pillOk,
+    outline: styles.pillOutline,
   };
-  const textMap = {
-    default: styles.pillTextDefault,
-    success: styles.pillTextSuccess,
-    warning: styles.pillTextWarning,
-    danger: styles.pillTextDanger,
+  const textMap: Record<PillTone, TextStyle> = {
+    soft: styles.pillTextSoft,
+    warn: styles.pillTextWarn,
+    bad: styles.pillTextBad,
+    ok: styles.pillTextOk,
+    outline: styles.pillTextOutline,
   };
 
   return (
-    <View style={[styles.pill, bgMap[tone]]}>
+    <View style={[styles.pill, boxMap[tone]]}>
       <Text style={[styles.pillText, textMap[tone]]}>{label}</Text>
     </View>
   );
@@ -211,57 +532,69 @@ export function Pill({
 export function EmptyState({
   title,
   body,
+  action,
+  onAction,
 }: {
   title: string;
-  body: string;
+  body?: string;
+  /** A way back — "show all" after a filter turned up nothing. */
+  action?: string;
+  onAction?: () => void;
 }) {
+  const styles = useStyles();
   return (
-    <Card style={styles.emptyCard}>
+    <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
-    </Card>
+      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
+      {action && onAction ? (
+        <Pressable onPress={onAction} hitSlop={12} style={styles.emptyAction}>
+          <Text style={styles.emptyActionText}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
 export function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const styles = useStyles();
   const { t } = useI18n();
   return (
-    <Card>
-      <Text style={styles.errorTitle}>
-        {t("common.attentionTitle")}
-      </Text>
+    <Panel padded>
+      <Text style={styles.errorTitle}>{t("common.attentionTitle")}</Text>
       <Text style={styles.errorBody}>{message}</Text>
       {onRetry ? (
-        <Button
-          label={t("common.retry")}
-          variant="secondary"
-          onPress={onRetry}
-        />
+        <Button label={t("common.retry")} variant="secondary" size="sm" onPress={onRetry} />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
+/** A number and its label. Borderless — the strip around it draws the rules. */
 export function Metric({
   label,
   value,
+  tone = "ink",
   onPress,
 }: {
   label: string;
   value: string | number;
+  tone?: "ink" | "amber" | "red" | "green";
   onPress?: () => void;
 }) {
+  const styles = useStyles();
+  const toneMap: Record<"ink" | "amber" | "red" | "green", TextStyle> = {
+    ink: styles.metricValueInk,
+    amber: styles.metricValueAmber,
+    red: styles.metricValueRed,
+    green: styles.metricValueGreen,
+  };
+
   const content = (
     <>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <View style={styles.metricBottomRow}>
-        <Text style={styles.metricValue}>{value}</Text>
-        {onPress ? (
-          <View style={styles.metricChevron}>
-            <Text style={styles.metricChevronText}>{"\u203a"}</Text>
-          </View>
-        ) : null}
-      </View>
+      <Text style={[styles.metricValue, toneMap[tone]]}>{value}</Text>
+      <Text style={styles.metricLabel} numberOfLines={1}>
+        {label}
+      </Text>
     </>
   );
 
@@ -269,298 +602,408 @@ export function Metric({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.metricCard, pressed ? styles.metricCardPressed : null]}
+        style={({ pressed }) => [styles.metric, pressed ? styles.metricPressed : null]}
       >
         {content}
       </Pressable>
     );
   }
 
-  return <View style={styles.metricCard}>{content}</View>;
+  return <View style={styles.metric}>{content}</View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: c.app,
   },
   flexFill: {
     flex: 1,
   },
-  backgroundGlowTop: {
-    position: "absolute",
-    top: -56,
-    right: -28,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: colors.primarySoft,
-    opacity: 0.35,
+  appBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    height: 46,
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
   },
-  backgroundGlowBottom: {
-    position: "absolute",
-    bottom: 84,
-    left: -72,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: colors.surfaceMuted,
-    opacity: 0.55,
+  appBarTitle: {
+    ...text.barTitle,
+    flex: 1,
+    color: c.ink,
+  },
+  appBarWithBack: {
+    paddingLeft: 6,
+    paddingRight: 12,
+    gap: 9,
+  },
+  backButton: {
+    padding: 4,
+  },
+  backButtonPressed: {
+    opacity: 0.7,
+  },
+  appBarTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  appBarTitleMeta: {
+    ...text.numeric,
+    fontSize: 10.5,
+    lineHeight: 14,
+    marginTop: 1,
+    color: c.faint,
+  },
+  appBarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
   },
   scrollContent: {
     flexGrow: 1,
   },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 0,
-    gap: 20,
-  },
-  headerRow: {
+  notice: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 0,
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
   },
-  headerRowCompact: {
-    gap: 10,
+  noticeNeutral: {
+    backgroundColor: c.bar,
   },
-  headerTextWrap: {
+  noticeWarn: {
+    backgroundColor: c.amberSoft,
+  },
+  noticeBad: {
+    backgroundColor: c.redSoft,
+  },
+  noticeDot: {
+    width: 6,
+    height: 6,
+    flexShrink: 0,
+    borderRadius: radii.pill,
+  },
+  noticeText: {
+    ...text.small,
     flex: 1,
   },
-  eyebrow: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
+  noticeTextNeutral: {
+    color: c.dim,
   },
-  eyebrowCompact: {
-    fontSize: 10,
-    letterSpacing: 1.2,
-    marginBottom: 2,
-  } satisfies TextStyle,
-  title: {
-    fontSize: 32,
-    lineHeight: 37,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.8,
+  noticeTextWarn: {
+    color: c.amber,
   },
-  titleCompact: {
-    fontSize: 25,
-    lineHeight: 29,
-    letterSpacing: -0.5,
-  } satisfies TextStyle,
-  subtitle: {
-    marginTop: 4,
-    fontSize: 15,
-    lineHeight: 24,
-    color: colors.muted,
-    maxWidth: 640,
+  noticeTextBad: {
+    color: c.red,
   },
-  subtitleCompact: {
-    marginTop: 3,
-    fontSize: 14,
-    lineHeight: 21,
-  } satisfies TextStyle,
-  sectionHeader: {
-    gap: 5,
+  noticeAction: {
+    ...text.smallStrong,
+    color: c.accent,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.3,
+  content: {
+    paddingBottom: 16,
   },
-  sectionHint: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
+  contentFlex: {
+    flex: 1,
   },
-  card: {
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+  contentPadded: {
+    padding: 16,
     gap: 16,
-    ...shadow,
+  },
+  panel: {
+    backgroundColor: c.panel,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  panelPadded: {
+    padding: 14,
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
+  },
+  sectionHeaderLabel: {
+    ...text.sectionLabel,
+    flex: 1,
+    color: c.dim,
+  },
+  sectionHeaderCount: {
+    ...text.numeric,
+    color: c.faint,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSoft,
+  },
+  rowPressed: {
+    backgroundColor: c.raised,
+  },
+  rowBad: {
+    backgroundColor: c.redSoft,
+  },
+  rowSelected: {
+    backgroundColor: c.accentSoft,
+  },
+  rowTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    ...text.rowTitle,
+    color: c.ink,
+  },
+  rowMeta: {
+    ...text.meta,
+    marginTop: 3,
+    color: c.dim,
+  },
+  rowMetaMono: {
+    ...text.numericMeta,
+    marginTop: 3,
+  },
+  rowValueWrap: {
+    // Shrinkable and capped, so a long value truncates instead of squeezing the
+    // title off screen. A server URL is the case that found this.
+    flexShrink: 1,
+    maxWidth: "55%",
+    alignItems: "flex-end",
+  },
+  rowValue: {
+    ...text.amount,
+  },
+  rowValueInk: {
+    color: c.ink,
+  },
+  rowValueAmber: {
+    color: c.amber,
+  },
+  rowValueRed: {
+    color: c.red,
+  },
+  rowValueGreen: {
+    color: c.green,
+  },
+  rowValueMeta: {
+    ...text.numeric,
+    marginTop: 3,
+    color: c.faint,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    flexShrink: 0,
+    borderRadius: radii.pill,
+  },
+  dotAccent: {
+    backgroundColor: c.accent,
+  },
+  dotAmber: {
+    backgroundColor: c.amber,
+  },
+  dotRed: {
+    backgroundColor: c.red,
+  },
+  dotGreen: {
+    backgroundColor: c.green,
+  },
+  dotFaint: {
+    backgroundColor: c.borderStrong,
   },
   button: {
-    minHeight: 54,
-    borderRadius: 18,
+    height: 46,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 18,
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  buttonSm: {
+    height: 38,
+    paddingHorizontal: 12,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   secondaryButton: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.panel,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   dangerButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: c.panel,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   buttonDisabled: {
-    opacity: 0.55,
+    opacity: 0.45,
   },
   buttonPressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.985 }],
+    opacity: 0.85,
   },
   buttonText: {
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.1,
+    ...text.bodyStrong,
   },
+  // Colour only — `buttonText` owns the family, and a family here would
+  // silently undo its weight.
   primaryButtonText: {
-    color: "#fff",
+    color: c.accentFillInk,
   },
   secondaryButtonText: {
-    color: colors.primary,
+    color: c.ink,
   },
   dangerButtonText: {
-    color: "#fff",
-  },
-  loadingButtonText: {
-    opacity: 0.9,
+    color: c.red,
   },
   fieldWrap: {
-    gap: 9,
+    gap: 6,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.textSoft,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
+    ...text.meta,
+    color: c.muted,
   },
   input: {
-    minHeight: 54,
-    borderRadius: 18,
+    ...text.body,
+    height: 44,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 17,
-    lineHeight: 22,
+    borderColor: c.borderStrong,
+    backgroundColor: c.panel,
+    color: c.ink,
+    paddingHorizontal: 12,
   },
   inputMultiline: {
-    minHeight: 96,
+    height: undefined,
+    minHeight: 88,
+    paddingTop: 10,
+    paddingBottom: 10,
     textAlignVertical: "top",
   },
   pill: {
     alignSelf: "flex-start",
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
   },
-  pillDefault: {
-    backgroundColor: colors.surfaceMuted,
+  pillSoft: {
+    backgroundColor: c.accentSoft,
   },
-  pillSuccess: {
-    backgroundColor: "#d9f3e2",
+  pillWarn: {
+    backgroundColor: c.amberSoft,
   },
-  pillWarning: {
-    backgroundColor: "#f6ead1",
+  pillBad: {
+    backgroundColor: c.redSoft,
   },
-  pillDanger: {
-    backgroundColor: "#f4d9d6",
+  pillOk: {
+    backgroundColor: c.greenSoft,
+  },
+  pillOutline: {
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   pillText: {
+    ...text.smallStrong,
     fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    lineHeight: 15,
   },
-  pillTextDefault: {
-    color: colors.text,
+  pillTextSoft: {
+    color: c.accentSoftInk,
   },
-  pillTextSuccess: {
-    color: colors.success,
+  pillTextWarn: {
+    color: c.amber,
   },
-  pillTextWarning: {
-    color: colors.warning,
+  pillTextBad: {
+    color: c.red,
   },
-  pillTextDanger: {
-    color: colors.danger,
+  pillTextOk: {
+    color: c.green,
   },
-  emptyCard: {
+  pillTextOutline: {
+    color: c.dim,
+  },
+  emptyState: {
     alignItems: "center",
-    paddingVertical: 32,
+    gap: 6,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.3,
+    ...text.barTitle,
+    color: c.ink,
+    textAlign: "center",
   },
   emptyBody: {
-    marginTop: 10,
+    ...text.meta,
+    color: c.dim,
     textAlign: "center",
-    color: colors.muted,
-    lineHeight: 22,
-    maxWidth: 320,
+    maxWidth: 300,
   },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.danger,
-  },
-  errorBody: {
-    color: colors.text,
-    lineHeight: 21,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: 140,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 20,
-    padding: 16,
-    gap: 8,
-  },
-  metricCardPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  metricLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  metricBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  metricValue: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.8,
-  },
-  metricChevron: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
+  emptyAction: {
+    minHeight: 44,
     justifyContent: "center",
   },
-  metricChevronText: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: "800",
-    marginTop: -2,
+  emptyActionText: {
+    ...text.metaStrong,
+    color: c.accent,
   },
-});
+  errorTitle: {
+    ...text.bodyStrong,
+    color: c.red,
+  },
+  errorBody: {
+    ...text.meta,
+    color: c.ink,
+  },
+  metric: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 2,
+  },
+  metricPressed: {
+    opacity: 0.7,
+  },
+  metricValue: {
+    ...text.statValue,
+  },
+  metricValueInk: {
+    color: c.ink,
+  },
+  metricValueAmber: {
+    color: c.amber,
+  },
+  metricValueRed: {
+    color: c.red,
+  },
+  metricValueGreen: {
+    color: c.green,
+  },
+  metricLabel: {
+    ...text.small,
+    fontSize: 10.5,
+    lineHeight: 14,
+    marginTop: 2,
+    color: c.faint,
+  },
+}));

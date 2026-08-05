@@ -1,17 +1,24 @@
 import "react-native-gesture-handler";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { NavigationContainer, DefaultTheme, useNavigation } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DarkTheme,
+  DefaultTheme,
+  useNavigation,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
 import { I18nProvider, useI18n } from "./src/i18n";
+import { SelectionModeProvider, useSelectionMode } from "./src/selection-mode";
 import { OfflineArchiveProvider, useOfflineArchive } from "./src/offline-archive";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { DocumentDetailScreen } from "./src/screens/DocumentDetailScreen";
@@ -19,39 +26,70 @@ import { DocumentsScreen } from "./src/screens/DocumentsScreen";
 import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { ScanScreen } from "./src/screens/ScanScreen";
+import { OfflineArchiveScreen } from "./src/screens/OfflineArchiveScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { colors, shadow } from "./src/theme";
+import { createThemedStyles, radii, ThemeProvider, useAppearance, useColors } from "./src/theme";
+import { fontAssets, fonts, text } from "./src/typography";
+import { useDashboardInsights } from "./src/hooks/useDashboardInsights";
 
 export type AppStackParamList = {
   Home: undefined;
-  DocumentDetail: { documentId: string; title?: string };
-  Review: undefined;
+  DocumentDetail: {
+    documentId: string;
+    title?: string;
+    /** A chat citation: open on the page it is on and highlight it. (#122) */
+    citation?: { page: number | null; quote: string };
+  };
   Scan: undefined;
+  Settings: undefined;
+  OfflineArchive: undefined;
   Correspondents: undefined;
   CorrespondentDossier: { slug: string; name: string };
 };
 
+/** Review is a tab, not a stack screen — it is the daily job. */
 export type HomeTabParamList = {
-  Dashboard: undefined;
+  Today: undefined;
   Documents: undefined;
-  Search: undefined;
-  Settings: undefined;
+  Review: undefined;
+  Chat: undefined;
 };
+
+const TAB_ICONS: Record<keyof HomeTabParamList, string> = {
+  Today: "view-list-outline",
+  Documents: "file-multiple-outline",
+  Review: "check-circle-outline",
+  Chat: "message-outline",
+};
+
+/** Without the bottom inset. */
+const TAB_BAR_HEIGHT = 54;
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator<AppStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
 function HomeTabs() {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Dashboard");
+  const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Today");
   const { t } = useI18n();
+  const insights = useDashboardInsights();
+  const { selecting } = useSelectionMode();
 
-  const showFab = activeTab !== "Settings";
+  const pendingReview = insights.data?.stats.pendingReview ?? 0;
+  const totalDocuments = insights.data?.stats.totalDocuments ?? 0;
+
+  // The FAB sits above the tab bar everywhere except Review, where confirm and
+  // skip are the two primary actions and nothing may compete with them, and
+  // Chat, where the composer occupies the same corner. A live selection takes
+  // that corner too — its action bar puts `Delete` exactly there.
+  const showFab = activeTab !== "Review" && activeTab !== "Chat" && !selecting;
 
   return (
     <View style={styles.flex}>
@@ -66,83 +104,92 @@ function HomeTabs() {
         }}
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.muted,
+          tabBarActiveTintColor: colors.accent,
+          tabBarInactiveTintColor: colors.faint,
           tabBarStyle: [
             styles.tabBar,
             {
-              height: 62 + insets.bottom,
-              paddingBottom: Math.max(insets.bottom, 10),
+              height: TAB_BAR_HEIGHT + insets.bottom,
+              paddingBottom: insets.bottom,
             },
           ],
           tabBarLabelStyle: styles.tabBarLabel,
-          tabBarIcon: ({ color, size }) => {
-            const iconMap: Record<keyof HomeTabParamList, string> = {
-              Dashboard: "view-dashboard-outline",
-              Documents: "file-document-outline",
-              Search: "text-box-search-outline",
-              Settings: "cog-outline",
-            };
-
-            return (
-              <MaterialCommunityIcons
-                name={iconMap[route.name] as never}
-                size={size}
-                color={color}
-              />
-            );
-          },
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons
+              name={TAB_ICONS[route.name] as never}
+              size={21}
+              color={color}
+            />
+          ),
         })}
       >
         <Tabs.Screen
-          name="Dashboard"
+          name="Today"
           component={DashboardScreen}
-          options={{ title: t("tabs.dashboard"), tabBarLabel: t("tabs.dashboard") }}
+          options={{ title: t("tabs.today"), tabBarLabel: t("tabs.today") }}
         />
         <Tabs.Screen
           name="Documents"
           component={DocumentsScreen}
-          options={{ title: t("tabs.documents"), tabBarLabel: t("tabs.documents") }}
+          options={{
+            title: t("tabs.documents"),
+            tabBarLabel: t("tabs.documents"),
+            tabBarBadge: totalDocuments > 0 ? totalDocuments : undefined,
+            tabBarBadgeStyle: styles.countBadge,
+          }}
         />
         <Tabs.Screen
-          name="Search"
+          name="Review"
+          component={ReviewScreen}
+          options={{
+            title: t("tabs.review"),
+            tabBarLabel: t("tabs.review"),
+            // A dot, not a number: the count is already the first Today stat.
+            tabBarBadge: pendingReview > 0 ? "" : undefined,
+            tabBarBadgeStyle: styles.dotBadge,
+          }}
+        />
+        <Tabs.Screen
+          name="Chat"
           component={SearchScreen}
-          options={{ title: t("tabs.search"), tabBarLabel: t("tabs.search") }}
-        />
-        <Tabs.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: t("tabs.settings"), tabBarLabel: t("tabs.settings") }}
+          options={{ title: t("tabs.chat"), tabBarLabel: t("tabs.chat") }}
         />
       </Tabs.Navigator>
 
       {showFab ? (
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("screens.scanUpload")}
           onPress={() => navigation.navigate("Scan")}
           style={({ pressed }) => [
             styles.fab,
-            { bottom: 62 + insets.bottom + 14 },
+            { bottom: TAB_BAR_HEIGHT + insets.bottom + 12 },
             pressed ? styles.fabPressed : null,
           ]}
         >
-          <MaterialCommunityIcons name="camera-document" size={26} color="#fff" />
+          <MaterialCommunityIcons name="line-scan" size={23} color={colors.accentFillInk} />
         </Pressable>
       ) : null}
     </View>
   );
 }
 
-function AppNavigator() {
+function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const appearance = useAppearance();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
 
   const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
 
-  if (auth.isLoading || !offline.isReady) {
+  // The type scale is only right once the bundled faces are registered, so the
+  // splash keeps the app behind the same gate that already waits on auth.
+  if (!fontsLoaded || !appearance.isReady || auth.isLoading || !offline.isReady) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingTitle}>{t("app.loadingTitle")}</Text>
         <Text style={styles.loadingText}>{t("app.loadingText")}</Text>
       </SafeAreaView>
@@ -155,11 +202,11 @@ function AppNavigator() {
     return (
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.panel },
+          headerTintColor: colors.ink,
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.app },
         }}
       >
         <Stack.Screen
@@ -175,40 +222,45 @@ function AppNavigator() {
     <>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.panel },
+          headerTintColor: colors.ink,
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.app },
         }}
       >
         <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
         <Stack.Screen
           name="DocumentDetail"
           component={DocumentDetailScreen}
-          options={{ title: "" }}
+          // The screen brings its own bar and its own safe-area inset; the native
+          // header would sit above both as an empty strip.
+          options={{ headerShown: false }}
         />
         <Stack.Screen
-          name="Review"
-          component={ReviewScreen}
-          options={{ title: t("screens.reviewQueue") }}
+          name="Settings"
+          component={SettingsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="OfflineArchive"
+          component={OfflineArchiveScreen}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Scan"
           component={ScanScreen}
-          options={{ title: t("screens.scanUpload") }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Correspondents"
           component={CorrespondentsScreen}
-          options={{ title: t("screens.correspondents") }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="CorrespondentDossier"
           component={CorrespondentDossierScreen}
-          options={({ route }) => ({
-            title: route.params.name,
-          })}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </>
@@ -216,6 +268,17 @@ function AppNavigator() {
 }
 
 function Root() {
+  // The provider is outermost: everything below it, including the loading
+  // screen, reads its colours from the resolved theme.
+  return (
+    <ThemeProvider>
+      <AppTree />
+    </ThemeProvider>
+  );
+}
+
+function AppTree() {
+  const styles = useStyles();
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
@@ -230,30 +293,36 @@ function Root() {
 }
 
 function AppShell() {
+  const colors = useColors();
+  const appearance = useAppearance();
   const auth = useAuth();
-  const theme = useMemo(
-    () => ({
-      ...DefaultTheme,
+  const [fontsLoaded] = useFonts(fontAssets);
+  const isDark = appearance.theme === "dark";
+  const theme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
       colors: {
-        ...DefaultTheme.colors,
-        background: colors.background,
-        card: colors.surface,
-        primary: colors.primary,
-        text: colors.text,
+        ...base.colors,
+        background: colors.app,
+        card: colors.panel,
+        primary: colors.accent,
+        text: colors.ink,
         border: colors.border,
-        notification: colors.primary,
+        notification: colors.accent,
       },
-    }),
-    [],
-  );
+    };
+  }, [colors, isDark]);
 
   return (
     <I18nProvider language={auth.user?.preferences.uiLanguage}>
       <OfflineArchiveProvider>
-        <NavigationContainer theme={theme}>
-          <StatusBar style="dark" />
-          <AppNavigator />
-        </NavigationContainer>
+        <SelectionModeProvider>
+          <NavigationContainer theme={theme}>
+            <StatusBar style={isDark ? "light" : "dark"} />
+            <AppNavigator fontsLoaded={fontsLoaded} />
+          </NavigationContainer>
+        </SelectionModeProvider>
       </OfflineArchiveProvider>
     </I18nProvider>
   );
@@ -261,7 +330,7 @@ function AppShell() {
 
 export default Root;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   flex: {
     flex: 1,
   },
@@ -269,46 +338,65 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: c.app,
     gap: 12,
     padding: 24,
   },
+  // This screen is what shows *while* `useFonts` is still resolving, so it must
+  // not name a bundled face — React Native raises "fontFamily is not a system
+  // font and has not been loaded" for an unregistered family.
   loadingTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: colors.text,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.4,
+    color: c.ink,
   },
   loadingText: {
-    fontSize: 15,
-    color: colors.muted,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: c.muted,
     textAlign: "center",
   },
   tabBar: {
-    backgroundColor: colors.surfaceRaised,
-    borderTopColor: colors.border,
-    height: 72,
-    paddingBottom: 10,
-    paddingTop: 10,
+    backgroundColor: c.bar,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    paddingTop: 6,
   },
   tabBarLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    fontFamily: fonts.sans.medium,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  countBadge: {
+    ...text.numeric,
+    fontSize: 9.5,
+    lineHeight: 13,
+    minWidth: 16,
+    height: 14,
+    borderRadius: radii.sm,
+    backgroundColor: c.raised,
+    color: c.dim,
+  },
+  dotBadge: {
+    minWidth: 7,
+    width: 7,
+    height: 7,
+    borderRadius: radii.pill,
+    backgroundColor: c.amber,
   },
   fab: {
     position: "absolute",
-    right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: colors.primary,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: c.accentFill,
     alignItems: "center",
     justifyContent: "center",
-    ...shadow,
-    shadowOpacity: 0.2,
   },
   fabPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.94 }],
   },
-});
+}));

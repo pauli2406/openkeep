@@ -1,158 +1,278 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, Card, Field, Screen } from "../components/ui";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Button, Row, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
-import { colors } from "../theme";
+import { createThemedStyles, radii, useColors } from "../theme";
+import { text } from "../typography";
 
+/** `1,8 GB` — the same figure the offline screen and Settings show. */
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+/**
+ * First run (#118). Two fields, one action, and the offline copy as a row
+ * rather than a red warning. Cloudflare Access sits behind a disclosure,
+ * because almost nobody needs it.
+ */
 export function AuthScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
+
   const [apiUrl, setApiUrl] = useState(auth.apiUrl || "http://localhost:3000");
   const [apiToken, setApiToken] = useState("");
+  const [revealToken, setRevealToken] = useState(false);
+  const [cfOpen, setCfOpen] = useState(false);
   const [cfAccessClientId, setCfAccessClientId] = useState("");
   const [cfAccessClientSecret, setCfAccessClientSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
+  const [urlError, setUrlError] = useState("");
+  const [tokenError, setTokenError] = useState("");
+
+  const cachedCount = offline.cacheSummary.documentCount;
 
   async function handleSubmit() {
-    setError("");
+    setUrlError("");
+    setTokenError("");
     setBusy(true);
     try {
       if (!apiToken.trim()) {
-        throw new Error(t("auth.errorApiTokenRequired"));
+        setTokenError(t("auth.errorApiTokenRequired"));
+        return;
       }
       await auth.connect({ apiUrl, apiToken, cfAccessClientId, cfAccessClientSecret });
     } catch (value) {
-      if (value instanceof Error) {
-        if (value.message === t("auth.errorApiTokenRequired")) {
-          setError(value.message);
-        } else if (/api token|bearer token|401|unauthorized|unknown token|invalid token|malformed/i.test(value.message)) {
-          setError(t("auth.errorInvalidToken"));
-        } else if (/reach|health check|network|timed out|connection/i.test(value.message)) {
-          setError(t("auth.errorConnection"));
-        } else {
-          setError(value.message);
-        }
+      const message = value instanceof Error ? value.message : t("auth.errorGeneric");
+      // The error goes under the field it is about.
+      if (/api token|bearer token|401|unauthorized|unknown token|invalid token|malformed/i.test(message)) {
+        setTokenError(t("auth.errorInvalidToken"));
+      } else if (/reach|health check|network|timed out|connection/i.test(message)) {
+        setUrlError(t("auth.errorConnection"));
       } else {
-        setError(t("auth.errorGeneric"));
+        setUrlError(message);
       }
     } finally {
       setBusy(false);
     }
   }
 
+  async function handleOpenOffline() {
+    const opened = await auth.openOfflineCopy();
+    if (!opened) {
+      setUrlError(t("auth.offlineOpenFailed"));
+    }
+  }
+
   return (
-    <Screen
-      title={t("auth.title")}
-      subtitle={t("auth.subtitle")}
-      contentContainerStyle={styles.content}
-      headerVariant="compact"
-    >
-      <Card>
-        <View style={styles.introRow}>
-          <View style={styles.introBadge}>
-            <Text style={styles.introBadgeText}>{t("auth.connectBadge")}</Text>
-          </View>
-          <Text style={styles.introText}>{t("auth.connectIntro")}</Text>
-          {!hasCachedDocuments && auth.apiUrl ? (
-            <Text style={styles.error}>{t("auth.offlineSnapshotRequired")}</Text>
-          ) : null}
+    <Screen title={t("auth.title")} padded={false}>
+      <View style={styles.intro}>
+        <Image source={require("../../assets/icon.png")} style={styles.logo} />
+        <Text style={styles.heading}>{t("auth.connectTitle")}</Text>
+        <Text style={styles.lede}>{t("auth.whereToken")}</Text>
+      </View>
+
+      <View style={styles.form}>
+        <View style={styles.field}>
+          <Text style={styles.label}>{t("auth.serverUrl")}</Text>
+          <TextInput
+            value={apiUrl}
+            onChangeText={setApiUrl}
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="https://archive.example.com"
+            placeholderTextColor={colors.dim}
+            style={styles.input}
+          />
+          {urlError ? <Text style={styles.error}>{urlError}</Text> : null}
         </View>
 
-        <Field
-          label={t("auth.serverUrl")}
-          value={apiUrl}
-          onChangeText={setApiUrl}
-          keyboardType="url"
-          autoCapitalize="none"
-          placeholder="https://archive.example.com"
-        />
-
-        <Field
-          label={t("auth.apiToken")}
-          value={apiToken}
-          onChangeText={setApiToken}
-          autoCapitalize="none"
-          secureTextEntry
-          placeholder={t("auth.apiTokenPlaceholder")}
-        />
-
-        <Text style={styles.sectionHint}>
-          Cloudflare Access (optional) — only if your server is protected by a
-          Cloudflare Access service token.
-        </Text>
-
-        <Field
-          label="CF Access Client ID (optional)"
-          value={cfAccessClientId}
-          onChangeText={setCfAccessClientId}
-          autoCapitalize="none"
-          placeholder="xxxxxxxx.access"
-        />
-
-        <Field
-          label="CF Access Client Secret (optional)"
-          value={cfAccessClientSecret}
-          onChangeText={setCfAccessClientSecret}
-          autoCapitalize="none"
-          secureTextEntry
-          placeholder="Client secret"
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <View style={styles.field}>
+          <Text style={styles.label}>{t("auth.apiToken")}</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              value={apiToken}
+              onChangeText={setApiToken}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry={!revealToken}
+              placeholder={t("auth.apiTokenPlaceholder")}
+              placeholderTextColor={colors.dim}
+              style={styles.tokenInput}
+            />
+            <Pressable onPress={() => setRevealToken((current) => !current)} hitSlop={10}>
+              <Text style={styles.reveal}>{revealToken ? t("auth.hide") : t("auth.reveal")}</Text>
+            </Pressable>
+          </View>
+          {tokenError ? <Text style={styles.error}>{tokenError}</Text> : null}
+        </View>
 
         <Button
           label={t("auth.connectArchive")}
-          onPress={handleSubmit}
+          onPress={() => void handleSubmit()}
           loading={busy}
         />
-      </Card>
+      </View>
+
+      {/* Almost nobody needs this, so it stays folded away */}
+      <Row
+        minHeight={50}
+        leading={
+          <MaterialCommunityIcons
+            name={cfOpen ? "chevron-down" : "chevron-right"}
+            size={18}
+            color={colors.dim}
+          />
+        }
+        title={t("auth.cloudflare")}
+        value={t("auth.optional")}
+        onPress={() => setCfOpen((current) => !current)}
+      />
+      {cfOpen ? (
+        <View style={styles.form}>
+          <Text style={styles.lede}>{t("auth.cloudflareHint")}</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>{t("auth.cfClientId")}</Text>
+            <TextInput
+              value={cfAccessClientId}
+              onChangeText={setCfAccessClientId}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="xxxxxxxx.access"
+              placeholderTextColor={colors.dim}
+              style={styles.input}
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>{t("auth.cfClientSecret")}</Text>
+            <TextInput
+              value={cfAccessClientSecret}
+              onChangeText={setCfAccessClientSecret}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              placeholderTextColor={colors.dim}
+              style={styles.input}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* The working case, as a row — not a red warning. Cached rows are not
+          enough: without a stored user there is no session to restore, and the
+          row would lead nowhere. */}
+      {cachedCount > 0 && auth.hasRestorableSession ? (
+        <Row
+          leading={<MaterialCommunityIcons name="database-outline" size={18} color={colors.dim} />}
+          title={t("auth.openOfflineCopy")}
+          meta={`${cachedCount} ${t("auth.offlineCopyMeta")} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
+          metaMono
+          chevron
+          onPress={() => void handleOpenOffline()}
+        />
+      ) : auth.apiUrl ? (
+        <View style={styles.note}>
+          <Text style={styles.noteText}>{t("auth.offlineSnapshotRequired")}</Text>
+        </View>
+      ) : null}
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  content: {
+const useStyles = createThemedStyles((c) => ({
+  intro: {
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 22,
+  },
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.lg,
+  },
+  heading: {
+    ...text.screenTitle,
+    color: c.ink,
+    textAlign: "center",
+  },
+  lede: {
+    ...text.meta,
+    color: c.dim,
+    textAlign: "center",
+    maxWidth: 300,
+  },
+  form: {
+    paddingHorizontal: 16,
+    paddingBottom: 18,
     gap: 14,
   },
-  introRow: {
-    gap: 10,
+  field: {
+    gap: 6,
   },
-  introBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
+  label: {
+    ...text.meta,
+    color: c.muted,
+  },
+  input: {
+    ...text.body,
+    height: 44,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    borderRadius: 9,
+    backgroundColor: c.panel,
+    color: c.ink,
     paddingHorizontal: 12,
-    paddingVertical: 7,
   },
-  introBadgeText: {
-    color: colors.primaryDeep,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    height: 44,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    borderRadius: 9,
+    backgroundColor: c.panel,
+    paddingHorizontal: 12,
   },
-  introText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
+  tokenInput: {
+    ...text.amount,
+    flex: 1,
+    minWidth: 0,
+    color: c.ink,
+    padding: 0,
   },
-  sectionHint: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
+  reveal: {
+    ...text.smallStrong,
+    color: c.accent,
   },
   error: {
-    color: colors.danger,
-    fontWeight: "600",
-    lineHeight: 20,
-    backgroundColor: "#f8e2de",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    ...text.small,
+    color: c.red,
   },
-});
+  note: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  noteText: {
+    ...text.small,
+    color: c.dim,
+    textAlign: "center",
+  },
+}));

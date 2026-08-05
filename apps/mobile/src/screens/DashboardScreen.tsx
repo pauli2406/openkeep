@@ -1,616 +1,240 @@
 import { useNavigation } from "@react-navigation/native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Swipeable } from "react-native-gesture-handler";
 import { useAuth } from "../auth";
-import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Card, EmptyState, ErrorCard, Metric, Pill, Screen, SectionTitle } from "../components/ui";
-import { processingRefetchInterval } from "../document-processing";
+import { AvatarButton } from "../components/AvatarButton";
+import {
+  EmptyState,
+  ErrorCard,
+  Metric,
+  Notice,
+  Panel,
+  Row,
+  Screen,
+  SectionHeader,
+  type RowDot,
+} from "../components/ui";
+import { documentRowState } from "../document-processing";
+import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
+import { text } from "../typography";
 import {
   formatCurrency,
-  formatDate,
-  formatMonthLabel,
-  formatMonthYear,
-  formatTaskDateLabel,
+  formatShortDate,
   responseToMessage,
   titleForDocument,
-  toneForStatus,
   type ArchiveDocument,
   type DashboardInsights,
 } from "../lib";
 
-// ---------------------------------------------------------------------------
-// Intake Trend — horizontal mini bar chart
-// ---------------------------------------------------------------------------
-
-function IntakeTrend({ data }: { data: Array<{ month: string; count: number }> }) {
-  const { t } = useI18n();
-
-  if (data.length === 0) {
-    return null;
-  }
-
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
-  const BAR_MAX_HEIGHT = 48;
-
-  let previousYear = "";
-
-  return (
-    <View style={trendStyles.wrap}>
-      <View style={trendStyles.header}>
-        <Text style={trendStyles.eyebrow}>{t("dashboard.intakeTrendEyebrow")}</Text>
-        <Text style={trendStyles.title}>{t("dashboard.intakeTrendTitle")}</Text>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={trendStyles.chartScroll}
-      >
-        {data.map((point) => {
-          const year = formatMonthYear(point.month);
-          const showYear = year !== previousYear;
-          previousYear = year;
-          const barHeight = Math.max(4, (point.count / maxCount) * BAR_MAX_HEIGHT);
-
-          return (
-            <View key={point.month} style={trendStyles.barColumn}>
-              {showYear ? (
-                <Text style={trendStyles.yearLabel}>{year}</Text>
-              ) : (
-                <View style={trendStyles.yearPlaceholder} />
-              )}
-              <View style={trendStyles.barTrack}>
-                <View style={[trendStyles.bar, { height: barHeight }]} />
-              </View>
-              <Text style={trendStyles.monthLabel}>{formatMonthLabel(point.month)}</Text>
-              {point.count > 0 ? (
-                <Text style={trendStyles.countLabel}>{point.count}</Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
-const trendStyles = StyleSheet.create({
-  wrap: {
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingTop: 18,
-    paddingBottom: 14,
-    gap: 16,
-    ...shadow,
-  },
-  header: {
-    paddingHorizontal: 18,
-    gap: 4,
-  },
-  eyebrow: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  chartScroll: {
-    paddingHorizontal: 18,
-    gap: 0,
-  },
-  barColumn: {
-    alignItems: "center",
-    width: 38,
-    gap: 4,
-  },
-  yearLabel: {
-    color: colors.muted,
-    fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  yearPlaceholder: {
-    height: 13,
-  },
-  barTrack: {
-    height: 48,
-    width: 22,
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  bar: {
-    width: 22,
-    borderRadius: 6,
-    backgroundColor: colors.primary,
-  },
-  monthLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  countLabel: {
-    color: colors.textSoft,
-    fontSize: 10,
-    fontWeight: "700",
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Correspondent Cluster Strip — horizontally scrollable cards
-// ---------------------------------------------------------------------------
-
-type Correspondent = DashboardInsights["topCorrespondents"][number];
-
-const DOT_COLORS = ["#b04030", "#af6d11", "#17624f", "#5c6bc0"];
-
-function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item: Correspondent) => void }) {
-  const { t } = useI18n();
-
-  if (data.length === 0) {
-    return null;
-  }
-
-  return (
-    <View style={clusterStyles.wrap}>
-      <View style={clusterStyles.header}>
-        <Text style={clusterStyles.eyebrow}>{t("dashboard.clusterEyebrow")}</Text>
-        <Text style={clusterStyles.title}>{t("dashboard.clusterTitle")}</Text>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={clusterStyles.scroll}
-      >
-        {data.slice(0, 4).map((item, index) => (
-          <Pressable
-            key={item.id}
-            onPress={() => onPress(item)}
-            style={({ pressed }) => [clusterStyles.card, pressed ? clusterStyles.cardPressed : null]}
-          >
-            <View style={clusterStyles.cardTopRow}>
-              <Text style={clusterStyles.docCount}>
-                {item.documentCount} {item.documentCount === 1 ? t("dashboard.clusterDoc") : t("dashboard.clusterDocs")}
-              </Text>
-              <MaterialCommunityIcons name="arrow-right" size={16} color={colors.muted} />
-            </View>
-
-            <Text numberOfLines={2} style={clusterStyles.name}>{item.name}</Text>
-
-            {(item.documentTypes ?? []).length > 0 ? (
-              <View style={clusterStyles.typePillRow}>
-                {(item.documentTypes ?? []).slice(0, 3).map((dt, dtIndex) => (
-                  <View key={dt.name} style={clusterStyles.typePill}>
-                    <View style={[clusterStyles.typeDot, { backgroundColor: DOT_COLORS[dtIndex % DOT_COLORS.length] }]} />
-                    <Text style={clusterStyles.typePillText}>
-                      {dt.name} {dt.count > 1 ? `\u00b7 ${dt.count}` : ""}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            <View style={clusterStyles.cardFooter}>
-              <Text style={clusterStyles.footerDate}>
-                {item.latestDocDate ? formatDate(item.latestDocDate) : "-"}
-              </Text>
-              <Text style={clusterStyles.footerAmount}>
-                {formatCurrency(item.totalAmount, item.currency ?? "EUR")}
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-const clusterStyles = StyleSheet.create({
-  wrap: {
-    gap: 14,
-  },
-  header: {
-    paddingHorizontal: 0,
-    gap: 4,
-  },
-  eyebrow: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-  scroll: {
-    gap: 10,
-  },
-  card: {
-    width: 200,
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 16,
-    gap: 10,
-    ...shadow,
-  },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.97 }],
-  },
-  cardTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  docCount: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  name: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 21,
-    letterSpacing: -0.2,
-  },
-  typePillRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  typePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  typeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  typePillText: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 2,
-  },
-  footerDate: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  footerAmount: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Task Table — vertical card list with Done action
-// ---------------------------------------------------------------------------
-
 type DeadlineItem = DashboardInsights["upcomingDeadlines"][number];
+type Translate = ReturnType<typeof useI18n>["t"];
 
-function TaskList({
-  items,
-  onComplete,
-  busyId,
-}: {
-  items: DeadlineItem[];
-  onComplete?: (documentId: string) => void;
-  busyId: string | null;
-}) {
-  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const { t } = useI18n();
+/** Anything further out than this belongs on Documents, not on Today. */
+const THIS_WEEK_DAYS = 7;
+const RECENT_LIMIT = 5;
 
-  if (items.length === 0) {
-    return <EmptyState title={t("dashboard.tasks.emptyTitle")} body={t("dashboard.tasks.emptyBody")} />;
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
+
+/** `4 T über` / `28.03.` — short enough to sit at the end of a row. */
+function dueLabel(item: DeadlineItem, t: Translate) {
+  if (item.isOverdue) {
+    return `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`;
+  }
+  if (item.daysUntilDue === 0) {
+    return t("today.dueToday");
+  }
+  if (item.daysUntilDue === 1) {
+    return t("today.dueTomorrow");
+  }
+  return formatShortDate(item.dueDate);
+}
+
+/** `06:15` today, `gestern` yesterday, `24.02.` before that. */
+function arrivedLabel(iso: string | null | undefined, t: Translate) {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
   }
 
-  return (
-    <>
-      {items.map((item) => {
-        const deadlineLabel = item.isOverdue
-          ? `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`
-          : `${item.daysUntilDue}${t("dashboard.tasks.dueIn")}`;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-        return (
-          <Pressable
-            key={`${item.documentId}-${item.dueDate}`}
-            onPress={() => navigation.navigate("DocumentDetail", {
-              documentId: item.documentId,
-              title: item.title,
-            })}
-            style={({ pressed }) => [pressed ? taskStyles.pressed : null]}
-          >
-            <Card style={item.isOverdue ? taskStyles.overdueCard : undefined}>
-              <View style={taskStyles.topRow}>
-                <View style={taskStyles.correspondentWrap}>
-                    <Text numberOfLines={1} style={taskStyles.correspondent}>
-                    {item.correspondentName ?? t("dashboard.tasks.unfiled")}
-                  </Text>
-                  {item.documentTypeName ? (
-                    <Text style={taskStyles.docType}>{item.documentTypeName}</Text>
-                  ) : null}
-                </View>
-                <Pill
-                  label={item.isOverdue ? t("dashboard.tasks.overdue") : deadlineLabel}
-                  tone={item.isOverdue ? "danger" : "warning"}
-                />
-              </View>
+  if (date.getTime() >= startOfToday.getTime()) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
 
-              <Text numberOfLines={2} style={taskStyles.title}>{item.title}</Text>
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  if (date.getTime() >= startOfYesterday.getTime()) {
+    return t("today.yesterday");
+  }
 
-              <View style={taskStyles.metaRow}>
-                <View style={taskStyles.metaChip}>
-                  <Text style={taskStyles.metaLabel}>{t("dashboard.tasks.whatToDo")}</Text>
-                  <Text style={taskStyles.metaValue}>{item.taskLabel}</Text>
-                </View>
-                <View style={taskStyles.metaChip}>
-                  <Text style={taskStyles.metaLabel}>{t("dashboard.tasks.amount")}</Text>
-                  <Text style={taskStyles.metaValue}>
-                    {formatCurrency(item.amount, item.currency ?? "EUR")}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={taskStyles.footerRow}>
-                <Text style={taskStyles.deadline}>
-                  {formatTaskDateLabel(item.dueDate)}
-                </Text>
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    onComplete?.(item.documentId);
-                  }}
-                  disabled={!onComplete || busyId === item.documentId}
-                  style={({ pressed }) => [
-                    taskStyles.doneButton,
-                    pressed ? taskStyles.doneButtonPressed : null,
-                    !onComplete || busyId === item.documentId ? taskStyles.doneButtonDisabled : null,
-                  ]}
-                >
-                  <MaterialCommunityIcons name="check" size={14} color={colors.primary} />
-                  <Text style={taskStyles.doneText}>{t("dashboard.tasks.done")}</Text>
-                </Pressable>
-              </View>
-            </Card>
-          </Pressable>
-        );
-      })}
-    </>
-  );
+  return formatShortDate(iso);
 }
 
-const taskStyles = StyleSheet.create({
-  pressed: {
-    opacity: 0.93,
-  },
-  overdueCard: {
-    backgroundColor: "#fff6f1",
-    borderColor: "#f0ddd5",
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  correspondentWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  correspondent: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  docType: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  metaChip: {
-    flex: 1,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 3,
-  },
-  metaLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  metaValue: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  deadline: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  doneButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  doneButtonPressed: {
-    opacity: 0.85,
-  },
-  doneButtonDisabled: {
-    opacity: 0.5,
-  },
-  doneText: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-});
+function documentMeta(document: ArchiveDocument, t: Translate) {
+  const state = documentRowState(document);
+  if (state === "failed") {
+    return t("state.failed");
+  }
+  if (state === "processing" || state === "queued") {
+    // No metadata has been extracted yet, so there is nothing to show here. The
+    // design shows a stage next to this ("wird verarbeitet · OCR") but
+    // `ProcessingJobSummary` carries no stage field, so the label stands alone.
+    return state === "queued" ? t("state.queued") : t("state.processing");
+  }
 
-// ---------------------------------------------------------------------------
-// Document Card — for recent documents
-// ---------------------------------------------------------------------------
-
-function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen: () => void }) {
-  const { t } = useI18n();
-  return (
-    <Pressable onPress={onOpen} style={({ pressed }) => [pressed ? docStyles.pressed : null]}>
-      <Card style={docStyles.card}>
-        <View style={docStyles.topRow}>
-          <Text style={docStyles.meta}>{document.documentType?.name ?? t("dashboard.documentCard.document")}</Text>
-          <Pill label={formatDashboardDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
-        </View>
-        <Text numberOfLines={2} style={docStyles.title}>{titleForDocument(document)}</Text>
-        <DocumentProcessingIndicator document={document} />
-        <Text style={docStyles.helper}>{document.correspondent?.name ?? t("dashboard.documentCard.unfiled")}</Text>
-        <View style={docStyles.footerRow}>
-          <Text style={docStyles.detail}>
-            {formatDate(document.issueDate)} {"\u00b7"} {formatCurrency(document.amount, document.currency ?? "EUR")}
-          </Text>
-          {document.reviewStatus === "pending" ? (
-            <Pill label={t("dashboard.documentCard.review")} tone="warning" />
-          ) : null}
-        </View>
-      </Card>
-    </Pressable>
-  );
+  const correspondent = document.correspondent?.name ?? t("documents.unfiled");
+  const type = document.documentType?.name;
+  return type ? `${correspondent} · ${type}` : correspondent;
 }
 
-function formatDashboardDocumentStatus(
-  t: ReturnType<typeof useI18n>["t"],
-  status: string,
-) {
-  switch (status) {
-    case "pending":
-      return t("documentDetail.status.pending");
-    case "processing":
-      return t("documentDetail.status.processing");
-    case "ready":
-      return t("documentDetail.status.ready");
+function documentDot(document: ArchiveDocument): RowDot {
+  switch (documentRowState(document)) {
     case "failed":
-      return t("documentDetail.status.failed");
+      return "red";
+    case "processing":
+    case "queued":
+      return "faint";
     default:
-      return status;
+      return document.reviewStatus === "pending" ? "amber" : "green";
   }
 }
 
-const docStyles = StyleSheet.create({
-  pressed: {
-    opacity: 0.93,
-  },
-  card: {
-    gap: 10,
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  meta: {
-    flex: 1,
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 23,
-    letterSpacing: -0.2,
-  },
-  helper: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  detail: {
-    color: colors.textSoft,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-});
+// ---------------------------------------------------------------------------
+// Number strip
+// ---------------------------------------------------------------------------
+
+/**
+ * Four numbers, one divided row. Every value comes from the insights payload —
+ * `Neu` is the current month's entry in `monthlyActivity`, since there is no
+ * "new documents" stat.
+ */
+function NumberStrip({
+  data,
+  dueCount,
+  onReview,
+  onDocuments,
+}: {
+  data: DashboardInsights;
+  /** What the groups below actually show — the payload caps its lists at six. */
+  dueCount: number;
+  onReview: () => void;
+  onDocuments: () => void;
+}) {
+  const styles = useStyles();
+  const { t } = useI18n();
+
+  // `monthlyActivity` is grouped from real document months and is not
+  // zero-filled, so the last point can be an earlier month. A month with no
+  // arrivals means zero, not "the last month that had some".
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const latest = (data.monthlyActivity ?? []).at(-1);
+  const newThisMonth = latest?.month === currentMonth ? latest.count : 0;
+
+  return (
+    <View style={styles.numberStrip}>
+      <Metric
+        label={t("today.stat.review")}
+        value={data.stats.pendingReview}
+        tone={data.stats.pendingReview > 0 ? "amber" : "ink"}
+        onPress={onReview}
+      />
+      <Metric label={t("today.stat.due")} value={dueCount} onPress={onDocuments} />
+      <Metric label={t("today.stat.new")} value={newThisMonth} onPress={onDocuments} />
+      <Metric
+        label={t("today.stat.total")}
+        value={data.stats.totalDocuments.toLocaleString()}
+        onPress={onDocuments}
+      />
+    </View>
+  );
+}
 
 // ---------------------------------------------------------------------------
-// Dashboard Screen
+// What needs you
+// ---------------------------------------------------------------------------
+
+/** Tap opens the document; a swipe left completes the task. */
+function TaskRow({
+  item,
+  onOpen,
+  onComplete,
+  busy,
+}: {
+  item: DeadlineItem;
+  onOpen: () => void;
+  onComplete?: () => void;
+  busy: boolean;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+  const { t } = useI18n();
+
+  const row = (
+    <Row
+      dot={item.isOverdue ? "red" : "amber"}
+      accessibilityActions={
+        onComplete ? [{ name: "done", label: t("dashboard.tasks.done") }] : undefined
+      }
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "done") {
+          onComplete?.();
+        }
+      }}
+      title={item.title}
+      meta={
+        item.documentTypeName
+          ? `${item.correspondentName ?? t("dashboard.tasks.unfiled")} · ${item.documentTypeName}`
+          : (item.correspondentName ?? t("dashboard.tasks.unfiled"))
+      }
+      value={formatCurrency(item.amount, item.currency ?? "EUR")}
+      valueMeta={dueLabel(item, t)}
+      minHeight={66}
+      onPress={onOpen}
+    />
+  );
+
+  if (!onComplete) {
+    return row;
+  }
+
+  return (
+    <Swipeable
+      enabled={!busy}
+      overshootRight={false}
+      renderRightActions={() => (
+        <Pressable onPress={onComplete} disabled={busy} style={styles.swipeAction}>
+          <MaterialCommunityIcons name="check" size={18} color={colors.accentFillInk} />
+          <Text style={styles.swipeActionText}>{t("dashboard.tasks.done")}</Text>
+        </Pressable>
+      )}
+    >
+      {row}
+    </Swipeable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Today
 // ---------------------------------------------------------------------------
 
 export function DashboardScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -619,23 +243,7 @@ export function DashboardScreen() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
-  const insightsQuery = useQuery({
-    queryKey: ["dashboard", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
-    queryFn: async () => {
-      if (shouldUseCache) {
-        return offline.loadCachedDashboard();
-      }
-
-      const response = await auth.authFetch("/api/dashboard/insights");
-      if (!response.ok) {
-        throw new Error(t("dashboard.screen.loadInsights"));
-      }
-      return (await response.json()) as DashboardInsights;
-    },
-    refetchInterval: shouldUseCache
-      ? false
-      : (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
-  });
+  const insightsQuery = useDashboardInsights();
 
   const completeMutation = useMutation({
     mutationFn: async (documentId: string) => {
@@ -660,89 +268,98 @@ export function DashboardScreen() {
 
   const data = insightsQuery.data;
 
-  // Build task list: overdue first, then upcoming, capped at 6
-  const taskItems: DeadlineItem[] = [];
-  if (data) {
-    const overdue = data.overdueItems.map((item) => ({ ...item, isOverdue: true as const }));
-    taskItems.push(...overdue);
-    for (const item of data.upcomingDeadlines) {
-      if (!taskItems.some((t) => t.documentId === item.documentId && t.dueDate === item.dueDate)) {
-        taskItems.push(item);
-      }
-    }
-    taskItems.splice(6);
-  }
+  const overdue: DeadlineItem[] = (data?.overdueItems ?? []).map((item) => ({
+    ...item,
+    isOverdue: true as const,
+  }));
+  const overdueKeys = new Set(overdue.map((item) => `${item.documentId}:${item.dueDate}`));
+  const thisWeek = (data?.upcomingDeadlines ?? []).filter(
+    (item) =>
+      !overdueKeys.has(`${item.documentId}:${item.dueDate}`) &&
+      item.daysUntilDue <= THIS_WEEK_DAYS,
+  );
+
+  const openDocument = (documentId: string, title: string) =>
+    navigation.navigate("DocumentDetail", { documentId, title });
+
+  const completeTask = shouldUseCache ? undefined : (id: string) => completeMutation.mutate(id);
+
+  const groups: Array<{ label: string; items: DeadlineItem[] }> = [
+    { label: t("today.overdue"), items: overdue },
+    { label: t("today.thisWeek"), items: thisWeek },
+  ].filter((group) => group.items.length > 0);
 
   return (
     <Screen
-      title={t("dashboard.screen.title")}
-      subtitle={t("dashboard.screen.subtitle")}
-      showEyebrow
-      contentContainerStyle={styles.content}
+      title={t("today.brand")}
+      leading={<Image source={require("../../assets/icon.png")} style={styles.logoMark} />}
+      right={
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("today.correspondents")}
+            onPress={() => navigation.navigate("Correspondents")}
+            hitSlop={12}
+          >
+            <MaterialCommunityIcons
+              name="account-multiple-outline"
+              size={18}
+              color={colors.muted}
+            />
+          </Pressable>
+          <AvatarButton />
+        </>
+      }
+      notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
+      padded={false}
     >
       {insightsQuery.isLoading ? (
-        <Card>
-          <Text style={styles.loadingText}>{t("dashboard.screen.loading")}</Text>
-        </Card>
+        <View style={styles.gutter}>
+          <Panel padded>
+            <Text style={styles.loadingText}>{t("dashboard.screen.loading")}</Text>
+          </Panel>
+        </View>
       ) : null}
 
       {insightsQuery.isError ? (
-        <ErrorCard
-          message={t("dashboard.screen.loadError")}
-          onRetry={() => insightsQuery.refetch()}
-        />
+        <View style={styles.gutter}>
+          <ErrorCard
+            message={t("dashboard.screen.loadError")}
+            onRetry={() => insightsQuery.refetch()}
+          />
+        </View>
       ) : null}
 
       {data ? (
         <>
-          {/* ── Metric ribbon ── */}
-          <View style={styles.metricGrid}>
-            <Metric label={t("dashboard.screen.totalDocuments")} value={data.stats.totalDocuments} />
-            <Metric
-              label={t("dashboard.screen.pendingReview")}
-              value={data.stats.pendingReview}
-              onPress={() => navigation.navigate("Review")}
-            />
-          </View>
-          <View style={styles.metricGrid}>
-            <Metric label={t("dashboard.screen.documentTypes")} value={data.stats.documentTypesCount} />
-            <Metric
-              label={t("dashboard.screen.correspondents")}
-              value={data.stats.correspondentsCount}
-              onPress={() => navigation.navigate("Correspondents")}
-            />
-          </View>
+          <NumberStrip
+            data={data}
+            dueCount={overdue.length + thisWeek.length}
+            onReview={() => navigation.navigate("Home", { screen: "Review" } as never)}
+            onDocuments={() => navigation.navigate("Home", { screen: "Documents" } as never)}
+          />
 
-          {/* ── Intake trend ── */}
-          {(data.monthlyActivity ?? []).length > 0 ? (
-            <IntakeTrend data={data.monthlyActivity!} />
-          ) : null}
+          {groups.length === 0 ? (
+            <EmptyState title={t("today.nothingDue")} />
+          ) : (
+            groups.map((group) => (
+              <View key={group.label}>
+                <SectionHeader label={group.label} count={group.items.length} />
+                {group.items.map((item) => (
+                  <TaskRow
+                    key={`${item.documentId}:${item.dueDate}`}
+                    item={item}
+                    busy={busyTaskId === item.documentId}
+                    onOpen={() => openDocument(item.documentId, item.title)}
+                    onComplete={completeTask ? () => completeTask(item.documentId) : undefined}
+                  />
+                ))}
+              </View>
+            ))
+          )}
 
-          {/* ── Correspondent clusters ── */}
-          {data.topCorrespondents.length > 0 ? (
-            <ClusterStrip
-              data={data.topCorrespondents}
-              onPress={(item) =>
-                navigation.navigate("CorrespondentDossier", {
-                  slug: item.slug,
-                  name: item.name,
-                })
-              }
-            />
-          ) : null}
-
-          {/* ── Deadline / task list ── */}
-          <View style={styles.sectionWrap}>
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionEyebrow}>{t("dashboard.screen.deadlines")}</Text>
-                <Text style={styles.sectionTitle}>{t("dashboard.screen.upcomingTasks")}</Text>
-            </View>
-            <TaskList
-              items={taskItems}
-              onComplete={shouldUseCache ? undefined : (id) => completeMutation.mutate(id)}
-              busyId={busyTaskId}
-            />
-            {completeMutation.isError ? (
+          {completeMutation.isError ? (
+            <View style={styles.gutter}>
               <ErrorCard
                 message={
                   completeMutation.error instanceof Error
@@ -750,70 +367,83 @@ export function DashboardScreen() {
                     : t("dashboard.screen.completeFailed")
                 }
               />
-            ) : null}
-          </View>
+            </View>
+          ) : null}
 
-          {/* ── Recent documents ── */}
-          <View style={styles.sectionWrap}>
-            <SectionTitle
-                title={t("dashboard.screen.recentDocuments")}
-                hint={t("dashboard.screen.recentHint")}
-              />
-            {data.recentDocuments.length === 0 ? (
-              <EmptyState
-                title={t("dashboard.screen.noDocumentsTitle")}
-                body={t("dashboard.screen.noDocumentsBody")}
-              />
-            ) : (
-              data.recentDocuments.slice(0, 5).map((document) => (
-                <DocumentCard
+          <SectionHeader
+            label={t("today.recentlyAdded")}
+            right={
+              <Pressable
+                onPress={() => navigation.navigate("Home", { screen: "Documents" } as never)}
+                hitSlop={12}
+              >
+                <Text style={styles.headerLink}>{t("today.allDocuments")}</Text>
+              </Pressable>
+            }
+          />
+          {data.recentDocuments.length === 0 ? (
+            <EmptyState
+              title={t("dashboard.screen.noDocumentsTitle")}
+              body={t("dashboard.screen.noDocumentsBody")}
+            />
+          ) : (
+            data.recentDocuments.slice(0, RECENT_LIMIT).map((document) => {
+              const state = documentRowState(document);
+              return (
+                <Row
                   key={document.id}
-                  document={document}
-                  onOpen={() =>
-                    navigation.navigate("DocumentDetail", {
-                      documentId: document.id,
-                      title: titleForDocument(document),
-                    })
-                  }
+                  dot={documentDot(document)}
+                  pulse={state === "processing" || state === "queued"}
+                  tone={state === "failed" ? "bad" : "default"}
+                  title={titleForDocument(document)}
+                  meta={documentMeta(document, t)}
+                  valueMeta={arrivedLabel(document.createdAt, t)}
+                  onPress={() => openDocument(document.id, titleForDocument(document))}
                 />
-              ))
-            )}
-          </View>
+              );
+            })
+          )}
         </>
       ) : null}
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  content: {
-    gap: 16,
+const useStyles = createThemedStyles((c) => ({
+  gutter: {
+    padding: 16,
+  },
+  logoMark: {
+    width: 19,
+    height: 19,
+    borderRadius: 4,
   },
   loadingText: {
-    color: colors.muted,
-    lineHeight: 20,
+    ...text.meta,
+    color: c.muted,
   },
-  metricGrid: {
+  numberStrip: {
     flexDirection: "row",
-    gap: 12,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
   },
-  sectionWrap: {
-    gap: 14,
+  headerLink: {
+    ...text.smallStrong,
+    color: c.accent,
   },
-  sectionHeader: {
-    gap: 4,
+  swipeAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    width: 96,
+    backgroundColor: c.accentFill,
   },
-  sectionEyebrow: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
+  swipeActionText: {
+    ...text.smallStrong,
+    color: c.accentFillInk,
   },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-  },
-});
+}));

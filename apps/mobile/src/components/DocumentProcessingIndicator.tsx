@@ -1,68 +1,52 @@
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import type { ArchiveDocument } from "../lib";
-import { getDocumentProcessingLabel, isDocumentProcessing } from "../document-processing";
+import { documentRowState, isDocumentProcessing } from "../document-processing";
 import { useI18n } from "../i18n";
-import { colors } from "../theme";
+import { createThemedStyles, radii } from "../theme";
+import { text } from "../typography";
+import { PulsingDot } from "./ui";
 
+/**
+ * A document still in the pipeline. This used to be an uppercase pill over an
+ * indeterminate bar, with hardcoded English labels; #120 makes it the same
+ * pulsing dot and lower-case line the row treatment uses, so the two never
+ * disagree about what "processing" looks like.
+ */
 export function DocumentProcessingIndicator({
   document,
 }: {
   document: Pick<ArchiveDocument, "status" | "latestProcessingJob">;
 }) {
+  const styles = useStyles();
   const { t } = useI18n();
 
   if (!isDocumentProcessing(document)) {
     return null;
   }
 
-  const label = getDocumentProcessingLabel(document) ?? t("common.processing");
+  const label = documentRowState(document) === "queued" ? t("state.queued") : t("state.processing");
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.labelRow}>
-        <ActivityIndicator size="small" color={colors.primary} />
-        <Text style={styles.label}>{label}</Text>
-      </View>
-      <View style={styles.track}>
-        <View style={styles.bar} />
-      </View>
+      <PulsingDot style={styles.dot} />
+      <Text style={styles.label}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   wrap: {
-    gap: 8,
-  },
-  labelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 7,
     alignSelf: "flex-start",
-    borderWidth: 1,
-    borderColor: colors.primarySoft,
-    backgroundColor: colors.primarySoft,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+  },
+  dot: {
+    backgroundColor: c.accent,
+    borderRadius: radii.pill,
   },
   label: {
-    color: colors.primaryDeep,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
+    ...text.meta,
+    color: c.dim,
   },
-  track: {
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: colors.primarySoft,
-    overflow: "hidden",
-  },
-  bar: {
-    width: "34%",
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: colors.primary,
-  },
-});
+}));

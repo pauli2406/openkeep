@@ -1,775 +1,843 @@
 import { useNavigation } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Markdown from "react-native-markdown-display";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
-import { Card, ErrorCard, Screen } from "../components/ui";
+import {
+  EmptyState,
+  ErrorCard,
+  Notice,
+  PulsingDot,
+  Row,
+  Screen,
+} from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, radii, useColors } from "../theme";
+import { fonts, text } from "../typography";
 import {
   formatCurrency,
-  formatDate,
+  formatShortDate,
   linkifyCitations,
   titleForDocument,
   type AnswerCitation,
   type ArchiveDocument,
 } from "../lib";
-import { useAnswerStream } from "../hooks/useAnswerStream";
+import { useAnswerStream, type StreamState } from "../hooks/useAnswerStream";
 import { useRecentSearches } from "../hooks/useRecentSearches";
 import { useSuggestions } from "../hooks/useSuggestions";
-import { Pill } from "../components/ui";
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+/**
+ * One question and the answer to it. Completed turns hold a frozen copy of the
+ * stream state; the turn at the end reads `answerStream` live. `useAnswerStream`
+ * is unchanged — it still holds exactly one stream. (#112)
+ */
+type Turn = {
+  id: string;
+  question: string;
+  answer: StreamState | null;
+};
+
+function citationsInOrder(citations: AnswerCitation[]) {
+  const seen = new Map<string, AnswerCitation>();
+  for (const citation of citations) {
+    const key = `${citation.index ?? 0}:${citation.documentId}`;
+    if (!seen.has(key)) {
+      seen.set(key, citation);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+}
 
 // ---------------------------------------------------------------------------
-// Main screen
+// Structured results — a compact bordered table, not a stack of cards
+// ---------------------------------------------------------------------------
+
+function StructuredTable({
+  data,
+  onOpen,
+  t,
+}: {
+  data: NonNullable<StreamState["structuredData"]>;
+  onOpen: (documentId: string, title: string) => void;
+  t: Translate;
+}) {
+  const styles = useStyles();
+
+  // Mixed currencies (and deadlines with no amounts at all) leave `totalAmount`
+  // null, which would render as a bare dash. The open count is always there.
+  const total =
+    data.kind === "deadline_items"
+      ? data.totalAmount === null
+        ? String(data.totalOpenCount)
+        : formatCurrency(data.totalAmount, data.currency ?? "EUR")
+      : String(data.totalCount);
+
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeader}>
+        <Text style={styles.tableHeaderLabel}>{t("chat.openItems")}</Text>
+        <Text style={styles.tableHeaderTotal}>{total}</Text>
+      </View>
+      {data.kind === "deadline_items"
+        ? data.items.map((item) => (
+            <Row
+              key={`${item.documentId}-${item.dueDate}`}
+              minHeight={56}
+              title={item.title}
+              meta={
+                item.isOverdue
+                  ? `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`
+                  : `${t("chat.dueDate")} ${formatShortDate(item.dueDate)}`
+              }
+              value={formatCurrency(item.amount, item.currency ?? "EUR")}
+              valueTone={item.isOverdue ? "red" : "ink"}
+              onPress={() => onOpen(item.documentId, item.title)}
+            />
+          ))
+        : (data.items as ArchiveDocument[]).map((document) => (
+            <Row
+              key={document.id}
+              minHeight={56}
+              title={titleForDocument(document)}
+              meta={document.correspondent?.name ?? t("documents.unfiled")}
+              // "which contracts expire this month" is a question about expiry
+              // dates; an issue date answers a different one.
+              valueMeta={formatShortDate(
+                data.kind === "expiring_contracts"
+                  ? (document.expiryDate ?? document.issueDate ?? document.createdAt)
+                  : (document.issueDate ?? document.createdAt),
+              )}
+              onPress={() => onOpen(document.id, titleForDocument(document))}
+            />
+          ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One turn of the thread
+// ---------------------------------------------------------------------------
+
+function TurnView({
+  turn,
+  live,
+  documentCount,
+  onOpenDocument,
+  onOpenCitation,
+  cachedIds,
+}: {
+  turn: Turn;
+  live: StreamState | null;
+  documentCount: number;
+  onOpenDocument: (documentId: string, title: string) => void;
+  onOpenCitation: (citation: AnswerCitation) => void;
+  /** Null when online: every document is reachable. */
+  cachedIds: Set<string> | null;
+}) {
+  const styles = useStyles();
+  const markdownStyles = useMarkdownStyles();
+  const { t } = useI18n();
+
+  const state = turn.answer ?? live;
+  const searching = state?.status === "searching";
+  const citations = state ? citationsInOrder(state.citations) : [];
+
+  return (
+    <View style={styles.turn}>
+      <View style={styles.questionRow}>
+        <View style={styles.questionBubble}>
+          <Text style={styles.questionText}>{turn.question}</Text>
+        </View>
+      </View>
+
+      {searching ? (
+        <View style={styles.searchingWrap}>
+          <View style={styles.searchingRow}>
+            <Text style={styles.searchingText}>
+              {`${t("chat.searched")} ${documentCount.toLocaleString()} ${t("chat.documents")}`}
+            </Text>
+            <PulsingDot style={styles.searchingDot} />
+          </View>
+          <View style={styles.skeletonLong} />
+          <View style={styles.skeletonShort} />
+        </View>
+      ) : null}
+
+      {state?.status === "error" ? (
+        <Text style={styles.answerError}>{state.errorMessage ?? t("chat.failed")}</Text>
+      ) : null}
+
+      {state?.answerText ? (
+        <Markdown
+          style={markdownStyles}
+          onLinkPress={(url) => {
+            if (!url.startsWith("/documents/")) {
+              // An ordinary http link in the answer: let the markdown component
+              // open it rather than swallowing the tap.
+              return true;
+            }
+            const [documentId, marker] = url.slice("/documents/".length).split("#c");
+            const index = marker ? Number(marker) : null;
+            const citation =
+              (index !== null && Number.isFinite(index)
+                ? citations.find(
+                    (item) => item.documentId === documentId && item.index === index,
+                  )
+                : undefined) ?? citations.find((item) => item.documentId === documentId);
+            if (citation && (!cachedIds || cachedIds.has(citation.documentId))) {
+              onOpenCitation(citation);
+            }
+            return false;
+          }}
+        >
+          {linkifyCitations(state.answerText, state.citations, state.searchResults)}
+        </Markdown>
+      ) : null}
+
+      {state?.lowConfidence && state.status === "done" ? (
+        <View style={styles.insufficient}>
+          <Text style={styles.insufficientText}>{t("chat.lowConfidence")}</Text>
+        </View>
+      ) : null}
+
+      {state?.answerStatus === "insufficient_evidence" ? (
+        <View style={styles.insufficient}>
+          <Text style={styles.insufficientText}>{t("chat.insufficient")}</Text>
+        </View>
+      ) : null}
+
+      {state?.structuredData ? (
+        <StructuredTable data={state.structuredData} onOpen={onOpenDocument} t={t} />
+      ) : null}
+
+      {citations.length > 0 ? (
+        <View>
+          <Text style={styles.sourcesLabel}>{t("chat.sources")}</Text>
+          <View style={styles.sourceRow}>
+            {citations.map((citation) => {
+              // Offline, a citation into a document the copy has not got would
+              // open a blank reader. Say so on the pill instead.
+              const reachable = !cachedIds || cachedIds.has(citation.documentId);
+              return (
+                <Pressable
+                  key={`${citation.index}-${citation.documentId}-${citation.chunkIndex}`}
+                  onPress={() => (reachable ? onOpenCitation(citation) : undefined)}
+                  disabled={!reachable}
+                  style={[styles.sourcePill, reachable ? null : styles.sourcePillMuted]}
+                >
+                  <View style={styles.sourceIndex}>
+                    <Text style={styles.sourceIndexText}>{citation.index ?? "?"}</Text>
+                  </View>
+                  <Text style={styles.sourceTitle} numberOfLines={1}>
+                    {citation.documentTitle}
+                  </Text>
+                  {reachable ? null : (
+                    <Text style={styles.sourceNote}>{t("chat.notCached")}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Chat
 // ---------------------------------------------------------------------------
 
 export function SearchScreen() {
+  const styles = useStyles();
+  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<TextInput>(null);
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
-  const answerStream = useAnswerStream(auth.streamFetch);
-  const { recentSearches, addSearch, removeSearch, clearAll } = useRecentSearches();
-  const { suggestions, isLoading: suggestionsLoading } = useSuggestions(
-    auth.authFetch,
-    !shouldUseCache,
-  );
+  const [draft, setDraft] = useState("");
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const turnCounter = useRef(0);
 
-  const cachedSearchQuery = useQuery({
-    queryKey: ["cached-search", query.trim(), offline.cacheSummary.updatedAt],
-    enabled: shouldUseCache && query.trim().length > 0,
-    queryFn: () => offline.queryCachedDocuments({ query }),
+  const answerStream = useAnswerStream(auth.streamFetch);
+  const { recentSearches, addSearch, clearAll } = useRecentSearches();
+  const { suggestions } = useSuggestions(auth.authFetch, !shouldUseCache);
+
+  const cachedSearch = useQuery({
+    queryKey: ["cached-search", draft.trim(), offline.cacheSummary.updatedAt],
+    enabled: shouldUseCache && draft.trim().length > 0,
+    queryFn: () => offline.queryCachedDocuments({ query: draft }),
   });
 
-  const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
-  const hasAnswer = !shouldUseCache && (answerStream.status === "streaming" || answerStream.status === "done");
-  const hasQuery = shouldUseCache ? query.trim().length > 0 : answerStream.status !== "idle";
-
-  const runSearch = useCallback(
-    (searchQuery?: string) => {
-      const q = (searchQuery ?? query).trim();
-      if (!q) return;
-      void addSearch(q);
-      if (searchQuery) setQuery(searchQuery);
-      if (shouldUseCache) {
-        answerStream.reset();
-        return;
-      }
-      answerStream.startStream(q);
-    },
-    [query, addSearch, answerStream, shouldUseCache],
+  const openDocument = useCallback(
+    (documentId: string, title: string) =>
+      navigation.navigate("DocumentDetail", { documentId, title }),
+    [navigation],
   );
 
-  const handleSuggestionPress = useCallback(
-    (suggestion: string) => {
-      setQuery(suggestion);
-      void addSearch(suggestion);
-      if (shouldUseCache) {
-        answerStream.reset();
-        inputRef.current?.blur();
+  /** A citation opens the document on the page its passage is on. */
+  const openCitation = useCallback(
+    (citation: AnswerCitation) =>
+      navigation.navigate("DocumentDetail", {
+        documentId: citation.documentId,
+        title: citation.documentTitle,
+        citation: { page: citation.pageFrom, quote: citation.quote },
+      }),
+    [navigation],
+  );
+
+  // Which documents the local copy actually holds, so a citation can say when
+  // it cannot be followed.
+  const cachedList = useQuery({
+    queryKey: ["cached-ids", offline.cacheSummary.updatedAt],
+    enabled: shouldUseCache,
+    queryFn: () => offline.queryCachedDocuments(),
+  });
+  const cachedIds = shouldUseCache
+    ? new Set((cachedList.data?.items ?? []).map((document) => document.id))
+    : null;
+
+  const status = answerStream.status;
+
+  /**
+   * A finished stream is copied into its turn. That frees the single stream in
+   * `useAnswerStream` for the next question while the thread keeps the answer.
+   */
+  useEffect(() => {
+    if (status !== "done" && status !== "error") {
+      return;
+    }
+    setTurns((current) => {
+      const last = current.at(-1);
+      if (!last || last.answer !== null) {
+        return current;
+      }
+      const snapshot: StreamState = {
+        status: answerStream.status,
+        answerStatus: answerStream.answerStatus,
+        lowConfidence: answerStream.lowConfidence,
+        route: answerStream.route,
+        answerText: answerStream.answerText,
+        citations: answerStream.citations,
+        searchResults: answerStream.searchResults,
+        structuredData: answerStream.structuredData,
+        errorMessage: answerStream.errorMessage,
+      };
+      return [...current.slice(0, -1), { ...last, answer: snapshot }];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  const busy = status === "searching" || status === "streaming";
+
+  const ask = useCallback(
+    (question: string) => {
+      const trimmed = question.trim();
+      // A second question would abort the first stream, and only the last turn
+      // reads the live state — the aborted one would sit there answerless.
+      if (!trimmed || shouldUseCache || status === "searching" || status === "streaming") {
         return;
       }
-      answerStream.startStream(suggestion);
+      turnCounter.current += 1;
+      setTurns((current) => [
+        ...current,
+        { id: `turn-${turnCounter.current}`, question: trimmed, answer: null },
+      ]);
+      setDraft("");
+      void addSearch(trimmed);
+      answerStream.startStream(trimmed);
       inputRef.current?.blur();
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     },
-    [addSearch, answerStream, shouldUseCache],
+    [addSearch, answerStream, shouldUseCache, status],
   );
 
-  const handleRecentPress = useCallback(
-    (recentQuery: string) => {
-      setQuery(recentQuery);
-      if (shouldUseCache) {
-        answerStream.reset();
-        inputRef.current?.blur();
-        return;
-      }
-      answerStream.startStream(recentQuery);
-      inputRef.current?.blur();
-    },
-    [answerStream, shouldUseCache],
-  );
+  const newThread = useCallback(() => {
+    answerStream.reset();
+    setTurns([]);
+    setDraft("");
+  }, [answerStream]);
+
+  const liveState: StreamState | null =
+    status === "idle"
+      ? null
+      : {
+          status: answerStream.status,
+          answerStatus: answerStream.answerStatus,
+          lowConfidence: answerStream.lowConfidence,
+          route: answerStream.route,
+          answerText: answerStream.answerText,
+          citations: answerStream.citations,
+          searchResults: answerStream.searchResults,
+          structuredData: answerStream.structuredData,
+          errorMessage: answerStream.errorMessage,
+        };
+
+  const documentCount = answerStream.searchResults.length;
+  const lastQuestion = turns.at(-1)?.question;
 
   return (
     <Screen
-      title={t("search.title")}
-      subtitle={t("search.subtitle")}
-      showEyebrow
+      title={lastQuestion ?? t("chat.title")}
+      titleMeta={t("chat.scopeArchive")}
+      padded={false}
+      scroll={false}
+      notice={shouldUseCache ? <Notice label={t("state.offlineChat")} /> : undefined}
+      right={
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.historyAction")}
+            onPress={() => setHistoryOpen(true)}
+            hitSlop={12}
+          >
+            <MaterialCommunityIcons name="history" size={18} color={colors.muted} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.newThread")}
+            onPress={newThread}
+            hitSlop={12}
+          >
+            <MaterialCommunityIcons name="plus" size={19} color={colors.muted} />
+          </Pressable>
+        </>
+      }
     >
-      {/* ─── Search bar ─── */}
-      <View style={styles.searchBarContainer}>
-        <View style={styles.searchInputWrap}>
-          <Text style={styles.searchIcon}>{"⌕"}</Text>
+      <ScrollView ref={scrollRef} style={styles.threadScroll} contentContainerStyle={styles.thread}>
+        {turns.length === 0 && !shouldUseCache ? (
+          <EmptyState title={t("chat.placeholder")} body={t("chat.subtitle")} />
+        ) : null}
+
+        {turns.map((turn, index) => (
+          <TurnView
+            key={turn.id}
+            turn={turn}
+            live={index === turns.length - 1 ? liveState : null}
+            documentCount={documentCount}
+            onOpenDocument={openDocument}
+            onOpenCitation={openCitation}
+            cachedIds={cachedIds}
+          />
+        ))}
+
+        {/* Offline the assistant is unavailable, but the local copy is searchable */}
+        {shouldUseCache && draft.trim().length > 0
+          ? cachedSearch.isLoading
+            ? <Text style={styles.searchingText}>{t("chat.searchingCache")}</Text>
+            : (cachedSearch.data?.items.length ?? 0) === 0
+              ? <EmptyState title={t("chat.noCachedResults")} />
+              : cachedSearch.data?.items.map((document) => (
+                  <Row
+                    key={document.id}
+                    minHeight={56}
+                    title={titleForDocument(document)}
+                    meta={document.correspondent?.name ?? t("documents.unfiled")}
+                    valueMeta={formatShortDate(document.issueDate ?? document.createdAt)}
+                    onPress={() => openDocument(document.id, titleForDocument(document))}
+                  />
+                ))
+          : null}
+
+        {status === "error" && turns.length === 0 ? (
+          <ErrorCard message={answerStream.errorMessage ?? t("chat.failed")} />
+        ) : null}
+      </ScrollView>
+
+      {/* Composer */}
+      <View style={styles.composer}>
+        {suggestions.length > 0 && !shouldUseCache ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.suggestionRow}
+          >
+            {suggestions.slice(0, 4).map((suggestion) => (
+              <Pressable
+                key={suggestion}
+                onPress={() => ask(suggestion)}
+                disabled={busy}
+                style={styles.suggestionChip}
+              >
+                <Text style={styles.suggestionText}>{suggestion}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.inputRow}>
           <TextInput
             ref={inputRef}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t("search.placeholder")}
-            placeholderTextColor={colors.muted}
-            returnKeyType="search"
-            onSubmitEditing={() => runSearch()}
-            style={styles.searchInput}
-            autoCorrect={false}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={t("chat.placeholder")}
+            placeholderTextColor={colors.dim}
+            style={styles.input}
+            multiline
+            returnKeyType="send"
+            onSubmitEditing={() => ask(draft)}
           />
-          {query.length > 0 && (
-            <Pressable
-              onPress={() => {
-                setQuery("");
-                answerStream.reset();
-                inputRef.current?.focus();
-              }}
-              hitSlop={8}
-              style={styles.clearButton}
-            >
-              <Text style={styles.clearButtonText}>{"✕"}</Text>
-            </Pressable>
-          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("chat.send")}
+            onPress={() => ask(draft)}
+            disabled={!draft.trim() || shouldUseCache || busy}
+            style={({ pressed }) => [
+              styles.sendButton,
+              !draft.trim() || shouldUseCache || busy ? styles.sendButtonDisabled : null,
+              pressed ? styles.sendButtonPressed : null,
+            ]}
+          >
+            <MaterialCommunityIcons name="arrow-up" size={19} color={colors.accentFillInk} />
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => runSearch()}
-          disabled={isStreaming || !query.trim()}
-          style={({ pressed }) => [
-            styles.searchButton,
-            (isStreaming || !query.trim()) && styles.searchButtonDisabled,
-            pressed && !(isStreaming || !query.trim()) ? styles.searchButtonPressed : null,
-          ]}
-        >
-          {isStreaming ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.searchButtonText}>{t("search.search")}</Text>
-          )}
-        </Pressable>
+
+        {answerStream.route ? (
+          <Text style={styles.modelLine}>{`${t("chat.model")} ${answerStream.route}`}</Text>
+        ) : null}
       </View>
 
-      {/* ─── Error ─── */}
-      {!shouldUseCache && answerStream.status === "error" && (
-        <ErrorCard
-          message={answerStream.errorMessage ?? t("search.searchFailed")}
-          onRetry={() => runSearch()}
-        />
-      )}
-
-      {/* ─── Searching state ─── */}
-      {!shouldUseCache && answerStream.status === "searching" && <SearchingSkeleton label={t("search.searching")} />}
-
-      {shouldUseCache && query.trim().length > 0 ? (
-        <CachedSearchResults
-          loading={cachedSearchQuery.isLoading}
-          documents={cachedSearchQuery.data?.items ?? []}
-          loadingLabel={t("search.searchingCache")}
-          emptyLabel={t("search.noCachedResults")}
-          documentLabel={t("search.document")}
-          unfiledLabel={t("documents.unfiled")}
-          onOpen={(document) =>
-            navigation.navigate("DocumentDetail", {
-              documentId: document.id,
-              title: titleForDocument(document),
-            })
-          }
-        />
-      ) : null}
-
-      {/* ─── AI Answer panel ─── */}
-      {hasAnswer && (
-        <AIAnswerPanel
-          answerStream={answerStream}
-          documentLabel={t("search.document")}
-          aiAnswerLabel={t("search.aiAnswer")}
-          generatingLabel={t("search.generating")}
-          answerReadyLabel={t("search.answerReady")}
-          insufficientLabel={t("search.insufficient")}
-          sourcesLabel={t("search.sources")}
-          openItemsLabel={t("search.openItems")}
-          totalLabel={t("search.total")}
-          structuredResultsLabel={t("search.structuredResults")}
-          dueDateLabel={t("search.dueDate")}
-          expiryDateLabel={t("search.expiryDate")}
-          amountLabel={t("search.amount")}
-          actionLabel={t("search.action")}
-          reviewLabel={t("search.reviewStatus")}
-          reviewReasonsLabel={t("search.reviewReasons")}
-          onCitationPress={(citation) =>
-            navigation.navigate("DocumentDetail", {
-              documentId: citation.documentId,
-              title: citation.documentTitle,
-            })
-          }
-          onDocumentPress={(documentId, title) =>
-            navigation.navigate("DocumentDetail", {
-              documentId,
-              title,
-            })
-          }
-        />
-      )}
-
-      {/* ─── Empty state: recent + suggestions ─── */}
-      {!hasQuery && (
-        <ZeroState
-          recentSearches={recentSearches}
-          suggestions={suggestions}
-          suggestionsLoading={suggestionsLoading}
-          onSelectQuery={handleSuggestionPress}
-          onSelectRecent={handleRecentPress}
-          onRemoveRecent={removeSearch}
-          onClearAll={clearAll}
-          recentLabel={t("search.recentSearches")}
-          clearAllLabel={t("search.clearAll")}
-          suggestedLabel={t("search.suggested")}
-          noSuggestionsLabel={t("search.noSuggestions")}
-        />
-      )}
+      {/* Recent questions, behind the history icon */}
+      <Modal
+        visible={historyOpen}
+        animationType="slide"
+        onRequestClose={() => setHistoryOpen(false)}
+      >
+        <SafeAreaView style={styles.historyRoot} edges={["top", "bottom"]}>
+          <View style={styles.historyBar}>
+            <Text style={styles.historyTitle}>{t("chat.recentTitle")}</Text>
+            {recentSearches.length > 0 ? (
+              <Pressable onPress={() => void clearAll()} hitSlop={10}>
+                <Text style={styles.historyAction}>{t("chat.clearRecent")}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable onPress={() => setHistoryOpen(false)} hitSlop={10}>
+              <Text style={styles.historyAction}>{t("chat.close")}</Text>
+            </Pressable>
+          </View>
+          <ScrollView>
+            {recentSearches.length === 0 ? (
+              <EmptyState title={t("chat.recentEmpty")} />
+            ) : (
+              recentSearches.map((entry) => (
+                <Row
+                  key={`${entry.timestamp}-${entry.query}`}
+                  title={entry.query}
+                  chevron
+                  onPress={() => {
+                    setHistoryOpen(false);
+                    if (shouldUseCache) {
+                      // The assistant is unavailable offline, but the draft is
+                      // what drives the local cache search.
+                      setDraft(entry.query);
+                      return;
+                    }
+                    ask(entry.query);
+                  }}
+                />
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </Screen>
   );
 }
 
-function CachedSearchResults({
-  loading,
-  documents,
-  loadingLabel,
-  emptyLabel,
-  documentLabel,
-  unfiledLabel,
-  onOpen,
-}: {
-  loading: boolean;
-  documents: ArchiveDocument[];
-  loadingLabel: string;
-  emptyLabel: string;
-  documentLabel: string;
-  unfiledLabel: string;
-  onOpen: (document: ArchiveDocument) => void;
-}) {
-  if (loading) {
-    return (
-      <Card>
-        <Text style={styles.mutedText}>{loadingLabel}</Text>
-      </Card>
-    );
-  }
+const useStyles = createThemedStyles((c) => ({
+  // Without a bounded height the thread grows past the viewport and pushes the
+  // composer off screen instead of scrolling.
+  threadScroll: {
+    flex: 1,
+  },
+  thread: {
+    padding: 16,
+    gap: 16,
+  },
+  turn: {
+    gap: 10,
+  },
+  questionRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  questionBubble: {
+    maxWidth: "82%",
+    borderRadius: radii.xl,
+    borderBottomRightRadius: 3,
+    backgroundColor: c.accentSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  questionText: {
+    ...text.body,
+    color: c.accentSoftInk,
+  },
 
-  if (documents.length === 0) {
-    return (
-      <Card>
-        <Text style={styles.mutedText}>{emptyLabel}</Text>
-      </Card>
-    );
-  }
+  /* streaming */
+  searchingWrap: {
+    gap: 8,
+  },
+  searchingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  searchingText: {
+    ...text.numericMeta,
+    color: c.dim,
+  },
+  searchingDot: {
+    backgroundColor: c.accent,
+    borderRadius: radii.pill,
+  },
+  skeletonLong: {
+    height: 8,
+    width: "92%",
+    borderRadius: radii.sm,
+    backgroundColor: c.raised,
+  },
+  skeletonShort: {
+    height: 8,
+    width: "62%",
+    borderRadius: radii.sm,
+    backgroundColor: c.raised,
+  },
+  answerError: {
+    ...text.meta,
+    color: c.red,
+  },
+  insufficient: {
+    borderRadius: radii.lg,
+    backgroundColor: c.amberSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  insufficientText: {
+    ...text.meta,
+    color: c.amber,
+  },
 
-  return (
-    <View style={styles.cachedResults}>
-      {documents.map((document) => (
-        <Pressable
-          key={document.id}
-          onPress={() => onOpen(document)}
-          style={({ pressed }) => [styles.resultCard, pressed ? styles.resultCardPressed : null]}
-        >
-          <View style={styles.resultHeader}>
-            <Text style={styles.resultTitle}>{titleForDocument(document)}</Text>
-            <Pill label={document.status} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
-          </View>
-          <Text style={styles.resultMeta}>
-            {document.correspondent?.name ?? unfiledLabel} · {document.documentType?.name ?? documentLabel}
-          </Text>
-          <Text style={styles.resultMeta}>{formatDate(document.createdAt)}</Text>
-          <Text style={styles.resultMeta}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
+  /* structured table */
+  table: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radii.lg,
+    backgroundColor: c.bar,
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSoft,
+  },
+  tableHeaderLabel: {
+    ...text.sectionLabel,
+    flex: 1,
+    fontSize: 9.5,
+    color: c.dim,
+  },
+  tableHeaderTotal: {
+    ...text.amount,
+    color: c.ink,
+  },
 
-// ---------------------------------------------------------------------------
-// Searching skeleton
-// ---------------------------------------------------------------------------
+  /* sources */
+  sourcesLabel: {
+    ...text.sectionLabel,
+    marginBottom: 7,
+    color: c.dim,
+  },
+  sourceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  sourcePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    maxWidth: "100%",
+    minHeight: 44,
+    paddingHorizontal: 11,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
+  sourceIndex: {
+    minWidth: 18,
+    alignItems: "center",
+    borderRadius: radii.sm,
+    backgroundColor: c.accentSoft,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  sourceIndexText: {
+    ...text.numericStrong,
+    fontSize: 10,
+    lineHeight: 14,
+    color: c.accentSoftInk,
+  },
+  sourceTitle: {
+    ...text.meta,
+    flexShrink: 1,
+    color: c.ink,
+  },
+  sourcePillMuted: {
+    opacity: 0.6,
+  },
+  sourceNote: {
+    ...text.small,
+    color: c.faint,
+  },
 
-function SearchingSkeleton({ label }: { label: string }) {
-  const opacity = useRef(new Animated.Value(0.35)).current;
+  /* composer */
+  composer: {
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingTop: 9,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    backgroundColor: c.bar,
+    gap: 9,
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    gap: 7,
+  },
+  suggestionChip: {
+    flexShrink: 0,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
+  suggestionText: {
+    ...text.meta,
+    color: c.muted,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    borderRadius: radii.xl,
+    backgroundColor: c.panel,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  input: {
+    ...text.body,
+    flex: 1,
+    minHeight: 34,
+    maxHeight: 110,
+    paddingTop: 7,
+    paddingBottom: 7,
+    color: c.ink,
+  },
+  sendButton: {
+    height: 36,
+    width: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radii.lg,
+    backgroundColor: c.accentFill,
+  },
+  sendButtonDisabled: {
+    opacity: 0.4,
+  },
+  sendButtonPressed: {
+    opacity: 0.85,
+  },
+  modelLine: {
+    ...text.numeric,
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: c.faint,
+  },
 
-  useState(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.35,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  });
+  /* recent questions */
+  historyRoot: {
+    flex: 1,
+    backgroundColor: c.app,
+  },
+  historyBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    height: 46,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
+  },
+  historyTitle: {
+    ...text.barTitle,
+    flex: 1,
+    color: c.ink,
+  },
+  historyAction: {
+    ...text.metaStrong,
+    color: c.accent,
+  },
+}));
 
-  return (
-    <Card>
-      <View style={styles.searchingHeader}>
-        <ActivityIndicator color={colors.accent} size="small" />
-        <Text style={styles.searchingText}>{label}</Text>
-      </View>
-      <View style={styles.skeletonLines}>
-        <Animated.View style={[styles.skeletonLine, { width: "90%", opacity }]} />
-        <Animated.View style={[styles.skeletonLine, { width: "75%", opacity }]} />
-        <Animated.View style={[styles.skeletonLine, { width: "60%", opacity }]} />
-      </View>
-      <View style={styles.skeletonSources}>
-        <Animated.View style={[styles.skeletonSourceCard, { opacity }]} />
-        <Animated.View style={[styles.skeletonSourceCard, { opacity }]} />
-      </View>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// AI Answer panel
-// ---------------------------------------------------------------------------
-
-function AIAnswerPanel({
-  answerStream,
-  documentLabel,
-  aiAnswerLabel,
-  generatingLabel,
-  answerReadyLabel,
-  insufficientLabel,
-  sourcesLabel,
-  openItemsLabel,
-  totalLabel,
-  structuredResultsLabel,
-  dueDateLabel,
-  expiryDateLabel,
-  amountLabel,
-  actionLabel,
-  reviewLabel,
-  reviewReasonsLabel,
-  onCitationPress,
-  onDocumentPress,
-}: {
-  answerStream: ReturnType<typeof useAnswerStream>;
-  documentLabel: string;
-  aiAnswerLabel: string;
-  generatingLabel: string;
-  answerReadyLabel: string;
-  insufficientLabel: string;
-  sourcesLabel: string;
-  openItemsLabel: string;
-  totalLabel: string;
-  structuredResultsLabel: string;
-  dueDateLabel: string;
-  expiryDateLabel: string;
-  amountLabel: string;
-  actionLabel: string;
-  reviewLabel: string;
-  reviewReasonsLabel: string;
-  onCitationPress: (citation: AnswerCitation) => void;
-  onDocumentPress: (documentId: string, title: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
-
-  const statusLabel = isStreaming
-    ? generatingLabel
-    : answerStream.status === "done"
-      ? answerReadyLabel
-      : "";
-
-  const linkedText = linkifyCitations(
-    answerStream.answerText,
-    answerStream.citations,
-    answerStream.searchResults.map((r) => ({
-      document: { id: r.document.id, title: r.document.title },
-    })),
-  );
-
-  return (
-    <View style={styles.aiPanelContainer}>
-      {/* Header toggle */}
-      <Pressable
-        onPress={() => setExpanded((v) => !v)}
-        style={[
-          styles.aiPanelHeader,
-          expanded ? styles.aiPanelHeaderExpanded : null,
-        ]}
-      >
-        <View style={[styles.aiIcon, expanded ? styles.aiIconExpanded : null]}>
-          <Text style={[styles.aiIconText, expanded ? styles.aiIconTextExpanded : null]}>{"✦"}</Text>
-        </View>
-        <View style={styles.aiPanelHeaderText}>
-          <Text style={styles.aiPanelTitle}>{aiAnswerLabel}</Text>
-          <Text style={styles.aiPanelStatus}>{statusLabel}</Text>
-        </View>
-        {isStreaming && <ActivityIndicator color={colors.accent} size="small" />}
-        <Text style={styles.aiChevron}>{expanded ? "▴" : "▾"}</Text>
-      </Pressable>
-
-      {/* Content */}
-      {expanded && (
-        <View style={styles.aiPanelContent}>
-          {/* Answer text */}
-          {answerStream.answerText.length > 0 &&
-            answerStream.answerStatus !== "insufficient_evidence" && (
-            <View style={styles.answerTextContainer}>
-              <Markdown
-                style={markdownStyles}
-                onLinkPress={(url: string) => {
-                  if (url.startsWith("/documents/")) {
-                    const documentId = url.replace("/documents/", "");
-                    const cit = answerStream.citations.find((c) => c.documentId === documentId);
-                    onCitationPress({
-                      documentId,
-                      documentTitle: cit?.documentTitle ?? documentLabel,
-                      chunkIndex: cit?.chunkIndex ?? 0,
-                      quote: cit?.quote ?? "",
-                      pageFrom: cit?.pageFrom ?? null,
-                      pageTo: cit?.pageTo ?? null,
-                    });
-                    return false;
-                  }
-                  return true;
-                }}
-              >
-                {linkedText}
-              </Markdown>
-              {answerStream.status === "streaming" && (
-                <View style={styles.streamingCursor} />
-              )}
-              {answerStream.lowConfidence && answerStream.status === "done" && (
-                <Text style={styles.lowConfidenceHint}>
-                  ⚠ This answer is based on weak evidence — verify it against the cited sources.
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Insufficient evidence */}
-          {answerStream.status === "done" &&
-            (answerStream.answerStatus === "insufficient_evidence" ||
-              !answerStream.answerText) && (
-            <View style={styles.insufficientBox}>
-              <Text style={styles.insufficientText}>
-                {answerStream.answerStatus === "insufficient_evidence" &&
-                answerStream.answerText
-                  ? answerStream.answerText
-                  : insufficientLabel}
-              </Text>
-            </View>
-          )}
-
-          {answerStream.structuredData && (
-            <View style={styles.structuredSection}>
-              <View style={styles.structuredHeader}>
-                <View style={styles.structuredTitleWrap}>
-                  <Text style={styles.sourcesLabel}>{`⊞  ${structuredResultsLabel}`}</Text>
-                  <Text style={styles.structuredTitle}>{answerStream.structuredData.title}</Text>
-                  {answerStream.structuredData.description ? (
-                    <Text style={styles.structuredDescription}>
-                      {answerStream.structuredData.description}
-                    </Text>
-                  ) : null}
-                </View>
-                <View style={styles.structuredPills}>
-                  <Pill
-                    label={`${openItemsLabel} ${
-                      answerStream.structuredData.kind === "deadline_items"
-                        ? answerStream.structuredData.totalOpenCount
-                        : answerStream.structuredData.totalCount
-                    }`}
-                  />
-                  {answerStream.structuredData.kind === "deadline_items" &&
-                  answerStream.structuredData.totalAmount !== null ? (
-                    <Pill
-                      label={`${totalLabel} ${formatCurrency(
-                        answerStream.structuredData.totalAmount,
-                        answerStream.structuredData.currency ?? "EUR",
-                      )}`}
-                      tone="warning"
-                    />
-                  ) : null}
-                </View>
-              </View>
-
-              <View style={styles.structuredList}>
-                {answerStream.structuredData.kind === "deadline_items"
-                  ? answerStream.structuredData.items.map((item) => (
-                      <Pressable
-                        key={item.documentId}
-                        onPress={() => onDocumentPress(item.documentId, item.title)}
-                        style={({ pressed }) => [
-                          styles.structuredCard,
-                          pressed ? styles.sourceCardPressed : null,
-                        ]}
-                      >
-                        <Text style={styles.structuredItemTitle}>{item.title}</Text>
-                        <Text style={styles.structuredItemMeta}>
-                          {[item.correspondentName, item.documentTypeName]
-                            .filter(Boolean)
-                            .join(" · ") || documentLabel}
-                        </Text>
-                        <View style={styles.structuredChipRow}>
-                          <StructuredChip label={`${dueDateLabel} ${formatDate(item.dueDate)}`} />
-                          {item.amount !== null ? (
-                            <StructuredChip
-                              label={`${amountLabel} ${formatCurrency(item.amount, item.currency ?? "EUR")}`}
-                            />
-                          ) : null}
-                          <StructuredChip label={`${actionLabel} ${item.taskLabel}`} />
-                        </View>
-                      </Pressable>
-                    ))
-                  : answerStream.structuredData.items.map((item) => (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => onDocumentPress(item.id, titleForDocument(item))}
-                        style={({ pressed }) => [
-                          styles.structuredCard,
-                          pressed ? styles.sourceCardPressed : null,
-                        ]}
-                      >
-                        <Text style={styles.structuredItemTitle}>{titleForDocument(item)}</Text>
-                        <Text style={styles.structuredItemMeta}>
-                          {[item.correspondent?.name, item.documentType?.name]
-                            .filter(Boolean)
-                            .join(" · ") || documentLabel}
-                        </Text>
-                        <View style={styles.structuredChipRow}>
-                          {item.expiryDate ? (
-                            <StructuredChip label={`${expiryDateLabel} ${formatDate(item.expiryDate)}`} />
-                          ) : null}
-                          {item.reviewStatus === "pending" ? (
-                            <StructuredChip label={`${reviewLabel} ${item.reviewStatus}`} />
-                          ) : null}
-                          {item.reviewReasons.length > 0 ? (
-                            <StructuredChip
-                              label={`${reviewReasonsLabel} ${item.reviewReasons.join(", ")}`}
-                            />
-                          ) : null}
-                        </View>
-                      </Pressable>
-                    ))}
-              </View>
-            </View>
-          )}
-
-          {/* Sources */}
-          {answerStream.citations.length > 0 && (
-            <View style={styles.sourcesSection}>
-              <Text style={styles.sourcesLabel}>{`⊞  ${sourcesLabel}`}</Text>
-              <View style={styles.sourcesGrid}>
-                {answerStream.citations.map((cit, i) => (
-                  <Pressable
-                    key={`${cit.documentId}-${cit.chunkIndex}`}
-                    onPress={() => onCitationPress(cit)}
-                    style={({ pressed }) => [
-                      styles.sourceCard,
-                      pressed ? styles.sourceCardPressed : null,
-                    ]}
-                  >
-                    <View style={styles.sourceCardTop}>
-                      <View style={styles.sourceNumber}>
-                        <Text style={styles.sourceNumberText}>{i + 1}</Text>
-                      </View>
-                      <Text style={styles.sourceTitle} numberOfLines={2}>
-                        {cit.documentTitle}
-                      </Text>
-                    </View>
-                    <Text style={styles.sourceQuote} numberOfLines={2}>
-                      {cit.quote}
-                    </Text>
-                    {(cit.pageFrom || cit.pageTo) && (
-                      <Text style={styles.sourcePage}>
-                        {"p."}
-                        {cit.pageFrom ?? cit.pageTo}
-                        {cit.pageTo && cit.pageTo !== cit.pageFrom
-                          ? `\u2013${cit.pageTo}`
-                          : ""}
-                      </Text>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function StructuredChip({ label }: { label: string }) {
-  return (
-    <View style={styles.structuredChip}>
-      <Text style={styles.structuredChipText}>{label}</Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Zero state (recent + suggestions)
-// ---------------------------------------------------------------------------
-
-function ZeroState({
-  recentSearches,
-  suggestions,
-  suggestionsLoading,
-  onSelectQuery,
-  onSelectRecent,
-  onRemoveRecent,
-  onClearAll,
-  recentLabel,
-  clearAllLabel,
-  suggestedLabel,
-  noSuggestionsLabel,
-}: {
-  recentSearches: Array<{ query: string; timestamp: number }>;
-  suggestions: string[];
-  suggestionsLoading: boolean;
-  onSelectQuery: (query: string) => void;
-  onSelectRecent: (query: string) => void;
-  onRemoveRecent: (query: string) => void;
-  onClearAll: () => void;
-  recentLabel: string;
-  clearAllLabel: string;
-  suggestedLabel: string;
-  noSuggestionsLabel: string;
-}) {
-  return (
-    <View style={styles.zeroState}>
-      {/* Recent searches */}
-      {recentSearches.length > 0 && (
-        <View style={styles.zeroSection}>
-          <View style={styles.zeroSectionHeader}>
-            <Text style={styles.zeroSectionTitle}>{recentLabel}</Text>
-            <Pressable onPress={() => void onClearAll()} hitSlop={8}>
-              <Text style={styles.zeroClearAll}>{clearAllLabel}</Text>
-            </Pressable>
-          </View>
-          {recentSearches.map((item) => (
-            <Pressable
-              key={item.query}
-              onPress={() => onSelectRecent(item.query)}
-              style={({ pressed }) => [
-                styles.zeroRow,
-                pressed ? styles.zeroRowPressed : null,
-              ]}
-            >
-              <Text style={styles.zeroRowIcon}>{"◷"}</Text>
-              <Text style={styles.zeroRowText} numberOfLines={1}>
-                {item.query}
-              </Text>
-              <Pressable
-                onPress={() => void onRemoveRecent(item.query)}
-                hitSlop={10}
-                style={styles.zeroRowRemove}
-              >
-                <Text style={styles.zeroRowRemoveText}>{"✕"}</Text>
-              </Pressable>
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {/* Suggestions */}
-      <View style={styles.zeroSection}>
-        <View style={styles.zeroSectionHeader}>
-          <Text style={styles.zeroSectionTitle}>{suggestedLabel}</Text>
-        </View>
-
-        {suggestionsLoading ? (
-          <View style={styles.suggestionsLoading}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.zeroRow}>
-                <View style={[styles.skeletonDot, { opacity: 0.4 + i * 0.1 }]} />
-                <View
-                  style={[
-                    styles.skeletonTextLine,
-                    { width: `${55 + i * 10}%`, opacity: 0.4 + i * 0.1 },
-                  ]}
-                />
-              </View>
-            ))}
-          </View>
-        ) : suggestions.length > 0 ? (
-          suggestions.map((suggestion) => (
-            <Pressable
-              key={suggestion}
-              onPress={() => onSelectQuery(suggestion)}
-              style={({ pressed }) => [
-                styles.zeroRow,
-                pressed ? styles.zeroRowPressed : null,
-              ]}
-            >
-              <Text style={styles.zeroRowIconSpark}>{"✦"}</Text>
-              <Text style={styles.zeroRowText} numberOfLines={1}>
-                {suggestion}
-              </Text>
-            </Pressable>
-          ))
-        ) : (
-          <View style={styles.zeroRow}>
-            <Text style={styles.zeroEmptyText}>
-              {noSuggestionsLabel}
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Markdown styles
-// ---------------------------------------------------------------------------
-
-const markdownStyles = StyleSheet.create({
+const useMarkdownStyles = createThemedStyles((c) => ({
   body: {
-    color: colors.text,
-    fontSize: 15,
+    ...text.body,
+    color: c.ink,
     lineHeight: 24,
   },
   heading1: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  heading2: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.text,
-    marginTop: 14,
+    ...text.barTitle,
+    color: c.ink,
+    marginTop: 12,
     marginBottom: 6,
   },
+  heading2: {
+    ...text.bodyStrong,
+    color: c.ink,
+    marginTop: 10,
+    marginBottom: 5,
+  },
   heading3: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 12,
+    ...text.bodyStrong,
+    color: c.ink,
+    marginTop: 8,
     marginBottom: 4,
   },
   strong: {
-    fontWeight: "800",
-    color: colors.text,
+    ...text.bodyStrong,
+    color: c.ink,
   },
   em: {
-    fontStyle: "italic",
+    // Android will not synthesise an italic for a named face, so name the face.
+    fontFamily: fonts.sans.italic,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 8,
   },
   bullet_list: {
     marginTop: 4,
@@ -783,524 +851,64 @@ const markdownStyles = StyleSheet.create({
     marginBottom: 4,
     flexDirection: "row",
   },
-  paragraph: {
-    marginTop: 0,
-    marginBottom: 8,
-  },
+  /** The inline citation marker: a small mono chip, not a blue link. */
   link: {
-    color: colors.accent,
-    backgroundColor: "#f6ead1",
-    fontWeight: "800",
-    fontSize: 11,
-    letterSpacing: 0.3,
-    borderRadius: 4,
-    paddingHorizontal: 1,
+    ...text.numericStrong,
+    fontSize: 10,
+    lineHeight: 14,
+    color: c.accentSoftInk,
+    backgroundColor: c.accentSoft,
+    borderRadius: radii.sm,
+    paddingHorizontal: 4,
   },
-  table: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    marginTop: 8,
-    marginBottom: 8,
+  code_inline: {
+    ...text.numeric,
+    color: c.ink,
+    backgroundColor: c.raised,
+    borderRadius: radii.sm,
+    paddingHorizontal: 4,
   },
-  thead: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  th: {
-    padding: 8,
-    fontWeight: "800",
-    fontSize: 13,
-    color: colors.text,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  td: {
-    padding: 8,
-    fontSize: 13,
-    color: colors.text,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  tr: {
-    borderBottomWidth: 1,
-    borderColor: colors.border,
+  fence: {
+    ...text.numeric,
+    backgroundColor: c.raised,
+    borderRadius: radii.lg,
+    padding: 12,
+    marginVertical: 8,
   },
   blockquote: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
+    borderLeftColor: c.accent,
     paddingLeft: 12,
     paddingVertical: 8,
     marginVertical: 8,
-    borderRadius: 4,
+    borderRadius: radii.sm,
   },
-  code_inline: {
-    backgroundColor: colors.surfaceMuted,
-    color: colors.text,
-    fontSize: 13,
-    fontFamily: "Menlo",
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  fence: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    padding: 12,
+  table: {
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: radii.lg,
     marginVertical: 8,
-    fontFamily: "Menlo",
-    fontSize: 13,
   },
-});
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-const styles = StyleSheet.create({
-  // Search bar
-  searchBarContainer: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center",
+  thead: {
+    backgroundColor: c.raised,
   },
-  searchInputWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    minHeight: 50,
-    ...shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-  },
-  searchIcon: {
-    fontSize: 18,
-    color: colors.muted,
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-    paddingVertical: 12,
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 4,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    color: colors.muted,
-    fontWeight: "600",
-  },
-  searchButton: {
-    backgroundColor: colors.text,
-    borderRadius: 16,
-    minHeight: 50,
-    paddingHorizontal: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  searchButtonDisabled: {
-    opacity: 0.45,
-  },
-  searchButtonPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.97 }],
-  },
-  searchButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.2,
-  },
-  cachedResults: {
-    gap: 10,
-  },
-  mutedText: {
-    color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  resultCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 8,
-    ...shadow,
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-  },
-  resultCardPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.99 }],
-  },
-  resultHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  resultTitle: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  resultMeta: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-
-  // Searching skeleton
-  searchingHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  searchingText: {
-    fontSize: 14,
-    color: colors.muted,
-  },
-  skeletonLines: {
-    gap: 10,
-    marginTop: 4,
-  },
-  skeletonLine: {
-    height: 12,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 6,
-  },
-  skeletonSources: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 4,
-  },
-  skeletonSourceCard: {
-    flex: 1,
-    height: 72,
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 14,
-  },
-
-  // AI Answer panel
-  aiPanelContainer: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: "hidden",
-    ...shadow,
-  },
-  aiPanelHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: colors.surfaceRaised,
-  },
-  aiPanelHeaderExpanded: {
-    backgroundColor: "#efe8de",
+  th: {
+    ...text.metaStrong,
+    padding: 8,
+    color: c.ink,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderColor: c.border,
   },
-  aiIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: "center",
-    justifyContent: "center",
+  td: {
+    ...text.meta,
+    padding: 8,
+    color: c.ink,
+    borderBottomWidth: 1,
+    borderColor: c.border,
   },
-  aiIconExpanded: {
-    backgroundColor: colors.accent,
+  tr: {
+    borderBottomWidth: 1,
+    borderColor: c.border,
   },
-  aiIconText: {
-    fontSize: 16,
-    color: colors.accent,
-  },
-  aiIconTextExpanded: {
-    color: "#fff",
-  },
-  aiPanelHeaderText: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  aiPanelTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  aiPanelStatus: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  aiChevron: {
-    fontSize: 16,
-    color: colors.muted,
-  },
-  aiPanelContent: {
-    backgroundColor: colors.surfaceRaised,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    gap: 16,
-  },
-
-  // Answer text
-  answerTextContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "flex-end",
-  },
-  streamingCursor: {
-    width: 6,
-    height: 18,
-    borderRadius: 3,
-    backgroundColor: colors.accent,
-    marginLeft: 2,
-    marginBottom: 2,
-    opacity: 0.8,
-  },
-
-  // Insufficient evidence
-  insufficientBox: {
-    backgroundColor: "#f6ead1",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  lowConfidenceHint: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#b45309",
-  },
-  insufficientText: {
-    fontSize: 14,
-    color: colors.warning,
-    lineHeight: 20,
-  },
-
-  structuredSection: {
-    gap: 12,
-  },
-  structuredHeader: {
-    gap: 10,
-  },
-  structuredTitleWrap: {
-    gap: 4,
-  },
-  structuredTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  structuredDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.muted,
-  },
-  structuredPills: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  structuredList: {
-    gap: 10,
-  },
-  structuredCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    gap: 8,
-  },
-  structuredItemTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  structuredItemMeta: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.muted,
-  },
-  structuredChipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  structuredChip: {
-    borderRadius: 999,
-    backgroundColor: colors.surfaceMuted,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  structuredChipText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.text,
-  },
-
-  // Sources
-  sourcesSection: {
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 14,
-  },
-  sourcesLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.muted,
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
-  },
-  sourcesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  sourceCard: {
-    width: "48%",
-    backgroundColor: colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 12,
-    gap: 6,
-  },
-  sourceCardPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.98 }],
-  },
-  sourceCardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-  },
-  sourceNumber: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: "#f6ead1",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sourceNumberText: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.accent,
-  },
-  sourceTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text,
-    lineHeight: 17,
-  },
-  sourceQuote: {
-    fontSize: 12,
-    color: colors.muted,
-    lineHeight: 16,
-  },
-  sourcePage: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.muted,
-    opacity: 0.7,
-  },
-
-  // Zero state
-  zeroState: {
-    gap: 24,
-  },
-  zeroSection: {
-    gap: 4,
-  },
-  zeroSectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 8,
-  },
-  zeroSectionTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.muted,
-    letterSpacing: 2.2,
-  },
-  zeroClearAll: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  zeroRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  zeroRowPressed: {
-    opacity: 0.6,
-  },
-  zeroRowIcon: {
-    fontSize: 18,
-    color: colors.muted,
-    width: 24,
-    textAlign: "center",
-  },
-  zeroRowIconSpark: {
-    fontSize: 16,
-    color: colors.accent,
-    opacity: 0.65,
-    width: 24,
-    textAlign: "center",
-  },
-  zeroRowText: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 21,
-  },
-  zeroRowRemove: {
-    padding: 4,
-  },
-  zeroRowRemoveText: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  zeroEmptyText: {
-    fontSize: 14,
-    color: colors.muted,
-    lineHeight: 20,
-  },
-
-  // Suggestion loading skeletons
-  suggestionsLoading: {
-    gap: 0,
-  },
-  skeletonDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.surfaceMuted,
-  },
-  skeletonTextLine: {
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.surfaceMuted,
-  },
-});
+}));

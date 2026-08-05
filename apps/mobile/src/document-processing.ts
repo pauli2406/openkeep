@@ -41,18 +41,40 @@ export function processingRefetchInterval<T>(
   return isDocumentProcessing(selected) ? DOCUMENT_PROCESSING_POLL_INTERVAL_MS : false;
 }
 
-export function getDocumentProcessingLabel(document: ProcessableDocumentLike) {
+/**
+ * What a document's row looks like (#120). `processing` gets a pulsing dot and
+ * `wird verarbeitet` where its metadata would be; `failed` gets a red tint and
+ * a reprocess action. Callers map these to strings themselves — this module
+ * has no access to the i18n dictionary.
+ */
+export type DocumentRowState = "queued" | "processing" | "failed" | "ready";
+
+export function documentRowState(document: ProcessableDocumentLike): DocumentRowState {
   if (!document) {
-    return null;
+    return "ready";
   }
 
+  // An active job wins over a stale row status. Requeueing a failure creates a
+  // `queued` job while `documents.status` stays `failed` until the worker picks
+  // it up; checking `failed` first would keep showing the red row and its
+  // reprocess action, inviting a duplicate job.
   if (document.latestProcessingJob?.status === "queued" || document.status === "pending") {
-    return "Queued";
+    return "queued";
   }
 
   if (isDocumentProcessing(document)) {
-    return "Processing";
+    return "processing";
   }
 
-  return null;
+  if (document.status === "failed" || document.latestProcessingJob?.status === "failed") {
+    return "failed";
+  }
+
+  return "ready";
+}
+
+/** A document has no metadata worth tapping into until it has been parsed. */
+export function hasParsedMetadata(document: ProcessableDocumentLike) {
+  const state = documentRowState(document);
+  return state === "ready";
 }

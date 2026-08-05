@@ -52,6 +52,18 @@ type AuthContextValue = {
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   revalidateSession: () => Promise<boolean>;
+  /**
+   * Enter the offline session on purpose. Until #118 this only happened at boot
+   * when the server was unreachable, so the Connect screen had no way to offer
+   * the local copy as a choice.
+   */
+  openOfflineCopy: () => Promise<boolean>;
+  /**
+   * Whether `openOfflineCopy` has a session to restore. Cached documents can
+   * outlive the stored user — a 401 clears the user but not the cache — and
+   * without one the offline session cannot be entered.
+   */
+  hasRestorableSession: boolean;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
@@ -139,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMode, setSessionMode] = useState<"none" | "online" | "offline">("none");
+  const [hasStoredUser, setHasStoredUser] = useState(false);
   const apiUrlRef = useRef("");
   const apiTokenRef = useRef("");
   const tokensRef = useRef({ accessToken: "", refreshToken: "" });
@@ -181,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const persistUser = useCallback(async (nextUser: User | null) => {
     setUser(nextUser);
+    setHasStoredUser(Boolean(nextUser));
     if (nextUser) {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser));
       return;
@@ -340,10 +354,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       Object.assign(headers, cfAccessHeaders());
 
+      // `expo/fetch` types `body` as `BodyInit | undefined` while the ambient
+      // `RequestInit` these callers use allows `null`. The wrapper passes
+      // whatever it was given straight through, so it takes the init type of the
+      // fetch it calls rather than asserting the two agree.
       return expoFetch(resolveUrl(currentApiUrl, path), {
         ...init,
         headers,
-      });
+      } as Parameters<typeof expoFetch>[1]);
     },
     [apiUrl],
   );
@@ -368,6 +386,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionMode("offline");
     return true;
   }, [persistUser]);
+
+  const openOfflineCopy = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) {
+      return false;
+    }
+    try {
+      return await restoreCachedSession(JSON.parse(raw) as User);
+    } catch {
+      return false;
+    }
+  }, [restoreCachedSession]);
 
   const revalidateSession = useCallback(async () => {
     if (
@@ -428,6 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await AsyncStorage.removeItem(USER_KEY);
           }
         }
+        setHasStoredUser(Boolean(storedUser));
 
         apiUrlRef.current = nextApiUrl;
         setApiUrlState(nextApiUrl);
@@ -605,6 +636,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(user),
       isLoading,
       isOfflineSession: sessionMode === "offline",
+      openOfflineCopy,
+      hasRestorableSession: hasStoredUser,
       setApiUrl,
       probeServer,
       connect,
@@ -618,6 +651,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiUrl,
       authFetch,
       connect,
+      hasStoredUser,
       isLoading,
       logout,
       probeServer,

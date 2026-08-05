@@ -6,14 +6,17 @@ export default {
     name: IS_DEV ? 'OpenKeep (Dev)' : 'OpenKeep',
     "slug": "openkeep-mobile",
     "scheme": "openkeep",
+    // `web` is here for the visual-regression build only (#150); nothing ships
+    // to a browser. See `visual/README.md`.
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
     "version": "0.1.0",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "plugins": [
       "expo-secure-store",
       "expo-document-picker",
@@ -53,7 +56,7 @@ export default {
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#f6f3ed"
+        "backgroundColor": "#fcfcfb"
       }
     },
     "extra": {

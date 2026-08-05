@@ -206,6 +206,16 @@ You can reprocess:
 
 Manual overrides remain locked during reprocessing unless you explicitly clear them first.
 
+## On Mobile
+
+Selection works by long-pressing a row in `Documents`. The action bar that
+appears offers `Add tag`, `Mark done` and `Delete` — reprocessing and downloads
+stay on the document page. Selection applies to what you picked, even after you
+change the search or filters, and is cleared when you leave the tab.
+
+Capture uses the phone's own document scanner rather than an in-app camera. See
+[Mobile App](./mobile-app.md).
+
 ## Next Step
 
 Continue with [Search and AI](./search-and-ai.md) for search, summaries, and AI-assisted answers.

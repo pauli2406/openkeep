@@ -31,7 +31,9 @@ openkeep-cache/
     └── <document-id>.<ext>
 ```
 
-The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size. Settings shows cached document count and file storage usage.
+The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size.
+
+`CacheSummary` exposes exactly three values — `documentCount`, `fileStorageBytes` and `updatedAt` — and the `Settings` -> `Offline` screen shows those three and nothing else. `updatedAt` is the revision the cached queries are keyed by, moved only when the counts change, so it is presented as when the cache was last checked rather than when a document was last written.
 
 ## Offline Read Paths
 
@@ -41,7 +43,7 @@ When the app is offline or running from an offline-restored session:
 |---|---|
 | Dashboard | Derived from cached documents only |
 | Documents | Lists and filters cached documents only |
-| Search | Runs local metadata/OCR search over cached documents |
+| Search | Runs local metadata/OCR search over cached documents; AI answers are unavailable |
 | Review | Shows cached documents with pending review only |
 | Correspondents | Builds facets from cached documents |
 | Document detail | Loads cached metadata, preview file, OCR text, and history |
@@ -50,7 +52,7 @@ Archive-wide AI search, document Q&A, uploads, edits, review mutations, reproces
 
 ## Cache Management
 
-Users can clear cached documents from Settings. Logging out also clears the cache on the device for privacy. Clearing the mobile cache does not modify the server archive.
+Users can clear cached documents from `Settings` -> `Offline`. There is no opt-in toggle, no auto-download and no retention setting; the provider deletes the AsyncStorage keys of those removed features on boot. Logging out also clears the cache on the device for privacy. Clearing the mobile cache does not modify the server archive.
 
 During startup, the mobile app removes legacy full-snapshot files under `openkeep-offline/`, the old `openkeep-offline.db` SQLite database, and old AsyncStorage settings for the previous offline archive mode.
 
@@ -58,3 +60,4 @@ During startup, the mobile app removes legacy full-snapshot files under `openkee
 
 - [Architecture Overview](./architecture-overview.md)
 - [API and Data Flows](./api-and-data-flows.md)
+- [Mobile App](../user/mobile-app.md)

@@ -76,6 +76,17 @@ If an action fails, the reason is shown above the list.
 
 Use this to keep the archive consistent when AI-generated labels drift or duplicate.
 
+## Mobile Offline Copy
+
+On the phone app, `Settings` -> `Offline` shows how many documents are cached,
+how much file storage they use, what is kept per document, and a
+`Delete the offline copy` action. Cache clearing lives there rather than in the
+main settings list. Deleting the local copy never changes the server archive.
+
+There is nothing to enable: the app caches each document you open while
+connected and reads from those copies when the archive is unreachable. See
+[Mobile App](./mobile-app.md).
+
 ## Archive Portability
 
 The archive portability section supports export, import, and watch-folder scans.

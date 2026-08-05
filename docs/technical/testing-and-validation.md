@@ -211,3 +211,71 @@ For most product changes, the practical validation path is:
 - [Backend Notes](../backend.md)
 - [Manual Smoke Checklist](../phase-3-smoke.md)
 - [Runbooks](../operations/runbooks.md)
+
+## Mobile Unit and Component Tests
+
+`apps/mobile` runs Jest through `jest-expo`, in the repo's `pnpm test` pipeline:
+
+```bash
+pnpm --filter @openkeep/mobile test          # once
+pnpm --filter @openkeep/mobile test:watch    # while working
+```
+
+These are not screenshots. They cover the layer where the mobile redesign kept
+going wrong:
+
+| Suite | What it holds in place |
+|---|---|
+| `dates` | date-only values parse as local calendar dates; the suite runs in `America/Los_Angeles` so a UTC-midnight regression fails |
+| `document-state` | an active processing job outranks a stale `failed` status |
+| `passage` | prefix matching stays opt-in for chat quotes; review evidence needs the full value; the cited page is searched first |
+| `i18n` | both locales carry the same keys, once each, and every literal `t()` key resolves |
+| `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
+| `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
+| `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |
+
+Native modules with no JavaScript fallback are mocked in `jest.setup.js` — SQLite,
+the OS document scanner, the PDF view, the file viewer, secure storage. Screens
+mock `../auth` and `../offline-archive` at the module boundary; the screen's own
+logic is never mocked.
+
+Two constraints worth knowing before adding a suite:
+
+- A `QueryClient` created per test needs `gcTime: 0` and a `clear()` afterwards,
+  or its garbage-collection timer keeps the Jest worker alive.
+- Rendering a screen under fake timers fights the queue's `refetchInterval`.
+  Where a timed window has to be closed, unmount instead — leaving the screen
+  closes it too.
+
+What the unit suite does **not** cover is how a screen is laid out. That is the
+visual suite below — and neither one proves how the app looks on a device.
+
+## Mobile Visual Regression
+
+Thirty-four screenshots — seventeen screens in both themes — of the real app at
+393×852:
+
+```bash
+pnpm --filter @openkeep/mobile test:visual           # compare
+pnpm --filter @openkeep/mobile test:visual:update    # re-bless
+```
+
+`OPENKEEP_VISUAL=1 expo export --platform web` renders the app in a browser.
+`metro.config.js` swaps `src/auth` and `src/offline-archive` for fixture-backed
+stubs, plus the modules with no browser implementation (the PDF view, the OS
+scanner, the file viewer, blob storage, SQLite, secure storage, `pdf-lib`).
+Everything above that line — screens, navigation, queries, tokens, faces — is the
+real thing. Playwright then reaches each screen the way a person does, by tapping
+tabs and rows.
+
+Like the web suite, it runs inside the pinned Playwright image, because text
+rasterisation depends on the font stack and the baselines are only reproducible
+against one. Diffs are uploaded as CI artifacts on failure.
+
+A green run means the palette, type scale, spacing, row heights, states and both
+themes are applied, and that the paths between screens still work. It does not
+mean the native screen is correct: react-native-web is a proxy for a device, and
+native text measurement, the native header and the real document viewer are
+absent or approximated. A simulator pass remains the only thing that proves
+native fidelity — see `apps/mobile/visual/README.md` for the harness rules,
+including which globals must not be frozen and why.
