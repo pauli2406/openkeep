@@ -1877,7 +1877,7 @@ const useStyles = createThemedStyles((c) => ({
     opacity: 0.5,
   },
   pickerCreateButtonText: {
-    color: c.panel,
+    color: c.accentFillInk,
     fontWeight: "700",
     fontSize: 14,
   },

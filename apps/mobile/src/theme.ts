@@ -12,7 +12,6 @@
 import { useMemo } from "react";
 import {
   StyleSheet,
-  useColorScheme,
   type ImageStyle,
   type TextStyle,
   type ViewStyle,
@@ -161,11 +160,20 @@ export const radii = {
 } as const;
 
 /**
- * The active theme. #104 follows the OS; #108 replaces this with a persisted
- * light / dark / system context and keeps the same signature.
+ * The active theme.
+ *
+ * Deliberately pinned to `light` in this commit. Both palettes are defined and
+ * every themed stylesheet resolves against them, but 19 light-only colour
+ * literals still sit in the screens (`DOT_COLORS`, the overdue card, the pill
+ * backgrounds) and `StatusBar` is still hardcoded `dark`. Honouring a dark OS
+ * theme here would put dark-palette text on those light surfaces.
+ *
+ * #108 does the literal audit, adds the persisted light / dark / system context
+ * and drives `StatusBar` from it, replacing this function with the same
+ * signature — so nothing downstream changes when dark actually switches on.
  */
 export function useThemeName(): ThemeName {
-  return useColorScheme() === "dark" ? "dark" : "light";
+  return "light";
 }
 
 export function useColors(): Colors {

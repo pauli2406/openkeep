@@ -131,6 +131,13 @@ export function Button({
     danger: styles.dangerButtonText,
   };
 
+  // Each spinner matches its label, so a loading button stays legible.
+  const spinnerMap = {
+    primary: colors.accentFillInk,
+    secondary: colors.accentSoftInk,
+    danger: colors.app,
+  };
+
   return (
     <Pressable
       disabled={disabled || loading}
@@ -142,7 +149,7 @@ export function Button({
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
     >
-      {loading ? <ActivityIndicator color={variant === "secondary" ? colors.accent : colors.accentFillInk} /> : null}
+      {loading ? <ActivityIndicator color={spinnerMap[variant]} /> : null}
       <Text style={[styles.buttonText, textMap[variant], loading ? styles.loadingButtonText : null]}>{label}</Text>
     </Pressable>
   );

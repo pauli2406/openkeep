@@ -906,7 +906,9 @@ const useStyles = createThemedStyles((c) => ({
     fontWeight: "600",
   },
   searchButton: {
-    backgroundColor: c.ink,
+    // The search action is the accent fill, so its label can be the fill ink.
+    // `ink` here would collide with `accentFillInk` once dark lands.
+    backgroundColor: c.accentFill,
     borderRadius: 16,
     minHeight: 50,
     paddingHorizontal: 22,
