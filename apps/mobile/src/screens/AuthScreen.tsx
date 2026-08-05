@@ -173,8 +173,10 @@ export function AuthScreen() {
         </View>
       ) : null}
 
-      {/* The working case, as a row — not a red warning */}
-      {cachedCount > 0 ? (
+      {/* The working case, as a row — not a red warning. Cached rows are not
+          enough: without a stored user there is no session to restore, and the
+          row would lead nowhere. */}
+      {cachedCount > 0 && auth.hasRestorableSession ? (
         <Row
           leading={<MaterialCommunityIcons name="database-outline" size={18} color={colors.dim} />}
           title={t("auth.openOfflineCopy")}

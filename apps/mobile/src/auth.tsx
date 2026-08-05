@@ -58,6 +58,12 @@ type AuthContextValue = {
    * the local copy as a choice.
    */
   openOfflineCopy: () => Promise<boolean>;
+  /**
+   * Whether `openOfflineCopy` has a session to restore. Cached documents can
+   * outlive the stored user — a 401 clears the user but not the cache — and
+   * without one the offline session cannot be entered.
+   */
+  hasRestorableSession: boolean;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
@@ -145,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMode, setSessionMode] = useState<"none" | "online" | "offline">("none");
+  const [hasStoredUser, setHasStoredUser] = useState(false);
   const apiUrlRef = useRef("");
   const apiTokenRef = useRef("");
   const tokensRef = useRef({ accessToken: "", refreshToken: "" });
@@ -187,6 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const persistUser = useCallback(async (nextUser: User | null) => {
     setUser(nextUser);
+    setHasStoredUser(Boolean(nextUser));
     if (nextUser) {
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser));
       return;
@@ -446,6 +454,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await AsyncStorage.removeItem(USER_KEY);
           }
         }
+        setHasStoredUser(Boolean(storedUser));
 
         apiUrlRef.current = nextApiUrl;
         setApiUrlState(nextApiUrl);
@@ -624,6 +633,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       isOfflineSession: sessionMode === "offline",
       openOfflineCopy,
+      hasRestorableSession: hasStoredUser,
       setApiUrl,
       probeServer,
       connect,
@@ -637,6 +647,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiUrl,
       authFetch,
       connect,
+      hasStoredUser,
       isLoading,
       logout,
       probeServer,
