@@ -25,6 +25,7 @@ import { useDocumentQa } from "../hooks/useDocumentQa";
 import { useDocumentSummary } from "../hooks/useDocumentSummary";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
+import { reviewReasonLabel } from "../review-reasons";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, useColors } from "../theme";
 import { fonts, text } from "../typography";
@@ -690,7 +691,7 @@ function OverviewTab({
           {document.reviewReasons.length > 0 && (
             <View style={styles.tagRow}>
               {document.reviewReasons.map((reason) => (
-                <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warn" />
+                <Pill key={reason} label={reviewReasonLabel(reason, t)} tone="warn" />
               ))}
             </View>
           )}
