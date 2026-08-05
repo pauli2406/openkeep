@@ -248,6 +248,9 @@ export function Row({
 
   return (
     <Pressable
+      // Without a role a screen reader reads the row as text and gives no hint
+      // that it can be opened.
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.row, sizing, pressed ? styles.rowPressed : null]}
     >
@@ -293,6 +296,8 @@ export function Button({
 
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
