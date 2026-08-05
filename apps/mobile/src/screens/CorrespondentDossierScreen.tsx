@@ -183,7 +183,66 @@ export function CorrespondentDossierScreen() {
   const data = insightsQuery.data ?? null;
   const intelligence = data?.intelligence ?? null;
   const insurance = intelligence?.domainInsights.insurance;
-  const documents = documentsQuery.data?.items ?? [];
+  /**
+   * The backend fills the policy and coverage arrays independently of the three
+   * fields this section used to render, so a dossier could show an Insurance
+   * header with nothing under it while those details went unshown.
+   */
+  type InsuranceRow = { title: string; value?: string; meta?: string };
+  const insuranceRows: InsuranceRow[] = insurance
+    ? ([
+        insurance.latestPremiumAmount != null
+          ? {
+              title: t("correspondent.insurance.latestPremium"),
+              value: formatCurrency(
+                insurance.latestPremiumAmount,
+                insurance.latestPremiumCurrency ?? "EUR",
+              ),
+            }
+          : null,
+        insurance.premiumChangeSummary
+          ? {
+              title: t("correspondent.insurance.premiumChange"),
+              meta: insurance.premiumChangeSummary,
+            }
+          : null,
+        insurance.renewalDate
+          ? {
+              title: t("correspondent.insurance.renewal"),
+              value: formatShortDate(insurance.renewalDate),
+            }
+          : null,
+        insurance.cancellationWindow
+          ? {
+              title: t("correspondent.insurance.cancellation"),
+              value: insurance.cancellationWindow,
+            }
+          : null,
+        insurance.policyReferences.length > 0
+          ? {
+              title: t("correspondent.insurance.policyReferences"),
+              meta: insurance.policyReferences.join(" · "),
+            }
+          : null,
+        insurance.coverageHighlights.length > 0
+          ? {
+              title: t("correspondent.insurance.coverage"),
+              meta: insurance.coverageHighlights.join(" · "),
+            }
+          : null,
+      ] as Array<InsuranceRow | null>).filter((row): row is InsuranceRow => row !== null)
+    : [];
+  /**
+   * Neither source arrives in the order this list needs: the API sorts on
+   * `issueDate` alone, which puts undated documents first in a `DESC` sort, and
+   * the cache returns rows by when they were last viewed. Sort on the date the
+   * row actually shows.
+   */
+  const documents = [...(documentsQuery.data?.items ?? [])].sort((a, b) => {
+    const left = a.issueDate ?? a.createdAt;
+    const right = b.issueDate ?? b.createdAt;
+    return right.localeCompare(left);
+  });
 
   const stats = [
     {
@@ -192,7 +251,13 @@ export function CorrespondentDossierScreen() {
     },
     {
       label: t("correspondent.lastDocument"),
-      value: data?.stats.dateRange.to ? formatShortDate(data.stats.dateRange.to) : "-",
+      // The insights query is disabled offline, so the newest cached document is
+      // the only figure available there — and it is the right one.
+      value: data?.stats.dateRange.to
+        ? formatShortDate(data.stats.dateRange.to)
+        : documents.length > 0
+          ? formatShortDate(documents[0].issueDate ?? documents[0].createdAt)
+          : "-",
     },
     { label: t("correspondent.changes"), value: String(intelligence?.changes.length ?? 0) },
   ];
@@ -303,33 +368,18 @@ export function CorrespondentDossierScreen() {
         </>
       ) : null}
 
-      {insurance ? (
+      {insuranceRows.length > 0 ? (
         <>
           <SectionHeader label={t("correspondent.insurance")} />
-          {insurance.latestPremiumAmount != null ? (
+          {insuranceRows.map((row) => (
             <Row
+              key={row.title}
               minHeight={50}
-              title={t("correspondent.insurance.latestPremium")}
-              value={formatCurrency(
-                insurance.latestPremiumAmount,
-                insurance.latestPremiumCurrency ?? "EUR",
-              )}
+              title={row.title}
+              value={row.value}
+              meta={row.meta}
             />
-          ) : null}
-          {insurance.renewalDate ? (
-            <Row
-              minHeight={50}
-              title={t("correspondent.insurance.renewal")}
-              value={formatShortDate(insurance.renewalDate)}
-            />
-          ) : null}
-          {insurance.cancellationWindow ? (
-            <Row
-              minHeight={50}
-              title={t("correspondent.insurance.cancellation")}
-              value={insurance.cancellationWindow}
-            />
-          ) : null}
+          ))}
         </>
       ) : null}
 
