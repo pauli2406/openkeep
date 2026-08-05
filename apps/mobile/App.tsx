@@ -223,7 +223,9 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="DocumentDetail"
           component={DocumentDetailScreen}
-          options={{ title: "" }}
+          // The screen brings its own bar and its own safe-area inset; the native
+          // header would sit above both as an empty strip.
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Settings"
