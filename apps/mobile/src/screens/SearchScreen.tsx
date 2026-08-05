@@ -95,7 +95,7 @@ function StructuredTable({
               meta={
                 item.isOverdue
                   ? `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`
-                  : `${t("search.dueDate")} ${formatShortDate(item.dueDate)}`
+                  : `${t("chat.dueDate")} ${formatShortDate(item.dueDate)}`
               }
               value={formatCurrency(item.amount, item.currency ?? "EUR")}
               valueTone={item.isOverdue ? "red" : "ink"}
@@ -167,7 +167,7 @@ function TurnView({
       ) : null}
 
       {state?.status === "error" ? (
-        <Text style={styles.answerError}>{state.errorMessage ?? t("search.searchFailed")}</Text>
+        <Text style={styles.answerError}>{state.errorMessage ?? t("chat.failed")}</Text>
       ) : null}
 
       {state?.answerText ? (
@@ -199,7 +199,7 @@ function TurnView({
 
       {state?.answerStatus === "insufficient_evidence" ? (
         <View style={styles.insufficient}>
-          <Text style={styles.insufficientText}>{t("search.insufficient")}</Text>
+          <Text style={styles.insufficientText}>{t("chat.insufficient")}</Text>
         </View>
       ) : null}
 
@@ -377,7 +377,7 @@ export function SearchScreen() {
     >
       <ScrollView ref={scrollRef} style={styles.threadScroll} contentContainerStyle={styles.thread}>
         {turns.length === 0 && !shouldUseCache ? (
-          <EmptyState title={t("chat.placeholder")} body={t("search.subtitle")} />
+          <EmptyState title={t("chat.placeholder")} body={t("chat.subtitle")} />
         ) : null}
 
         {turns.map((turn, index) => (
@@ -393,9 +393,9 @@ export function SearchScreen() {
         {/* Offline the assistant is unavailable, but the local copy is searchable */}
         {shouldUseCache && draft.trim().length > 0
           ? cachedSearch.isLoading
-            ? <Text style={styles.searchingText}>{t("search.searchingCache")}</Text>
+            ? <Text style={styles.searchingText}>{t("chat.searchingCache")}</Text>
             : (cachedSearch.data?.items.length ?? 0) === 0
-              ? <EmptyState title={t("search.noCachedResults")} />
+              ? <EmptyState title={t("chat.noCachedResults")} />
               : cachedSearch.data?.items.map((document) => (
                   <Row
                     key={document.id}
@@ -409,7 +409,7 @@ export function SearchScreen() {
           : null}
 
         {status === "error" && turns.length === 0 ? (
-          <ErrorCard message={answerStream.errorMessage ?? t("search.searchFailed")} />
+          <ErrorCard message={answerStream.errorMessage ?? t("chat.failed")} />
         ) : null}
       </ScrollView>
 
