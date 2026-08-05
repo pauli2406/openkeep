@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.474.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { margin:0; background:#101314; font-family:"Public Sans",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  h1,h2,h3,h4 { margin:0; font-weight:600; letter-spacing:-0.01em; }
+  p { margin:0; }
+  input,textarea,button { font-family:inherit; }
+  @keyframes ok-fade { from{opacity:0.35} to{opacity:1} }
+
+  [data-theme="dark"][data-s="stage"], [data-theme="dark"] [data-s="stage"] { background:#101314 !important; }
+  [data-theme="dark"] [data-t="cink"] { color:#e6e9e7 !important; }
+  [data-theme="dark"] [data-t="cdim"] { color:#7d857f !important; }
+
+  [data-theme="dark"] [data-s="app"] { background:#0f1214 !important; color:#e6e9e7 !important; }
+  [data-theme="dark"] [data-s="bar"] { background:#14181a !important; }
+  [data-theme="dark"] [data-s="panel"] { background:#161a1c !important; }
+  [data-theme="dark"] [data-s="raised"] { background:#1b2023 !important; }
+  [data-theme="dark"] [data-s="sunken"] { background:#0b0e0f !important; }
+  [data-theme="dark"] [data-b] { border-color:#252b2e !important; }
+  [data-theme="dark"] [data-b="soft"] { border-color:#1e2325 !important; }
+  [data-theme="dark"] [data-b="strong"] { border-color:#2c3336 !important; }
+
+  [data-theme="dark"] [data-t="ink"] { color:#e6e9e7 !important; }
+  [data-theme="dark"] [data-t="muted"] { color:#a7afa9 !important; }
+  [data-theme="dark"] [data-t="dim"] { color:#8b938d !important; }
+  [data-theme="dark"] [data-t="faint"] { color:#7d857f !important; }
+  [data-theme="dark"] [data-t="accent"] { color:#7fc9b8 !important; }
+  [data-theme="dark"] [data-t="amber"] { color:#d9ae6a !important; }
+  [data-theme="dark"] [data-t="red"] { color:#dd8d78 !important; }
+  [data-theme="dark"] [data-t="green"] { color:#7fb98d !important; }
+
+  [data-theme="dark"] [data-a="fill"] { background:#1c6b60 !important; color:#f2fbf8 !important; }
+  [data-theme="dark"] [data-a="soft"] { background:#16302c !important; color:#7fc9b8 !important; }
+  [data-theme="dark"] [data-a="warn"] { background:#2e2415 !important; color:#d9ae6a !important; }
+  [data-theme="dark"] [data-a="bad"] { background:#331d1a !important; color:#dd8d78 !important; }
+  [data-theme="dark"] [data-a="ok"] { background:#16301c !important; color:#7fb98d !important; }
+  [data-theme="dark"] [data-a="chip"] { border-color:#2c3336 !important; color:#8b938d !important; }
+
+  [data-theme="dark"] [data-dot="accent"] { background:#5fb3a3 !important; }
+  [data-theme="dark"] [data-dot="amber"] { background:#d9ae6a !important; }
+  [data-theme="dark"] [data-dot="red"] { background:#dd8d78 !important; }
+  [data-theme="dark"] [data-dot="green"] { background:#7fb98d !important; }
+  [data-theme="dark"] [data-dot="faint"] { background:#3a4143 !important; }
+
+  [data-theme="dark"] [data-s="paper"] { background:#e9ebe9 !important; color:#26302a !important; }
+  /* The paper surface stays light in dark mode, so everything drawn ON it must
+     keep its light literals too — the global role rules above would otherwise
+     paint dark ink blocks onto a light page. */
+  [data-theme="dark"] [data-s="paper"] [data-rule] { background:#eef0ee !important; }
+  [data-theme="dark"] [data-s="paper"] [data-b] { border-color:#e3e6e3 !important; }
+  [data-theme="dark"] [data-s="paper"] [data-a="fill"] { background:#14544d !important; color:#ffffff !important; }
+  [data-theme="dark"] [data-s="paper"] [data-a="warn"] { background:#fdf1e3 !important; color:#8a5a19 !important; }
+  [data-theme="dark"] [data-s="paper"] [data-t="amber"] { color:#8a5a19 !important; }
+  [data-theme="dark"] [data-s="paper"] [data-t="dim"] { color:#8b9089 !important; }
+  [data-theme="dark"] [data-s="paper"] [data-t="faint"] { color:#9aa09a !important; }
+  [data-theme="dark"] [data-sel="1"] { background:#16302c !important; }
+  [data-theme="dark"] input { color:#e6e9e7 !important; }
+  [data-theme="dark"] input::placeholder { color:#7d857f !important; }
+  [data-theme="dark"] [data-rule] { background:#252b2e !important; }
+  [data-theme="dark"] [data-track] { background:#1b2023 !important; }
+  [data-theme="dark"] [data-mono-block] { background:#1b2023 !important; }
+</style>
+</helmet>
+
+<div data-s="stage" data-theme="{{ theme }}" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:16px;padding:36px 20px 56px;background:#f0f1f0">
+
+  <div style="text-align:center">
+    <p data-t="cdim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.16em;color:#8b9089">OpenKeep Mobile · Prototyp</p>
+    <h1 data-t="cink" style="font-size:20px;margin-top:7px;color:#26302a;letter-spacing:-0.02em">{{ screenTitle }}</h1>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ isDark }}" hint-size="402px,874px">
+    <div data-s="app" style="height:100%;display:flex;flex-direction:column;background:#fcfcfb;color:#26302a;padding-top:52px;font-family:'Public Sans',system-ui,sans-serif">
+
+      <!-- ─────────────── TAB: TODAY ─────────────── -->
+      <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;height:46px;flex-shrink:0;padding:0 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <img src="brand/logo-mark.svg" alt="" style="width:19px;height:19px;border-radius:4px">
+          <span style="font-size:14px;font-weight:700;letter-spacing:-0.01em">OpenKeep</span>
+          <button onClick="{{ goSettings }}" data-a="soft" style="margin-left:auto;display:flex;height:28px;width:28px;align-items:center;justify-content:center;border:none;border-radius:6px;background:#e7edea;color:#14544d;font-size:10.5px;font-weight:700;cursor:pointer">OK</button>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div data-b style="display:flex;padding:14px 16px;border-bottom:1px solid #e3e6e3">
+            <sc-for list="{{ todayStats }}" as="st" hint-placeholder-count="4">
+              <button onClick="{{ st.go }}" style="flex:1;min-width:0;border:none;background:transparent;padding:0;text-align:left;cursor:pointer;color:inherit">
+                <p data-t="{{ st.tone }}" style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;letter-spacing:-0.02em;color:#26302a">{{ st.value }}</p>
+                <p data-t="faint" style="font-size:10.5px;color:#9aa09a;margin-top:2px">{{ st.label }}</p>
+              </button>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ todayGroups }}" as="g" hint-placeholder-count="2">
+            <div data-s="bar" data-b style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">{{ g.label }}</span>
+              <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">{{ g.count }}</span>
+            </div>
+            <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="2">
+              <button onClick="{{ openDetail }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:12px;min-height:66px;padding:11px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+                <span data-dot="{{ it.dot }}" style="width:7px;height:7px;flex-shrink:0;border-radius:9999px;background:#8a5a19"></span>
+                <div style="flex:1;min-width:0">
+                  <p style="font-size:14.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.title }}</p>
+                  <p data-t="dim" style="font-size:12px;color:#8b9089;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ it.meta }}</p>
+                </div>
+                <div style="flex-shrink:0;text-align:right">
+                  <p style="font-family:'IBM Plex Mono',monospace;font-size:13.5px;font-weight:600">{{ it.amount }}</p>
+                  <p data-t="{{ it.dueTone }}" style="font-size:11.5px;font-weight:600;margin-top:3px;color:#8a5a19">{{ it.due }}</p>
+                </div>
+              </button>
+            </sc-for>
+          </sc-for>
+
+          <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Zuletzt hinzugefügt</span>
+            <button onClick="{{ goDocuments }}" data-t="accent" style="margin-left:auto;border:none;background:transparent;padding:0;font-size:11.5px;font-weight:600;color:#14544d;cursor:pointer">Alle Dokumente</button>
+          </div>
+          <sc-for list="{{ recentDocs }}" as="r" hint-placeholder-count="5">
+            <button onClick="{{ openDetail }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:12px;min-height:56px;padding:9px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+              <span data-dot="{{ r.dot }}" style="width:7px;height:7px;flex-shrink:0;border-radius:9999px;background:#4a7d5a"></span>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</p>
+                <p data-t="dim" style="font-size:12px;color:#8b9089;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.meta }}</p>
+              </div>
+              <span data-t="faint" style="flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9aa09a">{{ r.when }}</span>
+            </button>
+          </sc-for>
+          <div style="height:16px"></div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── TAB: DOCUMENTS ─────────────── -->
+      <sc-if value="{{ isDocuments }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:12px;height:46px;flex-shrink:0;padding:0 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <h2 style="font-size:16px;flex:1">Dokumente</h2>
+          <button onClick="{{ goCorrespondents }}" data-t="dim" style="display:flex;border:none;background:transparent;padding:0;color:#5b615c;cursor:pointer"><i data-lucide="users" style="width:18px;height:18px"></i></button>
+          <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="arrow-up-down" style="width:18px;height:18px"></i></span>
+        </div>
+
+        <div data-b style="flex-shrink:0;padding:10px 16px 9px;border-bottom:1px solid #e3e6e3">
+          <div data-s="panel" data-b="strong" style="display:flex;align-items:center;gap:8px;height:36px;border:1px solid #d6dad7;border-radius:8px;background:#fff;padding:0 10px">
+            <span data-t="dim" style="display:flex;color:#8b9089"><i data-lucide="search" style="width:15px;height:15px"></i></span>
+            <input placeholder="Titel, Betrag, Absender…" style="flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:inherit;outline:none">
+          </div>
+          <div style="display:flex;gap:6px;margin-top:9px;overflow:hidden">
+            <sc-for list="{{ docFilters }}" as="f" hint-placeholder-count="4">
+              <button onClick="{{ f.go }}" data-a="{{ f.tone }}" data-b="{{ f.bord }}" style="{{ f.style }}">{{ f.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div data-s="bar" data-b style="display:flex;align-items:center;flex-shrink:0;padding:7px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8b9089">{{ docCount }}</span>
+          <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">Neueste zuerst</span>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <sc-for list="{{ visibleDocs }}" as="d" hint-placeholder-count="8">
+            <button onClick="{{ openDetail }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:11px;min-height:62px;padding:10px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+              <span data-dot="{{ d.dot }}" style="width:7px;height:7px;flex-shrink:0;border-radius:9999px;background:#4a7d5a"></span>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.title }}</p>
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.meta }}</p>
+              </div>
+              <div style="flex-shrink:0;text-align:right">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ d.amount }}</p>
+                <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a;margin-top:3px">{{ d.date }}</p>
+              </div>
+              <span data-a="{{ d.tagTone }}" data-off="{{ d.tagOff }}" style="{{ d.tagStyle }}">{{ d.tag }}</span>
+            </button>
+          </sc-for>
+          <div style="height:16px"></div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── TAB: REVIEW ─────────────── -->
+      <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;height:46px;flex-shrink:0;padding:0 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <h2 style="font-size:16px;flex:1">Review</h2>
+          <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b9089">{{ reviewPos }}</span>
+        </div>
+        <div data-track style="height:2px;flex-shrink:0;background:#eceeec">
+          <div data-a="fill" style="{{ reviewBarStyle }}"></div>
+        </div>
+
+        <sc-if value="{{ reviewDone }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:32px">
+            <span data-a="ok" style="display:flex;height:54px;width:54px;align-items:center;justify-content:center;border-radius:14px;background:#e8f0ea;color:#4a7d5a"><i data-lucide="check" style="width:26px;height:26px"></i></span>
+            <h3 style="font-size:17px;text-align:center">Queue leer</h3>
+            <p data-t="dim" style="font-size:13.5px;line-height:1.55;color:#8b9089;text-align:center;max-width:250px">Alle Dokumente sind bestätigt. Neue erscheinen hier, sobald die Erkennung unsicher ist.</p>
+            <button onClick="{{ resetReview }}" data-s="panel" data-b="strong" style="height:40px;border:1px solid #d6dad7;border-radius:9px;background:#fff;padding:0 16px;font-size:13.5px;font-weight:500;color:inherit;cursor:pointer">Nochmal ansehen</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ reviewOpen }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openZoom }}" data-s="sunken" data-b style="position:relative;flex-shrink:0;display:flex;height:188px;width:100%;align-items:center;justify-content:center;border:none;border-bottom:1px solid #e3e6e3;background:#eceeec;padding:12px;cursor:pointer">
+            <div data-s="paper" style="width:128px;height:100%;background:#fff;box-shadow:0 2px 12px rgba(20,40,35,0.16);padding:13px;display:flex;flex-direction:column;gap:4px;text-align:left">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div data-a="fill" style="height:5px;width:48px;background:#14544d"></div>
+                <div data-rule style="height:13px;width:13px;background:#e3e6e3"></div>
+              </div>
+              <div data-rule style="height:3px;width:44%;background:#eef0ee;margin-top:6px"></div>
+              <div data-rule style="height:1px;background:#eef0ee;margin:5px 0"></div>
+              <div data-rule style="height:3px;width:88%;background:#eef0ee"></div>
+              <div data-rule style="height:3px;width:74%;background:#eef0ee"></div>
+              <div data-a="warn" style="border-radius:2px;background:#fdf1e3;box-shadow:inset 2px 0 0 #8a5a19;padding:5px;display:flex;flex-direction:column;gap:3px;margin:4px 0">
+                <div style="height:3px;width:86%;background:#e4d3b4"></div>
+                <div style="height:3px;width:56%;background:#e4d3b4"></div>
+              </div>
+              <div data-rule style="height:3px;width:80%;background:#eef0ee"></div>
+              <div data-rule style="height:3px;width:68%;background:#eef0ee"></div>
+            </div>
+            <span style="position:absolute;left:16px;bottom:12px;display:inline-flex;align-items:center;gap:5px;border-radius:5px;background:rgba(15,18,20,0.72);color:#fff;padding:3px 8px;font-size:10.5px">
+              <i data-lucide="maximize-2" style="width:11px;height:11px"></i>Ganze Seite
+            </span>
+            <span style="position:absolute;right:16px;bottom:12px;border-radius:5px;background:rgba(15,18,20,0.72);color:#fff;padding:3px 8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px">1 / 3</span>
+          </button>
+
+          <div style="flex:1;min-height:0;overflow:auto">
+            <div data-b style="padding:12px 16px;border-bottom:1px solid #e3e6e3">
+              <p style="font-size:15px;font-weight:600;line-height:1.35">{{ reviewDoc.title }}</p>
+              <p data-t="dim" style="font-size:12.5px;color:#8b9089;margin-top:4px">{{ reviewDoc.meta }}</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:9px">
+                <sc-for list="{{ reviewDoc.reasons }}" as="rr" hint-placeholder-count="2">
+                  <span data-a="warn" style="border-radius:4px;background:#fdf1e3;color:#8a5a19;padding:2px 7px;font-size:11px;font-weight:600">{{ rr }}</span>
+                </sc-for>
+              </div>
+            </div>
+
+            <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Zu bestätigen</span>
+              <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">{{ reviewDoc.fieldNote }}</span>
+            </div>
+
+            <sc-for list="{{ reviewFields }}" as="rf" hint-placeholder-count="6">
+              <div data-b="soft" data-sel="{{ rf.sel }}" style="{{ rf.rowStyle }}">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span data-t="dim" style="flex:1;font-size:11.5px;color:#8b9089">{{ rf.label }}</span>
+                  <span data-a="{{ rf.confTone }}" data-off="{{ rf.confOff }}" style="{{ rf.confStyle }}">{{ rf.conf }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+                  <span data-t="{{ rf.valTone }}" style="{{ rf.valStyle }}">{{ rf.value }}</span>
+                  <button onClick="{{ openZoom }}" data-t="accent" data-off="{{ rf.showOff }}" style="{{ rf.showStyle }}">Im Dokument zeigen</button>
+                  <span data-t="faint" style="margin-left:auto;display:flex;color:#9aa09a"><i data-lucide="pencil" style="width:14px;height:14px"></i></span>
+                </div>
+              </div>
+            </sc-for>
+            <div style="height:12px"></div>
+          </div>
+
+          <div data-s="bar" data-b style="flex-shrink:0;padding:11px 16px 12px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+            <div style="display:flex;gap:9px">
+              <button onClick="{{ skipReview }}" data-s="panel" data-b="strong" style="height:46px;flex:1;border:1px solid #d6dad7;border-radius:9px;background:#fff;font-size:14px;font-weight:500;color:inherit;cursor:pointer">Überspringen</button>
+              <button onClick="{{ confirmReview }}" data-a="fill" style="display:flex;height:46px;flex:2;align-items:center;justify-content:center;gap:7px;border:none;border-radius:9px;background:#14544d;color:#fff;font-size:14px;font-weight:600;cursor:pointer">
+                <span style="display:flex;color:#fff"><i data-lucide="check" style="width:16px;height:16px"></i></span>Bestätigen
+              </button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ reviewZoom }}" hint-placeholder-val="{{ false }}">
+          <div data-s="sunken" style="flex:1;min-height:0;display:flex;flex-direction:column;background:#eceeec">
+            <div data-b style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding:9px 14px;border-bottom:1px solid #e3e6e3">
+              <button onClick="{{ closeZoom }}" data-t="accent" style="display:flex;align-items:center;gap:5px;border:none;background:transparent;padding:4px 4px 4px 0;font-size:13.5px;font-weight:500;color:#14544d;cursor:pointer">
+                <i data-lucide="chevron-left" style="width:18px;height:18px"></i>Felder
+              </button>
+              <span data-t="dim" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">3 Seiten</span>
+            </div>
+
+            <div ref="{{ zoomScroller }}" onScroll="{{ onZoomScroll }}" style="flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px">
+
+              <div data-s="paper" style="width:100%;max-width:300px;height:424px;flex-shrink:0;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 3px 18px rgba(20,40,35,0.2);padding:24px;display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div data-a="fill" style="height:8px;width:104px;background:#14544d"></div>
+                  <div data-rule style="height:26px;width:26px;background:#e3e6e3"></div>
+                </div>
+                <div data-rule style="height:4px;width:52%;background:#eef0ee;margin-top:14px"></div>
+                <div data-rule style="height:4px;width:38%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:10px 0"></div>
+                <div data-rule style="height:4px;width:92%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:84%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:88%;background:#eef0ee"></div>
+                <div data-a="warn" style="border-radius:3px;background:#fdf1e3;box-shadow:inset 3px 0 0 #8a5a19;padding:9px 10px;margin:8px 0">
+                  <p data-t="amber" style="font-size:11.5px;line-height:1.6;color:#8a5a19">{{ reviewDoc.cite }}</p>
+                </div>
+                <div data-rule style="height:4px;width:86%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:78%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:82%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:64%;background:#eef0ee"></div>
+                <div style="margin-top:26px;display:flex;justify-content:space-between;align-items:flex-end">
+                  <div data-rule style="height:4px;width:28%;background:#eef0ee"></div>
+                  <div data-a="fill" style="height:8px;width:22%;background:#14544d;opacity:0.7"></div>
+                </div>
+              </div>
+
+              <div data-s="paper" style="width:100%;max-width:300px;height:424px;flex-shrink:0;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 3px 18px rgba(20,40,35,0.2);padding:24px;display:flex;flex-direction:column;gap:6px">
+                <div data-rule style="height:4px;width:44%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:9px 0"></div>
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <div data-rule style="height:4px;flex:1;background:#eef0ee"></div>
+                    <div data-rule style="height:4px;width:38px;background:#e3e6e3"></div>
+                  </div>
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <div data-rule style="height:4px;flex:1;background:#eef0ee"></div>
+                    <div data-rule style="height:4px;width:44px;background:#e3e6e3"></div>
+                  </div>
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <div data-rule style="height:4px;flex:1;background:#eef0ee"></div>
+                    <div data-rule style="height:4px;width:34px;background:#e3e6e3"></div>
+                  </div>
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <div data-rule style="height:4px;flex:1;background:#eef0ee"></div>
+                    <div data-rule style="height:4px;width:41px;background:#e3e6e3"></div>
+                  </div>
+                </div>
+                <div data-rule style="height:1px;background:#e3e6e3;margin:11px 0 7px"></div>
+                <div style="display:flex;gap:10px;align-items:center">
+                  <div data-rule style="height:5px;flex:1;background:#e3e6e3"></div>
+                  <div data-a="fill" style="height:6px;width:52px;background:#14544d;opacity:0.75"></div>
+                </div>
+                <div data-rule style="height:4px;width:70%;background:#eef0ee;margin-top:22px"></div>
+                <div data-rule style="height:4px;width:58%;background:#eef0ee"></div>
+              </div>
+
+              <div data-s="paper" style="width:100%;max-width:300px;height:424px;flex-shrink:0;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 3px 18px rgba(20,40,35,0.2);padding:24px;display:flex;flex-direction:column;gap:6px">
+                <div data-rule style="height:4px;width:36%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:9px 0"></div>
+                <div data-rule style="height:4px;width:88%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:76%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:82%;background:#eef0ee"></div>
+                <div data-rule style="height:4px;width:48%;background:#eef0ee"></div>
+                <div style="display:flex;gap:12px;align-items:flex-end;margin-top:30px">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+                    <div data-rule style="height:14px;width:64px;background:#eef0ee"></div>
+                    <div data-rule style="height:3px;width:80%;background:#e3e6e3"></div>
+                  </div>
+                  <div data-rule style="height:26px;width:26px;background:#eef0ee"></div>
+                </div>
+              </div>
+
+              <span data-t="faint" style="flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;padding-bottom:2px">Ende des Dokuments</span>
+            </div>
+
+            <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding:7px 16px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+              <button onClick="{{ prevPage }}" data-t="{{ prevTone }}" style="{{ prevStyle }}"><i data-lucide="chevron-up" style="width:16px;height:16px"></i></button>
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">Seite {{ zoomPage }} / 3</span>
+              <button onClick="{{ nextPage }}" data-t="{{ nextTone }}" style="{{ nextStyle }}"><i data-lucide="chevron-down" style="width:16px;height:16px"></i></button>
+              <button onClick="{{ goToCite }}" data-a="warn" style="margin-left:auto;flex-shrink:0;display:inline-flex;align-items:center;gap:5px;border:none;border-radius:6px;background:#fdf1e3;color:#8a5a19;padding:5px 9px;font-size:11.5px;font-weight:600;cursor:pointer">
+                <i data-lucide="crosshair" style="width:13px;height:13px"></i>Zur Fundstelle
+              </button>
+            </div>
+
+            <div data-s="bar" data-b style="flex-shrink:0;padding:11px 16px 12px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+              <div data-a="warn" style="display:flex;align-items:center;gap:9px;border-radius:8px;background:#fdf1e3;padding:9px 11px">
+                <span data-t="amber" style="display:flex;flex-shrink:0;color:#8a5a19"><i data-lucide="circle-alert" style="width:15px;height:15px"></i></span>
+                <div style="flex:1;min-width:0">
+                  <p data-t="amber" style="font-size:12px;color:#8a5a19">{{ zoomLabel }}</p>
+                  <p data-t="{{ zoomTone }}" style="{{ zoomStyle }}">{{ zoomValue }}</p>
+                </div>
+                <button onClick="{{ closeZoom }}" data-a="fill" style="flex-shrink:0;height:34px;border:none;border-radius:7px;background:#14544d;color:#fff;padding:0 13px;font-size:12.5px;font-weight:600;cursor:pointer">Passt</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- ─────────────── TAB: CHAT ─────────────── -->
+      <sc-if value="{{ isChat }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;height:46px;flex-shrink:0;padding:0 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <div style="flex:1;min-width:0">
+            <h2 style="font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Fällige Rechnungen</h2>
+            <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:1px">Ganzes Archiv</p>
+          </div>
+          <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="history" style="width:18px;height:18px"></i></span>
+          <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="plus" style="width:19px;height:19px"></i></span>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;justify-content:flex-end">
+            <div data-a="soft" style="max-width:82%;border-radius:12px 12px 3px 12px;background:#e7edea;color:#14544d;padding:9px 12px;font-size:14px;line-height:1.5">Welche Rechnungen sind diesen Monat fällig?</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <p style="font-size:14px;line-height:1.7">Drei Rechnungen, zusammen <strong>1.284,60 €</strong>. Die Jahresabrechnung der Stadtwerke ist <span data-t="red" style="color:#a8462f;font-weight:600">seit 4 Tagen überfällig</span><span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#14544d;background:#e7edea;border-radius:3px;padding:1px 4px;margin-left:3px">1</span>.</p>
+
+            <div data-s="bar" data-b style="border:1px solid #e3e6e3;border-radius:9px;background:#f7f8f7;overflow:hidden">
+              <div data-b="soft" style="display:flex;align-items:center;padding:7px 11px;border-bottom:1px solid #eef0ee">
+                <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:0.13em;color:#8b9089">Offene Posten</span>
+                <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600">1.284,60 €</span>
+              </div>
+              <sc-for list="{{ chatRows }}" as="c" hint-placeholder-count="3">
+                <button onClick="{{ openDetail }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:10px;padding:9px 11px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+                  <div style="flex:1;min-width:0">
+                    <p style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.title }}</p>
+                    <p data-t="{{ c.dueTone }}" style="{{ c.dueStyle }}">{{ c.due }}</p>
+                  </div>
+                  <span style="flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ c.amount }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#9aa09a">Quellen</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <sc-for list="{{ sourcePills }}" as="sp" hint-placeholder-count="3">
+                <button onClick="{{ openDetail }}" data-s="bar" data-b style="display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid #e3e6e3;border-radius:999px;background:#f7f8f7;padding:4px 10px;font-size:11.5px;color:inherit;cursor:pointer">
+                  <span data-a="soft" style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:700;color:#14544d;background:#e7edea;border-radius:3px;padding:0 4px">{{ sp.n }}</span>
+                  <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sp.title }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ chatAsked }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;justify-content:flex-end">
+              <div data-a="soft" style="max-width:82%;border-radius:12px 12px 3px 12px;background:#e7edea;color:#14544d;padding:9px 12px;font-size:14px;line-height:1.5">{{ chatFollowUp }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">Durchsucht 1.284 Dokumente</span>
+                <span data-dot="accent" style="width:5px;height:5px;border-radius:9999px;background:#14544d;animation:ok-fade 900ms ease-in-out infinite alternate"></span>
+              </div>
+              <div data-track style="height:9px;width:78%;border-radius:3px;background:#eceeec"></div>
+              <div data-track style="height:9px;width:56%;border-radius:3px;background:#eceeec"></div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div data-s="bar" data-b style="flex-shrink:0;border-top:1px solid #e3e6e3;background:#f7f8f7;padding:10px 16px 12px">
+          <div style="display:flex;gap:6px;margin-bottom:9px;overflow:hidden">
+            <sc-for list="{{ followUps }}" as="fu" hint-placeholder-count="2">
+              <button onClick="{{ fu.go }}" data-b="strong" data-a="chip" style="flex-shrink:0;border:1px solid #d6dad7;border-radius:999px;background:transparent;padding:5px 11px;font-size:11.5px;color:#5b615c;white-space:nowrap;cursor:pointer">{{ fu.label }}</button>
+            </sc-for>
+          </div>
+          <div data-s="panel" data-b="strong" style="display:flex;align-items:center;gap:9px;border:1px solid #d6dad7;border-radius:10px;background:#fff;padding:7px 8px 7px 12px">
+            <input placeholder="Frag dein Archiv…" style="flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:inherit;outline:none">
+            <span data-a="fill" style="display:flex;height:32px;width:32px;flex-shrink:0;align-items:center;justify-content:center;border-radius:8px;background:#14544d;color:#fff"><i data-lucide="arrow-up" style="width:16px;height:16px"></i></span>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: DOCUMENT DETAIL ─────────────── -->
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:9px;height:46px;flex-shrink:0;padding:0 12px 0 6px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="accent" style="display:flex;border:none;background:transparent;padding:4px;color:#14544d;cursor:pointer"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></button>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Jahresabrechnung 2026</p>
+            <p data-t="faint" style="font-size:11px;color:#9aa09a;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Stadtwerke München · Rechnung</p>
+          </div>
+          <span data-a="ok" style="flex-shrink:0;border-radius:4px;background:#e8f0ea;color:#4a7d5a;padding:2px 6px;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600">96 %</span>
+          <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="ellipsis-vertical" style="width:18px;height:18px"></i></span>
+        </div>
+
+        <div data-s="bar" data-b style="display:flex;gap:2px;flex-shrink:0;padding:6px 12px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <sc-for list="{{ detailTabs }}" as="dt" hint-placeholder-count="4">
+            <button onClick="{{ dt.go }}" data-a="{{ dt.tone }}" data-off="{{ dt.off }}" style="{{ dt.style }}">{{ dt.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+
+          <!-- Dokument -->
+          <sc-if value="{{ tabPreview }}" hint-placeholder-val="{{ true }}">
+            <div data-b style="display:flex;flex-shrink:0;border-bottom:1px solid #e3e6e3">
+              <sc-for list="{{ keyFacts }}" as="kf" hint-placeholder-count="3">
+                <div data-b="soft" data-last="{{ kf.last }}" style="{{ kf.cellStyle }}">
+                  <p data-t="faint" style="font-size:10.5px;color:#9aa09a">{{ kf.label }}</p>
+                  <p data-t="{{ kf.tone }}" style="{{ kf.valStyle }}">{{ kf.value }}</p>
+                </div>
+              </sc-for>
+            </div>
+
+            <div data-s="sunken" style="display:flex;height:356px;flex-shrink:0;align-items:center;justify-content:center;background:#eceeec;padding:14px">
+              <sc-if value="{{ docPage1 }}" hint-placeholder-val="{{ true }}">
+              <div data-s="paper" style="width:232px;height:328px;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 2px 16px rgba(20,40,35,0.18);padding:22px;display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                  <div data-a="fill" style="height:7px;width:86px;background:#14544d"></div>
+                  <div data-rule style="height:22px;width:22px;background:#e3e6e3"></div>
+                </div>
+                <div data-rule style="height:3px;width:44%;background:#eef0ee;margin-top:12px"></div>
+                <div data-rule style="height:3px;width:32%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:9px 0"></div>
+                <div data-rule style="height:3px;width:90%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:78%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:86%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:70%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:82%;background:#eef0ee;margin-top:9px"></div>
+                <div data-rule style="height:3px;width:64%;background:#eef0ee"></div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto">
+                  <div data-rule style="height:3px;width:26%;background:#eef0ee"></div>
+                  <div data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#9aa09a">1</div>
+                </div>
+              </div>
+              </sc-if>
+              <sc-if value="{{ docPage2 }}" hint-placeholder-val="{{ false }}">
+              <div data-s="paper" style="width:232px;height:328px;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 2px 16px rgba(20,40,35,0.18);padding:22px;display:flex;flex-direction:column;gap:5px">
+                <div data-rule style="height:3px;width:40%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:8px 0"></div>
+                <div data-rule style="height:3px;width:88%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:76%;background:#eef0ee"></div>
+                <div data-a="warn" style="border-radius:3px;background:#fdf1e3;box-shadow:inset 3px 0 0 #8a5a19;padding:8px 9px;margin:7px 0">
+                  <p data-t="amber" style="font-size:10.5px;line-height:1.55;color:#8a5a19">„Der Gesamtbetrag von 486,20 € ist fällig am 18.03.2026.“</p>
+                </div>
+                <div data-rule style="height:3px;width:84%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:72%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#e3e6e3;margin:9px 0 6px"></div>
+                <div style="display:flex;gap:9px;align-items:center">
+                  <div data-rule style="height:4px;flex:1;background:#e3e6e3"></div>
+                  <div data-a="fill" style="height:6px;width:46px;background:#14544d;opacity:0.75"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto">
+                  <div data-rule style="height:3px;width:26%;background:#eef0ee"></div>
+                  <div data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#9aa09a">2</div>
+                </div>
+              </div>
+              </sc-if>
+              <sc-if value="{{ docPage3 }}" hint-placeholder-val="{{ false }}">
+              <div data-s="paper" style="width:232px;height:328px;box-sizing:border-box;overflow:hidden;background:#fff;box-shadow:0 2px 16px rgba(20,40,35,0.18);padding:22px;display:flex;flex-direction:column;gap:5px">
+                <div data-rule style="height:3px;width:34%;background:#eef0ee"></div>
+                <div data-rule style="height:1px;background:#eef0ee;margin:8px 0"></div>
+                <div data-rule style="height:3px;width:86%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:74%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:80%;background:#eef0ee"></div>
+                <div data-rule style="height:3px;width:46%;background:#eef0ee"></div>
+                <div style="display:flex;gap:11px;align-items:flex-end;margin-top:26px">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+                    <div data-rule style="height:13px;width:58px;background:#eef0ee"></div>
+                    <div data-rule style="height:3px;width:78%;background:#e3e6e3"></div>
+                  </div>
+                  <div data-rule style="height:24px;width:24px;background:#eef0ee"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:auto">
+                  <div data-rule style="height:3px;width:26%;background:#eef0ee"></div>
+                  <div data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#9aa09a">3</div>
+                </div>
+              </div>
+              </sc-if>
+            </div>
+
+            <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;flex-shrink:0;padding:7px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <button onClick="{{ docPrev }}" data-t="{{ docPrevTone }}" style="{{ docPrevStyle }}"><i data-lucide="chevron-left" style="width:16px;height:16px"></i></button>
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089">Seite {{ docPage }} / 3</span>
+              <button onClick="{{ docNext }}" data-t="{{ docNextTone }}" style="{{ docNextStyle }}"><i data-lucide="chevron-right" style="width:16px;height:16px"></i></button>
+              <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">PDF · durchsuchbar</span>
+            </div>
+          </sc-if>
+
+          <!-- Details -->
+          <sc-if value="{{ tabOverview }}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{ fields }}" as="fl" hint-placeholder-count="6">
+              <div data-b="soft" style="display:flex;align-items:center;gap:10px;min-height:52px;padding:9px 16px;border-bottom:1px solid #eef0ee">
+                <span data-t="dim" style="width:98px;flex-shrink:0;font-size:12.5px;color:#8b9089">{{ fl.label }}</span>
+                <span data-t="{{ fl.tone }}" style="{{ fl.valStyle }}">{{ fl.value }}</span>
+                <span data-a="warn" data-off="{{ fl.confOff }}" style="{{ fl.confStyle }}">{{ fl.conf }}</span>
+                <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:15px;height:15px"></i></span>
+              </div>
+            </sc-for>
+
+            <div data-b="soft" style="padding:11px 16px;border-bottom:1px solid #eef0ee">
+              <p data-t="dim" style="font-size:12.5px;color:#8b9089">Tags</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+                <span data-a="soft" style="border-radius:4px;background:#e7edea;color:#14544d;padding:3px 8px;font-size:11.5px;font-weight:600">Energie</span>
+                <span data-a="soft" style="border-radius:4px;background:#e7edea;color:#14544d;padding:3px 8px;font-size:11.5px;font-weight:600">Rechnung</span>
+                <span data-b="strong" data-a="chip" style="border:1px solid #d6dad7;border-radius:4px;color:#5b615c;padding:3px 8px;font-size:11.5px">+ Tag</span>
+              </div>
+              <p data-t="faint" style="font-size:11.5px;color:#9aa09a;margin-top:11px">Vorgeschlagen</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px">
+                <span data-b="strong" data-a="chip" style="border:1px dashed #d6dad7;border-radius:4px;color:#5b615c;padding:3px 8px;font-size:11.5px">+ Jahresabrechnung</span>
+                <span data-b="strong" data-a="chip" style="border:1px dashed #d6dad7;border-radius:4px;color:#5b615c;padding:3px 8px;font-size:11.5px">+ Strom</span>
+              </div>
+            </div>
+
+            <div data-s="bar" data-b style="padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Datei</span>
+            </div>
+            <sc-for list="{{ fileMeta }}" as="pm" hint-placeholder-count="5">
+              <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 16px;border-bottom:1px solid #eef0ee">
+                <span data-t="dim" style="width:98px;flex-shrink:0;font-size:12.5px;color:#8b9089">{{ pm.label }}</span>
+                <span data-t="{{ pm.tone }}" style="{{ pm.valStyle }}">{{ pm.value }}</span>
+              </div>
+            </sc-for>
+            <div style="height:12px"></div>
+          </sc-if>
+
+          <!-- Fragen -->
+          <sc-if value="{{ tabInsights }}" hint-placeholder-val="{{ false }}">
+            <div data-b style="padding:13px 16px;border-bottom:1px solid #e3e6e3">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span data-t="accent" style="display:flex;color:#14544d"><i data-lucide="sparkles" style="width:14px;height:14px"></i></span>
+                <p data-t="dim" style="font-size:12px;color:#8b9089">Zusammenfassung</p>
+                <button data-t="accent" style="margin-left:auto;border:none;background:transparent;padding:0;font-size:11.5px;font-weight:600;color:#14544d;cursor:pointer">Neu</button>
+              </div>
+              <p style="font-size:13.5px;line-height:1.65;margin-top:9px">Jahresabrechnung für 2025 über <strong>486,20 €</strong>, fällig am 18.03.2026. Der Verbrauch lag 6 % unter dem Vorjahr; der monatliche Abschlag wurde zum 01.01.2026 auf 94,00 € gesenkt.</p>
+              <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:10px">gpt-4o-mini · zwischengespeichert</p>
+            </div>
+
+            <div style="padding:13px 16px">
+              <p data-t="dim" style="font-size:12.5px;color:#8b9089">Fragen zu diesem Dokument</p>
+              <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+                <sc-for list="{{ askChips }}" as="ac" hint-placeholder-count="3">
+                  <button data-s="panel" data-b="strong" style="display:flex;align-items:center;gap:9px;width:100%;border:1px solid #d6dad7;border-radius:9px;background:#fff;padding:10px 12px;font-size:13px;text-align:left;color:inherit;font-family:inherit;cursor:pointer">
+                    <span style="flex:1;min-width:0">{{ ac }}</span>
+                    <span data-t="faint" style="display:flex;flex-shrink:0;color:#9aa09a"><i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- Verlauf -->
+          <sc-if value="{{ tabActivity }}" hint-placeholder-val="{{ false }}">
+            <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Erkannter Text</span>
+              <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">3 Seiten</span>
+            </div>
+            <sc-for list="{{ ocrPages }}" as="op" hint-placeholder-count="2">
+              <div data-b="soft" style="padding:11px 16px;border-bottom:1px solid #eef0ee">
+                <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#9aa09a">Seite {{ op.n }}</p>
+                <p data-mono-block data-s="raised" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.6;background:#f2f4f2;border-radius:6px;padding:9px 10px;margin-top:8px">{{ op.text }}</p>
+              </div>
+            </sc-for>
+
+            <div data-s="bar" data-b style="padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Änderungen</span>
+            </div>
+            <div style="padding:10px 16px 16px">
+              <sc-for list="{{ historyRows }}" as="hr" hint-placeholder-count="4">
+                <div style="display:flex;gap:10px;padding:7px 0">
+                  <span data-dot="{{ hr.dot }}" style="width:6px;height:6px;flex-shrink:0;border-radius:9999px;background:#4a7d5a;margin-top:6px"></span>
+                  <div style="flex:1;min-width:0">
+                    <p style="font-size:13px">{{ hr.label }}</p>
+                    <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:2px">{{ hr.at }}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ tabInsights }}" hint-placeholder-val="{{ false }}">
+          <div data-s="bar" data-b style="flex-shrink:0;padding:10px 16px 34px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+            <div data-s="panel" data-b="strong" style="display:flex;align-items:center;gap:9px;border:1px solid #d6dad7;border-radius:10px;background:#fff;padding:7px 8px 7px 12px">
+              <input placeholder="Frag dieses Dokument…" style="flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:inherit;outline:none">
+              <span data-a="fill" style="display:flex;height:32px;width:32px;flex-shrink:0;align-items:center;justify-content:center;border-radius:8px;background:#14544d;color:#fff"><i data-lucide="arrow-up" style="width:16px;height:16px"></i></span>
+            </div>
+            <p data-t="faint" style="font-size:11px;color:#9aa09a;margin-top:8px;text-align:center">Nur der Text dieses Dokuments wird gesendet.</p>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabActions }}" hint-placeholder-val="{{ true }}">
+          <div data-s="bar" data-b style="display:flex;gap:9px;flex-shrink:0;padding:11px 16px 34px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+            <button data-s="panel" data-b="strong" style="display:flex;height:46px;flex:1;align-items:center;justify-content:center;gap:7px;border:1px solid #d6dad7;border-radius:9px;background:#fff;font-size:14px;font-weight:500;color:inherit;cursor:pointer">
+              <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="share" style="width:15px;height:15px"></i></span>Teilen
+            </button>
+            <button onClick="{{ back }}" data-a="fill" style="height:46px;flex:1;border:none;border-radius:9px;background:#14544d;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Erledigt</button>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- ─────────────── STACK: SETTINGS ─────────────── -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:9px;height:46px;flex-shrink:0;padding:0 12px 0 6px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="accent" style="display:flex;border:none;background:transparent;padding:4px;color:#14544d;cursor:pointer"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></button>
+          <h2 style="font-size:16px;flex:1">Einstellungen</h2>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div data-b style="display:flex;align-items:center;gap:13px;padding:15px 16px;border-bottom:1px solid #e3e6e3">
+            <span data-a="soft" style="display:flex;height:44px;width:44px;flex-shrink:0;align-items:center;justify-content:center;border-radius:9px;background:#e7edea;color:#14544d;font-size:15px;font-weight:700">OK</span>
+            <div style="flex:1;min-width:0">
+              <p style="font-size:15px;font-weight:600">Archive Owner</p>
+              <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">owner@example.com</p>
+            </div>
+            <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:17px;height:17px"></i></span>
+          </div>
+
+          <sc-for list="{{ settingsGroups }}" as="sg" hint-placeholder-count="4">
+            <div data-s="bar" data-b style="padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+              <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">{{ sg.label }}</span>
+            </div>
+            <sc-for list="{{ sg.rows }}" as="sr" hint-placeholder-count="3">
+              <button onClick="{{ sr.go }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:12px;min-height:50px;padding:8px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+                <span data-t="{{ sr.iconTone }}" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="{{ sr.icon }}" style="width:17px;height:17px"></i></span>
+                <span style="flex-shrink:0;font-size:14px">{{ sr.label }}</span>
+                <span data-t="{{ sr.valueTone }}" style="{{ sr.valueStyle }}">{{ sr.value }}</span>
+                <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:15px;height:15px"></i></span>
+              </button>
+            </sc-for>
+          </sc-for>
+
+          <div style="padding:16px">
+            <button onClick="{{ goConnect }}" data-s="panel" data-b="strong" style="display:flex;height:46px;width:100%;align-items:center;justify-content:center;gap:8px;border:1px solid #d6dad7;border-radius:9px;background:#fff;font-size:14px;font-weight:500;color:inherit;cursor:pointer">
+              <span data-t="red" style="display:flex;color:#a8462f"><i data-lucide="log-out" style="width:16px;height:16px"></i></span>
+              <span data-t="red" style="color:#a8462f">Abmelden</span>
+            </button>
+            <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;text-align:center;margin-top:14px">OpenKeep Mobile 0.1.0</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: OFFLINE ─────────────── -->
+      <sc-if value="{{ isOffline }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:9px;height:46px;flex-shrink:0;padding:0 12px 0 6px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="accent" style="display:flex;border:none;background:transparent;padding:4px;color:#14544d;cursor:pointer"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></button>
+          <h2 style="font-size:16px;flex:1">Offline verfügbar</h2>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div data-b style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #e3e6e3">
+            <span data-a="ok" style="display:flex;height:36px;width:36px;flex-shrink:0;align-items:center;justify-content:center;border-radius:9px;background:#e8f0ea;color:#4a7d5a"><i data-lucide="wifi" style="width:18px;height:18px"></i></span>
+            <div style="flex:1;min-width:0">
+              <p style="font-size:14.5px;font-weight:600">Verbunden</p>
+              <p data-t="dim" style="font-size:12px;color:#8b9089;margin-top:2px">Ohne Verbindung schaltet die App selbst auf die Kopie um.</p>
+            </div>
+          </div>
+
+          <div data-b style="display:flex;padding:14px 16px;border-bottom:1px solid #e3e6e3">
+            <sc-for list="{{ offlineStats }}" as="os" hint-placeholder-count="3">
+              <div style="flex:1;min-width:0">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;letter-spacing:-0.02em">{{ os.value }}</p>
+                <p data-t="faint" style="font-size:10.5px;color:#9aa09a;margin-top:2px">{{ os.label }}</p>
+              </div>
+            </sc-for>
+          </div>
+
+          <div data-s="bar" data-b style="padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Pro Dokument gespeichert</span>
+          </div>
+          <sc-for list="{{ offlineRows }}" as="orw" hint-placeholder-count="4">
+            <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:9px 16px;border-bottom:1px solid #eef0ee">
+              <span data-t="dim" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="{{ orw.icon }}" style="width:16px;height:16px"></i></span>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px">{{ orw.label }}</p>
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ orw.hint }}</p>
+              </div>
+            </div>
+          </sc-for>
+
+          <div data-a="soft" style="display:flex;gap:11px;margin:14px 16px 0;border-radius:9px;background:#e7edea;padding:12px">
+            <span data-t="accent" style="display:flex;flex-shrink:0;color:#14544d"><i data-lucide="info" style="width:16px;height:16px"></i></span>
+            <p data-t="accent" style="flex:1;font-size:12.5px;line-height:1.55;color:#14544d">Geöffnete Dokumente bleiben offline verfügbar. Es gibt keinen Voll-Download — die Kopie wächst mit dem, was du liest.</p>
+          </div>
+
+          <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:9px 16px;margin-top:14px;border-top:1px solid #eef0ee;border-bottom:1px solid #eef0ee">
+            <span data-t="dim" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="message-square-off" style="width:16px;height:16px"></i></span>
+            <div style="flex:1;min-width:0">
+              <p style="font-size:14px">Chat und Suche</p>
+              <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">Antworten brauchen eine Verbindung</p>
+            </div>
+            <span data-b="strong" data-a="chip" style="flex-shrink:0;border:1px solid #d6dad7;border-radius:4px;color:#8b9089;padding:2px 7px;font-size:11px;font-weight:600">nur online</span>
+          </div>
+
+          <div style="padding:16px">
+            <button data-s="panel" data-b="strong" style="display:flex;height:44px;width:100%;align-items:center;justify-content:center;gap:8px;border:1px solid #d6dad7;border-radius:9px;background:#fff;font-size:14px;font-weight:500;cursor:pointer">
+              <span data-t="red" style="display:flex;color:#a8462f"><i data-lucide="trash-2" style="width:15px;height:15px"></i></span>
+              <span data-t="red" style="color:#a8462f">Kopie löschen</span>
+            </button>
+            <p data-t="faint" style="font-size:11px;line-height:1.5;color:#9aa09a;margin-top:11px">Entfernt nur die lokale Kopie. Im Archiv bleibt alles unverändert.</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: CORRESPONDENTS ─────────────── -->
+      <sc-if value="{{ isCorrespondents }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:9px;height:46px;flex-shrink:0;padding:0 12px 0 6px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="accent" style="display:flex;border:none;background:transparent;padding:4px;color:#14544d;cursor:pointer"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></button>
+          <h2 style="font-size:16px;flex:1">Absender</h2>
+          <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="search" style="width:18px;height:18px"></i></span>
+        </div>
+        <div data-s="bar" data-b style="display:flex;align-items:center;flex-shrink:0;padding:7px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#8b9089">84 Absender</span>
+          <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">Nach Anzahl</span>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto">
+          <sc-for list="{{ correspondents }}" as="co" hint-placeholder-count="9">
+            <button onClick="{{ goDossier }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:12px;min-height:58px;padding:9px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+              <span data-a="soft" style="display:flex;height:32px;width:32px;flex-shrink:0;align-items:center;justify-content:center;border-radius:7px;background:#e7edea;color:#14544d;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700">{{ co.initials }}</span>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ co.name }}</p>
+                <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#8b9089;margin-top:3px">{{ co.count }} Dokumente</p>
+              </div>
+              <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:16px;height:16px"></i></span>
+            </button>
+          </sc-for>
+          <div style="height:12px"></div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: DOSSIER ─────────────── -->
+      <sc-if value="{{ isDossier }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:9px;height:46px;flex-shrink:0;padding:0 12px 0 6px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="accent" style="display:flex;border:none;background:transparent;padding:4px;color:#14544d;cursor:pointer"><i data-lucide="chevron-left" style="width:22px;height:22px"></i></button>
+          <h2 style="font-size:15px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Stadtwerke München</h2>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div data-b style="display:flex;padding:14px 16px;border-bottom:1px solid #e3e6e3">
+            <sc-for list="{{ dossierStats }}" as="ds" hint-placeholder-count="3">
+              <div style="flex:1;min-width:0">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;letter-spacing:-0.02em">{{ ds.value }}</p>
+                <p data-t="faint" style="font-size:10.5px;color:#9aa09a;margin-top:2px">{{ ds.label }}</p>
+              </div>
+            </sc-for>
+          </div>
+
+          <div data-b style="padding:13px 16px 15px;border-bottom:1px solid #e3e6e3">
+            <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Monatliche Aktivität</p>
+            <div style="display:flex;align-items:flex-end;gap:5px;height:52px;margin-top:12px">
+              <sc-for list="{{ dossierMonths }}" as="dm" hint-placeholder-count="12">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px">
+                  <div data-dot="{{ dm.dot }}" style="{{ dm.barStyle }}"></div>
+                  <span data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;color:#9aa09a">{{ dm.m }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Wichtige Änderungen</span>
+            <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">3</span>
+          </div>
+          <sc-for list="{{ keyChanges }}" as="kc" hint-placeholder-count="3">
+            <div data-b="soft" style="padding:10px 16px;border-bottom:1px solid #eef0ee">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="flex:1;min-width:0;font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ kc.label }}</span>
+                <span data-t="faint" style="flex-shrink:0;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">{{ kc.date }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:5px">
+                <span data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9aa09a;text-decoration:line-through">{{ kc.before }}</span>
+                <span data-t="faint" style="display:flex;color:#9aa09a"><i data-lucide="arrow-right" style="width:12px;height:12px"></i></span>
+                <span data-t="{{ kc.tone }}" style="{{ kc.afterStyle }}">{{ kc.after }}</span>
+              </div>
+            </div>
+          </sc-for>
+
+          <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Dokumente</span>
+            <span data-t="faint" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a">186</span>
+          </div>
+          <sc-for list="{{ dossierDocs }}" as="dd" hint-placeholder-count="6">
+            <button onClick="{{ openDetail }}" data-b="soft" style="display:flex;width:100%;align-items:center;gap:11px;min-height:56px;padding:9px 16px;border:none;border-bottom:1px solid #eef0ee;background:transparent;color:inherit;cursor:pointer;text-align:left">
+              <span data-dot="{{ dd.dot }}" style="width:7px;height:7px;flex-shrink:0;border-radius:9999px;background:#4a7d5a"></span>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ dd.title }}</p>
+                <p data-t="dim" style="font-size:11.5px;color:#8b9089;margin-top:2px">{{ dd.meta }}</p>
+              </div>
+              <div style="flex-shrink:0;text-align:right">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600">{{ dd.amount }}</p>
+                <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;margin-top:2px">{{ dd.date }}</p>
+              </div>
+            </button>
+          </sc-for>
+          <div style="height:12px"></div>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: SCAN ─────────────── -->
+      <sc-if value="{{ isScan }}" hint-placeholder-val="{{ false }}">
+        <div data-s="bar" data-b style="display:flex;align-items:center;gap:10px;height:46px;flex-shrink:0;padding:0 16px 0 10px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-t="dim" style="display:flex;border:none;background:transparent;padding:4px;color:#5b615c;cursor:pointer"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+          <h2 style="font-size:16px;flex:1">Import</h2>
+          <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#8b9089">3 Seiten</span>
+        </div>
+
+        <div style="flex:1;min-height:0;overflow:auto">
+          <div data-b style="padding:13px 16px;border-bottom:1px solid #e3e6e3">
+            <label style="display:flex;flex-direction:column;gap:7px">
+              <span data-t="dim" style="font-size:12px;color:#5b615c">Titel <span data-t="faint" style="color:#9aa09a">· optional</span></span>
+              <input data-s="panel" data-b="strong" placeholder="Sonst aus dem Dokument erkannt" style="height:40px;border:1px solid #d6dad7;border-radius:9px;background:#fff;padding:0 12px;font-size:14px;color:inherit;outline:none">
+            </label>
+          </div>
+
+          <div data-s="bar" data-b style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Erfasste Seiten</span>
+            <span data-t="accent" style="margin-left:auto;font-size:11.5px;font-weight:600;color:#14544d">Neu scannen</span>
+          </div>
+          <sc-for list="{{ scanPages }}" as="sp" hint-placeholder-count="3">
+            <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:74px;padding:10px 16px;border-bottom:1px solid #eef0ee">
+              <div data-s="paper" data-b style="width:40px;height:54px;flex-shrink:0;border:1px solid #e3e6e3;border-radius:4px;background:#fff;padding:5px;display:flex;flex-direction:column;gap:2px;overflow:hidden">
+                <div data-a="fill" style="height:3px;width:60%;background:#14544d"></div>
+                <div data-rule style="height:2px;width:82%;background:#eef0ee;margin-top:3px"></div>
+                <div data-rule style="height:2px;width:70%;background:#eef0ee"></div>
+                <div data-rule style="height:2px;width:78%;background:#eef0ee"></div>
+              </div>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:14px;font-weight:500">Seite {{ sp.n }}</p>
+                <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa09a;margin-top:3px">{{ sp.size }}</p>
+              </div>
+              <span data-t="red" style="flex-shrink:0;display:flex;color:#a8462f"><i data-lucide="trash-2" style="width:16px;height:16px"></i></span>
+            </div>
+          </sc-for>
+
+          <div data-s="bar" data-b style="padding:8px 16px;border-bottom:1px solid #e3e6e3;background:#f7f8f7">
+            <span data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.14em;color:#8b9089">Stattdessen importieren</span>
+          </div>
+          <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:9px 16px;border-bottom:1px solid #eef0ee">
+            <span data-t="dim" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="image" style="width:17px;height:17px"></i></span>
+            <span style="flex:1;font-size:14px">Bilder aus Dateien</span>
+            <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:15px;height:15px"></i></span>
+          </div>
+          <div data-b="soft" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:9px 16px;border-bottom:1px solid #eef0ee">
+            <span data-t="dim" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="file-text" style="width:17px;height:17px"></i></span>
+            <span style="flex:1;font-size:14px">PDF auswählen</span>
+            <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:15px;height:15px"></i></span>
+          </div>
+
+          <p data-t="faint" style="font-size:11.5px;line-height:1.55;color:#9aa09a;padding:13px 16px 0">Die Kamera öffnet den Scanner des Systems. Zugeschnittene Seiten landen hier als Entwurf.</p>
+          <div style="height:14px"></div>
+        </div>
+
+        <div data-s="bar" data-b style="flex-shrink:0;padding:11px 16px 34px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+          <button onClick="{{ back }}" data-a="fill" style="display:flex;height:48px;width:100%;align-items:center;justify-content:center;gap:8px;border:none;border-radius:9px;background:#14544d;color:#fff;font-size:15px;font-weight:600;cursor:pointer">
+            <span style="display:flex;color:#fff"><i data-lucide="arrow-up" style="width:16px;height:16px"></i></span>PDF erstellen und hochladen
+          </button>
+          <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;text-align:center;margin-top:9px">3 Seiten → 1 PDF</p>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── STACK: CONNECT ─────────────── -->
+      <sc-if value="{{ isConnect }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;overflow:auto;padding:28px 20px 20px">
+          <img src="brand/logo-mark.svg" alt="" style="width:34px;height:34px;border-radius:8px">
+          <h1 style="font-size:22px;margin-top:18px;letter-spacing:-0.02em">Mit deinem Archiv verbinden</h1>
+          <p data-t="dim" style="font-size:14px;line-height:1.6;color:#8b9089;margin-top:8px">Adresse und API-Token findest du in den Einstellungen deiner OpenKeep-Instanz.</p>
+
+          <div style="display:flex;flex-direction:column;gap:15px;margin-top:26px">
+            <label style="display:flex;flex-direction:column;gap:7px">
+              <span data-t="dim" style="font-size:12px;color:#5b615c">Server</span>
+              <input data-s="panel" data-b="strong" value="https://archive.example.com" style="height:44px;border:1px solid #d6dad7;border-radius:9px;background:#fff;padding:0 12px;font-size:14px;color:inherit;outline:none">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:7px">
+              <span data-t="dim" style="font-size:12px;color:#5b615c">API-Token</span>
+              <div data-s="panel" data-b="strong" style="display:flex;align-items:center;gap:8px;height:44px;border:1px solid #d6dad7;border-radius:9px;background:#fff;padding:0 12px">
+                <input value="ok_live_8f2c9d41" style="flex:1;min-width:0;border:none;background:transparent;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:inherit;outline:none">
+                <span data-t="faint" style="display:flex;color:#9aa09a"><i data-lucide="eye" style="width:16px;height:16px"></i></span>
+              </div>
+            </label>
+          </div>
+
+          <div data-b="soft" style="display:flex;align-items:center;gap:10px;margin-top:18px;padding-top:15px;border-top:1px solid #eef0ee">
+            <span data-t="dim" style="display:flex;color:#5b615c"><i data-lucide="shield" style="width:16px;height:16px"></i></span>
+            <span data-t="dim" style="flex:1;font-size:13px;color:#5b615c">Cloudflare Access</span>
+            <span data-t="faint" style="font-size:12px;color:#9aa09a">Optional</span>
+            <span data-t="faint" style="display:flex;color:#9aa09a"><i data-lucide="chevron-down" style="width:16px;height:16px"></i></span>
+          </div>
+
+          <button onClick="{{ goToday }}" data-a="fill" style="display:flex;height:48px;width:100%;align-items:center;justify-content:center;border:none;border-radius:9px;background:#14544d;color:#fff;font-size:15px;font-weight:600;margin-top:24px;cursor:pointer">Verbinden</button>
+
+          <button onClick="{{ goToday }}" data-s="bar" data-b style="display:flex;width:100%;align-items:center;gap:11px;border:1px solid #e3e6e3;border-radius:9px;background:#f7f8f7;padding:12px;margin-top:14px;color:inherit;cursor:pointer;text-align:left">
+            <span data-t="dim" style="display:flex;flex-shrink:0;color:#5b615c"><i data-lucide="cloud-off" style="width:17px;height:17px"></i></span>
+            <div style="flex:1;min-width:0">
+              <p style="font-size:13.5px;font-weight:500">Offline-Kopie öffnen</p>
+              <p data-t="dim" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b9089;margin-top:2px">184 Dokumente · 1,8 GB</p>
+            </div>
+            <span data-t="faint" style="flex-shrink:0;display:flex;color:#9aa09a"><i data-lucide="chevron-right" style="width:16px;height:16px"></i></span>
+          </button>
+        </div>
+        <div style="flex-shrink:0;padding:0 20px 34px">
+          <p data-t="faint" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa09a;text-align:center">Dein Archiv läuft auf deiner Hardware</p>
+        </div>
+      </sc-if>
+
+      <!-- ─────────────── TAB BAR + FAB ─────────────── -->
+      <sc-if value="{{ showTabBar }}" hint-placeholder-val="{{ true }}">
+        <div style="position:relative;flex-shrink:0">
+          <sc-if value="{{ showFab }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ goScan }}" data-a="fill" style="position:absolute;right:16px;top:-64px;display:flex;height:52px;width:52px;align-items:center;justify-content:center;border:none;border-radius:16px;background:#14544d;color:#fff;box-shadow:0 6px 20px rgba(15,25,22,0.28);cursor:pointer">
+              <span style="display:flex;color:#fff"><i data-lucide="scan-line" style="width:23px;height:23px"></i></span>
+            </button>
+          </sc-if>
+          <div data-s="bar" data-b style="display:flex;padding:6px 4px 34px;border-top:1px solid #e3e6e3;background:#f7f8f7">
+            <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="4">
+              <button onClick="{{ tb.go }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0;border:none;background:transparent;cursor:pointer">
+                <div style="position:relative">
+                  <span data-t="{{ tb.tone }}" style="display:flex;color:#9aa09a"><i data-lucide="{{ tb.icon }}" style="width:21px;height:21px"></i></span>
+                  <span data-dot="{{ tb.badgeDot }}" data-off="{{ tb.badgeOff }}" style="{{ tb.badgeStyle }}"></span>
+                </div>
+                <span data-t="{{ tb.tone }}" style="font-size:10px;font-weight:500;color:#9aa09a">{{ tb.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </x-import>
+
+  <p data-t="cdim" style="font-size:12.5px;color:#5b615c;text-align:center;max-width:400px;line-height:1.55">Tab-Bar, Zeilen, Filter-Chips, die vier Detail-Tabs und der FAB reagieren. Review lässt sich bis zur leeren Queue durchklicken; das Erscheinungsbild schaltest du in den Einstellungen.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:520,&quot;height&quot;:1060},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;\&quot;dark\&quot; | \&quot;light\&quot;&quot;,&quot;section&quot;:&quot;Appearance&quot;},&quot;tabLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Navigation&quot;}}">
+const MONO = "'IBM Plex Mono',monospace";
+const GREEN = "#14544d", AMBER = "#8a5a19", RED = "#a8462f", OK = "#4a7d5a";
+
+const REVIEW_QUEUE = [
+  {
+    title: "Jahresabrechnung 2026", meta: "Stadtwerke München · Rechnung",
+    reasons: ["Betrag unsicher", "Frist fehlt"], fieldNote: "2 von 6 Feldern",
+    cite: "„Der Gesamtbetrag von 486,20 € ist fällig am 18.03.2026 und wird ohne Abzug erbeten.“",
+    fields: [
+      { label: "Betrag", value: "486,20 €", conf: "61 %", low: true, mono: true },
+      { label: "Fälligkeit", value: "Fehlt — antippen", conf: "—", missing: true },
+      { label: "Absender", value: "Stadtwerke München", conf: "98 %" },
+      { label: "Typ", value: "Rechnung", conf: "96 %" },
+      { label: "Datum", value: "18.03.2026", conf: "99 %", mono: true },
+      { label: "Tags", value: "Energie, Rechnung", conf: "94 %" },
+    ],
+  },
+  {
+    title: "scan_2026-03-22_bescheid.pdf", meta: "Absender unklar · Bescheid",
+    reasons: ["Absender unklar"], fieldNote: "1 von 5 Feldern",
+    cite: "„AOK Bayern · Landesdirektion Süd“ — Briefkopf teilweise abgeschnitten.",
+    fields: [
+      { label: "Absender", value: "AOK Bayern?", conf: "44 %", low: true },
+      { label: "Typ", value: "Bescheid", conf: "91 %" },
+      { label: "Datum", value: "20.03.2026", conf: "97 %", mono: true },
+      { label: "Betrag", value: "212,00 €", conf: "95 %", mono: true },
+      { label: "Tags", value: "Gesundheit", conf: "88 %" },
+    ],
+  },
+  {
+    title: "Mietnebenkosten 2025", meta: "Hausverwaltung Kern · Abrechnung",
+    reasons: ["Betrag unsicher"], fieldNote: "1 von 6 Feldern",
+    cite: "„Ihr Anteil an den Gesamtkosten beträgt 1.104,00 €.“",
+    fields: [
+      { label: "Betrag", value: "1.104,00 €", conf: "58 %", low: true, mono: true },
+      { label: "Absender", value: "Hausverwaltung Kern", conf: "97 %" },
+      { label: "Typ", value: "Abrechnung", conf: "94 %" },
+      { label: "Datum", value: "24.02.2026", conf: "99 %", mono: true },
+      { label: "Zeitraum", value: "2025", conf: "92 %", mono: true },
+      { label: "Tags", value: "Wohnung", conf: "90 %" },
+    ],
+  },
+  {
+    title: "IMG_4471.HEIC", meta: "Absender fehlt · Typ unklar",
+    reasons: ["Absender fehlt", "Typ unklar"], fieldNote: "2 von 4 Feldern",
+    cite: "Kein Briefkopf erkannt — Foto beginnt mit der Betragszeile.",
+    fields: [
+      { label: "Absender", value: "Fehlt — antippen", conf: "—", missing: true },
+      { label: "Typ", value: "Quittung?", conf: "39 %", low: true },
+      { label: "Datum", value: "21.03.2026", conf: "96 %", mono: true },
+      { label: "Betrag", value: "24,90 €", conf: "93 %", mono: true },
+    ],
+  },
+  {
+    title: "Beitragsbescheid Q2 2026", meta: "AOK Bayern · Bescheid",
+    reasons: ["Frist fehlt"], fieldNote: "1 von 5 Feldern",
+    cite: "„Zahlung erbeten nach Erhalt dieses Bescheids.“ — kein Datum genannt.",
+    fields: [
+      { label: "Fälligkeit", value: "Fehlt — antippen", conf: "—", missing: true },
+      { label: "Absender", value: "AOK Bayern", conf: "99 %" },
+      { label: "Typ", value: "Bescheid", conf: "97 %" },
+      { label: "Datum", value: "06.03.2026", conf: "99 %", mono: true },
+      { label: "Betrag", value: "212,00 €", conf: "98 %", mono: true },
+    ],
+  },
+  {
+    title: "Gehaltsabrechnung Februar", meta: "Berenberg · Abrechnung",
+    reasons: ["Betrag unsicher"], fieldNote: "1 von 4 Feldern",
+    cite: "„Gesamtbrutto 5.210,00 € · Auszahlungsbetrag 3.412,88 €“ — zwei Beträge gefunden.",
+    fields: [
+      { label: "Betrag", value: "Mehrere gefunden", conf: "52 %", low: true },
+      { label: "Absender", value: "Berenberg", conf: "98 %" },
+      { label: "Typ", value: "Abrechnung", conf: "95 %" },
+      { label: "Datum", value: "28.02.2026", conf: "99 %", mono: true },
+    ],
+  },
+  {
+    title: "telekom_maerz.pdf", meta: "Telekom · Rechnung",
+    reasons: ["Doppelt?"], fieldNote: "1 von 5 Feldern",
+    cite: "„Rechnungsnummer 8841-2026-03“ — gleiche Nummer wie Mobilfunk März 2026.",
+    fields: [
+      { label: "Duplikat", value: "Ähnlich zu Mobilfunk März 2026", conf: "71 %", low: true },
+      { label: "Absender", value: "Telekom Deutschland", conf: "99 %" },
+      { label: "Typ", value: "Rechnung", conf: "98 %" },
+      { label: "Datum", value: "12.03.2026", conf: "99 %", mono: true },
+      { label: "Betrag", value: "39,95 €", conf: "99 %", mono: true },
+    ],
+  },
+];
+
+class Component extends DCLogic {
+  state = {
+    tab: "today", stack: [], detailTab: "preview",
+    filter: 0, reviewIdx: 0, reviewZoom: false, zoomPage: 1, docPage: 1, chatAsked: false, chatFollowUp: "",
+    themeOverride: null,
+  };
+
+  componentDidMount() { this.icons(); }
+  componentDidUpdate() { this.icons(); }
+  icons() {
+    if (!window.lucide) { clearTimeout(this._iconT); this._iconT = setTimeout(() => this.icons(), 150); return; }
+    // createIcons() replaces the <i> placeholders with <svg>; skip when none are left.
+    if (!document.querySelector("i[data-lucide]")) return;
+    try { window.lucide.createIcons(); } catch (e) { /* icons load async */ }
+  }
+
+  push(screen) {
+    return (e) => { if (e) e.preventDefault(); this.setState((s) => ({ stack: [...s.stack, screen] })); };
+  }
+  goTab(tab) {
+    return (e) => { if (e) e.preventDefault(); this.setState({ tab, stack: [] }); };
+  }
+
+  zoomRef = React.createRef();
+
+  goPage(n) {
+    const el = this.zoomRef.current;
+    if (!el) return;
+    const pages = [...el.children].filter((c) => c.getAttribute("data-s") === "paper");
+    if (!pages.length) return;
+    const i = Math.max(0, Math.min(pages.length - 1, n - 1));
+    this.setState({ zoomPage: i + 1 });
+    el.scrollTo({ top: pages[i].offsetTop - el.offsetTop - 16, behavior: "smooth" });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const theme = s.themeOverride ?? this.props.theme ?? "dark";
+    const isDark = theme === "dark";
+    const labels = this.props.tabLabels ?? true;
+
+    const top = s.stack.length ? s.stack[s.stack.length - 1] : null;
+    const current = top ?? s.tab;
+
+    const titles = {
+      today: "Today", documents: "Dokumente", review: "Review", chat: "Chat",
+      detail: "Dokument", settings: "Einstellungen", offline: "Offline verfügbar",
+      correspondents: "Absender", dossier: "Dossier", scan: "Import", connect: "Verbinden",
+    };
+
+    const back = (e) => { if (e) e.preventDefault(); this.setState((st) => ({ stack: st.stack.slice(0, -1) })); };
+
+    // ── Review queue walk-through ──
+    const reviewIdx = s.reviewIdx;
+    const reviewDone = reviewIdx >= REVIEW_QUEUE.length;
+    const reviewDoc = reviewDone ? REVIEW_QUEUE[0] : REVIEW_QUEUE[reviewIdx];
+    // The field the zoom view is about: the first one that needs a human.
+    const zoomField = reviewDoc && reviewDoc.fields.find((x) => x.low || x.missing);
+    const advance = (e) => { if (e) e.preventDefault(); this.setState((st) => ({ reviewIdx: st.reviewIdx + 1, reviewZoom: false, zoomPage: 1 })); };
+
+    // ── Documents filter ──
+    const allDocs = [
+      { title: "Jahresabrechnung 2026", meta: "Stadtwerke München · Rechnung", amount: "486,20 €", date: "18.03.", dot: "red", tag: "Fällig", tagTone: "bad", due: true },
+      { title: "Mobilfunk März 2026", meta: "Telekom · Rechnung", amount: "39,95 €", date: "12.03.", dot: "amber", tag: "Review", tagTone: "warn", review: true, due: true },
+      { title: "Kfz-Versicherung 2026", meta: "HUK-Coburg · Beitrag", amount: "758,45 €", date: "09.03.", dot: "amber", tag: "", due: true },
+      { title: "Beitragsbescheid Q2 2026", meta: "AOK Bayern · Bescheid", amount: "212,00 €", date: "06.03.", dot: "green", tag: "" },
+      { title: "Gehaltsabrechnung Februar", meta: "Berenberg · Abrechnung", amount: "—", date: "28.02.", dot: "green", tag: "" },
+      { title: "Mietnebenkosten 2025", meta: "Hausverwaltung Kern · Abrechnung", amount: "1.104,00 €", date: "24.02.", dot: "green", tag: "Review", tagTone: "warn", review: true },
+      { title: "Stromabschlag Januar", meta: "Stadtwerke München · Abschlag", amount: "94,00 €", date: "02.01.", dot: "green", tag: "" },
+      { title: "scan_2026-03-22_bescheid.pdf", meta: "Wird verarbeitet · OCR läuft", amount: "—", date: "heute", dot: "faint", tag: "OCR", tagTone: "chip", review: true },
+    ];
+    const filters = ["Alle", "Review · 3", "Fällig", "2026"];
+    const shown = s.filter === 1 ? allDocs.filter((d) => d.review)
+      : s.filter === 2 ? allDocs.filter((d) => d.due)
+      : allDocs;
+
+    const openDetail = this.push("detail");
+
+    return {
+      theme, isDark,
+      screenTitle: titles[current] ?? "OpenKeep",
+      back,
+
+      isToday: current === "today", isDocuments: current === "documents",
+      isReview: current === "review", isChat: current === "chat",
+      isDetail: current === "detail", isSettings: current === "settings",
+      isOffline: current === "offline", isCorrespondents: current === "correspondents",
+      isDossier: current === "dossier", isScan: current === "scan", isConnect: current === "connect",
+
+      // The tab bar belongs to the tab screens; stack screens and the
+      // import sheet cover it, exactly as React Navigation would.
+      showTabBar: !top,
+      showFab: !top && s.tab !== "review",
+
+      goToday: this.goTab("today"), goDocuments: this.goTab("documents"),
+      goSettings: this.push("settings"), goScan: this.push("scan"),
+      goCorrespondents: this.push("correspondents"), goDossier: this.push("dossier"),
+      goConnect: this.push("connect"), openDetail,
+
+      tabs: [
+        { label: "Today", icon: "layout-list", to: "today" },
+        { label: "Documents", icon: "files", to: "documents" },
+        { label: "Review", icon: "circle-check", to: "review", badge: !reviewDone },
+        { label: "Chat", icon: "message-square", to: "chat" },
+      ].map((t) => ({
+        ...t, label: labels ? t.label : "",
+        go: this.goTab(t.to),
+        tone: t.to === s.tab ? "accent" : "faint",
+        badgeDot: t.badge ? "amber" : "faint",
+        badgeOff: t.badge ? null : "1",
+        badgeStyle: t.badge
+          ? `position:absolute;top:-2px;right:-4px;width:7px;height:7px;border-radius:9999px;background:${AMBER}`
+          : "display:none",
+      })),
+
+      // ── Today ──
+      todayStats: [
+        { label: "Review", value: reviewDone ? "0" : String(REVIEW_QUEUE.length - reviewIdx), tone: "amber", to: "review" },
+        { label: "Fällig", value: "3", tone: "ink", to: "documents" },
+        { label: "Neu", value: "12", tone: "ink", to: "documents" },
+        { label: "Gesamt", value: "1.284", tone: "ink", to: "documents" },
+      ].map((st) => ({ ...st, go: this.goTab(st.to) })),
+
+      todayGroups: [
+        { label: "Überfällig", count: "1", items: [
+          { title: "Jahresabrechnung 2026", meta: "Stadtwerke München · Rechnung", amount: "486,20 €", due: "4 T über", dot: "red", dueTone: "red" },
+        ] },
+        { label: "Diese Woche", count: "2", items: [
+          { title: "Mobilfunk März 2026", meta: "Telekom · Rechnung", amount: "39,95 €", due: "28.03.", dot: "amber", dueTone: "amber" },
+          { title: "Kfz-Versicherung", meta: "HUK-Coburg · Beitrag", amount: "758,45 €", due: "31.03.", dot: "amber", dueTone: "amber" },
+        ] },
+      ],
+
+      recentDocs: [
+        { title: "Beitragsbescheid Q2 2026", meta: "AOK Bayern · Bescheid", when: "06:15", dot: "green" },
+        { title: "scan_2026-03-22_bescheid.pdf", meta: "Wird verarbeitet · OCR", when: "06:12", dot: "faint" },
+        { title: "Gehaltsabrechnung Februar", meta: "Berenberg · Abrechnung", when: "gestern", dot: "green" },
+        { title: "Mietnebenkosten 2025", meta: "Hausverwaltung Kern · Abrechnung", when: "24.02.", dot: "green" },
+        { title: "Kfz-Versicherung 2026", meta: "HUK-Coburg · Beitrag", when: "09.03.", dot: "amber" },
+      ],
+
+      // ── Documents ──
+      docCount: `${shown.length} von ${allDocs.length}`,
+      docFilters: filters.map((label, i) => ({
+        label, tone: i === s.filter ? "fill" : "chip", bord: i === s.filter ? null : "strong",
+        go: (e) => { e.preventDefault(); this.setState({ filter: i }); },
+        style: "flex-shrink:0;border-radius:999px;padding:5px 12px;font-size:12px;white-space:nowrap;cursor:pointer;" +
+          (i === s.filter ? `background:${GREEN};color:#fff;font-weight:600;border:none;` : "border:1px solid #d6dad7;background:transparent;color:#5b615c;"),
+      })),
+      visibleDocs: shown.map((d) => ({
+        ...d,
+        tagOff: d.tagTone === "chip" ? "chip" : null,
+        tagStyle: d.tag
+          ? "flex-shrink:0;border-radius:4px;padding:2px 6px;font-size:10.5px;font-weight:600;" +
+            (d.tagTone === "bad" ? `background:#fdeeea;color:${RED};`
+              : d.tagTone === "warn" ? `background:#fdf1e3;color:${AMBER};`
+              : "border:1px solid #d6dad7;color:#8b9089;")
+          : "display:none",
+      })),
+
+      // ── Review ──
+      // You cannot confirm an amount you cannot read — the page is always
+      // one tap away, and the cited line is highlighted on it.
+      reviewZoom: !reviewDone && s.reviewZoom,
+      zoomLabel: zoomField ? `${zoomField.label} · ${zoomField.missing ? "nicht gefunden" : `${zoomField.conf} sicher`}` : "",
+      zoomValue: zoomField ? zoomField.value : "",
+      zoomTone: zoomField && zoomField.missing ? "amber" : "ink",
+      zoomStyle: (zoomField && zoomField.mono ? `font-family:${MONO};` : "")
+        + "font-size:14px;font-weight:600;margin-top:2px"
+        + (zoomField && zoomField.missing ? `;color:${AMBER}` : ""),
+      openZoom: (e) => { e.preventDefault(); this.setState({ reviewZoom: true, zoomPage: 1 }); },
+      closeZoom: (e) => { e.preventDefault(); this.setState({ reviewZoom: false }); },
+
+      // Three real pages in one scroller: paging scrolls, scrolling re-pages.
+      zoomScroller: this.zoomRef,
+      zoomPage: s.zoomPage,
+      onZoomScroll: () => {
+        const el = this.zoomRef.current;
+        if (!el) return;
+        const pages = [...el.children].filter((c) => c.getAttribute("data-s") === "paper");
+        if (!pages.length) return;
+        // At the very bottom the last page is authoritative, whatever the midpoint says.
+        const atEnd = el.scrollTop >= el.scrollHeight - el.clientHeight - 4;
+        let cur = pages.length;
+        if (!atEnd) {
+          const mid = el.scrollTop + el.clientHeight / 2;
+          cur = 1;
+          pages.forEach((p, i) => { if (p.offsetTop - el.offsetTop <= mid) cur = i + 1; });
+        }
+        if (cur !== this.state.zoomPage) this.setState({ zoomPage: cur });
+      },
+      // The click owns the page index; the scroll handler only re-syncs after
+      // a user-initiated scroll. Reading it from the closure made the buttons
+      // wait on a handler that could never report the last page.
+      prevPage: (e) => { e.preventDefault(); this.goPage(this.state.zoomPage - 1); },
+      nextPage: (e) => { e.preventDefault(); this.goPage(this.state.zoomPage + 1); },
+      goToCite: (e) => { e.preventDefault(); this.goPage(1); },
+      prevTone: s.zoomPage > 1 ? "accent" : "faint",
+      nextTone: s.zoomPage < 3 ? "accent" : "faint",
+      prevStyle: `flex-shrink:0;display:flex;align-items:center;justify-content:center;height:30px;width:30px;border:none;border-radius:7px;background:transparent;cursor:pointer;color:${s.zoomPage > 1 ? GREEN : "#9aa09a"}`,
+      nextStyle: `flex-shrink:0;display:flex;align-items:center;justify-content:center;height:30px;width:30px;border:none;border-radius:7px;background:transparent;cursor:pointer;color:${s.zoomPage < 3 ? GREEN : "#9aa09a"}`,
+
+      reviewDone, reviewOpen: !reviewDone && !s.reviewZoom,
+      reviewPos: `${reviewDone ? REVIEW_QUEUE.length : reviewIdx + 1} / ${REVIEW_QUEUE.length}`,
+      reviewBarStyle: `height:2px;background:${GREEN};width:${Math.round(((reviewDone ? REVIEW_QUEUE.length : reviewIdx) / REVIEW_QUEUE.length) * 100)}%`,
+      reviewDoc,
+      confirmReview: advance,
+      skipReview: advance,
+      resetReview: (e) => { e.preventDefault(); this.setState({ reviewIdx: 0 }); },
+      reviewFields: reviewDoc.fields.map((rf) => ({
+        ...rf,
+        sel: rf.low || rf.missing ? "1" : "0",
+        rowStyle: "padding:10px 16px;border-bottom:1px solid #eef0ee;" + (rf.low || rf.missing ? "background:#faf7f0;" : ""),
+        confTone: rf.low ? "warn" : rf.missing ? "chip" : "ok",
+        confOff: rf.missing ? "chip" : null,
+        confStyle: `flex-shrink:0;border-radius:4px;padding:1px 6px;font-family:${MONO};font-size:10px;font-weight:600;` +
+          (rf.low ? `background:#fdf1e3;color:${AMBER};`
+            : rf.missing ? "border:1px solid #d6dad7;color:#9aa09a;"
+            : `background:#e8f0ea;color:${OK};`),
+        valTone: rf.missing ? "amber" : "ink",
+        valStyle: (rf.mono ? `font-family:${MONO};` : "") + "font-size:14.5px;font-weight:500;" + (rf.missing ? `color:${AMBER};` : ""),
+        showOff: rf.low || rf.missing ? null : "1",
+        showStyle: rf.low || rf.missing
+          ? `flex-shrink:0;border:none;background:transparent;padding:0;font-size:11.5px;font-weight:600;color:${GREEN};cursor:pointer`
+          : "display:none",
+      })),
+
+      // ── Chat ──
+      chatAsked: s.chatAsked, chatFollowUp: s.chatFollowUp,
+      chatRows: [
+        { title: "Jahresabrechnung 2026", due: "seit 4 Tagen überfällig", amount: "486,20 €", overdue: true },
+        { title: "Mobilfunk März 2026", due: "fällig 28.03.", amount: "39,95 €" },
+        { title: "Kfz-Versicherung", due: "fällig 31.03.", amount: "758,45 €" },
+      ].map((c) => ({
+        ...c, dueTone: c.overdue ? "red" : "dim",
+        dueStyle: "font-size:11px;margin-top:2px;" + (c.overdue ? `color:${RED};font-weight:600;` : "color:#8b9089;"),
+      })),
+      sourcePills: [
+        { n: 1, title: "Jahresabrechnung" },
+        { n: 2, title: "Mobilfunk März" },
+        { n: 3, title: "Kfz-Versicherung" },
+      ],
+      followUps: ["Erinnere mich 3 Tage vorher", "Summe pro Anbieter"].map((label) => ({
+        label,
+        go: (e) => { e.preventDefault(); this.setState({ chatAsked: true, chatFollowUp: label }); },
+      })),
+
+      // ── Detail ──
+      detailTab: s.detailTab,
+      tabPreview: s.detailTab === "preview", tabOverview: s.detailTab === "overview",
+      tabInsights: s.detailTab === "insights", tabActivity: s.detailTab === "activity",
+      tabActions: s.detailTab !== "insights",
+      detailTabs: [
+        { label: "Dokument", to: "preview" },
+        { label: "Details", to: "overview" },
+        { label: "Fragen", to: "insights" },
+        { label: "Verlauf", to: "activity" },
+      ].map((dt) => {
+        const on = s.detailTab === dt.to;
+        return {
+          ...dt,
+          go: (e) => { e.preventDefault(); this.setState({ detailTab: dt.to }); },
+          tone: on ? "soft" : "chip", off: on ? null : "1",
+          style: "flex:1;text-align:center;border:none;border-radius:6px;padding:6px 0;font-size:12.5px;cursor:pointer;" +
+            (on ? `background:#e7edea;color:${GREEN};font-weight:600;` : "background:transparent;color:#5b615c;"),
+        };
+      }),
+
+      // The three facts you opened the document for, above the page itself.
+      keyFacts: [
+        { label: "Betrag", value: "486,20 €" },
+        { label: "Fällig", value: "18.03.2026", tone: "red" },
+        { label: "Rechnung", value: "18.03.2026" },
+      ].map((kf, i, all) => ({
+        ...kf, last: i === all.length - 1 ? "1" : null,
+        tone: kf.tone ?? "ink",
+        cellStyle: "flex:1;min-width:0;padding:10px 12px" + (i < all.length - 1 ? ";border-right:1px solid #eef0ee" : ""),
+        valStyle: `font-family:${MONO};font-size:14.5px;font-weight:600;margin-top:3px;letter-spacing:-0.01em`
+          + (kf.tone === "red" ? `;color:${RED}` : ""),
+      })),
+
+      // Technical file facts: real, but not why anyone opens a document.
+      fileMeta: [
+        { label: "Typ", value: "PDF · 3 Seiten" },
+        { label: "Größe", value: "1,4 MB", mono: true },
+        { label: "Importiert", value: "22.03.2026 06:12", mono: true },
+        { label: "Parser", value: "local-ocr", mono: true },
+        { label: "Durchsuchbar", value: "ja", tone: "green" },
+      ].map((pm) => ({
+        ...pm, tone: pm.tone ?? "ink",
+        valStyle: "flex:1;min-width:0;text-align:right;font-size:13px;" + (pm.mono ? `font-family:${MONO};` : "") +
+          (pm.tone === "green" ? `color:${OK};font-weight:600;` : "font-weight:500;"),
+      })),
+
+      // One list, not two: the confidence badge rides on the field it belongs to,
+      // and only when the value is uncertain. The old Analyse tab repeated four of
+      // these rows just to show a percentage.
+      fields: [
+        { label: "Absender", value: "Stadtwerke München" },
+        { label: "Typ", value: "Rechnung" },
+        { label: "Betrag", value: "486,20 €", mono: true, conf: "61 %" },
+        { label: "Rechnungsdatum", value: "18.03.2026", mono: true },
+        { label: "Fällig", value: "18.03.2026 · überfällig", mono: true, tone: "red" },
+        { label: "Zeitraum", value: "01.01.–31.12.2025", mono: true },
+        { label: "Referenz", value: "SWM-2026-884213", mono: true },
+        { label: "Kundennr.", value: "4471902", mono: true },
+      ].map((fl) => ({
+        ...fl, tone: fl.tone ?? "ink", conf: fl.conf ?? "", confOff: fl.conf ? null : "1",
+        valStyle: "flex:1;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;" +
+          (fl.mono ? `font-family:${MONO};` : "") +
+          (fl.tone === "red" ? `color:${RED};font-weight:600;` : "font-weight:500;"),
+        confStyle: fl.conf
+          ? `flex-shrink:0;border-radius:4px;background:#fdf1e3;color:${AMBER};padding:1px 6px;font-family:${MONO};font-size:10px;font-weight:600`
+          : "display:none",
+      })),
+
+      askChips: [
+        "Wie hoch ist der neue Abschlag?",
+        "Warum ist der Betrag niedriger als 2024?",
+        "Bis wann muss ich zahlen?",
+      ],
+
+      docPage: s.docPage,
+      docPage1: s.docPage === 1, docPage2: s.docPage === 2, docPage3: s.docPage === 3,
+      docPrev: (e) => { e.preventDefault(); this.setState((st) => ({ docPage: Math.max(1, st.docPage - 1) })); },
+      docNext: (e) => { e.preventDefault(); this.setState((st) => ({ docPage: Math.min(3, st.docPage + 1) })); },
+      docPrevTone: s.docPage > 1 ? "accent" : "faint",
+      docNextTone: s.docPage < 3 ? "accent" : "faint",
+      docPrevStyle: `flex-shrink:0;display:flex;align-items:center;justify-content:center;height:30px;width:30px;border:none;border-radius:7px;background:transparent;cursor:pointer;color:${s.docPage > 1 ? GREEN : "#9aa09a"}`,
+      docNextStyle: `flex-shrink:0;display:flex;align-items:center;justify-content:center;height:30px;width:30px;border:none;border-radius:7px;background:transparent;cursor:pointer;color:${s.docPage < 3 ? GREEN : "#9aa09a"}`,
+
+      ocrPages: [
+        { n: 1, text: "Stadtwerke München GmbH · Jahresabrechnung 2025\nKundennummer 4471902 · Zählernummer 1BE9021\nAbrechnungszeitraum 01.01.2025 – 31.12.2025" },
+        { n: 2, text: "Der Gesamtbetrag von 486,20 € ist fällig am 18.03.2026\nund wird ohne Abzug erbeten.\nNeuer monatlicher Abschlag ab 01.01.2026: 94,00 €" },
+      ],
+
+      historyRows: [
+        { label: "Betrag korrigiert · 486,20 €", at: "22.03.2026 07:04 · Owner", dot: "accent" },
+        { label: "Tags gesetzt · Energie, Rechnung", at: "22.03.2026 06:14 · System", dot: "faint" },
+        { label: "Verarbeitet · local-ocr", at: "22.03.2026 06:12 · System", dot: "faint" },
+        { label: "Importiert", at: "22.03.2026 06:12 · Owner", dot: "faint" },
+      ],
+
+      // ── Settings ──
+      settingsGroups: [
+        { label: "Sprache", rows: [
+          { icon: "languages", label: "Oberfläche", value: "Deutsch" },
+          { icon: "scan-text", label: "Dokumente (OCR)", value: "Deutsch" },
+          { icon: "message-square", label: "Chat", value: "Deutsch" },
+        ] },
+        { label: "Darstellung", rows: [
+          { icon: isDark ? "moon" : "sun", label: "Erscheinungsbild", value: isDark ? "Dunkel" : "Hell", accent: true, toggle: true },
+          { icon: "rows-3", label: "Zeilendichte", value: "Standard" },
+        ] },
+        { label: "Archiv", rows: [
+          { icon: "server", label: "Server", value: "archive.example.com", mono: true },
+          { icon: "hard-drive-download", label: "Offline verfügbar", value: "184 · 1,8 GB", mono: true, to: "offline" },
+          { icon: "users", label: "Absender", value: "84", mono: true, to: "correspondents" },
+        ] },
+        { label: "Info", rows: [
+          { icon: "info", label: "Version", value: "0.1.0", mono: true },
+        ] },
+      ].map((sg) => ({
+        ...sg,
+        rows: sg.rows.map((sr) => ({
+          ...sr,
+          go: sr.toggle
+            ? (e) => { e.preventDefault(); this.setState({ themeOverride: isDark ? "light" : "dark" }); }
+            : sr.to ? this.push(sr.to) : (e) => e.preventDefault(),
+          iconTone: sr.accent ? "accent" : "dim",
+          valueTone: sr.accent ? "accent" : "dim",
+          valueStyle: "flex:1;min-width:0;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;" +
+            (sr.mono ? `font-family:${MONO};` : "") + (sr.accent ? `color:${GREEN};font-weight:600;` : "color:#8b9089;"),
+        })),
+      })),
+
+      // ── Offline ──
+      offlineStats: [
+        { label: "Dokumente", value: "184" },
+        { label: "Belegt", value: "1,8 GB" },
+        { label: "Geändert", value: "06:15" },
+      ],
+      offlineRows: [
+        { icon: "list", label: "Metadaten", hint: "Titel, Beträge, Fristen, Tags" },
+        { icon: "file-text", label: "Original", hint: "PDF oder Scan · durchsuchbare Fassung, wenn vorhanden" },
+        { icon: "scan-text", label: "Erkannter Text", hint: "OCR-Blöcke pro Seite" },
+        { icon: "history", label: "Verlauf", hint: "Änderungen am Dokument" },
+      ],
+
+      // ── Correspondents ──
+      correspondents: [
+        { name: "Stadtwerke München", initials: "SM", count: "186" },
+        { name: "Telekom Deutschland", initials: "TD", count: "142" },
+        { name: "HUK-Coburg", initials: "HC", count: "94" },
+        { name: "AOK Bayern", initials: "AB", count: "76" },
+        { name: "Finanzamt München", initials: "FM", count: "61" },
+        { name: "Berenberg", initials: "BB", count: "54" },
+        { name: "Hausverwaltung Kern", initials: "HK", count: "47" },
+        { name: "ADAC", initials: "AD", count: "24" },
+        { name: "Deutsche Bahn", initials: "DB", count: "19" },
+      ],
+
+      // ── Dossier ──
+      dossierStats: [
+        { label: "Dokumente", value: "186" },
+        { label: "Letztes Dok.", value: "18.03." },
+        { label: "Änderungen", value: "3" },
+      ],
+      dossierMonths: (() => {
+        const data = [["A",14],["M",22],["J",18],["J",31],["A",9],["S",27],["O",24],["N",38],["D",41],["J",19],["F",33],["M",28]];
+        const max = Math.max(...data.map((d) => d[1]));
+        return data.map(([m, v], i) => ({
+          m, dot: i === 11 ? "accent" : "faint",
+          barStyle: `width:100%;border-radius:2px;height:${Math.max(4, Math.round((v / max) * 38))}px;background:${i === 11 ? GREEN : "#c3ccc6"}`,
+        }));
+      })(),
+      keyChanges: [
+        { label: "Monatlicher Abschlag", date: "01.01.2026", before: "118,00 €", after: "94,00 €", good: true },
+        { label: "Grundpreis", date: "01.01.2026", before: "11,90 €", after: "12,40 €" },
+        { label: "Zählernummer", date: "14.08.2025", before: "1BE0447", after: "1BE9021" },
+      ].map((kc) => ({
+        ...kc, tone: kc.good ? "green" : "ink",
+        afterStyle: `font-family:${MONO};font-size:12px;font-weight:600;` + (kc.good ? `color:${OK};` : ""),
+      })),
+      dossierDocs: [
+        { title: "Jahresabrechnung 2026", meta: "Rechnung", amount: "486,20 €", date: "18.03.", dot: "red" },
+        { title: "Stromabschlag März", meta: "Abschlag", amount: "94,00 €", date: "01.03.", dot: "green" },
+        { title: "Stromabschlag Februar", meta: "Abschlag", amount: "94,00 €", date: "01.02.", dot: "green" },
+        { title: "Stromabschlag Januar", meta: "Abschlag", amount: "94,00 €", date: "02.01.", dot: "green" },
+        { title: "Jahresabrechnung 2025", meta: "Rechnung", amount: "512,80 €", date: "16.03.", dot: "green" },
+        { title: "Abschlagsanpassung", meta: "Mitteilung", amount: "—", date: "28.12.", dot: "green" },
+      ],
+
+      // ── Scan ──
+      scanPages: [
+        { n: 1, size: "1,2 MB" },
+        { n: 2, size: "0,9 MB" },
+        { n: 3, size: "1,1 MB" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
