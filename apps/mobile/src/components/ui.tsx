@@ -348,8 +348,9 @@ export function Row({
     </>
   );
 
-  const scale = DENSITY_SCALE[density];
-  const sizing = { minHeight: Math.round((minHeight ?? 56) * scale) };
+  // Compact tightens the list but never past the 44pt tap-target floor.
+  const scaled = Math.round((minHeight ?? 56) * DENSITY_SCALE[density]);
+  const sizing = { minHeight: onPress ? Math.max(44, scaled) : scaled };
   const tinted = tone === "bad" ? styles.rowBad : null;
 
   if (!onPress) {
