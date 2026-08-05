@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -27,6 +27,9 @@ import {
 } from "../lib";
 
 type Translate = ReturnType<typeof useI18n>["t"];
+
+/** Long enough to notice a mis-tap, short enough not to linger. */
+const UNDO_WINDOW_MS = 5_000;
 
 const FIELD_KEYS: Record<string, string> = {
   issueDate: "review.field.issueDate",
@@ -361,6 +364,21 @@ export function ReviewScreen() {
   const [handled, setHandled] = useState<Set<string>>(new Set());
   const [readerField, setReaderField] = useState<string | null>(null);
   const [readerOpen, setReaderOpen] = useState(false);
+  /**
+   * One snackbar at a time: what just happened, and how to take it back. The
+   * confirm is not sent while the window is open — it is held in
+   * `pendingConfirm` and posted when the window closes. Two problems go away
+   * with it: undo can no longer race an in-flight resolve, and taking a
+   * mis-tap back needs no server call, so the queue never goes through
+   * `requeue`, which clears the review state and enqueues a forced processing
+   * job rather than restoring the document to pending review.
+   */
+  const [undo, setUndo] = useState<{
+    action: "confirmed" | "skipped";
+    documentId: string;
+  } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingConfirm = useRef<string | null>(null);
 
   const reviewQuery = useQuery({
     queryKey: ["review", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
@@ -472,11 +490,86 @@ export function ReviewScreen() {
     setHandled((current) => new Set(current).add(documentId));
   }, []);
 
+  /** Post the confirm that is still waiting out its window, if there is one. */
+  const flushPendingConfirm = useCallback(() => {
+    const documentId = pendingConfirm.current;
+    pendingConfirm.current = null;
+    if (documentId) {
+      mutation.mutate({ id: documentId, action: "resolve" });
+    }
+  }, [mutation]);
+
+  const closeUndo = useCallback(() => {
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
+    }
+    setUndo(null);
+  }, []);
+
+  const offerUndo = useCallback(
+    (action: "confirmed" | "skipped", documentId: string) => {
+      if (undoTimer.current) {
+        clearTimeout(undoTimer.current);
+      }
+      setUndo({ action, documentId });
+      undoTimer.current = setTimeout(() => {
+        undoTimer.current = null;
+        flushPendingConfirm();
+        setUndo(null);
+      }, UNDO_WINDOW_MS);
+    },
+    [flushPendingConfirm],
+  );
+
+  const skip = useCallback(() => {
+    if (!document) return;
+    flushPendingConfirm();
+    offerUndo("skipped", document.id);
+    advance(document.id);
+  }, [advance, document, flushPendingConfirm, offerUndo]);
+
   const confirm = useCallback(() => {
     if (!document) return;
-    mutation.mutate({ id: document.id, action: "resolve" });
+    // A confirm still in its window goes now; only one can be taken back.
+    flushPendingConfirm();
+    pendingConfirm.current = document.id;
+    offerUndo("confirmed", document.id);
     advance(document.id);
-  }, [advance, document, mutation]);
+  }, [advance, document, flushPendingConfirm, offerUndo]);
+
+  /**
+   * Back puts the document at the head of the queue again. Nothing was sent, so
+   * this is local: drop the pending confirm and stop treating the document as
+   * handled. Rewinding by id rather than by position matters — a refetch may
+   * have reordered the queue since.
+   */
+  const undoLast = useCallback(() => {
+    if (!undo) return;
+    pendingConfirm.current = null;
+    setReaderField(null);
+    setHandled((current) => {
+      const next = new Set(current);
+      next.delete(undo.documentId);
+      return next;
+    });
+    closeUndo();
+  }, [closeUndo, undo]);
+
+  // Leaving the screen closes the window: send the confirm rather than drop it.
+  const flushRef = useRef(flushPendingConfirm);
+  useEffect(() => {
+    flushRef.current = flushPendingConfirm;
+  }, [flushPendingConfirm]);
+  useEffect(
+    () => () => {
+      if (undoTimer.current) {
+        clearTimeout(undoTimer.current);
+      }
+      flushRef.current();
+    },
+    [],
+  );
 
   const openReader = useCallback((field?: string) => {
     if (field) {
@@ -541,7 +634,7 @@ export function ReviewScreen() {
           overshootRight={false}
           onSwipeableOpen={(direction) => {
             if (direction === "right") {
-              advance(document.id);
+              skip();
             }
           }}
           renderRightActions={() => (
@@ -670,7 +763,7 @@ export function ReviewScreen() {
                 <Button
                   label={t("review.skip")}
                   variant="secondary"
-                  onPress={() => advance(document.id)}
+                  onPress={skip}
                 />
               </View>
               <View style={styles.confirmSlot}>
@@ -684,6 +777,17 @@ export function ReviewScreen() {
             </View>
           </View>
         </Swipeable>
+      ) : null}
+
+      {undo ? (
+        <View style={styles.snackbar}>
+          <Text style={styles.snackbarText}>
+            {undo.action === "confirmed" ? t("review.undoConfirmed") : t("review.undoSkipped")}
+          </Text>
+          <Pressable onPress={undoLast} hitSlop={10} style={styles.snackbarAction}>
+            <Text style={styles.snackbarActionText}>{t("review.undo")}</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {readerOpen && document ? (
@@ -938,6 +1042,36 @@ const useStyles = createThemedStyles((c) => ({
   editRowText: {
     ...text.meta,
     color: c.dim,
+  },
+
+  /* undo */
+  snackbar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 0,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: radii.lg,
+    backgroundColor: c.raised,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingLeft: 12,
+    paddingRight: 6,
+  },
+  snackbarText: {
+    ...text.meta,
+    flex: 1,
+    color: c.ink,
+  },
+  snackbarAction: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  snackbarActionText: {
+    ...text.metaStrong,
+    color: c.accent,
   },
 
   /* actions */
