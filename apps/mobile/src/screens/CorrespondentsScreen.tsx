@@ -1,29 +1,42 @@
 import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery } from "@tanstack/react-query";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Text, TextInput, View } from "react-native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
-import { EmptyState, ErrorCard, Notice, Panel, Screen } from "../components/ui";
+import { EmptyState, ErrorCard, Notice, Panel, Row, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { createThemedStyles, useColors } from "../theme";
-import { fonts, text } from "../typography";
+import { createThemedStyles, radii, useColors } from "../theme";
+import { text } from "../typography";
 import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
 
-// ---------------------------------------------------------------------------
-// Correspondents Screen
-// ---------------------------------------------------------------------------
+function initialsFor(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
+/**
+ * A row per sender: initials, name, `N Dokumente`, chevron.
+ *
+ * The facets and taxonomy calls yield `id`, `name`, `slug` and `count` — no
+ * dates and no sums — so nothing else may appear here. (#117)
+ */
 export function CorrespondentsScreen() {
-  const colors = useColors();
   const styles = useStyles();
+  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
+  const [query, setQuery] = useState("");
 
   const facetsQuery = useQuery({
     queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
@@ -59,11 +72,10 @@ export function CorrespondentsScreen() {
         count: counts.get(item.id) ?? 0,
       }));
 
-  // Sort by doc count descending, then alphabetically
-  const sorted = [...correspondents].sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    return a.name.localeCompare(b.name);
-  });
+  const needle = query.trim().toLowerCase();
+  const visible = [...correspondents]
+    .filter((item) => (needle ? item.name.toLowerCase().includes(needle) : true))
+    .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.name.localeCompare(b.name)));
 
   const isLoading = facetsQuery.isLoading || (!shouldUseCache && taxonomyQuery.isLoading);
   const isError = facetsQuery.isError || taxonomyQuery.isError;
@@ -73,104 +85,149 @@ export function CorrespondentsScreen() {
     <Screen
       title={t("correspondents.title")}
       onBack={() => navigation.goBack()}
+      padded={false}
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
-      contentContainerStyle={styles.content}
     >
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBox}>
+          <MaterialCommunityIcons name="magnify" size={15} color={colors.dim} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("correspondents.searchPlaceholder")}
+            placeholderTextColor={colors.dim}
+            style={styles.searchInput}
+            autoCorrect={false}
+          />
+        </View>
+      </View>
+
       {isLoading ? (
-        <Panel padded>
-          <Text style={styles.loadingText}>{t("correspondents.loading")}</Text>
-        </Panel>
+        <View style={styles.gutter}>
+          <Panel padded>
+            <Text style={styles.hint}>{t("correspondents.loading")}</Text>
+          </Panel>
+        </View>
       ) : null}
 
       {isError ? (
-        <ErrorCard
-          message={t("correspondents.loadError")}
-          onRetry={() => {
-            void facetsQuery.refetch();
-            void taxonomyQuery.refetch();
-          }}
-        />
+        <View style={styles.gutter}>
+          <ErrorCard
+            message={t("correspondents.loadError")}
+            onRetry={() => {
+              void facetsQuery.refetch();
+              void taxonomyQuery.refetch();
+            }}
+          />
+        </View>
       ) : null}
 
-      {hasData && sorted.length === 0 ? (
-        <EmptyState
-          title={t("correspondents.emptyTitle")}
-          body={t("correspondents.emptyBody")}
-        />
-      ) : null}
+      {hasData ? (
+        <>
+          <View style={styles.countStrip}>
+            <Text style={styles.countText}>
+              {`${visible.length} ${t("correspondents.count")}`}
+            </Text>
+          </View>
 
-      {sorted.map((item) => (
-        <Pressable
-          key={item.id}
-          onPress={() =>
-            navigation.navigate("CorrespondentDossier", {
-              slug: item.slug,
-              name: item.name,
-            })
-          }
-          style={({ pressed }) => [
-            pressed ? styles.cardPressed : null,
-          ]}
-        >
-          <Panel padded style={styles.card}>
-            <View style={styles.topRow}>
-              <View style={styles.nameWrap}>
-                <Text numberOfLines={1} style={styles.name}>
-                  {item.name}
-                </Text>
-                <Text style={styles.docCount}>
-                  {item.count} {item.count === 1 ? t("correspondents.document") : t("correspondents.documents")}
-                </Text>
-              </View>
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={22}
-                color={colors.muted}
+          {visible.length === 0 ? (
+            needle ? (
+              <EmptyState
+                title={t("state.emptySearch")}
+                action={t("state.showAll")}
+                onAction={() => setQuery("")}
               />
-            </View>
-          </Panel>
-        </Pressable>
-      ))}
+            ) : (
+              <EmptyState
+                title={t("correspondents.emptyTitle")}
+                body={t("correspondents.emptyBody")}
+              />
+            )
+          ) : (
+            visible.map((item) => (
+              <Row
+                key={item.id}
+                leading={
+                  <View style={styles.initials}>
+                    <Text style={styles.initialsText}>{initialsFor(item.name) || "–"}</Text>
+                  </View>
+                }
+                title={item.name}
+                value={String(item.count)}
+                valueMeta={t("correspondents.documents")}
+                chevron
+                onPress={() =>
+                  navigation.navigate("CorrespondentDossier", {
+                    slug: item.slug,
+                    name: item.name,
+                  })
+                }
+              />
+            ))
+          )}
+        </>
+      ) : null}
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  content: {
-    gap: 10,
+  gutter: {
+    padding: 16,
   },
-  loadingText: {
-    fontFamily: fonts.sans.regular,
+  hint: {
+    ...text.meta,
     color: c.muted,
-    lineHeight: 20,
   },
-  cardPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }],
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
   },
-  card: {
-    gap: 0,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  topRow: {
+  searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    gap: 8,
+    height: 36,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    borderRadius: radii.lg,
+    backgroundColor: c.panel,
+    paddingHorizontal: 10,
   },
-  nameWrap: {
+  searchInput: {
+    ...text.body,
     flex: 1,
-    gap: 3,
-  },
-  name: {
-    fontSize: 16,
-    fontFamily: fonts.sans.semibold,
+    minWidth: 0,
     color: c.ink,
-    letterSpacing: -0.2,
+    padding: 0,
   },
-  docCount: {
-    ...text.numericMeta,
-    color: c.muted,
+  countStrip: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
+  },
+  countText: {
+    ...text.numeric,
+    color: c.dim,
+  },
+  initials: {
+    height: 32,
+    width: 32,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 7,
+    backgroundColor: c.accentSoft,
+  },
+  initialsText: {
+    ...text.numericStrong,
+    fontSize: 11,
+    lineHeight: 15,
+    color: c.accentSoftInk,
   },
 }));

@@ -1,965 +1,120 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
-import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
+import type {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from "@react-navigation/native-stack";
 import { useQuery } from "@tanstack/react-query";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Text, View } from "react-native";
 import { useAuth } from "../auth";
-import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { EmptyState, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
-import { processingRefetchInterval } from "../document-processing";
+import { EmptyState, ErrorCard, Notice, Panel, Row, Screen, SectionHeader } from "../components/ui";
+import { documentRowState, processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { createThemedStyles } from "../theme";
-import { fonts, text } from "../typography";
+import { createThemedStyles, radii } from "../theme";
+import { text } from "../typography";
 import {
   formatCurrency,
-  formatDate,
   formatMonthLabel,
-  formatMonthYear,
+  formatShortDate,
   titleForDocument,
-  toneForStatus,
   type ArchiveDocument,
   type CorrespondentInsightsResponse,
-  type CorrespondentIntelligence,
+  type CorrespondentIntelligenceChange,
+  type CorrespondentTimelinePoint,
   type SearchDocumentsResponse,
 } from "../lib";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function compareIsoDates(left: string | null | undefined, right: string | null | undefined): number {
-  return (left ?? "").localeCompare(right ?? "");
-}
-
-function compareDocumentsNewestFirst(left: ArchiveDocument, right: ArchiveDocument): number {
-  return compareIsoDates(right.issueDate ?? right.createdAt, left.issueDate ?? left.createdAt);
-}
-
-function findCurrentStateFact(
-  intelligence: CorrespondentIntelligence | null,
-  label: string,
-): string | null {
-  return (
-    intelligence?.currentState.find(
-      (fact) => fact.label.toLowerCase() === label.toLowerCase(),
-    )?.value ?? null
-  );
-}
-
-function buildSmartHighlight(
-  data: CorrespondentInsightsResponse,
-  intelligence: CorrespondentIntelligence | null,
-  t: ReturnType<typeof useI18n>["t"],
-): { label: string; value: string } {
-  const insurance = intelligence?.domainInsights.insurance;
-  if (insurance?.latestPremiumAmount != null && insurance.latestPremiumCurrency) {
-    return {
-      label: t("correspondent.smartHighlight.latestPremium"),
-      value:
-        formatCurrency(insurance.latestPremiumAmount, insurance.latestPremiumCurrency),
-    };
-  }
-
-  const latestAmount = findCurrentStateFact(intelligence, "Latest amount");
-  if (latestAmount) {
-    return { label: t("correspondent.smartHighlight.latestAmount"), value: latestAmount };
-  }
-
-  const latestDocumentType = findCurrentStateFact(intelligence, "Latest document type");
-  if (latestDocumentType) {
-    return { label: t("correspondent.smartHighlight.latestType"), value: latestDocumentType };
-  }
-
-  return {
-    label: t("correspondent.smartHighlight.topType"),
-    value: data.documentTypeBreakdown[0]?.name ?? t("correspondent.smartHighlight.na"),
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Section: Metric Ribbon
-// ---------------------------------------------------------------------------
-
-function MetricRibbon({
-  items,
-}: {
-  items: Array<{ label: string; value: string }>;
-}) {
-  const ribbonStyles = useRibbonStyles();
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={ribbonStyles.scroll}
-    >
-      {items.map((item) => (
-        <View key={item.label} style={ribbonStyles.metric}>
-          <Text style={ribbonStyles.label}>{item.label}</Text>
-          <Text style={ribbonStyles.value} numberOfLines={1}>
-            {item.value}
-          </Text>
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-const useRibbonStyles = createThemedStyles((c) => ({
-  scroll: {
-    gap: 10,
-  },
-  metric: {
-    minWidth: 120,
-    backgroundColor: c.raised,
-    borderRadius: 20,
-    padding: 16,
-    gap: 6,
-  },
-  label: {
-    ...text.sectionLabel,
-    color: c.muted,
-  },
-  value: {
-    ...text.statValue,
-    color: c.ink,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Relationship Overview
-// ---------------------------------------------------------------------------
-
-function RelationshipOverview({
-  intelligence,
-  intelligenceStatus,
-}: {
-  intelligence: CorrespondentIntelligence | null;
-  intelligenceStatus: string;
-}) {
-  const overviewStyles = useOverviewStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.relationship.title")}</Text>
-      <View style={overviewStyles.body}>
-        {intelligenceStatus === "ready" && intelligence?.overview ? (
-          <>
-            <Text style={overviewStyles.overviewText}>
-              {intelligence.overview}
-            </Text>
-            {intelligence.profile ? (
-              <View style={overviewStyles.chipRow}>
-                <View style={overviewStyles.chip}>
-                  <Text style={overviewStyles.chipText}>
-                    {intelligence.profile.category ?? t("correspondent.relationship.unknownCategory")}
-                  </Text>
-                </View>
-                {intelligence.profile.subcategory ? (
-                  <View style={overviewStyles.chip}>
-                    <Text style={overviewStyles.chipText}>
-                      {intelligence.profile.subcategory}
-                    </Text>
-                  </View>
-                ) : null}
-                {(intelligence.profile.keySignals ?? []).map((signal) => (
-                  <View key={signal} style={overviewStyles.chip}>
-                    <Text style={overviewStyles.chipText}>{signal}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </>
-        ) : intelligenceStatus === "pending" ? (
-          <Text style={overviewStyles.pendingText}>{t("correspondent.relationship.pending")}</Text>
-        ) : (
-          <Text style={overviewStyles.pendingText}>{t("correspondent.relationship.unavailable")}</Text>
-        )}
-      </View>
-    </Panel>
-  );
-}
-
-const useOverviewStyles = createThemedStyles((c) => ({
-  body: {
-    backgroundColor: c.raised,
-    borderRadius: 18,
-    padding: 16,
-    gap: 14,
-  },
-  overviewText: {
-    fontSize: 17,
-    fontFamily: fonts.sans.semibold,
-    lineHeight: 26,
-    color: c.ink,
-    letterSpacing: -0.2,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipText: {
-    fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  pendingText: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 14,
-    color: c.muted,
-    lineHeight: 21,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Key Changes
-// ---------------------------------------------------------------------------
-
-function KeyChanges({
-  changes,
-}: {
-  changes: CorrespondentIntelligence["changes"];
-}) {
-  const changeStyles = useChangeStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.keyChanges.title")}</Text>
-      {changes.length > 0 ? (
-        <View style={changeStyles.list}>
-          {changes.map((change, index) => (
-            <View key={`${change.title}-${index}`} style={changeStyles.item}>
-              <View style={changeStyles.headerRow}>
-                <Text style={changeStyles.title} numberOfLines={2}>
-                  {change.title}
-                </Text>
-                <Text style={changeStyles.date}>
-                  {change.effectiveDate ?? t("correspondent.keyChanges.undated")}
-                </Text>
-              </View>
-              <Text style={changeStyles.description}>{change.description}</Text>
-              {change.valueBefore || change.valueAfter ? (
-                <Text style={changeStyles.transition}>
-                  {change.valueBefore ?? t("correspondent.keyChanges.na")} {"\u2192"}{" "}
-                  {change.valueAfter ?? t("correspondent.keyChanges.na")}
-                </Text>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : (
-        <EmptyCard label={t("correspondent.keyChanges.empty")} />
-      )}
-    </Panel>
-  );
-}
-
-const useChangeStyles = createThemedStyles((c) => ({
-  list: {
-    gap: 10,
-  },
-  item: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  title: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  date: {
-    ...text.numeric,
-    color: c.muted,
-  },
-  description: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 13,
-    color: c.muted,
-    lineHeight: 19,
-  },
-  transition: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 12,
-    color: c.muted,
-    letterSpacing: 0.2,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Monthly Activity (mini bar chart)
-// ---------------------------------------------------------------------------
-
-function MonthlyActivity({
-  data,
-}: {
-  data: Array<{ month: string; count: number }>;
-}) {
-  const activityStyles = useActivityStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  if (data.length === 0) {
-    return null;
-  }
-
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
-  const BAR_MAX_HEIGHT = 48;
-  let previousYear = "";
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.monthlyActivity.title")}</Text>
-      <Text style={activityStyles.title}>{t("correspondent.monthlyActivity.rhythm")}</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={activityStyles.chartScroll}
-      >
-        {data.map((point) => {
-          const year = formatMonthYear(point.month);
-          const showYear = year !== previousYear;
-          previousYear = year;
-          const barHeight = Math.max(4, (point.count / maxCount) * BAR_MAX_HEIGHT);
-
-          return (
-            <View key={point.month} style={activityStyles.barColumn}>
-              {showYear ? (
-                <Text style={activityStyles.yearLabel}>{year}</Text>
-              ) : (
-                <View style={activityStyles.yearPlaceholder} />
-              )}
-              <View style={activityStyles.barTrack}>
-                <View
-                  style={[activityStyles.bar, { height: barHeight }]}
-                />
-              </View>
-              <Text style={activityStyles.monthLabel}>
-                {formatMonthLabel(point.month)}
-              </Text>
-              {point.count > 0 ? (
-                <Text style={activityStyles.countLabel}>{point.count}</Text>
-              ) : null}
-            </View>
-          );
-        })}
-      </ScrollView>
-    </Panel>
-  );
-}
-
-const useActivityStyles = createThemedStyles((c) => ({
-  title: {
-    fontSize: 22,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-    letterSpacing: -0.3,
-    marginTop: -8,
-  },
-  chartScroll: {
-    gap: 0,
-    paddingTop: 4,
-  },
-  barColumn: {
-    alignItems: "center",
-    width: 38,
-    gap: 4,
-  },
-  yearLabel: {
-    ...text.numeric,
-    fontSize: 9,
-    lineHeight: 13,
-    color: c.muted,
-    marginBottom: 2,
-  },
-  yearPlaceholder: {
-    height: 13,
-  },
-  barTrack: {
-    height: 48,
-    width: 22,
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  bar: {
-    width: 22,
-    borderRadius: 6,
-    backgroundColor: c.accentFill,
-  },
-  monthLabel: {
-    ...text.numeric,
-    fontSize: 10,
-    lineHeight: 14,
-    color: c.muted,
-  },
-  countLabel: {
-    ...text.numericStrong,
-    fontSize: 10,
-    lineHeight: 14,
-    color: c.muted,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Current State
-// ---------------------------------------------------------------------------
-
-function CurrentState({
-  facts,
-}: {
-  facts: CorrespondentIntelligence["currentState"];
-}) {
-  const factStyles = useFactStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.currentState.title")}</Text>
-      {facts.length > 0 ? (
-        <View style={factStyles.list}>
-          {facts.map((fact) => (
-            <View key={`${fact.label}-${fact.value}`} style={factStyles.item}>
-              <View style={factStyles.content}>
-                <Text style={factStyles.label}>{fact.label}</Text>
-                <Text style={factStyles.value}>{fact.value}</Text>
-              </View>
-              {fact.asOf ? (
-                <Text style={factStyles.asOf}>{fact.asOf}</Text>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : (
-        <EmptyCard label={t("correspondent.currentState.empty")} />
-      )}
-    </Panel>
-  );
-}
-
-const useFactStyles = createThemedStyles((c) => ({
-  list: {
-    gap: 10,
-  },
-  item: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  content: {
-    flex: 1,
-    gap: 4,
-  },
-  label: {
-    fontSize: 10,
-    fontFamily: fonts.sans.semibold,
-    color: c.muted,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  value: {
-    fontSize: 14,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  asOf: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 12,
-    color: c.muted,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Timeline Highlights
-// ---------------------------------------------------------------------------
-
-function TimelineHighlights({
-  events,
-}: {
-  events: CorrespondentIntelligence["timeline"];
-}) {
-  const timelineStyles = useTimelineStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  const sorted = [...events].sort((a, b) =>
-    compareIsoDates(b.date, a.date),
-  );
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.timeline.title")}</Text>
-      {sorted.length > 0 ? (
-        <View style={timelineStyles.list}>
-          {sorted.map((event, index) => (
-            <View key={`${event.title}-${index}`} style={timelineStyles.item}>
-              <View style={timelineStyles.headerRow}>
-                <Text style={timelineStyles.title} numberOfLines={2}>
-                  {event.title}
-                </Text>
-                <Text style={timelineStyles.date}>
-                  {event.date ?? t("correspondent.timeline.undated")}
-                </Text>
-              </View>
-              <Text style={timelineStyles.description}>
-                {event.description}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <EmptyCard label={t("correspondent.timeline.empty")} />
-      )}
-    </Panel>
-  );
-}
-
-const useTimelineStyles = createThemedStyles((c) => ({
-  list: {
-    gap: 10,
-  },
-  item: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  title: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  date: {
-    fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    color: c.muted,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  description: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 13,
-    color: c.muted,
-    lineHeight: 19,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Insurance Lens (conditional)
-// ---------------------------------------------------------------------------
-
-function InsuranceLens({
-  insurance,
-}: {
-  insurance: NonNullable<CorrespondentIntelligence["domainInsights"]["insurance"]>;
-}) {
-  const insuranceStyles = useInsuranceStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  return (
-    <View style={insuranceStyles.wrap}>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.insurance.title")}</Text>
-
-      <View style={insuranceStyles.grid}>
-        <FactPanel
-          label={t("correspondent.insurance.policyReferences")}
-          value={insurance.policyReferences.join(", ") || t("correspondent.insurance.na")}
-        />
-        <FactPanel
-          label={t("correspondent.insurance.latestPremium")}
-          value={
-            insurance.latestPremiumAmount != null &&
-            insurance.latestPremiumCurrency
-              ? formatCurrency(
-                  insurance.latestPremiumAmount,
-                  insurance.latestPremiumCurrency,
-                )
-              : t("correspondent.insurance.na")
-          }
-        />
-        <FactPanel
-          label={t("correspondent.insurance.renewal")}
-          value={insurance.renewalDate ?? t("correspondent.insurance.na")}
-        />
-        <FactPanel
-          label={t("correspondent.insurance.cancellation")}
-          value={insurance.cancellationWindow ?? t("correspondent.insurance.na")}
-        />
-      </View>
-
-      {(insurance.coverageHighlights ?? []).length > 0 ? (
-        <View style={insuranceStyles.chipRow}>
-          {insurance.coverageHighlights.map((item) => (
-            <View key={item} style={insuranceStyles.chip}>
-              <Text style={insuranceStyles.chipText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function FactPanel({ label, value }: { label: string; value: string }) {
-  const insuranceStyles = useInsuranceStyles();
-  return (
-    <View style={insuranceStyles.factPanel}>
-      <Text style={insuranceStyles.factLabel}>{label}</Text>
-      <Text style={insuranceStyles.factValue}>{value}</Text>
-    </View>
-  );
-}
-
-const useInsuranceStyles = createThemedStyles((c) => ({
-  wrap: {
-    backgroundColor: c.panel,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: c.border,
-    padding: 20,
-    gap: 16,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  factPanel: {
-    flex: 1,
-    minWidth: "45%" as unknown as number,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 6,
-  },
-  factLabel: {
-    fontSize: 10,
-    fontFamily: fonts.sans.semibold,
-    color: c.muted,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  factValue: {
-    fontSize: 14,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipText: {
-    fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Type Breakdown
-// ---------------------------------------------------------------------------
-
-function TypeBreakdown({
-  items,
-}: {
-  items: Array<{ name: string; count: number }>;
-}) {
-  const typeStyles = useTypeStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.typeBreakdown.title")}</Text>
-      {items.length > 0 ? (
-        <View style={typeStyles.list}>
-          {items.map((item) => (
-            <View key={item.name} style={typeStyles.item}>
-              <Text style={typeStyles.name}>{item.name}</Text>
-              <Text style={typeStyles.count}>{item.count}</Text>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <EmptyCard label={t("correspondent.typeBreakdown.empty")} />
-      )}
-    </Panel>
-  );
-}
-
-const useTypeStyles = createThemedStyles((c) => ({
-  list: {
-    gap: 10,
-  },
-  item: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  name: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  count: {
-    ...text.numericMeta,
-    color: c.muted,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Legacy Summary
-// ---------------------------------------------------------------------------
-
-function LegacySummary({ text }: { text: string }) {
-  const summaryStyles = useSummaryStyles();
-  const sectionStyles = useSectionStyles();
-  const { t } = useI18n();
-  return (
-    <Panel padded>
-      <Text style={sectionStyles.eyebrow}>{t("correspondent.legacySummary.title")}</Text>
-      <View style={summaryStyles.body}>
-        <Text style={summaryStyles.text}>{text}</Text>
-      </View>
-    </Panel>
-  );
-}
-
-const useSummaryStyles = createThemedStyles((c) => ({
-  body: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  text: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 14,
-    color: c.muted,
-    lineHeight: 22,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Section: Documents list
-// ---------------------------------------------------------------------------
-
-function DocumentCard({
-  document,
-  onOpen,
-}: {
-  document: ArchiveDocument;
-  onOpen: () => void;
-}) {
-  const docStyles = useDocStyles();
-  const { t } = useI18n();
-  return (
-    <Pressable
-      onPress={onOpen}
-      style={({ pressed }) => [pressed ? docStyles.pressed : null]}
-    >
-      <Panel padded style={docStyles.card}>
-        <View style={docStyles.topRow}>
-          <Text style={docStyles.meta}>
-            {document.documentType?.name ?? t("correspondent.documentCard.document")}
-          </Text>
-          <Pill label={formatCorrespondentDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
-        </View>
-        <Text numberOfLines={2} style={docStyles.title}>
-          {titleForDocument(document)}
-        </Text>
-        <DocumentProcessingIndicator document={document} />
-        <View style={docStyles.footerRow}>
-          <Text style={docStyles.detail}>
-            {formatDate(document.issueDate)} {"\u00b7"}{" "}
-            {formatCurrency(document.amount, document.currency ?? "EUR")}
-          </Text>
-        </View>
-      </Panel>
-    </Pressable>
-  );
-}
-
-const useDocStyles = createThemedStyles((c) => ({
-  pressed: {
-    opacity: 0.93,
-  },
-  card: {
-    gap: 10,
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  meta: {
-    flex: 1,
-    color: c.muted,
-    fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  title: {
-    color: c.ink,
-    fontSize: 17,
-    fontFamily: fonts.sans.semibold,
-    lineHeight: 23,
-    letterSpacing: -0.2,
-  },
-  footerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 8,
-  },
-  detail: {
-    fontFamily: fonts.sans.regular,
-    color: c.muted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Small helpers
-// ---------------------------------------------------------------------------
-
-function EmptyCard({ label }: { label: string }) {
-  const emptyCardStyles = useEmptyCardStyles();
-  return (
-    <View style={emptyCardStyles.wrap}>
-      <Text style={emptyCardStyles.text}>{label}</Text>
-    </View>
-  );
-}
-
-function formatCorrespondentDocumentStatus(
-  t: ReturnType<typeof useI18n>["t"],
-  status: string,
-) {
-  switch (status) {
-    case "pending":
-      return t("documentDetail.status.pending");
-    case "processing":
-      return t("documentDetail.status.processing");
-    case "ready":
-      return t("documentDetail.status.ready");
-    case "failed":
-      return t("documentDetail.status.failed");
-    default:
-      return status;
-  }
-}
-
-const useEmptyCardStyles = createThemedStyles((c) => ({
-  wrap: {
-    minHeight: 80,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: c.border,
-  },
-  text: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 14,
-    color: c.muted,
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Shared section styles
-// ---------------------------------------------------------------------------
-
-const useSectionStyles = createThemedStyles((c) => ({
-  eyebrow: {
-    color: c.muted,
-    fontSize: 10,
-    fontFamily: fonts.sans.semibold,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Main Screen
-// ---------------------------------------------------------------------------
-
 type Props = NativeStackScreenProps<AppStackParamList, "CorrespondentDossier">;
+type Translate = ReturnType<typeof useI18n>["t"];
+
+// ---------------------------------------------------------------------------
+// Monthly activity — a thin 12-bar sparkline, current month in accent
+// ---------------------------------------------------------------------------
+
+function ActivitySparkline({ points }: { points: CorrespondentTimelinePoint[] }) {
+  const styles = useStyles();
+  const recent = points.slice(-12);
+  const peak = Math.max(1, ...recent.map((point) => point.count));
+
+  return (
+    <View style={styles.sparkline}>
+      {recent.map((point, index) => {
+        const isCurrent = index === recent.length - 1;
+        return (
+          <View key={point.month} style={styles.sparkColumn}>
+            <View style={styles.sparkTrack}>
+              <View
+                style={[
+                  styles.sparkBar,
+                  isCurrent ? styles.sparkBarCurrent : null,
+                  { height: Math.max(4, Math.round((point.count / peak) * 56)) },
+                ]}
+              />
+            </View>
+            <Text style={styles.sparkLabel} numberOfLines={1}>
+              {formatMonthLabel(point.month).slice(0, 1)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Key changes — the section that explains why an amount moved
+// ---------------------------------------------------------------------------
+
+function ChangeRow({ change }: { change: CorrespondentIntelligenceChange }) {
+  const styles = useStyles();
+  const dropped = change.direction === "decrease";
+
+  return (
+    <View style={styles.changeRow}>
+      <View style={styles.changeTop}>
+        <Text style={styles.changeTitle} numberOfLines={1}>
+          {change.title}
+        </Text>
+        <Text style={styles.changeDate}>
+          {change.effectiveDate ? formatShortDate(change.effectiveDate) : ""}
+        </Text>
+      </View>
+      {change.valueBefore || change.valueAfter ? (
+        <View style={styles.changeValues}>
+          {change.valueBefore ? (
+            <Text style={styles.changeBefore}>{change.valueBefore}</Text>
+          ) : null}
+          <Text style={styles.changeArrow}>{"→"}</Text>
+          <Text style={[styles.changeAfter, dropped ? styles.changeAfterDown : null]}>
+            {change.valueAfter ?? "-"}
+          </Text>
+        </View>
+      ) : (
+        <Text style={styles.changeDescription} numberOfLines={2}>
+          {change.description}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function documentMeta(document: ArchiveDocument, t: Translate) {
+  const state = documentRowState(document);
+  if (state === "failed") {
+    return t("state.failed");
+  }
+  if (state === "processing" || state === "queued") {
+    return t("state.processing");
+  }
+  return document.documentType?.name ?? t("documents.document");
+}
+
+// ---------------------------------------------------------------------------
+// Dossier
+// ---------------------------------------------------------------------------
 
 export function CorrespondentDossierScreen() {
-  const sectionStyles = useSectionStyles();
   const styles = useStyles();
   const route = useRoute<Props["route"]>();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -970,7 +125,6 @@ export function CorrespondentDossierScreen() {
 
   const { slug, name } = route.params;
 
-  // ── Primary query: insights (polls every 4s while pending) ──
   const insightsQuery = useQuery({
     queryKey: ["correspondent", slug, "insights", auth.apiUrl, shouldUseCache],
     enabled: !shouldUseCache,
@@ -979,20 +133,18 @@ export function CorrespondentDossierScreen() {
         `/api/correspondents/${encodeURIComponent(slug)}/insights`,
       );
       if (!response.ok) {
-          throw new Error(t("correspondent.screen.loadInsights"));
+        throw new Error(t("correspondent.screen.loadInsights"));
       }
       return (await response.json()) as CorrespondentInsightsResponse;
     },
     refetchInterval: (query) => {
       const current = query.state.data;
-      return current?.summaryStatus === "pending" ||
-        current?.intelligenceStatus === "pending"
+      return current?.summaryStatus === "pending" || current?.intelligenceStatus === "pending"
         ? 4_000
         : false;
     },
   });
 
-  // ── Secondary query: documents (enabled once we have the correspondent ID) ──
   const correspondentId = insightsQuery.data?.correspondent.id;
   const documentsQuery = useQuery({
     queryKey: [
@@ -1016,9 +168,7 @@ export function CorrespondentDossierScreen() {
         sort: "issueDate",
         direction: "desc",
       });
-      const response = await auth.authFetch(
-        `/api/documents?${params.toString()}`,
-      );
+      const response = await auth.authFetch(`/api/documents?${params.toString()}`);
       if (!response.ok) {
         throw new Error(t("correspondent.screen.loadDocumentsFailed"));
       }
@@ -1030,179 +180,349 @@ export function CorrespondentDossierScreen() {
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
-  // ── Loading state ──
-  if (!shouldUseCache && insightsQuery.isLoading) {
-    return (
-      <Screen
-        title={name}
-        onBack={() => navigation.goBack()}
-        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
-        contentContainerStyle={styles.content}
-      >
-        <Panel padded>
-          <Text style={styles.loadingText}>
-            {t("correspondent.screen.loadDossier")}
-          </Text>
-        </Panel>
-      </Screen>
-    );
-  }
-
-  // ── Error state ──
-  if (!shouldUseCache && (insightsQuery.isError || !insightsQuery.data)) {
-    return (
-      <Screen
-        title={name}
-        onBack={() => navigation.goBack()}
-        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
-        contentContainerStyle={styles.content}
-      >
-        <ErrorCard
-          message={t("correspondent.screen.loadInsights")}
-          onRetry={() => insightsQuery.refetch()}
-        />
-      </Screen>
-    );
-  }
-
-  // ── Data ready ──
   const data = insightsQuery.data ?? null;
   const intelligence = data?.intelligence ?? null;
-  const intelligenceStatus = data?.intelligenceStatus ?? "unavailable";
-  const smartHighlight = data ? buildSmartHighlight(data, intelligence, t) : null;
+  const insurance = intelligence?.domainInsights.insurance;
+  const documents = documentsQuery.data?.items ?? [];
 
-  const orderedDocuments = [
-    ...(documentsQuery.data?.items ?? []),
-  ].sort(compareDocumentsNewestFirst);
-
-  const summaryText =
-    data?.summary ??
-    intelligence?.profile?.narrative ??
-    t("correspondent.screen.noSummary");
+  const stats = [
+    {
+      label: t("correspondents.documents"),
+      value: String(data?.stats.documentCount ?? documents.length),
+    },
+    {
+      label: t("correspondent.lastDocument"),
+      value: data?.stats.dateRange.to ? formatShortDate(data.stats.dateRange.to) : "-",
+    },
+    { label: t("correspondent.changes"), value: String(intelligence?.changes.length ?? 0) },
+  ];
 
   return (
     <Screen
       title={name}
       onBack={() => navigation.goBack()}
+      padded={false}
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
-      contentContainerStyle={styles.content}
     >
-      {data ? (
+      {!shouldUseCache && insightsQuery.isLoading ? (
+        <View style={styles.gutter}>
+          <Panel padded>
+            <Text style={styles.hint}>{t("correspondent.screen.loadDossier")}</Text>
+          </Panel>
+        </View>
+      ) : null}
+
+      {!shouldUseCache && insightsQuery.isError ? (
+        <View style={styles.gutter}>
+          <ErrorCard
+            message={t("correspondent.screen.loadInsights")}
+            onRetry={() => insightsQuery.refetch()}
+          />
+        </View>
+      ) : null}
+
+      {/* Three numbers, all real */}
+      <View style={styles.statStrip}>
+        {stats.map((stat, index) => (
+          <View
+            key={stat.label}
+            style={[styles.statCell, index < stats.length - 1 ? styles.statCellDivided : null]}
+          >
+            <Text style={styles.statValue} numberOfLines={1}>
+              {stat.value}
+            </Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              {stat.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {(data?.timeline.length ?? 0) > 0 ? (
         <>
-          {/* ── Metric ribbon ── */}
-          <MetricRibbon
-            items={[
-              {
-                label: t("correspondent.screen.metricDocuments"),
-                value: data.stats.documentCount.toLocaleString(),
-              },
-              smartHighlight!,
-              {
-                label: t("correspondent.screen.metricLastDocument"),
-                value: data.stats.dateRange.to ?? t("correspondent.screen.undated"),
-              },
-              {
-                label: t("correspondent.screen.metricChanges"),
-                value: String(intelligence?.changes.length ?? 0),
-              },
-            ]}
+          <SectionHeader label={t("correspondent.monthlyActivity")} />
+          <ActivitySparkline points={data!.timeline} />
+        </>
+      ) : null}
+
+      {/* Why an amount moved */}
+      {(intelligence?.changes.length ?? 0) > 0 ? (
+        <>
+          <SectionHeader
+            label={t("correspondent.keyChanges")}
+            count={intelligence!.changes.length}
           />
+          {intelligence!.changes.map((change, index) => (
+            <ChangeRow key={`${change.title}-${index}`} change={change} />
+          ))}
+        </>
+      ) : null}
 
-          {/* ── Relationship overview ── */}
-          <RelationshipOverview
-            intelligence={intelligence}
-            intelligenceStatus={intelligenceStatus}
-          />
+      {/* Each group collapses when empty rather than rendering an empty card */}
+      {intelligence?.profile?.category || intelligence?.overview ? (
+        <>
+          <SectionHeader label={t("correspondent.relationship")} />
+          <View style={styles.prose}>
+            {intelligence.profile?.category ? (
+              <Text style={styles.proseLabel}>{intelligence.profile.category}</Text>
+            ) : null}
+            {intelligence.overview ? (
+              <Text style={styles.proseText}>{intelligence.overview}</Text>
+            ) : null}
+          </View>
+        </>
+      ) : null}
 
-          {/* ── Key changes ── */}
-          <KeyChanges changes={intelligence?.changes ?? []} />
+      {(intelligence?.currentState.length ?? 0) > 0 ? (
+        <>
+          <SectionHeader label={t("correspondent.currentState")} />
+          {intelligence!.currentState.map((fact, index) => (
+            <Row
+              key={`${fact.label}-${index}`}
+              minHeight={50}
+              title={fact.label}
+              value={fact.value}
+              valueMeta={fact.asOf ? formatShortDate(fact.asOf) : undefined}
+            />
+          ))}
+        </>
+      ) : null}
 
-          {/* ── Monthly activity ── */}
-          {data.timeline.length > 0 ? (
-            <MonthlyActivity data={data.timeline} />
+      {(intelligence?.timeline.length ?? 0) > 0 ? (
+        <>
+          <SectionHeader label={t("correspondent.timeline")} />
+          {intelligence!.timeline.map((event, index) => (
+            <Row
+              key={`${event.title}-${index}`}
+              dot="green"
+              title={event.title}
+              meta={event.description}
+              valueMeta={event.date ? formatShortDate(event.date) : undefined}
+            />
+          ))}
+        </>
+      ) : null}
+
+      {insurance ? (
+        <>
+          <SectionHeader label={t("correspondent.insurance")} />
+          {insurance.latestPremiumAmount != null ? (
+            <Row
+              minHeight={50}
+              title={t("correspondent.insurance.latestPremium")}
+              value={formatCurrency(
+                insurance.latestPremiumAmount,
+                insurance.latestPremiumCurrency ?? "EUR",
+              )}
+            />
           ) : null}
-
-          {/* ── Current state ── */}
-          <CurrentState facts={intelligence?.currentState ?? []} />
-
-          {/* ── Timeline highlights ── */}
-          <TimelineHighlights events={intelligence?.timeline ?? []} />
-
-          {/* ── Insurance lens (conditional) ── */}
-          {intelligence?.domainInsights.insurance ? (
-            <InsuranceLens insurance={intelligence.domainInsights.insurance} />
+          {insurance.renewalDate ? (
+            <Row
+              minHeight={50}
+              title={t("correspondent.insurance.renewal")}
+              value={formatShortDate(insurance.renewalDate)}
+            />
+          ) : null}
+          {insurance.cancellationWindow ? (
+            <Row
+              minHeight={50}
+              title={t("correspondent.insurance.cancellation")}
+              value={insurance.cancellationWindow}
+            />
           ) : null}
         </>
       ) : null}
 
-      {data ? <TypeBreakdown items={data.documentTypeBreakdown} /> : null}
+      {(data?.documentTypeBreakdown.length ?? 0) > 0 ? (
+        <>
+          <SectionHeader label={t("correspondent.types")} />
+          {data!.documentTypeBreakdown.map((type) => (
+            <Row key={type.name} minHeight={50} title={type.name} value={String(type.count)} />
+          ))}
+        </>
+      ) : null}
 
-      {/* ── Legacy summary ── */}
-      {data ? <LegacySummary text={summaryText} /> : null}
-
-      {/* ── Documents ── */}
-      <View style={styles.documentsSection}>
-        <View style={styles.documentsSectionHeader}>
-          <Text style={sectionStyles.eyebrow}>{t("correspondent.screen.documents")}</Text>
-          <Text style={styles.documentsTitle}>
-            {`${t("correspondent.screen.documentsFrom")} ${data?.correspondent.name ?? name}`}
-          </Text>
-        </View>
-
-        {documentsQuery.isLoading ? (
-          <Panel padded>
-            <Text style={styles.loadingText}>
-              {t("correspondent.screen.loadingDocuments")}
-            </Text>
-          </Panel>
-        ) : documentsQuery.isError ? (
+      {/* Documents, as standard rows */}
+      <SectionHeader
+        label={t("correspondent.documents")}
+        count={documentsQuery.data?.total ?? documents.length}
+      />
+      {documentsQuery.isError ? (
+        <View style={styles.gutter}>
           <ErrorCard
             message={t("correspondent.screen.loadDocumentsFailed")}
             onRetry={() => documentsQuery.refetch()}
           />
-        ) : orderedDocuments.length === 0 ? (
-          <EmptyState
-            title={t("correspondent.screen.noDocumentsTitle")}
-            body={t("correspondent.screen.noDocumentsBody")}
+        </View>
+      ) : null}
+      {documentsQuery.data && documents.length === 0 ? (
+        <EmptyState title={t("correspondent.screen.noDocumentsTitle")} />
+      ) : null}
+      {documents.map((document) => {
+        const state = documentRowState(document);
+        return (
+          <Row
+            key={document.id}
+            minHeight={62}
+            dot={
+              state === "failed"
+                ? "red"
+                : state === "ready"
+                  ? document.reviewStatus === "pending"
+                    ? "amber"
+                    : "green"
+                  : "faint"
+            }
+            pulse={state === "processing" || state === "queued"}
+            tone={state === "failed" ? "bad" : "default"}
+            title={titleForDocument(document)}
+            meta={documentMeta(document, t)}
+            value={formatCurrency(document.amount, document.currency ?? "EUR")}
+            valueMeta={formatShortDate(document.issueDate ?? document.createdAt)}
+            onPress={() =>
+              navigation.navigate("DocumentDetail", {
+                documentId: document.id,
+                title: titleForDocument(document),
+              })
+            }
           />
-        ) : (
-          orderedDocuments.map((document) => (
-            <DocumentCard
-              key={document.id}
-              document={document}
-              onOpen={() =>
-                navigation.navigate("DocumentDetail", {
-                  documentId: document.id,
-                  title: titleForDocument(document),
-                })
-              }
-            />
-          ))
-        )}
-      </View>
+        );
+      })}
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  content: {
-    gap: 16,
+  gutter: {
+    padding: 16,
   },
-  loadingText: {
-    fontFamily: fonts.sans.regular,
+  hint: {
+    ...text.meta,
     color: c.muted,
-    lineHeight: 20,
   },
-  documentsSection: {
-    gap: 14,
+  statStrip: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
   },
-  documentsSectionHeader: {
+  statCell: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    gap: 3,
+  },
+  statCellDivided: {
+    borderRightWidth: 1,
+    borderRightColor: c.borderSoft,
+  },
+  statValue: {
+    ...text.statValue,
+    color: c.ink,
+  },
+  statLabel: {
+    ...text.small,
+    color: c.faint,
+  },
+
+  /* sparkline */
+  sparkline: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  sparkColumn: {
+    flex: 1,
+    alignItems: "center",
     gap: 6,
   },
-  documentsTitle: {
-    fontSize: 22,
-    fontFamily: fonts.sans.semibold,
+  sparkTrack: {
+    height: 56,
+    width: "100%",
+    justifyContent: "flex-end",
+  },
+  sparkBar: {
+    width: "100%",
+    borderRadius: radii.sm,
+    backgroundColor: c.raised,
+  },
+  sparkBarCurrent: {
+    backgroundColor: c.accent,
+  },
+  sparkLabel: {
+    ...text.numeric,
+    fontSize: 10,
+    lineHeight: 13,
+    color: c.faint,
+  },
+
+  /* key changes */
+  changeRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    gap: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSoft,
+  },
+  changeTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  changeTitle: {
+    ...text.rowTitle,
+    flex: 1,
     color: c.ink,
-    letterSpacing: -0.3,
+  },
+  changeDate: {
+    ...text.numeric,
+    color: c.faint,
+  },
+  changeValues: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  changeBefore: {
+    ...text.amount,
+    color: c.faint,
+    textDecorationLine: "line-through",
+  },
+  changeArrow: {
+    ...text.small,
+    color: c.dim,
+  },
+  changeAfter: {
+    ...text.amount,
+    color: c.ink,
+  },
+  changeAfterDown: {
+    color: c.green,
+  },
+  changeDescription: {
+    ...text.meta,
+    color: c.dim,
+  },
+
+  /* prose */
+  prose: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSoft,
+  },
+  proseLabel: {
+    ...text.sectionLabel,
+    color: c.dim,
+  },
+  proseText: {
+    ...text.meta,
+    color: c.ink,
   },
 }));
