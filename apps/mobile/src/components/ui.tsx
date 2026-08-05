@@ -33,6 +33,7 @@ export function Screen({
   children,
   scroll = true,
   right,
+  leading,
   onBack,
   notice,
   contentContainerStyle,
@@ -43,6 +44,8 @@ export function Screen({
   children: ReactNode;
   scroll?: boolean;
   right?: ReactNode;
+  /** Sits left of the title — Today puts the logo mark there. */
+  leading?: ReactNode;
   /**
    * A stack screen carries its back affordance in this bar. Every route that
    * renders a `Screen` has its native header switched off, so without this the
@@ -88,6 +91,7 @@ export function Screen({
             <MaterialCommunityIcons name="chevron-left" size={22} color={colors.accent} />
           </Pressable>
         ) : null}
+        {leading}
         <Text style={styles.appBarTitle} numberOfLines={1}>
           {title}
         </Text>
