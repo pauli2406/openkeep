@@ -162,9 +162,11 @@ bump.
    example `0.1.0` → `0.2.0`. The release workflow verifies this matches what you
    asked it to release; it deliberately does not rewrite the commit it is
    releasing.
-2. **Wait for CI to be green on main.** The workflow reads the `CI` check for the
-   commit and refuses anything else. A release build is not where you want to
-   discover a failing test.
+2. **CI has to be green on the commit.** The workflow reads the `CI` check and
+   waits for it if it is still running — releasing straight after a merge is the
+   normal case, and the merge commit's CI is usually still in flight. It refuses a
+   commit whose CI failed, and a commit with no CI run at all. A release build is
+   not where you want to discover a failing test.
 3. **Run the workflow.** Actions → `Release iOS` → Run workflow, with the version
    (`0.2.0`, no leading `v`) and optionally a specific commit. Leave `submit` on to
    have the build uploaded to TestFlight.
@@ -233,7 +235,9 @@ store step.
 | Message | Meaning |
 |---|---|
 | `… is not an ancestor of origin/main` | You pointed the workflow at a branch or an unmerged commit. |
-| `CI is 'failure' for …` | The commit's CI is not green. Fix it and release the fix. |
+| `CI concluded 'failure' for …` | The commit's CI is not green. Fix it and release the fix. |
+| `no CI run for … after 180s` | The commit never had a CI run — CI runs on pushes to main and on pull requests. |
+| `CI was still 'in_progress' after 2700s` | CI is stuck or unusually slow; look at the run before releasing. |
 | `app.config.js says X but you asked to release Y` | Bump the version in a PR first. |
 | `no App Store Connect app id` | Set the `ASC_APP_ID` variable, or add `ascAppId` to `eas.json`. |
 | `EXPO_TOKEN secret is not set` | Add it under repository secrets. |
