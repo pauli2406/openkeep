@@ -54,16 +54,20 @@ export function documentRowState(document: ProcessableDocumentLike): DocumentRow
     return "ready";
   }
 
-  if (document.status === "failed" || document.latestProcessingJob?.status === "failed") {
-    return "failed";
-  }
-
+  // An active job wins over a stale row status. Requeueing a failure creates a
+  // `queued` job while `documents.status` stays `failed` until the worker picks
+  // it up; checking `failed` first would keep showing the red row and its
+  // reprocess action, inviting a duplicate job.
   if (document.latestProcessingJob?.status === "queued" || document.status === "pending") {
     return "queued";
   }
 
   if (isDocumentProcessing(document)) {
     return "processing";
+  }
+
+  if (document.status === "failed" || document.latestProcessingJob?.status === "failed") {
+    return "failed";
   }
 
   return "ready";

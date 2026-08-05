@@ -49,6 +49,9 @@ export function DocumentsScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        // Reprocessing can clear a pending review, and the Review tab stays
+        // mounted once visited.
+        queryClient.invalidateQueries({ queryKey: ["review"] }),
       ]);
     },
   });
