@@ -18,6 +18,7 @@ import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
 import { I18nProvider, useI18n } from "./src/i18n";
+import { SelectionModeProvider, useSelectionMode } from "./src/selection-mode";
 import { OfflineArchiveProvider, useOfflineArchive } from "./src/offline-archive";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { DocumentDetailScreen } from "./src/screens/DocumentDetailScreen";
@@ -79,14 +80,16 @@ function HomeTabs() {
   const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Today");
   const { t } = useI18n();
   const insights = useDashboardInsights();
+  const { selecting } = useSelectionMode();
 
   const pendingReview = insights.data?.stats.pendingReview ?? 0;
   const totalDocuments = insights.data?.stats.totalDocuments ?? 0;
 
   // The FAB sits above the tab bar everywhere except Review, where confirm and
   // skip are the two primary actions and nothing may compete with them, and
-  // Chat, where the composer occupies the same corner.
-  const showFab = activeTab !== "Review" && activeTab !== "Chat";
+  // Chat, where the composer occupies the same corner. A live selection takes
+  // that corner too — its action bar puts `Delete` exactly there.
+  const showFab = activeTab !== "Review" && activeTab !== "Chat" && !selecting;
 
   return (
     <View style={styles.flex}>
@@ -314,10 +317,12 @@ function AppShell() {
   return (
     <I18nProvider language={auth.user?.preferences.uiLanguage}>
       <OfflineArchiveProvider>
-        <NavigationContainer theme={theme}>
-          <StatusBar style={isDark ? "light" : "dark"} />
-          <AppNavigator fontsLoaded={fontsLoaded} />
-        </NavigationContainer>
+        <SelectionModeProvider>
+          <NavigationContainer theme={theme}>
+            <StatusBar style={isDark ? "light" : "dark"} />
+            <AppNavigator fontsLoaded={fontsLoaded} />
+          </NavigationContainer>
+        </SelectionModeProvider>
       </OfflineArchiveProvider>
     </I18nProvider>
   );

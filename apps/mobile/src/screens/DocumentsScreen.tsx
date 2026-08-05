@@ -22,6 +22,7 @@ import { documentRowState, processingRefetchInterval } from "../document-process
 import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
+import { useSelectionMode } from "../selection-mode";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
@@ -140,6 +141,15 @@ export function DocumentsScreen() {
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const selecting = selected.size > 0;
+
+  // The shell hides the scan button while a selection is live; its corner is
+  // where the action bar puts `Delete`.
+  const selectionMode = useSelectionMode();
+  useEffect(() => {
+    selectionMode.setSelecting(selecting);
+    return () => selectionMode.setSelecting(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecting]);
 
   const toggleSelected = (document: ArchiveDocument) =>
     setSelected((current) => {
