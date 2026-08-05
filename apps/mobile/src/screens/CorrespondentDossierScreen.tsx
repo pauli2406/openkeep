@@ -1,7 +1,7 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useQuery } from "@tanstack/react-query";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
@@ -10,7 +10,7 @@ import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles } from "../theme";
 import {
   formatCurrency,
   formatDate,
@@ -86,6 +86,7 @@ function MetricRibbon({
 }: {
   items: Array<{ label: string; value: string }>;
 }) {
+  const ribbonStyles = useRibbonStyles();
   return (
     <ScrollView
       horizontal
@@ -104,13 +105,13 @@ function MetricRibbon({
   );
 }
 
-const ribbonStyles = StyleSheet.create({
+const useRibbonStyles = createThemedStyles((c) => ({
   scroll: {
     gap: 10,
   },
   metric: {
     minWidth: 120,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 20,
     padding: 16,
     gap: 6,
@@ -118,17 +119,17 @@ const ribbonStyles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
   value: {
     fontSize: 22,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.5,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Relationship Overview
@@ -141,6 +142,8 @@ function RelationshipOverview({
   intelligence: CorrespondentIntelligence | null;
   intelligenceStatus: string;
 }) {
+  const overviewStyles = useOverviewStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   return (
@@ -184,9 +187,9 @@ function RelationshipOverview({
   );
 }
 
-const overviewStyles = StyleSheet.create({
+const useOverviewStyles = createThemedStyles((c) => ({
   body: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 18,
     padding: 16,
     gap: 14,
@@ -195,7 +198,7 @@ const overviewStyles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     lineHeight: 26,
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.2,
   },
   chipRow: {
@@ -206,24 +209,24 @@ const overviewStyles = StyleSheet.create({
   chip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
+    borderColor: c.border,
+    backgroundColor: c.panel,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   chipText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   pendingText: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 21,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Key Changes
@@ -234,6 +237,8 @@ function KeyChanges({
 }: {
   changes: CorrespondentIntelligence["changes"];
 }) {
+  const changeStyles = useChangeStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   return (
@@ -268,14 +273,14 @@ function KeyChanges({
   );
 }
 
-const changeStyles = StyleSheet.create({
+const useChangeStyles = createThemedStyles((c) => ({
   list: {
     gap: 10,
   },
   item: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.6)",
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -291,26 +296,26 @@ const changeStyles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
   date: {
     fontSize: 11,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   description: {
     fontSize: 13,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 19,
   },
   transition: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.2,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Monthly Activity (mini bar chart)
@@ -321,6 +326,8 @@ function MonthlyActivity({
 }: {
   data: Array<{ month: string; count: number }>;
 }) {
+  const activityStyles = useActivityStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   if (data.length === 0) {
@@ -372,11 +379,11 @@ function MonthlyActivity({
   );
 }
 
-const activityStyles = StyleSheet.create({
+const useActivityStyles = createThemedStyles((c) => ({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.3,
     marginTop: -8,
   },
@@ -390,7 +397,7 @@ const activityStyles = StyleSheet.create({
     gap: 4,
   },
   yearLabel: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 0.6,
@@ -409,21 +416,21 @@ const activityStyles = StyleSheet.create({
   bar: {
     width: 22,
     borderRadius: 6,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   monthLabel: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   countLabel: {
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "700",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Current State
@@ -434,6 +441,8 @@ function CurrentState({
 }: {
   facts: CorrespondentIntelligence["currentState"];
 }) {
+  const factStyles = useFactStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   return (
@@ -460,7 +469,7 @@ function CurrentState({
   );
 }
 
-const factStyles = StyleSheet.create({
+const useFactStyles = createThemedStyles((c) => ({
   list: {
     gap: 10,
   },
@@ -471,7 +480,7 @@ const factStyles = StyleSheet.create({
     gap: 10,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.55)",
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -483,20 +492,20 @@ const factStyles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   value: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.text,
+    color: c.ink,
   },
   asOf: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Timeline Highlights
@@ -507,6 +516,8 @@ function TimelineHighlights({
 }: {
   events: CorrespondentIntelligence["timeline"];
 }) {
+  const timelineStyles = useTimelineStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   const sorted = [...events].sort((a, b) =>
@@ -541,14 +552,14 @@ function TimelineHighlights({
   );
 }
 
-const timelineStyles = StyleSheet.create({
+const useTimelineStyles = createThemedStyles((c) => ({
   list: {
     gap: 10,
   },
   item: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.55)",
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -564,21 +575,21 @@ const timelineStyles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
   date: {
     fontSize: 11,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   description: {
     fontSize: 13,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 19,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Insurance Lens (conditional)
@@ -589,6 +600,8 @@ function InsuranceLens({
 }: {
   insurance: NonNullable<CorrespondentIntelligence["domainInsights"]["insurance"]>;
 }) {
+  const insuranceStyles = useInsuranceStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   return (
@@ -636,6 +649,7 @@ function InsuranceLens({
 }
 
 function FactPanel({ label, value }: { label: string; value: string }) {
+  const insuranceStyles = useInsuranceStyles();
   return (
     <View style={insuranceStyles.factPanel}>
       <Text style={insuranceStyles.factLabel}>{label}</Text>
@@ -644,15 +658,14 @@ function FactPanel({ label, value }: { label: string; value: string }) {
   );
 }
 
-const insuranceStyles = StyleSheet.create({
+const useInsuranceStyles = createThemedStyles((c) => ({
   wrap: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 20,
     gap: 16,
-    ...shadow,
   },
   grid: {
     flexDirection: "row",
@@ -664,7 +677,7 @@ const insuranceStyles = StyleSheet.create({
     minWidth: "45%" as unknown as number,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.65)",
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -673,14 +686,14 @@ const insuranceStyles = StyleSheet.create({
   factLabel: {
     fontSize: 10,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   factValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: colors.text,
+    color: c.ink,
   },
   chipRow: {
     flexDirection: "row",
@@ -690,7 +703,7 @@ const insuranceStyles = StyleSheet.create({
   chip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.7)",
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -698,11 +711,11 @@ const insuranceStyles = StyleSheet.create({
   chipText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Type Breakdown
@@ -713,6 +726,8 @@ function TypeBreakdown({
 }: {
   items: Array<{ name: string; count: number }>;
 }) {
+  const typeStyles = useTypeStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
 
   return (
@@ -734,7 +749,7 @@ function TypeBreakdown({
   );
 }
 
-const typeStyles = StyleSheet.create({
+const useTypeStyles = createThemedStyles((c) => ({
   list: {
     gap: 10,
   },
@@ -744,7 +759,7 @@ const typeStyles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.55)",
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -753,19 +768,21 @@ const typeStyles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-    color: colors.text,
+    color: c.ink,
   },
   count: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Legacy Summary
 // ---------------------------------------------------------------------------
 
 function LegacySummary({ text }: { text: string }) {
+  const summaryStyles = useSummaryStyles();
+  const sectionStyles = useSectionStyles();
   const { t } = useI18n();
   return (
     <Card>
@@ -777,21 +794,21 @@ function LegacySummary({ text }: { text: string }) {
   );
 }
 
-const summaryStyles = StyleSheet.create({
+const useSummaryStyles = createThemedStyles((c) => ({
   body: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     backgroundColor: "rgba(255,255,255,0.55)",
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   text: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 22,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Section: Documents list
@@ -804,6 +821,7 @@ function DocumentCard({
   document: ArchiveDocument;
   onOpen: () => void;
 }) {
+  const docStyles = useDocStyles();
   const { t } = useI18n();
   return (
     <Pressable
@@ -832,7 +850,7 @@ function DocumentCard({
   );
 }
 
-const docStyles = StyleSheet.create({
+const useDocStyles = createThemedStyles((c) => ({
   pressed: {
     opacity: 0.93,
   },
@@ -847,14 +865,14 @@ const docStyles = StyleSheet.create({
   },
   meta: {
     flex: 1,
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   title: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 17,
     fontWeight: "800",
     lineHeight: 23,
@@ -867,17 +885,18 @@ const docStyles = StyleSheet.create({
     gap: 8,
   },
   detail: {
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 13,
     lineHeight: 18,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
 
 function EmptyCard({ label }: { label: string }) {
+  const emptyCardStyles = useEmptyCardStyles();
   return (
     <View style={emptyCardStyles.wrap}>
       <Text style={emptyCardStyles.text}>{label}</Text>
@@ -903,7 +922,7 @@ function formatCorrespondentDocumentStatus(
   }
 }
 
-const emptyCardStyles = StyleSheet.create({
+const useEmptyCardStyles = createThemedStyles((c) => ({
   wrap: {
     minHeight: 80,
     alignItems: "center",
@@ -911,27 +930,27 @@ const emptyCardStyles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   text: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Shared section styles
 // ---------------------------------------------------------------------------
 
-const sectionStyles = StyleSheet.create({
+const useSectionStyles = createThemedStyles((c) => ({
   eyebrow: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Main Screen
@@ -940,6 +959,8 @@ const sectionStyles = StyleSheet.create({
 type Props = NativeStackScreenProps<AppStackParamList, "CorrespondentDossier">;
 
 export function CorrespondentDossierScreen() {
+  const sectionStyles = useSectionStyles();
+  const styles = useStyles();
   const route = useRoute<Props["route"]>();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const auth = useAuth();
@@ -1164,12 +1185,12 @@ export function CorrespondentDossierScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   content: {
     gap: 16,
   },
   loadingText: {
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 20,
   },
   documentsSection: {
@@ -1181,7 +1202,7 @@ const styles = StyleSheet.create({
   documentsTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.3,
   },
-});
+}));

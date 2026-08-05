@@ -1,7 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
@@ -11,7 +11,7 @@ import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 import {
   formatCurrency,
   formatDate,
@@ -30,6 +30,7 @@ import {
 // ---------------------------------------------------------------------------
 
 function IntakeTrend({ data }: { data: Array<{ month: string; count: number }> }) {
+  const trendStyles = useTrendStyles();
   const { t } = useI18n();
 
   if (data.length === 0) {
@@ -81,30 +82,29 @@ function IntakeTrend({ data }: { data: Array<{ month: string; count: number }> }
   );
 }
 
-const trendStyles = StyleSheet.create({
+const useTrendStyles = createThemedStyles((c) => ({
   wrap: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     paddingTop: 18,
     paddingBottom: 14,
     gap: 16,
-    ...shadow,
   },
   header: {
     paddingHorizontal: 18,
     gap: 4,
   },
   eyebrow: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   title: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.3,
@@ -119,7 +119,7 @@ const trendStyles = StyleSheet.create({
     gap: 4,
   },
   yearLabel: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 0.6,
@@ -138,21 +138,21 @@ const trendStyles = StyleSheet.create({
   bar: {
     width: 22,
     borderRadius: 6,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   monthLabel: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   countLabel: {
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "700",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Correspondent Cluster Strip — horizontally scrollable cards
@@ -163,6 +163,8 @@ type Correspondent = DashboardInsights["topCorrespondents"][number];
 const DOT_COLORS = ["#b04030", "#af6d11", "#17624f", "#5c6bc0"];
 
 function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item: Correspondent) => void }) {
+  const colors = useColors();
+  const clusterStyles = useClusterStyles();
   const { t } = useI18n();
 
   if (data.length === 0) {
@@ -224,7 +226,7 @@ function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item
   );
 }
 
-const clusterStyles = StyleSheet.create({
+const useClusterStyles = createThemedStyles((c) => ({
   wrap: {
     gap: 14,
   },
@@ -233,14 +235,14 @@ const clusterStyles = StyleSheet.create({
     gap: 4,
   },
   eyebrow: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   title: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.3,
@@ -250,13 +252,12 @@ const clusterStyles = StyleSheet.create({
   },
   card: {
     width: 200,
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 16,
     gap: 10,
-    ...shadow,
   },
   cardPressed: {
     opacity: 0.92,
@@ -268,14 +269,14 @@ const clusterStyles = StyleSheet.create({
     alignItems: "center",
   },
   docCount: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   name: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 16,
     fontWeight: "800",
     lineHeight: 21,
@@ -290,7 +291,7 @@ const clusterStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -301,7 +302,7 @@ const clusterStyles = StyleSheet.create({
     borderRadius: 4,
   },
   typePillText: {
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -312,16 +313,16 @@ const clusterStyles = StyleSheet.create({
     marginTop: 2,
   },
   footerDate: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     fontWeight: "600",
   },
   footerAmount: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 13,
     fontWeight: "800",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Task Table — vertical card list with Done action
@@ -338,6 +339,8 @@ function TaskList({
   onComplete?: (documentId: string) => void;
   busyId: string | null;
 }) {
+  const colors = useColors();
+  const taskStyles = useTaskStyles();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { t } = useI18n();
 
@@ -408,7 +411,7 @@ function TaskList({
                     !onComplete || busyId === item.documentId ? taskStyles.doneButtonDisabled : null,
                   ]}
                 >
-                  <MaterialCommunityIcons name="check" size={14} color={colors.primary} />
+                  <MaterialCommunityIcons name="check" size={14} color={colors.accent} />
                   <Text style={taskStyles.doneText}>{t("dashboard.tasks.done")}</Text>
                 </Pressable>
               </View>
@@ -420,7 +423,7 @@ function TaskList({
   );
 }
 
-const taskStyles = StyleSheet.create({
+const useTaskStyles = createThemedStyles((c) => ({
   pressed: {
     opacity: 0.93,
   },
@@ -439,19 +442,19 @@ const taskStyles = StyleSheet.create({
     gap: 2,
   },
   correspondent: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 14,
     fontWeight: "800",
   },
   docType: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   title: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 16,
     fontWeight: "700",
     lineHeight: 22,
@@ -462,21 +465,21 @@ const taskStyles = StyleSheet.create({
   },
   metaChip: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 3,
   },
   metaLabel: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   metaValue: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -487,7 +490,7 @@ const taskStyles = StyleSheet.create({
     gap: 12,
   },
   deadline: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -495,7 +498,7 @@ const taskStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -507,17 +510,18 @@ const taskStyles = StyleSheet.create({
     opacity: 0.5,
   },
   doneText: {
-    color: colors.primary,
+    color: c.accent,
     fontSize: 13,
     fontWeight: "800",
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Document Card — for recent documents
 // ---------------------------------------------------------------------------
 
 function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen: () => void }) {
+  const docStyles = useDocStyles();
   const { t } = useI18n();
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [pressed ? docStyles.pressed : null]}>
@@ -560,7 +564,7 @@ function formatDashboardDocumentStatus(
   }
 }
 
-const docStyles = StyleSheet.create({
+const useDocStyles = createThemedStyles((c) => ({
   pressed: {
     opacity: 0.93,
   },
@@ -575,21 +579,21 @@ const docStyles = StyleSheet.create({
   },
   meta: {
     flex: 1,
-    color: colors.muted,
+    color: c.muted,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   title: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 17,
     fontWeight: "800",
     lineHeight: 23,
     letterSpacing: -0.2,
   },
   helper: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -600,17 +604,18 @@ const docStyles = StyleSheet.create({
     gap: 8,
   },
   detail: {
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 13,
     lineHeight: 18,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Dashboard Screen
 // ---------------------------------------------------------------------------
 
 export function DashboardScreen() {
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -785,12 +790,12 @@ export function DashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   content: {
     gap: 16,
   },
   loadingText: {
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 20,
   },
   metricGrid: {
@@ -804,16 +809,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionEyebrow: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   sectionTitle: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
-});
+}));

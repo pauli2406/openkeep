@@ -1,6 +1,6 @@
 import "react-native-gesture-handler";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { NavigationContainer, DefaultTheme, useNavigation } from "@react-navigation/native";
@@ -23,7 +23,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { colors, shadow } from "./src/theme";
+import { createThemedStyles, useColors } from "./src/theme";
 
 export type AppStackParamList = {
   Home: undefined;
@@ -46,6 +46,8 @@ const Stack = createNativeStackNavigator<AppStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
 function HomeTabs() {
+  const colors = useColors();
+  const styles = useStyles();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Dashboard");
@@ -66,7 +68,7 @@ function HomeTabs() {
         }}
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: colors.primary,
+          tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.muted,
           tabBarStyle: [
             styles.tabBar,
@@ -125,7 +127,7 @@ function HomeTabs() {
             pressed ? styles.fabPressed : null,
           ]}
         >
-          <MaterialCommunityIcons name="camera-document" size={26} color="#fff" />
+          <MaterialCommunityIcons name="camera-document" size={26} color={colors.accentFillInk} />
         </Pressable>
       ) : null}
     </View>
@@ -133,6 +135,8 @@ function HomeTabs() {
 }
 
 function AppNavigator() {
+  const colors = useColors();
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -142,7 +146,7 @@ function AppNavigator() {
   if (auth.isLoading || !offline.isReady) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingTitle}>{t("app.loadingTitle")}</Text>
         <Text style={styles.loadingText}>{t("app.loadingText")}</Text>
       </SafeAreaView>
@@ -155,11 +159,11 @@ function AppNavigator() {
     return (
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.panel },
+          headerTintColor: colors.ink,
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.app },
         }}
       >
         <Stack.Screen
@@ -175,11 +179,11 @@ function AppNavigator() {
     <>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.text,
+          headerStyle: { backgroundColor: colors.panel },
+          headerTintColor: colors.ink,
           headerShadowVisible: false,
           headerBackButtonDisplayMode: "minimal",
-          contentStyle: { backgroundColor: colors.background },
+          contentStyle: { backgroundColor: colors.app },
         }}
       >
         <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
@@ -216,6 +220,7 @@ function AppNavigator() {
 }
 
 function Root() {
+  const styles = useStyles();
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
@@ -230,21 +235,22 @@ function Root() {
 }
 
 function AppShell() {
+  const colors = useColors();
   const auth = useAuth();
   const theme = useMemo(
     () => ({
       ...DefaultTheme,
       colors: {
         ...DefaultTheme.colors,
-        background: colors.background,
-        card: colors.surface,
-        primary: colors.primary,
-        text: colors.text,
+        background: colors.app,
+        card: colors.panel,
+        primary: colors.accent,
+        text: colors.ink,
         border: colors.border,
-        notification: colors.primary,
+        notification: colors.accent,
       },
     }),
-    [],
+    [colors],
   );
 
   return (
@@ -261,7 +267,7 @@ function AppShell() {
 
 export default Root;
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   flex: {
     flex: 1,
   },
@@ -269,23 +275,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: c.app,
     gap: 12,
     padding: 24,
   },
   loadingTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
   loadingText: {
     fontSize: 15,
-    color: colors.muted,
+    color: c.muted,
     textAlign: "center",
   },
   tabBar: {
-    backgroundColor: colors.surfaceRaised,
-    borderTopColor: colors.border,
+    backgroundColor: c.panel,
+    borderTopColor: c.border,
     height: 72,
     paddingBottom: 10,
     paddingTop: 10,
@@ -301,14 +307,12 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
     alignItems: "center",
     justifyContent: "center",
-    ...shadow,
-    shadowOpacity: 0.2,
   },
   fabPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.94 }],
   },
-});
+}));

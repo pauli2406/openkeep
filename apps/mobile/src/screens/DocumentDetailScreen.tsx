@@ -34,7 +34,7 @@ import { useDocumentSummary } from "../hooks/useDocumentSummary";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 import {
   fetchTaxonomy,
   formatCurrency,
@@ -67,6 +67,8 @@ const TAXONOMY_KINDS = ["correspondents", "document-types", "tags"] as const;
 // ---------------------------------------------------------------------------
 
 export function DocumentDetailScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -209,7 +211,7 @@ export function DocumentDetailScreen() {
     return (
       <ScreenShell title={t("documentDetail.doc")} subtitle={t("documentDetail.loading")}>
         <Card>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.accent} />
           <Text style={styles.helper}>{t("documentDetail.loadingDetail")}</Text>
         </Card>
       </ScreenShell>
@@ -307,6 +309,7 @@ function ScreenShell({
   subtitle: string;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.root}>
       <ScrollView
@@ -339,6 +342,7 @@ function SegmentedTabs({
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
 }) {
+  const styles = useStyles();
   const { t } = useI18n();
   const tabs = [
     { key: "preview" as const, label: t("documentDetail.tab.preview") },
@@ -385,6 +389,7 @@ function PreviewTab({
   offlineMode: boolean;
   textBlocks?: Array<{ page: number; text: string }>;
 }) {
+  const styles = useStyles();
   const { t } = useI18n();
   const { ensureCachedFile, isConnected } = useOfflineArchive();
   const persistOnlineFile = useCallback(
@@ -503,6 +508,7 @@ function OverviewTab({
   navigation: NativeStackNavigationProp<AppStackParamList>;
   offlineReadOnly: boolean;
 }) {
+  const styles = useStyles();
   const { t } = useI18n();
 
   // ---- Form state ----
@@ -954,6 +960,9 @@ function InsightsTab({
   refetchQaHistory: () => void;
   offlineMode: boolean;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const markdownStyles = useMarkdownStyles();
   const { t } = useI18n();
   const summary = useDocumentSummary(streamFetch, documentId);
   const qa = useDocumentQa(streamFetch, documentId);
@@ -991,7 +1000,7 @@ function InsightsTab({
         {!offlineMode && summary.status === "streaming" && (
           <>
             <Markdown style={markdownStyles}>{summary.summaryText || t("documentDetail.insights.generating")}</Markdown>
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
+            <ActivityIndicator color={colors.accent} style={{ marginTop: 8 }} />
           </>
         )}
         {!offlineMode && summary.status === "done" && summary.summaryText && (
@@ -1158,7 +1167,7 @@ function InsightsTab({
             ]}
           >
             {qa.status === "streaming" ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={colors.accentFillInk} size="small" />
             ) : (
               <Text style={styles.qaButtonText}>{t("documentDetail.insights.ask")}</Text>
             )}
@@ -1225,6 +1234,8 @@ function ActivityTab({
   textQuery: ReturnType<typeof useQuery<DocumentTextResponse>>;
   historyQuery: ReturnType<typeof useQuery<DocumentHistoryResponse>>;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useI18n();
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
@@ -1248,7 +1259,7 @@ function ActivityTab({
       <SectionTitle title={t("documentDetail.activity.ocrText")} hint={t("documentDetail.activity.ocrHint")} />
       {textQuery.isLoading && (
         <Card>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.accent} />
           <Text style={styles.helper}>{t("documentDetail.activity.loadingOcr")}</Text>
         </Card>
       )}
@@ -1266,7 +1277,7 @@ function ActivityTab({
       <SectionTitle title={t("documentDetail.activity.history")} hint={t("documentDetail.activity.historyHint")} />
       {historyQuery.isLoading && (
         <Card>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.accent} />
         </Card>
       )}
       {historyQuery.data && historyQuery.data.items.length === 0 && (
@@ -1326,6 +1337,7 @@ function ActivityTab({
 // ===========================================================================
 
 function MetaRow({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.metaRow}>
       <Text style={styles.metaLabel}>{label}</Text>
@@ -1389,6 +1401,8 @@ function PickerField({
   createPending?: boolean;
   createError?: string | null;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1482,6 +1496,7 @@ function TagsPicker({
   options: Array<{ id: string; label: string }>;
   onToggle: (id: string) => void;
 }) {
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
 
   return (
@@ -1539,9 +1554,9 @@ function formatEventType(eventType: string): string {
 // Markdown theme
 // ---------------------------------------------------------------------------
 
-const markdownStyles = StyleSheet.create({
+const useMarkdownStyles = createThemedStyles((c) => ({
   body: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 15,
     lineHeight: 22,
   },
@@ -1549,15 +1564,15 @@ const markdownStyles = StyleSheet.create({
     fontWeight: "800" as const,
   },
   code_inline: {
-    backgroundColor: colors.surfaceMuted,
-    color: colors.textSoft,
+    backgroundColor: c.raised,
+    color: c.muted,
     fontSize: 13,
     paddingHorizontal: 4,
     paddingVertical: 2,
     borderRadius: 4,
   },
   bullet_list_icon: {
-    color: colors.primary,
+    color: c.accent,
     fontSize: 8,
     marginTop: 8,
     marginRight: 8,
@@ -1566,16 +1581,16 @@ const markdownStyles = StyleSheet.create({
     flexDirection: "row" as const,
     marginBottom: 4,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: c.app,
   },
   scrollContent: {
     flexGrow: 1,
@@ -1599,14 +1614,14 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 31,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.6,
   },
   subtitle: {
     marginTop: 4,
     fontSize: 14,
     lineHeight: 21,
-    color: colors.muted,
+    color: c.muted,
   },
   statusRow: {
     flexDirection: "row",
@@ -1617,7 +1632,7 @@ const styles = StyleSheet.create({
   // Tab bar
   tabBar: {
     flexDirection: "row",
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 16,
     padding: 4,
   },
@@ -1628,41 +1643,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabActive: {
-    backgroundColor: colors.surface,
-    ...shadow,
+    backgroundColor: c.panel,
   },
   tabText: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.2,
   },
   tabTextActive: {
-    color: colors.text,
+    color: c.ink,
   },
 
   // Shared
   helper: {
-    color: colors.muted,
+    color: c.muted,
     textAlign: "center",
   },
   error: {
-    color: colors.danger,
+    color: c.red,
     fontSize: 14,
   },
   hintText: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     lineHeight: 17,
   },
   metaText: {
-    color: colors.text,
+    color: c.ink,
     lineHeight: 20,
     fontSize: 14,
   },
   metaLabel: {
     fontWeight: "700",
-    color: colors.textSoft,
+    color: c.muted,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -1674,7 +1688,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   metaValue: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 14,
     fontWeight: "600",
     textAlign: "right",
@@ -1689,13 +1703,13 @@ const styles = StyleSheet.create({
 
   // Review banner
   reviewBanner: {
-    borderColor: colors.warning,
+    borderColor: c.amber,
     borderWidth: 1.5,
   },
   reviewBannerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: colors.warning,
+    color: c.amber,
   },
   reviewActions: {
     flexDirection: "row",
@@ -1704,16 +1718,16 @@ const styles = StyleSheet.create({
 
   // Error banner
   errorBanner: {
-    borderColor: colors.danger,
+    borderColor: c.red,
     borderWidth: 1.5,
   },
   errorBannerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: colors.danger,
+    color: c.red,
   },
   errorBannerBody: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 13,
     lineHeight: 19,
   },
@@ -1725,7 +1739,7 @@ const styles = StyleSheet.create({
   fieldLabelSmall: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.textSoft,
+    color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
@@ -1736,20 +1750,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     marginRight: 8,
   },
   providerChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   providerChipText: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.textSoft,
+    color: c.muted,
     textTransform: "capitalize",
   },
   providerChipTextActive: {
-    color: "#fff",
+    color: c.accentFillInk,
   },
 
   // Job status
@@ -1762,12 +1776,12 @@ const styles = StyleSheet.create({
   jobStatusLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   jobError: {
-    color: colors.danger,
+    color: c.red,
     fontSize: 12,
     lineHeight: 17,
     flex: 1,
@@ -1777,7 +1791,7 @@ const styles = StyleSheet.create({
   dangerZone: {
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
   },
 
   // Picker
@@ -1787,7 +1801,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.textSoft,
+    color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
@@ -1795,8 +1809,8 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: c.border,
+    backgroundColor: c.panel,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: "row",
@@ -1805,31 +1819,31 @@ const styles = StyleSheet.create({
   },
   pickerButtonText: {
     fontSize: 17,
-    color: colors.text,
+    color: c.ink,
     flex: 1,
   },
   pickerPlaceholder: {
-    color: colors.muted,
+    color: c.muted,
   },
   pickerChevron: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     marginLeft: 8,
   },
   pickerDropdown: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: c.border,
+    backgroundColor: c.panel,
     overflow: "hidden",
   },
   pickerSearch: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
     fontSize: 15,
-    color: colors.text,
+    color: c.ink,
   },
   pickerCreateWrap: {
     flexDirection: "row",
@@ -1837,24 +1851,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   pickerCreateInput: {
     flex: 1,
     minHeight: 42,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    borderColor: c.border,
+    backgroundColor: c.app,
     paddingHorizontal: 12,
-    color: colors.text,
+    color: c.ink,
     fontSize: 15,
   },
   pickerCreateButton: {
     minWidth: 72,
     minHeight: 42,
     borderRadius: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
@@ -1863,14 +1877,14 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   pickerCreateButtonText: {
-    color: colors.surface,
+    color: c.panel,
     fontWeight: "700",
     fontSize: 14,
   },
   pickerCreateError: {
     paddingHorizontal: 12,
     paddingBottom: 8,
-    color: colors.danger,
+    color: c.red,
     fontSize: 13,
   },
   pickerList: {
@@ -1881,18 +1895,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   pickerOptionSelected: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
   },
   pickerOptionText: {
     fontSize: 15,
-    color: colors.text,
+    color: c.ink,
   },
   pickerOptionTextSelected: {
-    color: colors.primary,
+    color: c.accent,
     fontWeight: "700",
   },
   pickerOptionClear: {
-    color: colors.muted,
+    color: c.muted,
     fontStyle: "italic",
   },
 
@@ -1901,22 +1915,22 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   intelLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.accent,
+    color: c.accent,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   validationError: {
-    color: colors.danger,
+    color: c.red,
     fontSize: 13,
     lineHeight: 18,
   },
   validationWarning: {
-    color: colors.warning,
+    color: c.amber,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1933,19 +1947,19 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: c.border,
+    backgroundColor: c.panel,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: colors.text,
+    color: c.ink,
     lineHeight: 20,
   },
   qaButton: {
     width: 54,
     height: 48,
     borderRadius: 16,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1956,7 +1970,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   qaButtonText: {
-    color: "#fff",
+    color: c.accentFillInk,
     fontWeight: "800",
     fontSize: 14,
   },
@@ -1968,12 +1982,12 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingTop: 4,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
   },
   qaHistoryQuestion: {
     fontSize: 15,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
     lineHeight: 21,
   },
 
@@ -1981,13 +1995,13 @@ const styles = StyleSheet.create({
   pageLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.accent,
+    color: c.accent,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 4,
   },
   ocrText: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -2007,14 +2021,14 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: c.accent,
   },
   timelineLine: {
     width: 2,
     flex: 1,
-    backgroundColor: colors.border,
+    backgroundColor: c.border,
     marginTop: 4,
   },
   timelineContent: {
@@ -2025,29 +2039,29 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   historyMeta: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 17,
   },
   expandHint: {
     fontSize: 12,
-    color: colors.primary,
+    color: c.accent,
     fontWeight: "600",
     marginTop: 2,
   },
   payloadWrap: {
     marginTop: 6,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 10,
     padding: 12,
     gap: 4,
   },
   payloadLine: {
     fontSize: 12,
-    color: colors.text,
+    color: c.ink,
     lineHeight: 17,
   },
-});
+}));

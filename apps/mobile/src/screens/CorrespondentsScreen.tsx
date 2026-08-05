@@ -8,7 +8,7 @@ import { Card, EmptyState, ErrorCard, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +16,8 @@ import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
 // ---------------------------------------------------------------------------
 
 export function CorrespondentsScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -133,12 +135,12 @@ export function CorrespondentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   content: {
     gap: 10,
   },
   loadingText: {
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 20,
   },
   cardPressed: {
@@ -163,12 +165,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 16,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.2,
   },
   docCount: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.muted,
+    color: c.muted,
   },
-});
+}));

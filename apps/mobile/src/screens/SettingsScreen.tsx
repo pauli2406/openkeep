@@ -4,7 +4,7 @@ import { useAuth } from "../auth";
 import { Card, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 
 const APP_VERSION = "0.1.0";
 
@@ -21,13 +21,15 @@ function SettingsRow({
   onPress?: () => void;
   tone?: "default" | "danger";
 }) {
+  const colors = useColors();
+  const rowStyles = useRowStyles();
   const inner = (
     <View style={rowStyles.row}>
       <View style={[rowStyles.iconWrap, tone === "danger" ? rowStyles.iconWrapDanger : null]}>
         <MaterialCommunityIcons
           name={icon as never}
           size={18}
-          color={tone === "danger" ? colors.danger : colors.primary}
+          color={tone === "danger" ? colors.red : colors.accent}
         />
       </View>
       <View style={rowStyles.textWrap}>
@@ -60,7 +62,7 @@ function SettingsRow({
   return inner;
 }
 
-const rowStyles = StyleSheet.create({
+const useRowStyles = createThemedStyles((c) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -71,7 +73,7 @@ const rowStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -85,49 +87,53 @@ const rowStyles = StyleSheet.create({
   label: {
     fontSize: 15,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
   labelDanger: {
-    color: colors.danger,
+    color: c.red,
   },
   value: {
     fontSize: 13,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 18,
   },
   pressed: {
     opacity: 0.75,
   },
-});
+}));
 
 function Divider() {
+  const dividerStyles = useDividerStyles();
   return <View style={dividerStyles.line} />;
 }
 
-const dividerStyles = StyleSheet.create({
+const useDividerStyles = createThemedStyles((c) => ({
   line: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: c.border,
     marginLeft: 50,
   },
-});
+}));
 
 function SectionLabel({ label }: { label: string }) {
+  const sectionStyles = useSectionStyles();
   return <Text style={sectionStyles.label}>{label}</Text>;
 }
 
-const sectionStyles = StyleSheet.create({
+const useSectionStyles = createThemedStyles((c) => ({
   label: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 1.2,
     textTransform: "uppercase",
     marginBottom: -6,
   },
-});
+}));
 
 export function SettingsScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const auth = useAuth();
   const offline = useOfflineArchive();
   const { t } = useI18n();
@@ -299,7 +305,7 @@ export function SettingsScreen() {
             pressed ? styles.logoutButtonPressed : null,
           ]}
         >
-          <MaterialCommunityIcons name="logout" size={18} color={colors.danger} />
+          <MaterialCommunityIcons name="logout" size={18} color={colors.red} />
           <Text style={styles.logoutText}>{t("settings.logOut")}</Text>
         </Pressable>
       </View>
@@ -312,7 +318,7 @@ export function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   logoutSection: {
     marginTop: 4,
   },
@@ -324,8 +330,6 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 18,
     backgroundColor: "#f4d9d6",
-    ...shadow,
-    shadowOpacity: 0.06,
   },
   logoutButtonPressed: {
     opacity: 0.85,
@@ -334,7 +338,7 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 15,
     fontWeight: "800",
-    color: colors.danger,
+    color: c.red,
     letterSpacing: 0.1,
   },
   footer: {
@@ -343,8 +347,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   footerText: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     lineHeight: 17,
   },
-});
+}));

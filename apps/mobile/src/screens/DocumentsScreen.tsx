@@ -10,12 +10,13 @@ import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors } from "../theme";
+import { createThemedStyles } from "../theme";
 import { formatCurrency, formatDate, titleForDocument, type SearchDocumentsResponse } from "../lib";
 
 const statuses = ["all", "pending", "processing", "ready", "failed"] as const;
 
 export function DocumentsScreen() {
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -134,7 +135,7 @@ export function DocumentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -144,20 +145,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   filterChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   filterText: {
-    color: colors.text,
+    color: c.ink,
     fontWeight: "700",
   },
   filterTextActive: {
-    color: "#fff",
+    color: c.accentFillInk,
   },
   helper: {
-    color: colors.muted,
+    color: c.muted,
   },
   titleRow: {
     flexDirection: "row",
@@ -168,13 +169,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   detailLine: {
-    color: colors.text,
+    color: c.ink,
     lineHeight: 20,
   },
   pressed: {
     opacity: 0.92,
   },
-});
+}));

@@ -17,7 +17,7 @@ import { Card, ErrorCard, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 import {
   formatCurrency,
   formatDate,
@@ -36,6 +36,8 @@ import { Pill } from "../components/ui";
 // ---------------------------------------------------------------------------
 
 export function SearchScreen() {
+  const colors = useColors();
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -150,7 +152,7 @@ export function SearchScreen() {
           ]}
         >
           {isStreaming ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={colors.accentFillInk} size="small" />
           ) : (
             <Text style={styles.searchButtonText}>{t("search.search")}</Text>
           )}
@@ -256,6 +258,7 @@ function CachedSearchResults({
   unfiledLabel: string;
   onOpen: (document: ArchiveDocument) => void;
 }) {
+  const styles = useStyles();
   if (loading) {
     return (
       <Card>
@@ -300,6 +303,8 @@ function CachedSearchResults({
 // ---------------------------------------------------------------------------
 
 function SearchingSkeleton({ label }: { label: string }) {
+  const colors = useColors();
+  const styles = useStyles();
   const opacity = useRef(new Animated.Value(0.35)).current;
 
   useState(() => {
@@ -381,6 +386,9 @@ function AIAnswerPanel({
   onCitationPress: (citation: AnswerCitation) => void;
   onDocumentPress: (documentId: string, title: string) => void;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const markdownStyles = useMarkdownStyles();
   const [expanded, setExpanded] = useState(true);
   const isStreaming = answerStream.status === "searching" || answerStream.status === "streaming";
 
@@ -613,6 +621,7 @@ function AIAnswerPanel({
 }
 
 function StructuredChip({ label }: { label: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.structuredChip}>
       <Text style={styles.structuredChipText}>{label}</Text>
@@ -649,6 +658,7 @@ function ZeroState({
   suggestedLabel: string;
   noSuggestionsLabel: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.zeroState}>
       {/* Recent searches */}
@@ -737,36 +747,36 @@ function ZeroState({
 // Markdown styles
 // ---------------------------------------------------------------------------
 
-const markdownStyles = StyleSheet.create({
+const useMarkdownStyles = createThemedStyles((c) => ({
   body: {
-    color: colors.text,
+    color: c.ink,
     fontSize: 15,
     lineHeight: 24,
   },
   heading1: {
     fontSize: 20,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     marginTop: 16,
     marginBottom: 8,
   },
   heading2: {
     fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     marginTop: 14,
     marginBottom: 6,
   },
   heading3: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
     marginTop: 12,
     marginBottom: 4,
   },
   strong: {
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   em: {
     fontStyle: "italic",
@@ -788,7 +798,7 @@ const markdownStyles = StyleSheet.create({
     marginBottom: 8,
   },
   link: {
-    color: colors.accent,
+    color: c.accent,
     backgroundColor: "#f6ead1",
     fontWeight: "800",
     fontSize: 11,
@@ -798,45 +808,45 @@ const markdownStyles = StyleSheet.create({
   },
   table: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: 8,
     marginTop: 8,
     marginBottom: 8,
   },
   thead: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   th: {
     padding: 8,
     fontWeight: "800",
     fontSize: 13,
-    color: colors.text,
+    color: c.ink,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   td: {
     padding: 8,
     fontSize: 13,
-    color: colors.text,
+    color: c.ink,
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   tr: {
     borderBottomWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
   },
   blockquote: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
+    borderLeftColor: c.accent,
     paddingLeft: 12,
     paddingVertical: 8,
     marginVertical: 8,
     borderRadius: 4,
   },
   code_inline: {
-    backgroundColor: colors.surfaceMuted,
-    color: colors.text,
+    backgroundColor: c.raised,
+    color: c.ink,
     fontSize: 13,
     fontFamily: "Menlo",
     borderRadius: 4,
@@ -844,20 +854,20 @@ const markdownStyles = StyleSheet.create({
     paddingVertical: 2,
   },
   fence: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 8,
     padding: 12,
     marginVertical: 8,
     fontFamily: "Menlo",
     fontSize: 13,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   // Search bar
   searchBarContainer: {
     flexDirection: "row",
@@ -868,25 +878,22 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: c.panel,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     paddingHorizontal: 14,
     minHeight: 50,
-    ...shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
   },
   searchIcon: {
     fontSize: 18,
-    color: colors.muted,
+    color: c.muted,
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
+    color: c.ink,
     paddingVertical: 12,
   },
   clearButton: {
@@ -895,11 +902,11 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
     fontWeight: "600",
   },
   searchButton: {
-    backgroundColor: colors.text,
+    backgroundColor: c.ink,
     borderRadius: 16,
     minHeight: 50,
     paddingHorizontal: 22,
@@ -914,7 +921,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   searchButtonText: {
-    color: "#fff",
+    color: c.accentFillInk,
     fontSize: 15,
     fontWeight: "800",
     letterSpacing: 0.2,
@@ -923,20 +930,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mutedText: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 14,
     lineHeight: 20,
   },
   resultCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: c.panel,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 14,
     gap: 8,
-    ...shadow,
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
   },
   resultCardPressed: {
     opacity: 0.8,
@@ -950,13 +954,13 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     flex: 1,
-    color: colors.text,
+    color: c.ink,
     fontSize: 15,
     fontWeight: "800",
     lineHeight: 20,
   },
   resultMeta: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     lineHeight: 16,
   },
@@ -969,7 +973,7 @@ const styles = StyleSheet.create({
   },
   searchingText: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
   },
   skeletonLines: {
     gap: 10,
@@ -977,7 +981,7 @@ const styles = StyleSheet.create({
   },
   skeletonLine: {
     height: 12,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 6,
   },
   skeletonSources: {
@@ -988,7 +992,7 @@ const styles = StyleSheet.create({
   skeletonSourceCard: {
     flex: 1,
     height: 72,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 14,
   },
 
@@ -996,9 +1000,8 @@ const styles = StyleSheet.create({
   aiPanelContainer: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     overflow: "hidden",
-    ...shadow,
   },
   aiPanelHeader: {
     flexDirection: "row",
@@ -1006,30 +1009,30 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
   },
   aiPanelHeaderExpanded: {
     backgroundColor: "#efe8de",
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   aiIcon: {
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     alignItems: "center",
     justifyContent: "center",
   },
   aiIconExpanded: {
-    backgroundColor: colors.accent,
+    backgroundColor: c.accentFill,
   },
   aiIconText: {
     fontSize: 16,
-    color: colors.accent,
+    color: c.accent,
   },
   aiIconTextExpanded: {
-    color: "#fff",
+    color: c.accentFillInk,
   },
   aiPanelHeaderText: {
     flex: 1,
@@ -1040,18 +1043,18 @@ const styles = StyleSheet.create({
   aiPanelTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   aiPanelStatus: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
   },
   aiChevron: {
     fontSize: 16,
-    color: colors.muted,
+    color: c.muted,
   },
   aiPanelContent: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
     paddingHorizontal: 18,
     paddingVertical: 16,
     gap: 16,
@@ -1067,7 +1070,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 18,
     borderRadius: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: c.accent,
     marginLeft: 2,
     marginBottom: 2,
     opacity: 0.8,
@@ -1087,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   insufficientText: {
     fontSize: 14,
-    color: colors.warning,
+    color: c.amber,
     lineHeight: 20,
   },
 
@@ -1103,12 +1106,12 @@ const styles = StyleSheet.create({
   structuredTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   structuredDescription: {
     fontSize: 13,
     lineHeight: 18,
-    color: colors.muted,
+    color: c.muted,
   },
   structuredPills: {
     flexDirection: "row",
@@ -1119,22 +1122,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   structuredCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: c.panel,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 14,
     gap: 8,
   },
   structuredItemTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   structuredItemMeta: {
     fontSize: 12,
     lineHeight: 16,
-    color: colors.muted,
+    color: c.muted,
   },
   structuredChipRow: {
     flexDirection: "row",
@@ -1143,27 +1146,27 @@ const styles = StyleSheet.create({
   },
   structuredChip: {
     borderRadius: 999,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   structuredChipText: {
     fontSize: 11,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
 
   // Sources
   sourcesSection: {
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: c.border,
     paddingTop: 14,
   },
   sourcesLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 1.8,
     textTransform: "uppercase",
   },
@@ -1174,10 +1177,10 @@ const styles = StyleSheet.create({
   },
   sourceCard: {
     width: "48%",
-    backgroundColor: colors.surface,
+    backgroundColor: c.panel,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     padding: 12,
     gap: 6,
   },
@@ -1201,24 +1204,24 @@ const styles = StyleSheet.create({
   sourceNumberText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.accent,
+    color: c.accent,
   },
   sourceTitle: {
     flex: 1,
     fontSize: 13,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
     lineHeight: 17,
   },
   sourceQuote: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 16,
   },
   sourcePage: {
     fontSize: 10,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
     opacity: 0.7,
   },
 
@@ -1238,12 +1241,12 @@ const styles = StyleSheet.create({
   zeroSectionTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 2.2,
   },
   zeroClearAll: {
     fontSize: 13,
-    color: colors.muted,
+    color: c.muted,
   },
   zeroRow: {
     flexDirection: "row",
@@ -1251,20 +1254,20 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   zeroRowPressed: {
     opacity: 0.6,
   },
   zeroRowIcon: {
     fontSize: 18,
-    color: colors.muted,
+    color: c.muted,
     width: 24,
     textAlign: "center",
   },
   zeroRowIconSpark: {
     fontSize: 16,
-    color: colors.accent,
+    color: c.accent,
     opacity: 0.65,
     width: 24,
     textAlign: "center",
@@ -1272,7 +1275,7 @@ const styles = StyleSheet.create({
   zeroRowText: {
     flex: 1,
     fontSize: 15,
-    color: colors.text,
+    color: c.ink,
     lineHeight: 21,
   },
   zeroRowRemove: {
@@ -1280,11 +1283,11 @@ const styles = StyleSheet.create({
   },
   zeroRowRemoveText: {
     fontSize: 12,
-    color: colors.muted,
+    color: c.muted,
   },
   zeroEmptyText: {
     fontSize: 14,
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 20,
   },
 
@@ -1296,11 +1299,11 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   skeletonTextLine: {
     height: 14,
     borderRadius: 7,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
-});
+}));

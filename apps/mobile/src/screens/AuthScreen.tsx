@@ -4,9 +4,10 @@ import { Button, Card, Field, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
-import { colors } from "../theme";
+import { createThemedStyles } from "../theme";
 
 export function AuthScreen() {
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -115,7 +116,7 @@ export function AuthScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   content: {
     gap: 14,
   },
@@ -124,30 +125,30 @@ const styles = StyleSheet.create({
   },
   introBadge: {
     alignSelf: "flex-start",
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   introBadgeText: {
-    color: colors.primaryDeep,
+    color: c.accent,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   introText: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 14,
     lineHeight: 21,
   },
   sectionHint: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 12,
     lineHeight: 18,
   },
   error: {
-    color: colors.danger,
+    color: c.red,
     fontWeight: "600",
     lineHeight: 20,
     backgroundColor: "#f8e2de",
@@ -155,4 +156,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-});
+}));

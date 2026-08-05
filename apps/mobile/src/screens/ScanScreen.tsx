@@ -10,7 +10,6 @@ import {
   PermissionsAndroid,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TurboModuleRegistry,
   View,
@@ -21,7 +20,7 @@ import { Button, Card, EmptyState, ErrorCard, Field, Screen, SectionTitle } from
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors } from "../theme";
+import { createThemedStyles } from "../theme";
 import { createPdfFromImages, responseToMessage } from "../lib";
 
 type ScannerModule = {
@@ -55,6 +54,7 @@ type DraftAsset = {
 };
 
 export function ScanScreen() {
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -243,23 +243,23 @@ export function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   buttonStack: {
     gap: 10,
   },
   helper: {
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 20,
   },
   error: {
-    color: colors.danger,
+    color: c.red,
     fontWeight: "600",
   },
   previewImage: {
     width: "100%",
     height: 240,
     borderRadius: 18,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   pageRow: {
     flexDirection: "row",
@@ -270,10 +270,10 @@ const styles = StyleSheet.create({
   pageTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   fileText: {
-    color: colors.text,
+    color: c.ink,
     lineHeight: 20,
   },
-});
+}));

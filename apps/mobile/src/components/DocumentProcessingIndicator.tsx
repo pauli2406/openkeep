@@ -2,13 +2,15 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import type { ArchiveDocument } from "../lib";
 import { getDocumentProcessingLabel, isDocumentProcessing } from "../document-processing";
 import { useI18n } from "../i18n";
-import { colors } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 
 export function DocumentProcessingIndicator({
   document,
 }: {
   document: Pick<ArchiveDocument, "status" | "latestProcessingJob">;
 }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useI18n();
 
   if (!isDocumentProcessing(document)) {
@@ -20,7 +22,7 @@ export function DocumentProcessingIndicator({
   return (
     <View style={styles.wrap}>
       <View style={styles.labelRow}>
-        <ActivityIndicator size="small" color={colors.primary} />
+        <ActivityIndicator size="small" color={colors.accent} />
         <Text style={styles.label}>{label}</Text>
       </View>
       <View style={styles.track}>
@@ -30,7 +32,7 @@ export function DocumentProcessingIndicator({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   wrap: {
     gap: 8,
   },
@@ -40,14 +42,14 @@ const styles = StyleSheet.create({
     gap: 8,
     alignSelf: "flex-start",
     borderWidth: 1,
-    borderColor: colors.primarySoft,
-    backgroundColor: colors.primarySoft,
+    borderColor: c.accentSoft,
+    backgroundColor: c.accentSoft,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   label: {
-    color: colors.primaryDeep,
+    color: c.accent,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 0.8,
@@ -56,13 +58,13 @@ const styles = StyleSheet.create({
   track: {
     height: 6,
     borderRadius: 999,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     overflow: "hidden",
   },
   bar: {
     width: "34%",
     height: "100%",
     borderRadius: 999,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
-});
+}));

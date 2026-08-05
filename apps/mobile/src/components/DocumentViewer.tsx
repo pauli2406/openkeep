@@ -5,7 +5,6 @@ import {
   Image,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -15,7 +14,7 @@ import FileViewer from "react-native-file-viewer";
 import Pdf, { type PdfRef } from "react-native-pdf";
 import { Buffer } from "buffer";
 import { useI18n } from "../i18n";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -93,7 +92,9 @@ function extensionForMime(mimeType: string): string {
 // Chevron icons (simple inline SVG-like shapes via Views)
 // ---------------------------------------------------------------------------
 
-function ChevronLeft({ color = colors.primary, size = 18 }: { color?: string; size?: number }) {
+function ChevronLeft({ color, size = 18 }: { color?: string; size?: number }) {
+  const colors = useColors();
+  const stroke = color ?? colors.accent;
   return (
     <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
       <View
@@ -102,7 +103,7 @@ function ChevronLeft({ color = colors.primary, size = 18 }: { color?: string; si
           height: size * 0.5,
           borderLeftWidth: 2.5,
           borderBottomWidth: 2.5,
-          borderColor: color,
+          borderColor: stroke,
           transform: [{ rotate: "45deg" }],
           marginLeft: size * 0.15,
         }}
@@ -111,7 +112,9 @@ function ChevronLeft({ color = colors.primary, size = 18 }: { color?: string; si
   );
 }
 
-function ChevronRight({ color = colors.primary, size = 18 }: { color?: string; size?: number }) {
+function ChevronRight({ color, size = 18 }: { color?: string; size?: number }) {
+  const colors = useColors();
+  const stroke = color ?? colors.accent;
   return (
     <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
       <View
@@ -120,7 +123,7 @@ function ChevronRight({ color = colors.primary, size = 18 }: { color?: string; s
           height: size * 0.5,
           borderRightWidth: 2.5,
           borderTopWidth: 2.5,
-          borderColor: color,
+          borderColor: stroke,
           transform: [{ rotate: "45deg" }],
           marginRight: size * 0.15,
         }}
@@ -129,19 +132,21 @@ function ChevronRight({ color = colors.primary, size = 18 }: { color?: string; s
   );
 }
 
-function ExpandIcon({ color = colors.muted, size = 16 }: { color?: string; size?: number }) {
+function ExpandIcon({ color, size = 16 }: { color?: string; size?: number }) {
+  const colors = useColors();
+  const stroke = color ?? colors.muted;
   return (
     <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
       {/* Four corner brackets to represent fullscreen/expand */}
       <View style={{ width: size * 0.75, height: size * 0.75, position: "relative" }}>
         {/* Top-left */}
-        <View style={{ position: "absolute", top: 0, left: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderLeftWidth: 2, borderColor: color }} />
+        <View style={{ position: "absolute", top: 0, left: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderLeftWidth: 2, borderColor: stroke }} />
         {/* Top-right */}
-        <View style={{ position: "absolute", top: 0, right: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderRightWidth: 2, borderColor: color }} />
+        <View style={{ position: "absolute", top: 0, right: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderRightWidth: 2, borderColor: stroke }} />
         {/* Bottom-left */}
-        <View style={{ position: "absolute", bottom: 0, left: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: color }} />
+        <View style={{ position: "absolute", bottom: 0, left: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: stroke }} />
         {/* Bottom-right */}
-        <View style={{ position: "absolute", bottom: 0, right: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderRightWidth: 2, borderColor: color }} />
+        <View style={{ position: "absolute", bottom: 0, right: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderRightWidth: 2, borderColor: stroke }} />
       </View>
     </View>
   );
@@ -152,6 +157,7 @@ function ExpandIcon({ color = colors.muted, size = 16 }: { color?: string; size?
 // ---------------------------------------------------------------------------
 
 function PdfProgressBar({ progress }: { progress: number }) {
+  const progressStyles = useProgressStyles();
   const pct = Math.max(0, Math.min(1, progress));
   return (
     <View style={progressStyles.container}>
@@ -163,7 +169,7 @@ function PdfProgressBar({ progress }: { progress: number }) {
   );
 }
 
-const progressStyles = StyleSheet.create({
+const useProgressStyles = createThemedStyles((c) => ({
   container: {
     alignItems: "center",
     justifyContent: "center",
@@ -174,20 +180,20 @@ const progressStyles = StyleSheet.create({
     width: 140,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     overflow: "hidden",
   },
   fill: {
     height: "100%",
     borderRadius: 2,
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   label: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.muted,
+    color: c.muted,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Page Navigation Bar
@@ -210,6 +216,8 @@ function PageNavigator({
   pageLabel: string;
   ofLabel: string;
 }) {
+  const colors = useColors();
+  const navStyles = useNavStyles();
   const isFirst = currentPage <= 1;
   const isLast = currentPage >= totalPages;
 
@@ -226,7 +234,7 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ChevronLeft color={isFirst ? colors.border : colors.primary} size={16} />
+        <ChevronLeft color={isFirst ? colors.border : colors.accent} size={16} />
       </Pressable>
 
       {/* Page indicator */}
@@ -247,7 +255,7 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ChevronRight color={isLast ? colors.border : colors.primary} size={16} />
+        <ChevronRight color={isLast ? colors.border : colors.accent} size={16} />
       </Pressable>
 
       {/* Fullscreen button */}
@@ -259,13 +267,13 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ExpandIcon color={colors.primary} size={16} />
+        <ExpandIcon color={colors.accent} size={16} />
       </Pressable>
     </View>
   );
 }
 
-const navStyles = StyleSheet.create({
+const useNavStyles = createThemedStyles((c) => ({
   container: {
     flexDirection: "row",
     alignItems: "center",
@@ -277,12 +285,12 @@ const navStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
   navButtonDisabled: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     opacity: 0.5,
   },
   navButtonPressed: {
@@ -296,18 +304,18 @@ const navStyles = StyleSheet.create({
   pageText: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.text,
+    color: c.ink,
   },
   fullscreenButton: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 4,
   },
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Main Component
@@ -325,6 +333,8 @@ export function DocumentViewer({
   onPersistOnlineFile,
   textBlocks,
 }: ViewerProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const { t } = useI18n();
   const [fileState, setFileState] = useState<FileState>({ status: "idle" });
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -560,7 +570,7 @@ export function DocumentViewer({
           onPress={() => void handleShare()}
         >
           {fileState.status === "loading" ? (
-            <ActivityIndicator color={colors.primary} size="small" />
+            <ActivityIndicator color={colors.accent} size="small" />
           ) : (
             <Text style={styles.shareButtonText}>{t("documentViewer.shareToOpen")}</Text>
           )}
@@ -573,7 +583,7 @@ export function DocumentViewer({
   if (fileState.status === "idle" || fileState.status === "loading") {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={colors.accent} size="large" />
         <Text style={styles.loadingText}>{t("documentViewer.loadingPreview")}</Text>
       </View>
     );
@@ -712,7 +722,7 @@ export function DocumentViewer({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   loadingContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -720,7 +730,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -734,7 +744,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -742,23 +752,23 @@ const styles = StyleSheet.create({
   fallbackIconText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     letterSpacing: 0.5,
   },
   fallbackTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   fallbackBody: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 13,
     textAlign: "center",
     maxWidth: 260,
     lineHeight: 18,
   },
   errorText: {
-    color: colors.danger,
+    color: c.red,
     fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
@@ -769,7 +779,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
   },
   shareButtonInline: {
     alignSelf: "center",
@@ -780,7 +790,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.97 }],
   },
   shareButtonText: {
-    color: colors.primary,
+    color: c.accent,
     fontSize: 14,
     fontWeight: "800",
   },
@@ -800,13 +810,13 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 0.707, // ~A4 portrait ratio
     borderRadius: 12,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   textContainer: {
     borderRadius: 12,
-    backgroundColor: colors.surface,
+    backgroundColor: c.panel,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     overflow: "hidden",
   },
   textScroll: {
@@ -817,6 +827,6 @@ const styles = StyleSheet.create({
     fontFamily: "monospace",
     fontSize: 13,
     lineHeight: 20,
-    color: colors.text,
+    color: c.ink,
   },
-});
+}));

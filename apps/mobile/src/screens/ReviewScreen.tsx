@@ -10,10 +10,11 @@ import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { colors } from "../theme";
+import { createThemedStyles } from "../theme";
 import { responseToMessage, titleForDocument, type ReviewQueueResponse } from "../lib";
 
 export function ReviewScreen() {
+  const styles = useStyles();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -111,14 +112,14 @@ export function ReviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   helper: {
-    color: colors.muted,
+    color: c.muted,
   },
   title: {
     fontSize: 18,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
   },
   reasonWrap: {
     flexDirection: "row",
@@ -129,4 +130,4 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-});
+}));

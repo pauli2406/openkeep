@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -16,7 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
-import { colors, shadow } from "../theme";
+import { createThemedStyles, useColors } from "../theme";
 
 export function Screen({
   title,
@@ -39,6 +38,7 @@ export function Screen({
   includeTopSafeArea?: boolean;
   showEyebrow?: boolean;
 }) {
+  const styles = useStyles();
   const { t } = useI18n();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -90,10 +90,12 @@ export function Screen({
 }
 
 export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -115,6 +117,8 @@ export function Button({
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   const styleMap = {
     primary: styles.primaryButton,
     secondary: styles.secondaryButton,
@@ -138,7 +142,7 @@ export function Button({
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
     >
-      {loading ? <ActivityIndicator color={variant === "secondary" ? colors.primary : "#fff"} /> : null}
+      {loading ? <ActivityIndicator color={variant === "secondary" ? colors.accent : colors.accentFillInk} /> : null}
       <Text style={[styles.buttonText, textMap[variant], loading ? styles.loadingButtonText : null]}>{label}</Text>
     </Pressable>
   );
@@ -163,6 +167,8 @@ export function Field({
   keyboardType?: "default" | "email-address" | "numeric" | "url";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
+  const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.fieldWrap}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -170,7 +176,7 @@ export function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={colors.dim}
         secureTextEntry={secureTextEntry}
         multiline={multiline}
         keyboardType={keyboardType}
@@ -188,6 +194,7 @@ export function Pill({
   label: string;
   tone?: "default" | "success" | "warning" | "danger";
 }) {
+  const styles = useStyles();
   const bgMap = {
     default: styles.pillDefault,
     success: styles.pillSuccess,
@@ -215,6 +222,7 @@ export function EmptyState({
   title: string;
   body: string;
 }) {
+  const styles = useStyles();
   return (
     <Card style={styles.emptyCard}>
       <Text style={styles.emptyTitle}>{title}</Text>
@@ -224,6 +232,7 @@ export function EmptyState({
 }
 
 export function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const styles = useStyles();
   const { t } = useI18n();
   return (
     <Card>
@@ -251,6 +260,7 @@ export function Metric({
   value: string | number;
   onPress?: () => void;
 }) {
+  const styles = useStyles();
   const content = (
     <>
       <Text style={styles.metricLabel}>{label}</Text>
@@ -279,10 +289,10 @@ export function Metric({
   return <View style={styles.metricCard}>{content}</View>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((c) => ({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: c.app,
   },
   flexFill: {
     flex: 1,
@@ -294,7 +304,7 @@ const styles = StyleSheet.create({
     width: 240,
     height: 240,
     borderRadius: 120,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     opacity: 0.35,
   },
   backgroundGlowBottom: {
@@ -304,7 +314,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     opacity: 0.55,
   },
   scrollContent: {
@@ -330,7 +340,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   eyebrow: {
-    color: colors.accent,
+    color: c.accent,
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.6,
@@ -346,7 +356,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     lineHeight: 37,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.8,
   },
   titleCompact: {
@@ -358,7 +368,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 15,
     lineHeight: 24,
-    color: colors.muted,
+    color: c.muted,
     maxWidth: 640,
   },
   subtitleCompact: {
@@ -372,22 +382,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.3,
   },
   sectionHint: {
-    color: colors.muted,
+    color: c.muted,
     fontSize: 13,
     lineHeight: 18,
   },
   card: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: c.panel,
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     gap: 16,
-    ...shadow,
   },
   button: {
     minHeight: 54,
@@ -399,13 +408,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: c.accentFill,
   },
   secondaryButton: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
   },
   dangerButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: c.red,
   },
   buttonDisabled: {
     opacity: 0.55,
@@ -420,13 +429,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   primaryButtonText: {
-    color: "#fff",
+    color: c.accentFillInk,
   },
   secondaryButtonText: {
-    color: colors.primary,
+    color: c.accentSoftInk,
   },
   dangerButtonText: {
-    color: "#fff",
+    color: c.app,
   },
   loadingButtonText: {
     opacity: 0.9,
@@ -437,7 +446,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: colors.textSoft,
+    color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
@@ -445,9 +454,9 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.text,
+    borderColor: c.border,
+    backgroundColor: c.panel,
+    color: c.ink,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 17,
@@ -464,16 +473,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillDefault: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
   },
   pillSuccess: {
-    backgroundColor: "#d9f3e2",
+    backgroundColor: c.greenSoft,
   },
   pillWarning: {
-    backgroundColor: "#f6ead1",
+    backgroundColor: c.amberSoft,
   },
   pillDanger: {
-    backgroundColor: "#f4d9d6",
+    backgroundColor: c.redSoft,
   },
   pillText: {
     fontSize: 11,
@@ -482,16 +491,16 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   pillTextDefault: {
-    color: colors.text,
+    color: c.ink,
   },
   pillTextSuccess: {
-    color: colors.success,
+    color: c.green,
   },
   pillTextWarning: {
-    color: colors.warning,
+    color: c.amber,
   },
   pillTextDanger: {
-    color: colors.danger,
+    color: c.red,
   },
   emptyCard: {
     alignItems: "center",
@@ -500,29 +509,29 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.3,
   },
   emptyBody: {
     marginTop: 10,
     textAlign: "center",
-    color: colors.muted,
+    color: c.muted,
     lineHeight: 22,
     maxWidth: 320,
   },
   errorTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: colors.danger,
+    color: c.red,
   },
   errorBody: {
-    color: colors.text,
+    color: c.ink,
     lineHeight: 21,
   },
   metricCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: c.raised,
     borderRadius: 20,
     padding: 16,
     gap: 8,
@@ -534,7 +543,7 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.muted,
+    color: c.muted,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -546,21 +555,21 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 30,
     fontWeight: "800",
-    color: colors.text,
+    color: c.ink,
     letterSpacing: -0.8,
   },
   metricChevron: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
   metricChevronText: {
-    color: colors.primary,
+    color: c.accent,
     fontSize: 18,
     fontWeight: "800",
     marginTop: -2,
   },
-});
+}));
