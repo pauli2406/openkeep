@@ -10,56 +10,59 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
-import { createThemedStyles, useColors } from "../theme";
-import { fonts, text } from "../typography";
+import { createThemedStyles, radii, useColors } from "../theme";
+import { text } from "../typography";
 
+/**
+ * A screen is an app bar plus a body. The bar is 46pt with the title on the
+ * left and actions on the right; the giant title block is gone.
+ *
+ * `padded` is for screens whose body is cards or a form. Row lists run
+ * edge to edge and pass `padded={false}`.
+ */
 export function Screen({
   title,
-  subtitle,
   children,
   scroll = true,
   right,
   contentContainerStyle,
-  headerVariant = "default",
   includeTopSafeArea = true,
+  padded = true,
 }: {
   title: string;
-  subtitle?: string;
   children: ReactNode;
   scroll?: boolean;
   right?: ReactNode;
   contentContainerStyle?: ViewStyle;
-  headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
+  padded?: boolean;
 }) {
   const styles = useStyles();
   const scrollRef = useRef<ScrollView>(null);
 
   useScrollToTop(scrollRef);
 
-  const compact = headerVariant === "compact";
   const body = (
-    <View style={[styles.content, contentContainerStyle]}>
-      <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
-        <View style={styles.headerTextWrap}>
-          <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
-          {subtitle ? <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>{subtitle}</Text> : null}
-        </View>
-        {right}
-      </View>
+    <View style={[padded ? styles.contentPadded : styles.content, contentContainerStyle]}>
       {children}
     </View>
   );
 
   return (
     <SafeAreaView edges={includeTopSafeArea ? ["top"] : []} style={styles.safeArea}>
-      <View pointerEvents="none" style={styles.backgroundGlowTop} />
-      <View pointerEvents="none" style={styles.backgroundGlowBottom} />
+      <View style={styles.appBar}>
+        <Text style={styles.appBarTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {right ? <View style={styles.appBarActions}>{right}</View> : null}
+      </View>
       <KeyboardAvoidingView
         style={styles.flexFill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -82,18 +85,142 @@ export function Screen({
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: ViewStyle }) {
+/** A bordered surface. Borders, not shadows. */
+export function Panel({
+  children,
+  style,
+  padded = false,
+}: {
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  padded?: boolean;
+}) {
   const styles = useStyles();
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.panel, padded ? styles.panelPadded : null, style]}>{children}</View>;
 }
 
-export function SectionTitle({ title, hint }: { title: string; hint?: string }) {
+/**
+ * The strip above a group of rows: a mono uppercase label on the bar surface,
+ * with an optional count on the right.
+ */
+export function SectionHeader({
+  label,
+  count,
+  right,
+}: {
+  label: string;
+  count?: string | number;
+  right?: ReactNode;
+}) {
   const styles = useStyles();
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+      <Text style={styles.sectionHeaderLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {count !== undefined ? <Text style={styles.sectionHeaderCount}>{count}</Text> : null}
+      {right}
     </View>
+  );
+}
+
+export type RowDot = "accent" | "amber" | "red" | "green" | "faint";
+
+/**
+ * The workhorse. Every list in the app is a stack of these: an optional
+ * leading dot, a title with an optional meta line, and a trailing value or
+ * chevron.
+ */
+export function Row({
+  title,
+  meta,
+  dot,
+  value,
+  valueMeta,
+  valueTone,
+  leading,
+  trailing,
+  chevron,
+  onPress,
+  minHeight,
+  titleNumberOfLines = 1,
+}: {
+  title: string;
+  meta?: string;
+  dot?: RowDot;
+  /** Trailing amount or value. Mono, because it is always a number. */
+  value?: string;
+  /** A second, smaller trailing line: a date, a count. */
+  valueMeta?: string;
+  valueTone?: "ink" | "amber" | "red" | "green";
+  /** Replaces the dot with an icon or avatar. */
+  leading?: ReactNode;
+  /** Replaces the value column entirely. */
+  trailing?: ReactNode;
+  chevron?: boolean;
+  onPress?: () => void;
+  /** 56 is the default; the design uses 50 for settings and 66 for Today. */
+  minHeight?: number;
+  titleNumberOfLines?: number;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+
+  const dotStyles: Record<RowDot, ViewStyle> = {
+    accent: styles.dotAccent,
+    amber: styles.dotAmber,
+    red: styles.dotRed,
+    green: styles.dotGreen,
+    faint: styles.dotFaint,
+  };
+  const valueTones: Record<"ink" | "amber" | "red" | "green", TextStyle> = {
+    ink: styles.rowValueInk,
+    amber: styles.rowValueAmber,
+    red: styles.rowValueRed,
+    green: styles.rowValueGreen,
+  };
+
+  const body = (
+    <>
+      {leading ?? (dot ? <View style={[styles.dot, dotStyles[dot]]} /> : null)}
+      <View style={styles.rowTextWrap}>
+        <Text style={styles.rowTitle} numberOfLines={titleNumberOfLines}>
+          {title}
+        </Text>
+        {meta ? (
+          <Text style={styles.rowMeta} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
+      {trailing ??
+        (value !== undefined || valueMeta !== undefined ? (
+          <View style={styles.rowValueWrap}>
+            {value !== undefined ? (
+              <Text style={[styles.rowValue, valueTones[valueTone ?? "ink"]]}>{value}</Text>
+            ) : null}
+            {valueMeta !== undefined ? <Text style={styles.rowValueMeta}>{valueMeta}</Text> : null}
+          </View>
+        ) : null)}
+      {chevron ? (
+        <MaterialCommunityIcons name="chevron-right" size={18} color={colors.faint} />
+      ) : null}
+    </>
+  );
+
+  const sizing = minHeight === undefined ? null : { minHeight };
+
+  if (!onPress) {
+    return <View style={[styles.row, sizing]}>{body}</View>;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, sizing, pressed ? styles.rowPressed : null]}
+    >
+      {body}
+    </Pressable>
   );
 }
 
@@ -101,34 +228,35 @@ export function Button({
   label,
   onPress,
   variant = "primary",
+  size = "md",
   disabled,
   loading,
 }: {
   label: string;
   onPress?: () => void;
   variant?: "primary" | "secondary" | "danger";
+  size?: "md" | "sm";
   disabled?: boolean;
   loading?: boolean;
 }) {
   const styles = useStyles();
   const colors = useColors();
-  const styleMap = {
+
+  const boxMap = {
     primary: styles.primaryButton,
     secondary: styles.secondaryButton,
     danger: styles.dangerButton,
   };
-
   const textMap = {
     primary: styles.primaryButtonText,
     secondary: styles.secondaryButtonText,
     danger: styles.dangerButtonText,
   };
-
   // Each spinner matches its label, so a loading button stays legible.
   const spinnerMap = {
     primary: colors.accentFillInk,
-    secondary: colors.accentSoftInk,
-    danger: colors.app,
+    secondary: colors.ink,
+    danger: colors.red,
   };
 
   return (
@@ -137,13 +265,14 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        styleMap[variant],
+        size === "sm" ? styles.buttonSm : null,
+        boxMap[variant],
         (disabled || loading) && styles.buttonDisabled,
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
     >
-      {loading ? <ActivityIndicator color={spinnerMap[variant]} /> : null}
-      <Text style={[styles.buttonText, textMap[variant], loading ? styles.loadingButtonText : null]}>{label}</Text>
+      {loading ? <ActivityIndicator size="small" color={spinnerMap[variant]} /> : null}
+      <Text style={[styles.buttonText, textMap[variant]]}>{label}</Text>
     </Pressable>
   );
 }
@@ -187,47 +316,39 @@ export function Field({
   );
 }
 
-export function Pill({
-  label,
-  tone = "default",
-}: {
-  label: string;
-  tone?: "default" | "success" | "warning" | "danger";
-}) {
+export type PillTone = "soft" | "warn" | "bad" | "ok" | "outline";
+
+export function Pill({ label, tone = "outline" }: { label: string; tone?: PillTone }) {
   const styles = useStyles();
-  const bgMap = {
-    default: styles.pillDefault,
-    success: styles.pillSuccess,
-    warning: styles.pillWarning,
-    danger: styles.pillDanger,
+  const boxMap: Record<PillTone, ViewStyle> = {
+    soft: styles.pillSoft,
+    warn: styles.pillWarn,
+    bad: styles.pillBad,
+    ok: styles.pillOk,
+    outline: styles.pillOutline,
   };
-  const textMap = {
-    default: styles.pillTextDefault,
-    success: styles.pillTextSuccess,
-    warning: styles.pillTextWarning,
-    danger: styles.pillTextDanger,
+  const textMap: Record<PillTone, TextStyle> = {
+    soft: styles.pillTextSoft,
+    warn: styles.pillTextWarn,
+    bad: styles.pillTextBad,
+    ok: styles.pillTextOk,
+    outline: styles.pillTextOutline,
   };
 
   return (
-    <View style={[styles.pill, bgMap[tone]]}>
+    <View style={[styles.pill, boxMap[tone]]}>
       <Text style={[styles.pillText, textMap[tone]]}>{label}</Text>
     </View>
   );
 }
 
-export function EmptyState({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
+export function EmptyState({ title, body }: { title: string; body: string }) {
   const styles = useStyles();
   return (
-    <Card style={styles.emptyCard}>
+    <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyBody}>{body}</Text>
-    </Card>
+    </View>
   );
 }
 
@@ -235,43 +356,42 @@ export function ErrorCard({ message, onRetry }: { message: string; onRetry?: () 
   const styles = useStyles();
   const { t } = useI18n();
   return (
-    <Card>
-      <Text style={styles.errorTitle}>
-        {t("common.attentionTitle")}
-      </Text>
+    <Panel padded>
+      <Text style={styles.errorTitle}>{t("common.attentionTitle")}</Text>
       <Text style={styles.errorBody}>{message}</Text>
       {onRetry ? (
-        <Button
-          label={t("common.retry")}
-          variant="secondary"
-          onPress={onRetry}
-        />
+        <Button label={t("common.retry")} variant="secondary" size="sm" onPress={onRetry} />
       ) : null}
-    </Card>
+    </Panel>
   );
 }
 
+/** A number and its label. Borderless — the strip around it draws the rules. */
 export function Metric({
   label,
   value,
+  tone = "ink",
   onPress,
 }: {
   label: string;
   value: string | number;
+  tone?: "ink" | "amber" | "red" | "green";
   onPress?: () => void;
 }) {
   const styles = useStyles();
+  const toneMap: Record<"ink" | "amber" | "red" | "green", TextStyle> = {
+    ink: styles.metricValueInk,
+    amber: styles.metricValueAmber,
+    red: styles.metricValueRed,
+    green: styles.metricValueGreen,
+  };
+
   const content = (
     <>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <View style={styles.metricBottomRow}>
-        <Text style={styles.metricValue}>{value}</Text>
-        {onPress ? (
-          <View style={styles.metricChevron}>
-            <Text style={styles.metricChevronText}>{"\u203a"}</Text>
-          </View>
-        ) : null}
-      </View>
+      <Text style={[styles.metricValue, toneMap[tone]]}>{value}</Text>
+      <Text style={styles.metricLabel} numberOfLines={1}>
+        {label}
+      </Text>
     </>
   );
 
@@ -279,14 +399,14 @@ export function Metric({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.metricCard, pressed ? styles.metricCardPressed : null]}
+        style={({ pressed }) => [styles.metric, pressed ? styles.metricPressed : null]}
       >
         {content}
       </Pressable>
     );
   }
 
-  return <View style={styles.metricCard}>{content}</View>;
+  return <View style={styles.metric}>{content}</View>;
 }
 
 const useStyles = createThemedStyles((c) => ({
@@ -297,260 +417,302 @@ const useStyles = createThemedStyles((c) => ({
   flexFill: {
     flex: 1,
   },
-  backgroundGlowTop: {
-    position: "absolute",
-    top: -56,
-    right: -28,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: c.accentSoft,
-    opacity: 0.35,
+  appBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    height: 46,
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
   },
-  backgroundGlowBottom: {
-    position: "absolute",
-    bottom: 84,
-    left: -72,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: c.raised,
-    opacity: 0.55,
+  appBarTitle: {
+    ...text.barTitle,
+    flex: 1,
+    color: c.ink,
+  },
+  appBarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
   },
   scrollContent: {
     flexGrow: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 0,
-    gap: 20,
+    paddingBottom: 16,
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 0,
-  },
-  headerRowCompact: {
-    gap: 10,
-  },
-  headerTextWrap: {
-    flex: 1,
-  },
-  title: {
-    ...text.screenTitle,
-    color: c.ink,
-  },
-  titleCompact: {
-    ...text.barTitle,
-  } satisfies TextStyle,
-  subtitle: {
-    ...text.meta,
-    marginTop: 4,
-    color: c.muted,
-    maxWidth: 640,
-  },
-  subtitleCompact: {
-    marginTop: 3,
-  } satisfies TextStyle,
-  sectionHeader: {
-    gap: 5,
-  },
-  sectionTitle: {
-    ...text.screenTitle,
-    color: c.ink,
-  },
-  sectionHint: {
-    ...text.meta,
-    color: c.muted,
-  },
-  card: {
-    backgroundColor: c.panel,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: c.border,
+  contentPadded: {
+    padding: 16,
     gap: 16,
   },
+  panel: {
+    backgroundColor: c.panel,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  panelPadded: {
+    padding: 14,
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
+  },
+  sectionHeaderLabel: {
+    ...text.sectionLabel,
+    flex: 1,
+    color: c.dim,
+  },
+  sectionHeaderCount: {
+    ...text.numeric,
+    color: c.faint,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderSoft,
+  },
+  rowPressed: {
+    backgroundColor: c.raised,
+  },
+  rowTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    ...text.rowTitle,
+    color: c.ink,
+  },
+  rowMeta: {
+    ...text.meta,
+    marginTop: 3,
+    color: c.dim,
+  },
+  rowValueWrap: {
+    flexShrink: 0,
+    alignItems: "flex-end",
+  },
+  rowValue: {
+    ...text.amount,
+  },
+  rowValueInk: {
+    color: c.ink,
+  },
+  rowValueAmber: {
+    color: c.amber,
+  },
+  rowValueRed: {
+    color: c.red,
+  },
+  rowValueGreen: {
+    color: c.green,
+  },
+  rowValueMeta: {
+    ...text.numeric,
+    marginTop: 3,
+    color: c.faint,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    flexShrink: 0,
+    borderRadius: radii.pill,
+  },
+  dotAccent: {
+    backgroundColor: c.accent,
+  },
+  dotAmber: {
+    backgroundColor: c.amber,
+  },
+  dotRed: {
+    backgroundColor: c.red,
+  },
+  dotGreen: {
+    backgroundColor: c.green,
+  },
+  dotFaint: {
+    backgroundColor: c.borderStrong,
+  },
   button: {
-    minHeight: 54,
-    borderRadius: 18,
+    height: 46,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 18,
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  buttonSm: {
+    height: 38,
+    paddingHorizontal: 12,
   },
   primaryButton: {
     backgroundColor: c.accentFill,
   },
   secondaryButton: {
-    backgroundColor: c.accentSoft,
+    backgroundColor: c.panel,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   dangerButton: {
-    backgroundColor: c.red,
+    backgroundColor: c.panel,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   buttonDisabled: {
-    opacity: 0.55,
+    opacity: 0.45,
   },
   buttonPressed: {
-    opacity: 0.96,
-    transform: [{ scale: 0.985 }],
+    opacity: 0.85,
   },
   buttonText: {
-    fontSize: 15,
-    fontFamily: fonts.sans.semibold,
-    letterSpacing: 0.1,
+    ...text.bodyStrong,
   },
+  // Colour only — `buttonText` owns the family, and a family here would
+  // silently undo its weight.
   primaryButtonText: {
-    // Colour only — `buttonText` owns the family, and a family here would
-    // silently undo its weight.
     color: c.accentFillInk,
   },
   secondaryButtonText: {
-    // Colour only — `buttonText` owns the family, and a family here would
-    // silently undo its weight.
-    color: c.accentSoftInk,
+    color: c.ink,
   },
   dangerButtonText: {
-    // Colour only — `buttonText` owns the family, and a family here would
-    // silently undo its weight.
-    color: c.app,
-  },
-  loadingButtonText: {
-    opacity: 0.9,
+    color: c.red,
   },
   fieldWrap: {
-    gap: 9,
+    gap: 6,
   },
   fieldLabel: {
-    fontSize: 12,
-    fontFamily: fonts.sans.semibold,
+    ...text.meta,
     color: c.muted,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
   },
   input: {
-    fontFamily: fonts.sans.regular,
-    minHeight: 54,
-    borderRadius: 18,
+    ...text.body,
+    height: 44,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
     backgroundColor: c.panel,
     color: c.ink,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 17,
-    lineHeight: 22,
+    paddingHorizontal: 12,
   },
   inputMultiline: {
-    minHeight: 96,
+    height: undefined,
+    minHeight: 88,
+    paddingTop: 10,
+    paddingBottom: 10,
     textAlignVertical: "top",
   },
   pill: {
     alignSelf: "flex-start",
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
   },
-  pillDefault: {
-    backgroundColor: c.raised,
+  pillSoft: {
+    backgroundColor: c.accentSoft,
   },
-  pillSuccess: {
-    backgroundColor: c.greenSoft,
-  },
-  pillWarning: {
+  pillWarn: {
     backgroundColor: c.amberSoft,
   },
-  pillDanger: {
+  pillBad: {
     backgroundColor: c.redSoft,
   },
+  pillOk: {
+    backgroundColor: c.greenSoft,
+  },
+  pillOutline: {
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
   pillText: {
+    ...text.smallStrong,
     fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+    lineHeight: 15,
   },
-  pillTextDefault: {
-    fontFamily: fonts.sans.regular,
-    color: c.ink,
+  pillTextSoft: {
+    color: c.accentSoftInk,
   },
-  pillTextSuccess: {
-    fontFamily: fonts.sans.regular,
-    color: c.green,
-  },
-  pillTextWarning: {
-    fontFamily: fonts.sans.regular,
+  pillTextWarn: {
     color: c.amber,
   },
-  pillTextDanger: {
-    fontFamily: fonts.sans.regular,
+  pillTextBad: {
     color: c.red,
   },
-  emptyCard: {
+  pillTextOk: {
+    color: c.green,
+  },
+  pillTextOutline: {
+    color: c.dim,
+  },
+  emptyState: {
     alignItems: "center",
-    paddingVertical: 32,
+    gap: 6,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
   },
   emptyTitle: {
-    ...text.screenTitle,
+    ...text.barTitle,
     color: c.ink,
+    textAlign: "center",
   },
   emptyBody: {
-    fontFamily: fonts.sans.regular,
-    marginTop: 10,
+    ...text.meta,
+    color: c.dim,
     textAlign: "center",
-    color: c.muted,
-    lineHeight: 22,
-    maxWidth: 320,
+    maxWidth: 300,
   },
   errorTitle: {
-    ...text.barTitle,
+    ...text.bodyStrong,
     color: c.red,
   },
   errorBody: {
-    fontFamily: fonts.sans.regular,
+    ...text.meta,
     color: c.ink,
-    lineHeight: 21,
   },
-  metricCard: {
+  metric: {
     flex: 1,
-    minWidth: 140,
-    backgroundColor: c.raised,
-    borderRadius: 20,
-    padding: 16,
-    gap: 8,
+    minWidth: 0,
+    paddingVertical: 2,
   },
-  metricCardPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  metricLabel: {
-    ...text.sectionLabel,
-    color: c.muted,
-  },
-  metricBottomRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  metricPressed: {
+    opacity: 0.7,
   },
   metricValue: {
     ...text.statValue,
+  },
+  metricValueInk: {
     color: c.ink,
   },
-  metricChevron: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: c.accentSoft,
-    alignItems: "center",
-    justifyContent: "center",
+  metricValueAmber: {
+    color: c.amber,
   },
-  metricChevronText: {
-    color: c.accent,
-    fontSize: 18,
-    fontFamily: fonts.sans.semibold,
-    marginTop: -2,
+  metricValueRed: {
+    color: c.red,
+  },
+  metricValueGreen: {
+    color: c.green,
+  },
+  metricLabel: {
+    ...text.small,
+    fontSize: 10.5,
+    lineHeight: 14,
+    marginTop: 2,
+    color: c.faint,
   },
 }));

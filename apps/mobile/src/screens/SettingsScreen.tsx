@@ -1,7 +1,7 @@
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
-import { Card, Screen } from "../components/ui";
+import { Panel, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import { createThemedStyles, useColors } from "../theme";
@@ -224,10 +224,10 @@ export function SettingsScreen() {
   }
 
   return (
-    <Screen title={t("settings.title")} subtitle={t("settings.subtitle")}>
+    <Screen title={t("settings.title")}>
       {/* Account */}
       <SectionLabel label={t("settings.account")} />
-      <Card>
+      <Panel padded>
         <SettingsRow
           icon="account-circle-outline"
           label={auth.user?.displayName ?? t("settings.userFallback")}
@@ -239,10 +239,10 @@ export function SettingsScreen() {
             <SettingsRow icon="shield-check-outline" label={t("settings.ownerAccount")} />
           </>
         ) : null}
-      </Card>
+      </Panel>
 
       <SectionLabel label={t("settings.languagePreferences")} />
-      <Card>
+      <Panel padded>
         <SettingsRow
           icon="translate"
           label={t("settings.uiLanguage")}
@@ -265,11 +265,11 @@ export function SettingsScreen() {
           value={labelForLanguage(auth.user?.preferences.aiChatLanguage ?? "en")}
           onPress={() => handleSelectPreference("aiChatLanguage", t("settings.aiChatLanguage"))}
         />
-      </Card>
+      </Panel>
 
       {/* Archive connection */}
       <SectionLabel label={t("settings.archive")} />
-      <Card>
+      <Panel padded>
         <SettingsRow
           icon="server-network"
           label={t("settings.connectedArchive")}
@@ -289,15 +289,15 @@ export function SettingsScreen() {
           onPress={handleClearCache}
           tone="danger"
         />
-      </Card>
+      </Panel>
 
       {/* About */}
       <SectionLabel label={t("settings.about")} />
-      <Card>
+      <Panel padded>
         <SettingsRow icon="information-outline" label={t("settings.version")} value={APP_VERSION} />
         <Divider />
         <SettingsRow icon="bookshelf" label="OpenKeep" value={t("settings.productTagline")} />
-      </Card>
+      </Panel>
 
       {/* Log out */}
       <View style={styles.logoutSection}>

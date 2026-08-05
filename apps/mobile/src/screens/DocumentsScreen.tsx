@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Card, EmptyState, ErrorCard, Field, Pill, Screen, SectionTitle } from "../components/ui";
+import { Panel, EmptyState, ErrorCard, Field, Pill, Screen, SectionHeader } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -88,10 +88,10 @@ export function DocumentsScreen() {
   });
 
   return (
-    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")}>
-      <Card>
+    <Screen title={t("documents.title")}>
+      <Panel padded>
         <Field label={t("documents.query")} value={query} onChangeText={setQuery} placeholder={t("documents.placeholder")} />
-        <SectionTitle title={t("documents.status")} hint={t("documents.statusHint")} />
+        <SectionHeader label={t("documents.status")} />
         <View style={styles.filterRow}>
           {statuses.map((value) => (
             <Pressable key={value} onPress={() => setStatus(value)} style={[styles.filterChip, status === value ? styles.filterChipActive : null]}>
@@ -99,14 +99,14 @@ export function DocumentsScreen() {
               </Pressable>
             ))}
           </View>
-      </Card>
+      </Panel>
 
-      {documentsQuery.isLoading ? <Card><Text style={styles.helper}>{t("documents.loading")}</Text></Card> : null}
+      {documentsQuery.isLoading ? <Panel padded><Text style={styles.helper}>{t("documents.loading")}</Text></Panel> : null}
       {documentsQuery.isError ? <ErrorCard message={t("documents.loadError")} onRetry={() => documentsQuery.refetch()} /> : null}
 
       {documentsQuery.data ? (
         <>
-          <SectionTitle title={`${documentsQuery.data.total} ${t("documents.results")}`} hint={t("documents.resultsHint")} />
+          <SectionHeader label={t("documents.results")} count={documentsQuery.data.total} />
           {documentsQuery.data.items.length === 0 ? (
             <EmptyState title={t("documents.noneTitle")} body={t("documents.noneBody")} />
           ) : (
@@ -116,17 +116,17 @@ export function DocumentsScreen() {
                 onPress={() => navigation.navigate("DocumentDetail", { documentId: document.id, title: titleForDocument(document) })}
                 style={({ pressed }) => [pressed ? styles.pressed : null]}
               >
-                <Card>
+                <Panel padded>
                   <View style={styles.titleRow}>
                     <Text style={styles.title}>{titleForDocument(document)}</Text>
-                    <Pill label={statusPillLabel(document.status)} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
+                    <Pill label={statusPillLabel(document.status)} tone={document.status === "ready" ? "ok" : document.status === "failed" ? "bad" : "warn"} />
                   </View>
                   <DocumentProcessingIndicator document={document} />
                   <Text style={styles.helper}>{document.correspondent?.name ?? t("documents.unfiled")} • {document.documentType?.name ?? t("documents.document")}</Text>
                   <Text style={styles.detailLine}>{`${t("documents.created")} ${formatDate(document.createdAt)}`}</Text>
                   <Text style={styles.detailLine}>{formatCurrency(document.amount, document.currency ?? "EUR")}</Text>
-                  {document.reviewStatus === "pending" ? <Pill label={t("documents.needsReview")} tone="warning" /> : null}
-                </Card>
+                  {document.reviewStatus === "pending" ? <Pill label={t("documents.needsReview")} tone="warn" /> : null}
+                </Panel>
               </Pressable>
             ))
           )}

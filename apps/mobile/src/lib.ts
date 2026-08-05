@@ -663,17 +663,17 @@ export function titleForDocument(document: ArchiveDocument) {
   return document.title?.trim() || document.referenceNumber?.trim() || "Untitled document";
 }
 
-export function toneForStatus(status: string): "default" | "success" | "warning" | "danger" {
+export function toneForStatus(status: string): "soft" | "warn" | "bad" | "ok" | "outline" {
   if (status === "ready" || status === "resolved") {
-    return "success";
+    return "ok";
   }
   if (status === "failed") {
-    return "danger";
+    return "bad";
   }
   if (status === "pending" || status === "processing") {
-    return "warning";
+    return "warn";
   }
-  return "default";
+  return "outline";
 }
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

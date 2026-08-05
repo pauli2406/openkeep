@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { Panel, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -143,7 +143,7 @@ function RelationshipOverview({
   const { t } = useI18n();
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.relationship.title")}</Text>
       <View style={overviewStyles.body}>
         {intelligenceStatus === "ready" && intelligence?.overview ? (
@@ -179,7 +179,7 @@ function RelationshipOverview({
           <Text style={overviewStyles.pendingText}>{t("correspondent.relationship.unavailable")}</Text>
         )}
       </View>
-    </Card>
+    </Panel>
   );
 }
 
@@ -239,7 +239,7 @@ function KeyChanges({
   const { t } = useI18n();
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.keyChanges.title")}</Text>
       {changes.length > 0 ? (
         <View style={changeStyles.list}>
@@ -266,7 +266,7 @@ function KeyChanges({
       ) : (
         <EmptyCard label={t("correspondent.keyChanges.empty")} />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -335,7 +335,7 @@ function MonthlyActivity({
   let previousYear = "";
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.monthlyActivity.title")}</Text>
       <Text style={activityStyles.title}>{t("correspondent.monthlyActivity.rhythm")}</Text>
       <ScrollView
@@ -371,7 +371,7 @@ function MonthlyActivity({
           );
         })}
       </ScrollView>
-    </Card>
+    </Panel>
   );
 }
 
@@ -441,7 +441,7 @@ function CurrentState({
   const { t } = useI18n();
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.currentState.title")}</Text>
       {facts.length > 0 ? (
         <View style={factStyles.list}>
@@ -460,7 +460,7 @@ function CurrentState({
       ) : (
         <EmptyCard label={t("correspondent.currentState.empty")} />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -521,7 +521,7 @@ function TimelineHighlights({
   );
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.timeline.title")}</Text>
       {sorted.length > 0 ? (
         <View style={timelineStyles.list}>
@@ -544,7 +544,7 @@ function TimelineHighlights({
       ) : (
         <EmptyCard label={t("correspondent.timeline.empty")} />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -728,7 +728,7 @@ function TypeBreakdown({
   const { t } = useI18n();
 
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.typeBreakdown.title")}</Text>
       {items.length > 0 ? (
         <View style={typeStyles.list}>
@@ -742,7 +742,7 @@ function TypeBreakdown({
       ) : (
         <EmptyCard label={t("correspondent.typeBreakdown.empty")} />
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -782,12 +782,12 @@ function LegacySummary({ text }: { text: string }) {
   const sectionStyles = useSectionStyles();
   const { t } = useI18n();
   return (
-    <Card>
+    <Panel padded>
       <Text style={sectionStyles.eyebrow}>{t("correspondent.legacySummary.title")}</Text>
       <View style={summaryStyles.body}>
         <Text style={summaryStyles.text}>{text}</Text>
       </View>
-    </Card>
+    </Panel>
   );
 }
 
@@ -826,7 +826,7 @@ function DocumentCard({
       onPress={onOpen}
       style={({ pressed }) => [pressed ? docStyles.pressed : null]}
     >
-      <Card style={docStyles.card}>
+      <Panel padded style={docStyles.card}>
         <View style={docStyles.topRow}>
           <Text style={docStyles.meta}>
             {document.documentType?.name ?? t("correspondent.documentCard.document")}
@@ -843,7 +843,7 @@ function DocumentCard({
             {formatCurrency(document.amount, document.currency ?? "EUR")}
           </Text>
         </View>
-      </Card>
+      </Panel>
     </Pressable>
   );
 }
@@ -1035,15 +1035,14 @@ export function CorrespondentDossierScreen() {
     return (
       <Screen
         title={name}
-        headerVariant="compact"
         includeTopSafeArea={false}
         contentContainerStyle={styles.content}
       >
-        <Card>
+        <Panel padded>
           <Text style={styles.loadingText}>
             {t("correspondent.screen.loadDossier")}
           </Text>
-        </Card>
+        </Panel>
       </Screen>
     );
   }
@@ -1053,7 +1052,6 @@ export function CorrespondentDossierScreen() {
     return (
       <Screen
         title={name}
-        headerVariant="compact"
         includeTopSafeArea={false}
         contentContainerStyle={styles.content}
       >
@@ -1083,8 +1081,6 @@ export function CorrespondentDossierScreen() {
   return (
     <Screen
       title={name}
-      subtitle={t("correspondent.screen.subtitle")}
-      headerVariant="compact"
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
     >
@@ -1151,11 +1147,11 @@ export function CorrespondentDossierScreen() {
         </View>
 
         {documentsQuery.isLoading ? (
-          <Card>
+          <Panel padded>
             <Text style={styles.loadingText}>
               {t("correspondent.screen.loadingDocuments")}
             </Text>
-          </Card>
+          </Panel>
         ) : documentsQuery.isError ? (
           <ErrorCard
             message={t("correspondent.screen.loadDocumentsFailed")}

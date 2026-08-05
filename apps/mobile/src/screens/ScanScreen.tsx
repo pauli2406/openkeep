@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
-import { Button, Card, EmptyState, ErrorCard, Field, Screen, SectionTitle } from "../components/ui";
+import { Button, Panel, EmptyState, ErrorCard, Field, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -197,8 +197,8 @@ export function ScanScreen() {
   }
 
   return (
-    <Screen includeTopSafeArea={false} title={t("scan.title")} subtitle={t("scan.subtitle")}>
-      <Card>
+    <Screen includeTopSafeArea={false} title={t("scan.title")}>
+      <Panel padded>
         <Field label={t("scan.titleOverride")} value={title} onChangeText={setTitle} placeholder={t("scan.optionalTitle")} />
         <View style={styles.buttonStack}>
           <Button label={t("scan.scanWithCamera")} onPress={() => void handleScan()} />
@@ -207,30 +207,30 @@ export function ScanScreen() {
         </View>
         {shouldUseCache ? <Text style={styles.helper}>{t("scan.uploadsPaused")}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-      </Card>
+      </Panel>
 
       {pdfUri ? (
-        <Card>
-            <SectionTitle title={t("scan.importedPdf")} hint={t("scan.importedHint")} />
+        <Panel padded>
+            <SectionHeader label={t("scan.importedPdf")} />
             <Text style={styles.fileText}>{pdfUri.split("/").pop() ?? pdfUri}</Text>
             <View style={styles.buttonStack}>
               <Button label={t("scan.shareCopy")} variant="secondary" onPress={() => void Sharing.shareAsync(pdfUri)} />
               <Button label={t("scan.uploadPdf")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={shouldUseCache} />
             </View>
-          </Card>
+          </Panel>
       ) : null}
 
       {pages.length > 0 ? (
         <>
-          <SectionTitle title={`${t("scan.capturedPages")} (${pages.length})`} hint={t("scan.capturedHint")} />
+          <SectionHeader label={t("scan.capturedPages")} count={pages.length} />
           {pages.map((page, index) => (
-            <Card key={page.id}>
+            <Panel padded key={page.id}>
               <Image source={{ uri: page.uri }} style={styles.previewImage} resizeMode="cover" />
               <View style={styles.pageRow}>
                 <Text style={styles.pageTitle}>{`${t("scan.page")} ${index + 1}`}</Text>
                 <Button label={t("scan.remove")} variant="danger" onPress={() => removePage(page.id)} />
               </View>
-            </Card>
+            </Panel>
           ))}
           {uploadMutation.isError ? <ErrorCard message={uploadMutation.error instanceof Error ? uploadMutation.error.message : t("scan.uploadFailed")} /> : null}
           <Button label={t("scan.createAndUpload")} onPress={() => void uploadMutation.mutateAsync()} loading={uploadMutation.isPending} disabled={shouldUseCache} />

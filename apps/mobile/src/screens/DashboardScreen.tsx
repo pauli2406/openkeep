@@ -6,7 +6,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Card, EmptyState, ErrorCard, Metric, Pill, Screen, SectionTitle } from "../components/ui";
+import { Panel, EmptyState, ErrorCard, Metric, Pill, Screen, SectionHeader } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -361,7 +361,7 @@ function TaskList({
             })}
             style={({ pressed }) => [pressed ? taskStyles.pressed : null]}
           >
-            <Card style={item.isOverdue ? taskStyles.overdueCard : undefined}>
+            <Panel padded style={item.isOverdue ? taskStyles.overdueCard : undefined}>
               <View style={taskStyles.topRow}>
                 <View style={taskStyles.correspondentWrap}>
                     <Text numberOfLines={1} style={taskStyles.correspondent}>
@@ -373,7 +373,7 @@ function TaskList({
                 </View>
                 <Pill
                   label={item.isOverdue ? t("dashboard.tasks.overdue") : deadlineLabel}
-                  tone={item.isOverdue ? "danger" : "warning"}
+                  tone={item.isOverdue ? "bad" : "warn"}
                 />
               </View>
 
@@ -412,7 +412,7 @@ function TaskList({
                   <Text style={taskStyles.doneText}>{t("dashboard.tasks.done")}</Text>
                 </Pressable>
               </View>
-            </Card>
+            </Panel>
           </Pressable>
         );
       })}
@@ -511,7 +511,7 @@ const useTaskStyles = createThemedStyles((c) => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Document Card — for recent documents
+// Document Panel — for recent documents
 // ---------------------------------------------------------------------------
 
 function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen: () => void }) {
@@ -519,7 +519,7 @@ function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen:
   const { t } = useI18n();
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [pressed ? docStyles.pressed : null]}>
-      <Card style={docStyles.card}>
+      <Panel padded style={docStyles.card}>
         <View style={docStyles.topRow}>
           <Text style={docStyles.meta}>{document.documentType?.name ?? t("dashboard.documentCard.document")}</Text>
           <Pill label={formatDashboardDocumentStatus(t, document.status)} tone={toneForStatus(document.status)} />
@@ -532,10 +532,10 @@ function DocumentCard({ document, onOpen }: { document: ArchiveDocument; onOpen:
             {formatDate(document.issueDate)} {"\u00b7"} {formatCurrency(document.amount, document.currency ?? "EUR")}
           </Text>
           {document.reviewStatus === "pending" ? (
-            <Pill label={t("dashboard.documentCard.review")} tone="warning" />
+            <Pill label={t("dashboard.documentCard.review")} tone="warn" />
           ) : null}
         </View>
-      </Card>
+      </Panel>
     </Pressable>
   );
 }
@@ -677,13 +677,12 @@ export function DashboardScreen() {
   return (
     <Screen
       title={t("dashboard.screen.title")}
-      subtitle={t("dashboard.screen.subtitle")}
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (
-        <Card>
+        <Panel padded>
           <Text style={styles.loadingText}>{t("dashboard.screen.loading")}</Text>
-        </Card>
+        </Panel>
       ) : null}
 
       {insightsQuery.isError ? (
@@ -755,10 +754,7 @@ export function DashboardScreen() {
 
           {/* ── Recent documents ── */}
           <View style={styles.sectionWrap}>
-            <SectionTitle
-                title={t("dashboard.screen.recentDocuments")}
-                hint={t("dashboard.screen.recentHint")}
-              />
+            <SectionHeader label={t("dashboard.screen.recentDocuments")} />
             {data.recentDocuments.length === 0 ? (
               <EmptyState
                 title={t("dashboard.screen.noDocumentsTitle")}

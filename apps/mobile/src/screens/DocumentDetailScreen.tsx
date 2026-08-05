@@ -19,12 +19,12 @@ import Markdown from "react-native-markdown-display";
 import { useAuth } from "../auth";
 import {
   Button,
-  Card,
+  Panel,
   EmptyState,
   ErrorCard,
   Field,
   Pill,
-  SectionTitle,
+  SectionHeader,
 } from "../components/ui";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { processingRefetchInterval } from "../document-processing";
@@ -210,18 +210,18 @@ export function DocumentDetailScreen() {
   // ---- Loading / error ----
   if (documentQuery.isLoading) {
     return (
-      <ScreenShell title={t("documentDetail.doc")} subtitle={t("documentDetail.loading")}>
-        <Card>
+      <ScreenShell title={t("documentDetail.doc")}>
+        <Panel padded>
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.helper}>{t("documentDetail.loadingDetail")}</Text>
-        </Card>
+        </Panel>
       </ScreenShell>
     );
   }
 
   if (documentQuery.isError || !documentQuery.data) {
     return (
-      <ScreenShell title={t("documentDetail.doc")} subtitle={t("documentDetail.unavailable")}>
+      <ScreenShell title={t("documentDetail.doc")}>
         <ErrorCard message={t("documentDetail.loadError")} onRetry={() => documentQuery.refetch()} />
       </ScreenShell>
     );
@@ -232,7 +232,6 @@ export function DocumentDetailScreen() {
   return (
     <ScreenShell
       title={titleForDocument(document)}
-      subtitle={`${document.correspondent?.name ?? t("documentDetail.unfiled")} \u00B7 ${document.documentType?.name ?? t("documentDetail.doc")}`}
     >
       {/* Status row */}
       <View style={styles.statusRow}>
@@ -241,7 +240,7 @@ export function DocumentDetailScreen() {
         {document.confidence !== null && document.confidence !== undefined && (
           <Pill
             label={`${Math.round(document.confidence * 100)}% ${t("documentDetail.confidenceShort")}`}
-            tone={document.confidence >= 0.8 ? "success" : document.confidence >= 0.5 ? "warning" : "danger"}
+            tone={document.confidence >= 0.8 ? "ok" : document.confidence >= 0.5 ? "warn" : "bad"}
           />
         )}
       </View>
@@ -303,11 +302,9 @@ export function DocumentDetailScreen() {
 
 function ScreenShell({
   title,
-  subtitle,
   children,
 }: {
   title: string;
-  subtitle: string;
   children: React.ReactNode;
 }) {
   const styles = useStyles();
@@ -322,7 +319,6 @@ function ScreenShell({
           <View style={styles.headerRow}>
             <View style={styles.headerTextWrap}>
               <Text style={styles.title} numberOfLines={2}>{title}</Text>
-              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             </View>
           </View>
           {children}
@@ -400,7 +396,7 @@ function PreviewTab({
 
   return (
     <>
-      <Card>
+      <Panel padded>
         <DocumentViewer
           authFetch={authFetch}
           documentId={document.id}
@@ -413,9 +409,9 @@ function PreviewTab({
           onPersistOnlineFile={persistOnlineFile}
           textBlocks={textBlocks}
         />
-      </Card>
+      </Panel>
       {/* Quick metadata summary below preview */}
-      <Card>
+      <Panel padded>
         <Text style={styles.metaText}>
           <Text style={styles.metaLabel}>{t("documentDetail.preview.type")}</Text>
           {document.mimeType}
@@ -442,7 +438,7 @@ function PreviewTab({
             {document.parseProvider}
           </Text>
         )}
-      </Card>
+      </Panel>
     </>
   );
 }
@@ -687,12 +683,12 @@ function OverviewTab({
     <>
       {/* Review banner */}
       {document.reviewStatus === "pending" && (
-        <Card style={styles.reviewBanner}>
+        <Panel padded style={styles.reviewBanner}>
           <Text style={styles.reviewBannerTitle}>{t("documentDetail.overview.needsReview")}</Text>
           {document.reviewReasons.length > 0 && (
             <View style={styles.tagRow}>
               {document.reviewReasons.map((reason) => (
-                <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warning" />
+                <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warn" />
               ))}
             </View>
           )}
@@ -721,20 +717,20 @@ function OverviewTab({
               loading={actionMutation.isPending}
             />
           </View>
-        </Card>
+        </Panel>
       )}
 
       {/* Processing error banner */}
       {document.lastProcessingError && (
-        <Card style={styles.errorBanner}>
+        <Panel padded style={styles.errorBanner}>
           <Text style={styles.errorBannerTitle}>{t("documentDetail.overview.processingError")}</Text>
           <Text style={styles.errorBannerBody}>{document.lastProcessingError}</Text>
-        </Card>
+        </Panel>
       )}
 
       {/* Quick info */}
-      <SectionTitle title={t("documentDetail.overview.details")} />
-      <Card>
+      <SectionHeader label={t("documentDetail.overview.details")} />
+      <Panel padded>
         <MetaRow label={t("documentDetail.overview.issueDate")} value={formatDate(document.issueDate)} numeric />
         <MetaRow label={t("documentDetail.overview.dueDate")} value={formatDate(document.dueDate)} numeric />
         {document.expiryDate && <MetaRow label={t("documentDetail.overview.expiryDate")} value={formatDate(document.expiryDate)} numeric />}
@@ -745,15 +741,15 @@ function OverviewTab({
         {document.tags.length > 0 && (
           <View style={styles.tagRow}>
             {document.tags.map((tag) => (
-              <Pill key={tag.id} label={tag.name} tone="default" />
+              <Pill key={tag.id} label={tag.name} tone="outline" />
             ))}
           </View>
         )}
-      </Card>
+      </Panel>
 
       {/* Metadata editing */}
-      <SectionTitle title={t("documentDetail.overview.editMetadata")} hint={t("documentDetail.overview.editHint")} />
-      <Card>
+      <SectionHeader label={t("documentDetail.overview.editMetadata")} />
+      <Panel padded>
         <Field
           label={`${t("documentDetail.overview.title")}${lockedFields.includes("correspondentId") ? " \uD83D\uDD12" : ""}`}
           value={form.title}
@@ -869,11 +865,11 @@ function OverviewTab({
               : `${lockedFields.length} ${t("documentDetail.overview.lockedFields.other")}`}
           </Text>
         )}
-      </Card>
+      </Panel>
 
       {/* Actions */}
-      <SectionTitle title={t("documentDetail.overview.actions")} />
-      <Card>
+      <SectionHeader label={t("documentDetail.overview.actions")} />
+      <Panel padded>
         <Button label={t("documentDetail.overview.shareOriginal")} variant="secondary" onPress={() => void handleDownload(false)} disabled={offlineReadOnly} />
         {document.searchablePdfAvailable && (
           <Button label={t("documentDetail.overview.shareSearchable")} variant="secondary" onPress={() => void handleDownload(true)} disabled={offlineReadOnly} />
@@ -936,7 +932,7 @@ function OverviewTab({
         <View style={styles.dangerZone}>
           <Button label={t("documentDetail.overview.deleteDocument")} variant="danger" onPress={confirmDelete} loading={deleteMutation.isPending} disabled={offlineReadOnly} />
         </View>
-      </Card>
+      </Panel>
     </>
   );
 }
@@ -990,8 +986,8 @@ function InsightsTab({
   return (
     <>
       {/* Summary section */}
-      <SectionTitle title={t("documentDetail.insights.summary")} hint={t("documentDetail.insights.summaryHint")} />
-      <Card>
+      <SectionHeader label={t("documentDetail.insights.summary")} />
+      <Panel padded>
         {offlineMode ? (
           <Text style={styles.hintText}>{t("documentDetail.insights.aiDisabled")}</Text>
         ) : null}
@@ -1022,13 +1018,13 @@ function InsightsTab({
             <Button label={t("documentDetail.insights.retry")} variant="secondary" onPress={() => summary.generate()} />
           </>
         )}
-      </Card>
+      </Panel>
 
       {/* Intelligence metadata */}
       {intelligence && (
         <>
-          <SectionTitle title={t("documentDetail.insights.intelligence")} hint={t("documentDetail.insights.intelligenceHint")} />
-          <Card>
+          <SectionHeader label={t("documentDetail.insights.intelligence")} />
+          <Panel padded>
             {intelligence.routing && (
               <View style={styles.intelSection}>
                 <Text style={styles.intelLabel}>{t("documentDetail.insights.routing")}</Text>
@@ -1079,7 +1075,7 @@ function InsightsTab({
                 <Text style={styles.intelLabel}>{t("documentDetail.insights.suggestedTags")}</Text>
                 <View style={styles.tagRow}>
                   {intelligence.tagging.tags.map((tag) => (
-                    <Pill key={tag} label={tag} tone="default" />
+                    <Pill key={tag} label={tag} tone="outline" />
                   ))}
                 </View>
               </View>
@@ -1109,15 +1105,15 @@ function InsightsTab({
                 )}
               </View>
             )}
-          </Card>
+          </Panel>
         </>
       )}
 
       {/* Review evidence */}
       {document.metadata?.reviewEvidence && (
         <>
-          <SectionTitle title={t("documentDetail.insights.reviewEvidence")} />
-          <Card>
+          <SectionHeader label={t("documentDetail.insights.reviewEvidence")} />
+          <Panel padded>
             <Text style={styles.metaText}>
               <Text style={styles.metaLabel}>{t("documentDetail.insights.documentClass")}: </Text>
               {document.metadata.reviewEvidence.documentClass}
@@ -1127,7 +1123,7 @@ function InsightsTab({
                 <Text style={styles.intelLabel}>{t("documentDetail.insights.missingFields")}</Text>
                 <View style={styles.tagRow}>
                   {document.metadata.reviewEvidence.missingFields.map((f) => (
-                    <Pill key={f} label={f} tone="warning" />
+                    <Pill key={f} label={f} tone="warn" />
                   ))}
                 </View>
               </View>
@@ -1140,13 +1136,13 @@ function InsightsTab({
                   ` (${t("documentDetail.insights.threshold")}: ${Math.round(document.metadata.reviewEvidence.confidenceThreshold * 100)}%)`}
               </Text>
             )}
-          </Card>
+          </Panel>
         </>
       )}
 
       {/* Document Q&A */}
-      <SectionTitle title={t("documentDetail.insights.askDocument")} hint={t("documentDetail.insights.askHint")} />
-      <Card>
+      <SectionHeader label={t("documentDetail.insights.askDocument")} />
+      <Panel padded>
         <View style={styles.qaInputRow}>
           <TextInput
             style={styles.qaInput}
@@ -1203,18 +1199,18 @@ function InsightsTab({
         {!offlineMode && qa.status === "error" && (
           <Text style={styles.error}>{qa.errorMessage}</Text>
         )}
-      </Card>
+      </Panel>
 
       {/* Q&A history */}
       {qaHistory.length > 0 && (
         <>
-          <SectionTitle title={t("documentDetail.insights.qaHistory")} />
+          <SectionHeader label={t("documentDetail.insights.qaHistory")} />
           {qaHistory.map((entry) => (
-            <Card key={entry.id}>
+            <Panel padded key={entry.id}>
               <Text style={styles.qaHistoryQuestion}>{entry.question}</Text>
               {entry.answer && <Markdown style={markdownStyles}>{entry.answer}</Markdown>}
               <Text style={styles.hintText}>{formatDate(entry.createdAt)}</Text>
-            </Card>
+            </Panel>
           ))}
         </>
       )}
@@ -1257,29 +1253,29 @@ function ActivityTab({
   return (
     <>
       {/* OCR text by page */}
-      <SectionTitle title={t("documentDetail.activity.ocrText")} hint={t("documentDetail.activity.ocrHint")} />
+      <SectionHeader label={t("documentDetail.activity.ocrText")} />
       {textQuery.isLoading && (
-        <Card>
+        <Panel padded>
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.helper}>{t("documentDetail.activity.loadingOcr")}</Text>
-        </Card>
+        </Panel>
       )}
       {textQuery.data && pageGroups.length === 0 && (
         <EmptyState title={t("documentDetail.activity.noOcrTitle")} body={t("documentDetail.activity.noOcrBody")} />
       )}
       {pageGroups.map(({ page, text }) => (
-        <Card key={page}>
+        <Panel padded key={page}>
           <Text style={styles.pageLabel}>{`${t("documentDetail.activity.page")} ${page}`}</Text>
           <Text style={styles.ocrText} selectable>{text}</Text>
-        </Card>
+        </Panel>
       ))}
 
       {/* Audit history timeline */}
-      <SectionTitle title={t("documentDetail.activity.history")} hint={t("documentDetail.activity.historyHint")} />
+      <SectionHeader label={t("documentDetail.activity.history")} />
       {historyQuery.isLoading && (
-        <Card>
+        <Panel padded>
           <ActivityIndicator color={colors.accent} />
-        </Card>
+        </Panel>
       )}
       {historyQuery.data && historyQuery.data.items.length === 0 && (
         <EmptyState title={t("documentDetail.activity.noHistoryTitle")} body={t("documentDetail.activity.noHistoryBody")} />
@@ -1520,7 +1516,7 @@ function TagsPicker({
             const opt = options.find((o) => o.id === id);
             return opt ? (
               <Pressable key={id} onPress={() => onToggle(id)}>
-                <Pill label={`${opt.label} \u00D7`} tone="default" />
+                <Pill label={`${opt.label} \u00D7`} tone="outline" />
               </Pressable>
             ) : null;
           })}

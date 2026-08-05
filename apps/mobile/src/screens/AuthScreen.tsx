@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Button, Card, Field, Screen } from "../components/ui";
+import { Button, Panel, Field, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -50,11 +50,9 @@ export function AuthScreen() {
   return (
     <Screen
       title={t("auth.title")}
-      subtitle={t("auth.subtitle")}
       contentContainerStyle={styles.content}
-      headerVariant="compact"
     >
-      <Card>
+      <Panel padded>
         <View style={styles.introRow}>
           <View style={styles.introBadge}>
             <Text style={styles.introBadgeText}>{t("auth.connectBadge")}</Text>
@@ -112,7 +110,7 @@ export function AuthScreen() {
           onPress={handleSubmit}
           loading={busy}
         />
-      </Card>
+      </Panel>
     </Screen>
   );
 }

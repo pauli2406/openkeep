@@ -13,7 +13,7 @@ import {
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Markdown from "react-native-markdown-display";
 import { useAuth } from "../auth";
-import { Card, ErrorCard, Screen } from "../components/ui";
+import { Panel, ErrorCard, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -111,7 +111,6 @@ export function SearchScreen() {
   return (
     <Screen
       title={t("search.title")}
-      subtitle={t("search.subtitle")}
     >
       {/* ─── Search bar ─── */}
       <View style={styles.searchBarContainer}>
@@ -261,17 +260,17 @@ function CachedSearchResults({
   const styles = useStyles();
   if (loading) {
     return (
-      <Card>
+      <Panel padded>
         <Text style={styles.mutedText}>{loadingLabel}</Text>
-      </Card>
+      </Panel>
     );
   }
 
   if (documents.length === 0) {
     return (
-      <Card>
+      <Panel padded>
         <Text style={styles.mutedText}>{emptyLabel}</Text>
-      </Card>
+      </Panel>
     );
   }
 
@@ -285,7 +284,7 @@ function CachedSearchResults({
         >
           <View style={styles.resultHeader}>
             <Text style={styles.resultTitle}>{titleForDocument(document)}</Text>
-            <Pill label={document.status} tone={document.status === "ready" ? "success" : document.status === "failed" ? "danger" : "warning"} />
+            <Pill label={document.status} tone={document.status === "ready" ? "ok" : document.status === "failed" ? "bad" : "warn"} />
           </View>
           <Text style={styles.resultMeta}>
             {document.correspondent?.name ?? unfiledLabel} · {document.documentType?.name ?? documentLabel}
@@ -325,7 +324,7 @@ function SearchingSkeleton({ label }: { label: string }) {
   });
 
   return (
-    <Card>
+    <Panel padded>
       <View style={styles.searchingHeader}>
         <ActivityIndicator color={colors.accent} size="small" />
         <Text style={styles.searchingText}>{label}</Text>
@@ -339,7 +338,7 @@ function SearchingSkeleton({ label }: { label: string }) {
         <Animated.View style={[styles.skeletonSourceCard, { opacity }]} />
         <Animated.View style={[styles.skeletonSourceCard, { opacity }]} />
       </View>
-    </Card>
+    </Panel>
   );
 }
 
@@ -507,7 +506,7 @@ function AIAnswerPanel({
                         answerStream.structuredData.totalAmount,
                         answerStream.structuredData.currency ?? "EUR",
                       )}`}
-                      tone="warning"
+                      tone="warn"
                     />
                   ) : null}
                 </View>

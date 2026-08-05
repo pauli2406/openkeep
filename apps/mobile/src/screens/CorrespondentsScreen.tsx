@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
-import { Card, EmptyState, ErrorCard, Screen } from "../components/ui";
+import { Panel, EmptyState, ErrorCard, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -72,15 +72,13 @@ export function CorrespondentsScreen() {
   return (
     <Screen
       title={t("correspondents.title")}
-      subtitle={t("correspondents.subtitle")}
-      headerVariant="compact"
       includeTopSafeArea={false}
       contentContainerStyle={styles.content}
     >
       {isLoading ? (
-        <Card>
+        <Panel padded>
           <Text style={styles.loadingText}>{t("correspondents.loading")}</Text>
-        </Card>
+        </Panel>
       ) : null}
 
       {isError ? (
@@ -113,7 +111,7 @@ export function CorrespondentsScreen() {
             pressed ? styles.cardPressed : null,
           ]}
         >
-          <Card style={styles.card}>
+          <Panel padded style={styles.card}>
             <View style={styles.topRow}>
               <View style={styles.nameWrap}>
                 <Text numberOfLines={1} style={styles.name}>
@@ -129,7 +127,7 @@ export function CorrespondentsScreen() {
                 color={colors.muted}
               />
             </View>
-          </Card>
+          </Panel>
         </Pressable>
       ))}
     </Screen>

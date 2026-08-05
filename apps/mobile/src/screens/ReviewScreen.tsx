@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Button, Card, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { Button, Panel, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -64,8 +64,8 @@ export function ReviewScreen() {
   });
 
   return (
-    <Screen includeTopSafeArea={false} title={t("review.title")} subtitle={t("review.subtitle")}>
-      {reviewQuery.isLoading ? <Card><Text style={styles.helper}>{t("review.loading")}</Text></Card> : null}
+    <Screen includeTopSafeArea={false} title={t("review.title")}>
+      {reviewQuery.isLoading ? <Panel padded><Text style={styles.helper}>{t("review.loading")}</Text></Panel> : null}
       {reviewQuery.isError ? <ErrorCard message={t("review.loadError")} onRetry={() => reviewQuery.refetch()} /> : null}
 
       {reviewQuery.data ? (
@@ -73,7 +73,7 @@ export function ReviewScreen() {
           <EmptyState title={t("review.emptyTitle")} body={t("review.emptyBody")} />
         ) : (
           reviewQuery.data.items.map((document) => (
-            <Card key={document.id}>
+            <Panel padded key={document.id}>
               <Pressable onPress={() => navigation.navigate("DocumentDetail", { documentId: document.id, title: titleForDocument(document) })}>
                 <Text style={styles.title}>{titleForDocument(document)}</Text>
                 <Text style={styles.helper}>{document.correspondent?.name ?? t("review.unfiled")}</Text>
@@ -81,7 +81,7 @@ export function ReviewScreen() {
               <DocumentProcessingIndicator document={document} />
               <View style={styles.reasonWrap}>
                 {document.reviewReasons.map((reason) => (
-                  <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warning" />
+                  <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warn" />
                 ))}
               </View>
               <View style={styles.actionRow}>
@@ -105,7 +105,7 @@ export function ReviewScreen() {
                   }}
                 />
               </View>
-            </Card>
+            </Panel>
           ))
         )
       ) : null}
