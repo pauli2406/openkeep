@@ -331,6 +331,7 @@ export function DocumentDetailScreen() {
                 hasLocalFile={Boolean(cachedRecordQuery.data?.fileUri)}
                 offlineMode={shouldUseCache}
                 textBlocks={textQuery.data?.blocks}
+                citation={route.params.citation}
               />
             ) : null}
 

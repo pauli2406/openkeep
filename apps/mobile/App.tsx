@@ -36,7 +36,12 @@ import { useDashboardInsights } from "./src/hooks/useDashboardInsights";
 
 export type AppStackParamList = {
   Home: undefined;
-  DocumentDetail: { documentId: string; title?: string };
+  DocumentDetail: {
+    documentId: string;
+    title?: string;
+    /** A chat citation: open on the page it is on and highlight it. (#122) */
+    citation?: { page: number | null; quote: string };
+  };
   Scan: undefined;
   Settings: undefined;
   OfflineArchive: undefined;

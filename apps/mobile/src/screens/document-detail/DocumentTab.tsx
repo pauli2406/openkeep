@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { DocumentViewer } from "../../components/DocumentViewer";
+import { findPassage, PassagePaper } from "../../components/Passage";
 import { useI18n } from "../../i18n";
 import { useOfflineArchive } from "../../offline-archive";
 import { createThemedStyles, radii, useColors } from "../../theme";
@@ -20,6 +21,7 @@ export function DocumentTab({
   hasLocalFile,
   offlineMode,
   textBlocks,
+  citation,
 }: {
   document: ArchiveDocument;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
@@ -27,12 +29,17 @@ export function DocumentTab({
   hasLocalFile: boolean;
   offlineMode: boolean;
   textBlocks?: Array<{ page: number; text: string }>;
+  /** Arrived from a chat citation — highlight it and open on its page. */
+  citation?: { page: number | null; quote: string };
 }) {
   const styles = useStyles();
   const colors = useColors();
   const { t } = useI18n();
   const { ensureCachedFile, isConnected } = useOfflineArchive();
-  const [page, setPage] = useState(1);
+  // A citation locates itself in the recognised text, so the page number is
+  // real rather than taken on trust from the answer.
+  const passage = citation ? findPassage(textBlocks as never, citation.quote) : null;
+  const [page, setPage] = useState(passage?.page ?? citation?.page ?? 1);
   /** What the PDF itself reports, which beats a missing `metadata.pageCount`. */
   const [viewerPages, setViewerPages] = useState(0);
 
@@ -85,6 +92,12 @@ export function DocumentTab({
           </View>
         ))}
       </View>
+
+      {passage ? (
+        <View style={styles.citation}>
+          <PassagePaper passage={passage} />
+        </View>
+      ) : null}
 
       <View style={styles.pageStage}>
         <DocumentViewer
@@ -172,6 +185,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   factValueRed: {
     color: c.red,
+  },
+  citation: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.sunken,
   },
   pageStage: {
     minHeight: 356,

@@ -131,11 +131,16 @@ function TurnView({
   live,
   documentCount,
   onOpenDocument,
+  onOpenCitation,
+  cachedIds,
 }: {
   turn: Turn;
   live: StreamState | null;
   documentCount: number;
   onOpenDocument: (documentId: string, title: string) => void;
+  onOpenCitation: (citation: AnswerCitation) => void;
+  /** Null when online: every document is reachable. */
+  cachedIds: Set<string> | null;
 }) {
   const styles = useStyles();
   const markdownStyles = useMarkdownStyles();
@@ -181,8 +186,8 @@ function TurnView({
             }
             const documentId = url.slice("/documents/".length);
             const citation = citations.find((item) => item.documentId === documentId);
-            if (citation) {
-              onOpenDocument(citation.documentId, citation.documentTitle);
+            if (citation && (!cachedIds || cachedIds.has(citation.documentId))) {
+              onOpenCitation(citation);
             }
             return false;
           }}
@@ -211,20 +216,29 @@ function TurnView({
         <View>
           <Text style={styles.sourcesLabel}>{t("chat.sources")}</Text>
           <View style={styles.sourceRow}>
-            {citations.map((citation) => (
-              <Pressable
-                key={`${citation.index}-${citation.documentId}-${citation.chunkIndex}`}
-                onPress={() => onOpenDocument(citation.documentId, citation.documentTitle)}
-                style={styles.sourcePill}
-              >
-                <View style={styles.sourceIndex}>
-                  <Text style={styles.sourceIndexText}>{citation.index ?? "?"}</Text>
-                </View>
-                <Text style={styles.sourceTitle} numberOfLines={1}>
-                  {citation.documentTitle}
-                </Text>
-              </Pressable>
-            ))}
+            {citations.map((citation) => {
+              // Offline, a citation into a document the copy has not got would
+              // open a blank reader. Say so on the pill instead.
+              const reachable = !cachedIds || cachedIds.has(citation.documentId);
+              return (
+                <Pressable
+                  key={`${citation.index}-${citation.documentId}-${citation.chunkIndex}`}
+                  onPress={() => (reachable ? onOpenCitation(citation) : undefined)}
+                  disabled={!reachable}
+                  style={[styles.sourcePill, reachable ? null : styles.sourcePillMuted]}
+                >
+                  <View style={styles.sourceIndex}>
+                    <Text style={styles.sourceIndexText}>{citation.index ?? "?"}</Text>
+                  </View>
+                  <Text style={styles.sourceTitle} numberOfLines={1}>
+                    {citation.documentTitle}
+                  </Text>
+                  {reachable ? null : (
+                    <Text style={styles.sourceNote}>{t("chat.notCached")}</Text>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       ) : null}
@@ -267,6 +281,28 @@ export function SearchScreen() {
       navigation.navigate("DocumentDetail", { documentId, title }),
     [navigation],
   );
+
+  /** A citation opens the document on the page its passage is on. */
+  const openCitation = useCallback(
+    (citation: AnswerCitation) =>
+      navigation.navigate("DocumentDetail", {
+        documentId: citation.documentId,
+        title: citation.documentTitle,
+        citation: { page: citation.pageFrom, quote: citation.quote },
+      }),
+    [navigation],
+  );
+
+  // Which documents the local copy actually holds, so a citation can say when
+  // it cannot be followed.
+  const cachedList = useQuery({
+    queryKey: ["cached-ids", offline.cacheSummary.updatedAt],
+    enabled: shouldUseCache,
+    queryFn: () => offline.queryCachedDocuments(),
+  });
+  const cachedIds = shouldUseCache
+    ? new Set((cachedList.data?.items ?? []).map((document) => document.id))
+    : null;
 
   const status = answerStream.status;
 
@@ -387,6 +423,8 @@ export function SearchScreen() {
             live={index === turns.length - 1 ? liveState : null}
             documentCount={documentCount}
             onOpenDocument={openDocument}
+            onOpenCitation={openCitation}
+            cachedIds={cachedIds}
           />
         ))}
 
@@ -654,6 +692,13 @@ const useStyles = createThemedStyles((c) => ({
     ...text.meta,
     flexShrink: 1,
     color: c.ink,
+  },
+  sourcePillMuted: {
+    opacity: 0.6,
+  },
+  sourceNote: {
+    ...text.small,
+    color: c.faint,
   },
 
   /* composer */

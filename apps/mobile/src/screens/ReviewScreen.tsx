@@ -8,6 +8,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
 import { DocumentViewer } from "../components/DocumentViewer";
+import { findPassage, firstLines, PassagePaper, type Passage } from "../components/Passage";
 import { Button, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
@@ -157,83 +158,11 @@ function reviewFields(document: ArchiveDocument, t: Translate): ReviewField[] {
   });
 }
 
-type Passage = {
-  page: number;
-  lines: Array<{ text: string; hit: boolean }>;
-};
-
-/**
- * Where a field's value appears in the recognised text. Blocks carry `page` and
- * `lineIndex`, so a match yields a real page number for the chip and the jump.
- */
-function findPassage(
-  blocks: DocumentTextResponse["blocks"] | undefined,
-  needle: string | null,
-): Passage | null {
-  if (!blocks || blocks.length === 0) {
-    return null;
-  }
-
-  const squash = (value: string) => value.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
-  const target = needle ? squash(needle) : "";
-  const index =
-    target.length >= 3 ? blocks.findIndex((block) => squash(block.text).includes(target)) : -1;
-
-  if (index === -1) {
-    return null;
-  }
-
-  const from = Math.max(0, index - 1);
-  const to = Math.min(blocks.length, index + 2);
-  return {
-    page: blocks[index].page,
-    lines: blocks.slice(from, to).map((block, offset) => ({
-      text: block.text,
-      hit: from + offset === index,
-    })),
-  };
-}
-
-function firstLines(
-  blocks: DocumentTextResponse["blocks"] | undefined,
-  count: number,
-): Passage | null {
-  if (!blocks || blocks.length === 0) {
-    return null;
-  }
-  return {
-    page: blocks[0].page,
-    lines: blocks.slice(0, count).map((block) => ({ text: block.text, hit: false })),
-  };
-}
-
 function confidenceLabel(confidence: number | null, t: Translate) {
   if (confidence === null) {
     return t("review.missingValue");
   }
   return `${Math.round(confidence * 100)}% ${t("review.sure")}`;
-}
-
-// ---------------------------------------------------------------------------
-// The passage, on paper
-// ---------------------------------------------------------------------------
-
-function PassagePaper({ passage, compact }: { passage: Passage; compact?: boolean }) {
-  const styles = useStyles();
-  return (
-    <View style={[styles.paper, compact ? styles.paperCompact : null]}>
-      {passage.lines.map((line, index) => (
-        <View key={`${index}-${line.text.slice(0, 12)}`} style={line.hit ? styles.hitLine : null}>
-          <Text
-            style={[styles.paperText, line.hit ? styles.paperTextHit : null]}
-            numberOfLines={compact ? 2 : undefined}
-          >
-            {line.text}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -890,36 +819,6 @@ const useStyles = createThemedStyles((c) => ({
     color: c.paper,
   },
 
-  /* the passage, on paper */
-  paper: {
-    alignSelf: "stretch",
-    backgroundColor: c.paper,
-    borderWidth: 1,
-    borderColor: c.paperBorder,
-    borderRadius: radii.sm,
-    padding: 13,
-    gap: 4,
-  },
-  paperCompact: {
-    maxWidth: 300,
-    alignSelf: "center",
-  },
-  paperText: {
-    ...text.small,
-    color: c.paperInk,
-  },
-  paperTextHit: {
-    color: c.highlightRule,
-  },
-  hitLine: {
-    backgroundColor: c.highlight,
-    borderLeftWidth: 2,
-    borderLeftColor: c.highlightRule,
-    paddingHorizontal: 5,
-    paddingVertical: 4,
-    marginVertical: 3,
-    borderRadius: 2,
-  },
 
   /* document header and reasons */
   fieldScroll: {
