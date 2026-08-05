@@ -1,6 +1,7 @@
 import { Alert, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../auth";
 import { Button, Pill, Row, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -21,9 +22,13 @@ export function OfflineArchiveScreen() {
   const colors = useColors();
   const navigation = useNavigation();
   const offline = useOfflineArchive();
+  const auth = useAuth();
   const { t } = useI18n();
 
-  const usingCopy = offline.shouldUseCache;
+  // A session restored offline reads the local copy even when the device itself
+  // has internet, which NetInfo alone cannot tell. Every other screen decides
+  // the same way.
+  const usingCopy = offline.shouldUseCache || auth.isOfflineSession;
 
   function formatBytes(bytes: number) {
     if (bytes < 1024) {
@@ -38,8 +43,13 @@ export function OfflineArchiveScreen() {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
   }
 
+  /**
+   * `updatedAt` is the revision the query keys hang off — the last time the app
+   * counted the cache, not the last time a document was written to it. The stat
+   * is labelled accordingly, and an empty cache has never been anything.
+   */
   function formatUpdated(value: string | null) {
-    if (!value) {
+    if (!value || offline.cacheSummary.documentCount === 0) {
       return t("offline.never");
     }
     const date = new Date(value);
@@ -141,11 +151,17 @@ export function OfflineArchiveScreen() {
         <Text style={styles.calloutText}>{t("offline.callout")}</Text>
       </View>
 
+      {/* Only the answers need the server; searching the local copy does not */}
       <Row
         leading={<MaterialCommunityIcons name="flag-off-outline" size={17} color={colors.dim} />}
         title={t("offline.chatAndSearch")}
         meta={t("offline.chatAndSearchBody")}
         accessory={<Pill label={t("offline.onlineOnly")} tone="outline" />}
+      />
+      <Row
+        leading={<MaterialCommunityIcons name="magnify" size={17} color={colors.dim} />}
+        title={t("offline.cachedSearch")}
+        meta={t("offline.cachedSearchBody")}
       />
 
       <View style={styles.footer}>
