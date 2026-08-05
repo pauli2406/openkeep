@@ -41,6 +41,7 @@ export function Screen({
   contentContainerStyle,
   includeTopSafeArea = true,
   padded = true,
+  footer,
 }: {
   title: string;
   /** A mono sub-line under the bar title — Chat names the scope there. */
@@ -63,6 +64,11 @@ export function Screen({
   contentContainerStyle?: ViewStyle;
   includeTopSafeArea?: boolean;
   padded?: boolean;
+  /**
+   * Pinned below the body, outside the scroll area — an action bar that has to
+   * stay reachable however far down the list the user is.
+   */
+  footer?: ReactNode;
 }) {
   const styles = useStyles();
   const colors = useColors();
@@ -136,6 +142,7 @@ export function Screen({
         ) : (
           body
         )}
+        {footer}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

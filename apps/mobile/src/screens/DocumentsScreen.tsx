@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -130,19 +130,24 @@ export function DocumentsScreen() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<DocFilter>("all");
   const [oldestFirst, setOldestFirst] = useState(false);
-  /** Selection lives in screen state, so it survives scrolling and dies on exit. */
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  /**
+   * Selection lives in screen state, so it survives scrolling and dies on exit.
+   * It holds the documents themselves: the search field and the chips can change
+   * what is loaded, and a bulk action has to act on what was picked rather than
+   * on whatever the list happens to show when the button is pressed.
+   */
+  const [selected, setSelected] = useState<Map<string, ArchiveDocument>>(new Map());
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const selecting = selected.size > 0;
 
-  const toggleSelected = (documentId: string) =>
+  const toggleSelected = (document: ArchiveDocument) =>
     setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(documentId)) {
-        next.delete(documentId);
+      const next = new Map(current);
+      if (next.has(document.id)) {
+        next.delete(document.id);
       } else {
-        next.add(documentId);
+        next.set(document.id, document);
       }
       return next;
     });
@@ -216,7 +221,10 @@ export function DocumentsScreen() {
    */
   const bulkMutation = useMutation({
     mutationFn: async (action: { kind: "tag"; tagId: string } | { kind: "done" } | { kind: "delete" }) => {
-      const documents = (documentsQuery.data?.items ?? []).filter((item) => selected.has(item.id));
+      const documents = Array.from(selected.values());
+      // One failure must not hide the requests that already landed, so each
+      // document is tracked and the outcome reported back.
+      const failed: string[] = [];
       for (const document of documents) {
         const init: RequestInit =
           action.kind === "delete"
@@ -234,22 +242,53 @@ export function DocumentsScreen() {
                     : { taskCompletedAt: new Date().toISOString() },
                 ),
               };
-        const response = await auth.authFetch(`/api/documents/${document.id}`, init);
-        if (!response.ok) {
-          throw new Error(await responseToMessage(response));
+        try {
+          const response = await auth.authFetch(`/api/documents/${document.id}`, init);
+          if (!response.ok) {
+            throw new Error(await responseToMessage(response));
+          }
+        } catch {
+          failed.push(document.id);
         }
       }
+      return { failed };
     },
-    onSuccess: async () => {
-      setSelected(new Set());
-      setTagSheetOpen(false);
+    onSuccess: async ({ failed }) => {
+      // Whatever failed stays selected, so a retry touches only that.
+      setSelected((current) => {
+        const next = new Map<string, ArchiveDocument>();
+        for (const id of failed) {
+          const document = current.get(id);
+          if (document) {
+            next.set(id, document);
+          }
+        }
+        return next;
+      });
+      if (failed.length === 0) {
+        setTagSheetOpen(false);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        // A deleted or completed document can be sitting in the review queue,
+        // and the Review tab stays mounted once visited.
+        queryClient.invalidateQueries({ queryKey: ["review"] }),
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["document-facets"] }),
       ]);
     },
   });
+
+  // Selection dies on exit, and leaving the tab is an exit — coming back into an
+  // armed selection mode invites a bulk action nobody meant.
+  useEffect(
+    () =>
+      navigation.addListener("blur", () => {
+        setSelected(new Map());
+        setTagSheetOpen(false);
+      }),
+    [navigation],
+  );
 
   function confirmDelete() {
     Alert.alert(t("documents.deleteTitle"), t("documents.deleteBody"), [
@@ -336,9 +375,42 @@ export function DocumentsScreen() {
       }
       padded={false}
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
+      footer={
+        selecting ? (
+          <View style={styles.bulkBar}>
+            <View style={styles.bulkSlot}>
+              <Button
+                label={t("documents.addTag")}
+                variant="secondary"
+                size="sm"
+                onPress={() => setTagSheetOpen(true)}
+                loading={bulkMutation.isPending}
+              />
+            </View>
+            <View style={styles.bulkSlot}>
+              <Button
+                label={t("documents.markDone")}
+                variant="secondary"
+                size="sm"
+                disabled={bulkMutation.isPending}
+                onPress={() => bulkMutation.mutate({ kind: "done" })}
+              />
+            </View>
+            <View style={styles.bulkSlot}>
+              <Button
+                label={t("documents.deleteSelected")}
+                variant="danger"
+                size="sm"
+                disabled={bulkMutation.isPending}
+                onPress={confirmDelete}
+              />
+            </View>
+          </View>
+        ) : undefined
+      }
       right={
         selecting ? (
-          <Pressable onPress={() => setSelected(new Set())} hitSlop={12}>
+          <Pressable onPress={() => setSelected(new Map())} hitSlop={12}>
             <Text style={styles.barAction}>{t("documents.cancel")}</Text>
           </Pressable>
         ) : (
@@ -459,7 +531,7 @@ export function DocumentsScreen() {
                 key={document.id}
                 minHeight={62}
                 selected={selected.has(document.id)}
-                onLongPress={shouldUseCache ? undefined : () => toggleSelected(document.id)}
+                onLongPress={shouldUseCache ? undefined : () => toggleSelected(document)}
                 leading={
                   selecting ? (
                     <MaterialCommunityIcons
@@ -484,7 +556,7 @@ export function DocumentsScreen() {
                 accessory={pill ? <Pill label={pill.label} tone={pill.tone} /> : undefined}
                 onPress={() =>
                   selecting
-                    ? toggleSelected(document.id)
+                    ? toggleSelected(document)
                     : navigation.navigate("DocumentDetail", {
                         documentId: document.id,
                         title: titleForDocument(document),
@@ -496,37 +568,7 @@ export function DocumentsScreen() {
         )
       ) : null}
 
-      {selecting ? (
-        <View style={styles.bulkBar}>
-          <View style={styles.bulkSlot}>
-            <Button
-              label={t("documents.addTag")}
-              variant="secondary"
-              size="sm"
-              onPress={() => setTagSheetOpen(true)}
-              loading={bulkMutation.isPending}
-            />
-          </View>
-          <View style={styles.bulkSlot}>
-            <Button
-              label={t("documents.markDone")}
-              variant="secondary"
-              size="sm"
-              onPress={() => bulkMutation.mutate({ kind: "done" })}
-            />
-          </View>
-          <View style={styles.bulkSlot}>
-            <Button
-              label={t("documents.deleteSelected")}
-              variant="danger"
-              size="sm"
-              onPress={confirmDelete}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      {bulkMutation.isError ? (
+      {bulkMutation.isError || (bulkMutation.data?.failed.length ?? 0) > 0 ? (
         <View style={styles.gutter}>
           <ErrorCard message={t("documents.bulkFailed")} />
         </View>
@@ -569,7 +611,11 @@ export function DocumentsScreen() {
                   key={tag.id}
                   title={tag.name}
                   chevron
-                  onPress={() => bulkMutation.mutate({ kind: "tag", tagId: tag.id })}
+                  onPress={
+                    bulkMutation.isPending
+                      ? undefined
+                      : () => bulkMutation.mutate({ kind: "tag", tagId: tag.id })
+                  }
                 />
               ))}
             {(tagsQuery.data ?? []).length === 0 ? (
