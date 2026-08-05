@@ -766,7 +766,7 @@ const useStyles = createThemedStyles((c) => ({
   fallbackIcon: {
     width: 64,
     height: 64,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     backgroundColor: c.raised,
     alignItems: "center",
     justifyContent: "center",
@@ -802,7 +802,7 @@ const useStyles = createThemedStyles((c) => ({
     marginTop: 8,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: radii.lg,
     backgroundColor: c.accentSoft,
   },
   shareButtonInline: {
@@ -848,7 +848,7 @@ const useStyles = createThemedStyles((c) => ({
     borderColor: c.paperBorder,
   },
   textContainer: {
-    borderRadius: 12,
+    borderRadius: radii.xl,
     backgroundColor: c.panel,
     borderWidth: 1,
     borderColor: c.border,
