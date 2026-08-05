@@ -300,6 +300,10 @@ export function Button({
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
+      // A small button is 38pt tall because the design says so, which is under
+      // the 44pt tap target. The slop makes the touch area 46 without changing
+      // what is drawn.
+      hitSlop={size === "sm" ? { top: 4, bottom: 4, left: 0, right: 0 } : undefined}
       style={({ pressed }) => [
         styles.button,
         size === "sm" ? styles.buttonSm : null,
