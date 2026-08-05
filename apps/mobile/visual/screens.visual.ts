@@ -59,7 +59,10 @@ const SCREENS: Screen[] = [
       // occasionally lands while the list is mid-refetch — so it gets retried
       // rather than being allowed to fail the screenshot.
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        await row.hover();
+        // `force`: the actionability check waits for the row to be "stable", and
+        // on a loaded runner the list is still settling when the attempt starts.
+        // A missed press is caught by the check below and retried instead.
+        await row.hover({ force: true }).catch(() => {});
         await page.mouse.down();
         await page.waitForTimeout(700);
         await page.mouse.up();

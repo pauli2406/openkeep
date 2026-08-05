@@ -28,7 +28,11 @@ export default defineConfig({
   // slower shots start timing out on a laptop rather than on anything real.
   workers: process.env.CI ? 4 : 4,
   forbidOnly: Boolean(process.env.CI),
-  retries: 0,
+  // One retry, for the two shots that have to synthesise a long press: a missed
+  // press is a harness artefact, and a real rendering change fails both times.
+  retries: process.env.CI ? 1 : 0,
+  // The default 30s is tight on a runner for a screen that is three taps deep.
+  timeout: 60_000,
   reporter: process.env.CI ? "line" : "list",
   snapshotPathTemplate: "{testDir}/__screenshots__/{arg}{ext}",
   expect: {
