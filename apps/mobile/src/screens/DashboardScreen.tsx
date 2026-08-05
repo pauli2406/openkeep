@@ -161,8 +161,6 @@ const useTrendStyles = createThemedStyles((c) => ({
 
 type Correspondent = DashboardInsights["topCorrespondents"][number];
 
-const DOT_COLORS = ["#b04030", "#af6d11", "#17624f", "#5c6bc0"];
-
 function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item: Correspondent) => void }) {
   const colors = useColors();
   const clusterStyles = useClusterStyles();
@@ -203,7 +201,7 @@ function ClusterStrip({ data, onPress }: { data: Correspondent[]; onPress: (item
               <View style={clusterStyles.typePillRow}>
                 {(item.documentTypes ?? []).slice(0, 3).map((dt, dtIndex) => (
                   <View key={dt.name} style={clusterStyles.typePill}>
-                    <View style={[clusterStyles.typeDot, { backgroundColor: DOT_COLORS[dtIndex % DOT_COLORS.length] }]} />
+                    <View style={[clusterStyles.typeDot, { backgroundColor: colors.cat[dtIndex % colors.cat.length] }]} />
                     <Text style={clusterStyles.typePillText}>
                       {dt.name} {dt.count > 1 ? `\u00b7 ${dt.count}` : ""}
                     </Text>
@@ -426,8 +424,8 @@ const useTaskStyles = createThemedStyles((c) => ({
     opacity: 0.93,
   },
   overdueCard: {
-    backgroundColor: "#fff6f1",
-    borderColor: "#f0ddd5",
+    backgroundColor: c.redSoft,
+    borderColor: c.border,
   },
   topRow: {
     flexDirection: "row",

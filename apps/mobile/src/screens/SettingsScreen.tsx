@@ -5,7 +5,7 @@ import { useAuth } from "../auth";
 import { Panel, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
-import { createThemedStyles, useColors } from "../theme";
+import { createThemedStyles, useAppearance, useColors, type ThemePreference } from "../theme";
 import { fonts } from "../typography";
 
 const APP_VERSION = "0.1.0";
@@ -80,7 +80,7 @@ const useRowStyles = createThemedStyles((c) => ({
     justifyContent: "center",
   },
   iconWrapDanger: {
-    backgroundColor: "#f4d9d6",
+    backgroundColor: c.redSoft,
   },
   textWrap: {
     flex: 1,
@@ -139,9 +139,25 @@ export function SettingsScreen() {
   const colors = useColors();
   const styles = useStyles();
   const navigation = useNavigation();
+  const appearance = useAppearance();
   const auth = useAuth();
   const offline = useOfflineArchive();
   const { t } = useI18n();
+
+  function labelForAppearance(preference: ThemePreference) {
+    if (preference === "light") return t("settings.appearanceLight");
+    if (preference === "dark") return t("settings.appearanceDark");
+    return t("settings.appearanceSystem");
+  }
+
+  function handleSelectAppearance() {
+    Alert.alert(t("settings.appearance"), t("settings.selectAppearance"), [
+      { text: t("settings.appearanceSystem"), onPress: () => appearance.setPreference("system") },
+      { text: t("settings.appearanceLight"), onPress: () => appearance.setPreference("light") },
+      { text: t("settings.appearanceDark"), onPress: () => appearance.setPreference("dark") },
+      { text: t("settings.cancel"), style: "cancel" },
+    ]);
+  }
 
   function labelForLanguage(language: "en" | "de") {
     return language === "de" ? t("settings.german") : t("settings.english");
@@ -269,6 +285,16 @@ export function SettingsScreen() {
         />
       </Panel>
 
+      <SectionLabel label={t("settings.display")} />
+      <Panel padded>
+        <SettingsRow
+          icon="weather-night"
+          label={t("settings.appearance")}
+          value={labelForAppearance(appearance.preference)}
+          onPress={handleSelectAppearance}
+        />
+      </Panel>
+
       {/* Archive connection */}
       <SectionLabel label={t("settings.archive")} />
       <Panel padded>
@@ -333,8 +359,10 @@ const useStyles = createThemedStyles((c) => ({
     justifyContent: "center",
     gap: 10,
     minHeight: 54,
-    borderRadius: 18,
-    backgroundColor: "#f4d9d6",
+    borderRadius: 9,
+    backgroundColor: c.panel,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
   },
   logoutButtonPressed: {
     opacity: 0.85,

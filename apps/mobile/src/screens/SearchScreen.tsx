@@ -800,8 +800,8 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     marginBottom: 8,
   },
   link: {
-    color: c.accent,
-    backgroundColor: "#f6ead1",
+    color: c.highlightRule,
+    backgroundColor: c.highlight,
     fontFamily: fonts.sans.semibold,
     fontSize: 11,
     letterSpacing: 0.3,
@@ -1023,7 +1023,7 @@ const useStyles = createThemedStyles((c) => ({
     backgroundColor: c.panel,
   },
   aiPanelHeaderExpanded: {
-    backgroundColor: "#efe8de",
+    backgroundColor: c.raised,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
   },
@@ -1094,7 +1094,7 @@ const useStyles = createThemedStyles((c) => ({
 
   // Insufficient evidence
   insufficientBox: {
-    backgroundColor: "#f6ead1",
+    backgroundColor: c.amberSoft,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1103,7 +1103,7 @@ const useStyles = createThemedStyles((c) => ({
     fontFamily: fonts.sans.regular,
     marginTop: 8,
     fontSize: 12,
-    color: "#b45309",
+    color: c.amber,
   },
   insufficientText: {
     fontFamily: fonts.sans.regular,
@@ -1217,7 +1217,7 @@ const useStyles = createThemedStyles((c) => ({
     width: 22,
     height: 22,
     borderRadius: 7,
-    backgroundColor: "#f6ead1",
+    backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },

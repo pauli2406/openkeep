@@ -13,7 +13,7 @@ export default {
     "version": "0.1.0",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "plugins": [
       "expo-secure-store",
       "expo-document-picker",
@@ -53,7 +53,7 @@ export default {
       },
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#f6f3ed"
+        "backgroundColor": "#fcfcfb"
       }
     },
     "extra": {

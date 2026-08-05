@@ -14,7 +14,7 @@ import FileViewer from "react-native-file-viewer";
 import Pdf, { type PdfRef } from "react-native-pdf";
 import { Buffer } from "buffer";
 import { useI18n } from "../i18n";
-import { createThemedStyles, useColors } from "../theme";
+import { createThemedStyles, radii, useColors } from "../theme";
 import { fonts } from "../typography";
 
 // ---------------------------------------------------------------------------
@@ -799,20 +799,31 @@ const useStyles = createThemedStyles((c) => ({
   pdfContainer: {
     alignItems: "center",
     gap: 4,
+    padding: 8,
+    borderRadius: radii.xl,
+    backgroundColor: c.sunken,
   },
   pdfTapTarget: {
-    borderRadius: 8,
+    borderRadius: radii.lg,
     overflow: "hidden",
+    backgroundColor: c.paper,
+    borderWidth: 1,
+    borderColor: c.paperBorder,
   },
   imageContainer: {
     alignItems: "center",
     gap: 8,
+    padding: 8,
+    borderRadius: radii.xl,
+    backgroundColor: c.sunken,
   },
   image: {
     width: "100%",
     aspectRatio: 0.707, // ~A4 portrait ratio
-    borderRadius: 12,
-    backgroundColor: c.raised,
+    borderRadius: radii.lg,
+    backgroundColor: c.paper,
+    borderWidth: 1,
+    borderColor: c.paperBorder,
   },
   textContainer: {
     borderRadius: 12,

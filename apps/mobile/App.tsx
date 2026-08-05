@@ -3,7 +3,12 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { NavigationContainer, DefaultTheme, useNavigation } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DarkTheme,
+  DefaultTheme,
+  useNavigation,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,7 +29,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { createThemedStyles, radii, useColors } from "./src/theme";
+import { createThemedStyles, radii, ThemeProvider, useAppearance, useColors } from "./src/theme";
 import { fontAssets, fonts, text } from "./src/typography";
 import { useDashboardInsights } from "./src/hooks/useDashboardInsights";
 
@@ -161,6 +166,7 @@ function HomeTabs() {
 function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const colors = useColors();
   const styles = useStyles();
+  const appearance = useAppearance();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -169,7 +175,7 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
 
   // The type scale is only right once the bundled faces are registered, so the
   // splash keeps the app behind the same gate that already waits on auth.
-  if (!fontsLoaded || auth.isLoading || !offline.isReady) {
+  if (!fontsLoaded || !appearance.isReady || auth.isLoading || !offline.isReady) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -244,6 +250,16 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
 }
 
 function Root() {
+  // The provider is outermost: everything below it, including the loading
+  // screen, reads its colours from the resolved theme.
+  return (
+    <ThemeProvider>
+      <AppTree />
+    </ThemeProvider>
+  );
+}
+
+function AppTree() {
   const styles = useStyles();
   return (
     <GestureHandlerRootView style={styles.flex}>
@@ -260,13 +276,16 @@ function Root() {
 
 function AppShell() {
   const colors = useColors();
+  const appearance = useAppearance();
   const auth = useAuth();
   const [fontsLoaded] = useFonts(fontAssets);
-  const theme = useMemo(
-    () => ({
-      ...DefaultTheme,
+  const isDark = appearance.theme === "dark";
+  const theme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
       colors: {
-        ...DefaultTheme.colors,
+        ...base.colors,
         background: colors.app,
         card: colors.panel,
         primary: colors.accent,
@@ -274,15 +293,14 @@ function AppShell() {
         border: colors.border,
         notification: colors.accent,
       },
-    }),
-    [colors],
-  );
+    };
+  }, [colors, isDark]);
 
   return (
     <I18nProvider language={auth.user?.preferences.uiLanguage}>
       <OfflineArchiveProvider>
         <NavigationContainer theme={theme}>
-          <StatusBar style="dark" />
+          <StatusBar style={isDark ? "light" : "dark"} />
           <AppNavigator fontsLoaded={fontsLoaded} />
         </NavigationContainer>
       </OfflineArchiveProvider>

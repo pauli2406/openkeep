@@ -9,13 +9,23 @@
  * change re-renders. A module-level `import { colors }` cannot do that, which is
  * why the old flat export is gone.
  */
-import { useMemo } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   StyleSheet,
+  useColorScheme,
   type ImageStyle,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ThemeName = "light" | "dark";
 
@@ -159,21 +169,78 @@ export const radii = {
   pill: 999,
 } as const;
 
-/**
- * The active theme.
- *
- * Deliberately pinned to `light` in this commit. Both palettes are defined and
- * every themed stylesheet resolves against them, but 19 light-only colour
- * literals still sit in the screens (`DOT_COLORS`, the overdue card, the pill
- * backgrounds) and `StatusBar` is still hardcoded `dark`. Honouring a dark OS
- * theme here would put dark-palette text on those light surfaces.
- *
- * #108 does the literal audit, adds the persisted light / dark / system context
- * and drives `StatusBar` from it, replacing this function with the same
- * signature — so nothing downstream changes when dark actually switches on.
- */
+/** What the user chose. `system` follows the OS. */
+export type ThemePreference = ThemeName | "system";
+
+const PREFERENCE_KEY = "openkeep.appearance";
+
+type Appearance = {
+  /** What the user chose. */
+  preference: ThemePreference;
+  /** What that resolves to right now. */
+  theme: ThemeName;
+  setPreference: (preference: ThemePreference) => void;
+  /** False until the stored preference has been read, to avoid a light flash. */
+  isReady: boolean;
+};
+
+const AppearanceContext = createContext<Appearance>({
+  preference: "system",
+  theme: "light",
+  setPreference: () => {},
+  isReady: true,
+});
+
+function isPreference(value: string | null): value is ThemePreference {
+  return value === "light" || value === "dark" || value === "system";
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const system = useColorScheme();
+  const [preference, setStoredPreference] = useState<ThemePreference>("system");
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void AsyncStorage.getItem(PREFERENCE_KEY)
+      .then((stored) => {
+        if (!cancelled && isPreference(stored)) {
+          setStoredPreference(stored);
+        }
+      })
+      .catch(() => {
+        // an unreadable preference is not worth failing a launch over
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsReady(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setPreference = useCallback((next: ThemePreference) => {
+    setStoredPreference(next);
+    void AsyncStorage.setItem(PREFERENCE_KEY, next).catch(() => {});
+  }, []);
+
+  const value = useMemo<Appearance>(() => {
+    const resolved: ThemeName =
+      preference === "system" ? (system === "dark" ? "dark" : "light") : preference;
+    return { preference, theme: resolved, setPreference, isReady };
+  }, [preference, system, setPreference, isReady]);
+
+  return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
+}
+
+export function useAppearance(): Appearance {
+  return useContext(AppearanceContext);
+}
+
 export function useThemeName(): ThemeName {
-  return "light";
+  return useContext(AppearanceContext).theme;
 }
 
 export function useColors(): Colors {
