@@ -216,7 +216,11 @@ jobs:
 
           exit "$status"
 
+      # Only a submitted build is a release. A build-only run proves signing and
+      # nothing else, and tagging it would leave a `mobile-v*` tag and a "Latest"
+      # release for a binary nobody ever received.
       - name: Create git tag and GitHub Release
+        if: inputs.submit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: mobile-v${{ inputs.version }}
@@ -248,8 +252,10 @@ jobs:
             echo "| | |"
             echo "|---|---|"
             echo "| Commit | \`$SHA\` |"
-            echo "| Tag | \`mobile-v$VERSION\` |"
             echo "| Submitted | ${{ inputs.submit }} |"
+            if [ "${{ inputs.submit }}" != "true" ]; then
+              echo "| Tag | none — a build-only run is not a release |"
+            fi
             echo "| Build | ${BUILD_URL:-see https://expo.dev/accounts} |"
             echo "| Build id | \`${BUILD_ID:-unknown}\` |"
             echo

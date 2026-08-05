@@ -136,7 +136,8 @@ pnpm exec eas build:list --platform ios --limit 5            # project is reacha
 ```
 
 Then take the first build with submission turned off — signing gets proven without
-touching App Store Connect:
+touching App Store Connect, and a build-only run is deliberately not tagged, since
+a binary nobody received is not a release:
 
 ```bash
 gh workflow run "Release iOS" --repo pauli2406/openkeep \
@@ -145,7 +146,8 @@ gh run watch --repo pauli2406/openkeep
 ```
 
 `0.1.0` is what `app.config.js` says today, so the version check passes without a
-bump.
+bump. Observed on the free plan: about five and a half minutes from queue to a
+signed `.ipa`.
 
 ### What ends up where
 
@@ -174,9 +176,9 @@ bump.
    at TestFlight on purpose: submitting for review is a decision, not a build
    step.
 
-The workflow tags the commit `mobile-v0.2.0` and creates a GitHub Release with
+A submitted build tags the commit `mobile-v0.2.0` and creates a GitHub Release with
 generated notes. The `mobile-v*` prefix keeps the mobile line from colliding with
-the server's `v*` tags.
+the server's `v*` tags. A run with `submit` turned off tags nothing.
 
 ### What the build number does
 
@@ -201,7 +203,7 @@ Connect: `pnpm exec eas build:version:set`.
 | | |
 |---|---|
 | iOS builds | 15 per month |
-| Queue | low priority — minutes to hours at peak |
+| Queue | low priority — five minutes on a quiet afternoon, longer at peak |
 | Build timeout | 45 minutes |
 | Concurrency | 1 |
 | EAS Submit | included, unlimited |
