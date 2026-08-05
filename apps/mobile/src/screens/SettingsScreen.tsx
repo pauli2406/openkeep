@@ -1,153 +1,58 @@
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
-import { Panel, Screen } from "../components/ui";
+import { Button, Row, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
-import { createThemedStyles, useAppearance, useColors, type ThemePreference } from "../theme";
-import { fonts } from "../typography";
+import {
+  createThemedStyles,
+  useAppearance,
+  useColors,
+  type Density,
+  type ThemePreference,
+} from "../theme";
+import { text } from "../typography";
 
 const APP_VERSION = "0.1.0";
 
-function SettingsRow({
-  icon,
-  label,
-  value,
-  onPress,
-  tone = "default",
-}: {
-  icon: string;
-  label: string;
-  value?: string;
-  onPress?: () => void;
-  tone?: "default" | "danger";
-}) {
-  const colors = useColors();
-  const rowStyles = useRowStyles();
-  const inner = (
-    <View style={rowStyles.row}>
-      <View style={[rowStyles.iconWrap, tone === "danger" ? rowStyles.iconWrapDanger : null]}>
-        <MaterialCommunityIcons
-          name={icon as never}
-          size={18}
-          color={tone === "danger" ? colors.red : colors.accent}
-        />
-      </View>
-      <View style={rowStyles.textWrap}>
-        <Text style={[rowStyles.label, tone === "danger" ? rowStyles.labelDanger : null]}>
-          {label}
-        </Text>
-        {value ? (
-          <Text numberOfLines={1} style={rowStyles.value}>
-            {value}
-          </Text>
-        ) : null}
-      </View>
-      {onPress ? (
-        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.muted} />
-      ) : null}
-    </View>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [pressed ? rowStyles.pressed : null]}
-      >
-        {inner}
-      </Pressable>
-    );
+/** `1,8 GB` — what the read-through cache is holding. */
+function formatBytes(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
   }
-
-  return inner;
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
-
-const useRowStyles = createThemedStyles((c) => ({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingVertical: 2,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: c.accentSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconWrapDanger: {
-    backgroundColor: c.redSoft,
-  },
-  textWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  label: {
-    fontSize: 15,
-    fontFamily: fonts.sans.semibold,
-    color: c.ink,
-  },
-  labelDanger: {
-    fontFamily: fonts.sans.regular,
-    color: c.red,
-  },
-  value: {
-    fontFamily: fonts.sans.regular,
-    fontSize: 13,
-    color: c.muted,
-    lineHeight: 18,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-}));
-
-function Divider() {
-  const dividerStyles = useDividerStyles();
-  return <View style={dividerStyles.line} />;
-}
-
-const useDividerStyles = createThemedStyles((c) => ({
-  line: {
-    height: 1,
-    backgroundColor: c.border,
-    marginLeft: 50,
-  },
-}));
-
-function SectionLabel({ label }: { label: string }) {
-  const sectionStyles = useSectionStyles();
-  return <Text style={sectionStyles.label}>{label}</Text>;
-}
-
-const useSectionStyles = createThemedStyles((c) => ({
-  label: {
-    fontSize: 11,
-    fontFamily: fonts.sans.semibold,
-    color: c.muted,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: -6,
-  },
-}));
 
 export function SettingsScreen() {
-  const colors = useColors();
   const styles = useStyles();
+  const colors = useColors();
   const navigation = useNavigation();
   const appearance = useAppearance();
   const auth = useAuth();
   const offline = useOfflineArchive();
   const { t } = useI18n();
 
+  /** A flat 17px glyph in `dim`, not a 36px coloured tile. */
+  const glyph = (name: string) => (
+    <MaterialCommunityIcons name={name as never} size={17} color={colors.dim} />
+  );
+
+  function labelForLanguage(language: "en" | "de") {
+    return language === "de" ? t("settings.german") : t("settings.english");
+  }
+
   function labelForAppearance(preference: ThemePreference) {
     if (preference === "light") return t("settings.appearanceLight");
     if (preference === "dark") return t("settings.appearanceDark");
     return t("settings.appearanceSystem");
+  }
+
+  function labelForDensity(density: Density) {
+    return density === "compact" ? t("settings.densityCompact") : t("settings.densityStandard");
   }
 
   function handleSelectAppearance() {
@@ -168,8 +73,12 @@ export function SettingsScreen() {
     );
   }
 
-  function labelForLanguage(language: "en" | "de") {
-    return language === "de" ? t("settings.german") : t("settings.english");
+  function handleSelectDensity() {
+    Alert.alert(t("settings.density"), t("settings.selectDensity"), [
+      { text: t("settings.densityStandard"), onPress: () => appearance.setDensity("standard") },
+      { text: t("settings.densityCompact"), onPress: () => appearance.setDensity("compact") },
+      { text: t("settings.cancel"), style: "cancel" },
+    ]);
   }
 
   function handleSelectPreference(
@@ -182,45 +91,21 @@ export function SettingsScreen() {
       aiChatLanguage: "en",
     };
 
+    const save = (language: "en" | "de") =>
+      void auth
+        .updatePreferences({ ...basePreferences, [key]: language })
+        .catch((error) =>
+          Alert.alert(
+            t("settings.failedToSave"),
+            error instanceof Error ? error.message : t("settings.failedToSave"),
+          ),
+        );
+
     Alert.alert(title, t("settings.selectLanguage"), [
-      {
-        text: t("settings.english"),
-        onPress: () =>
-          void auth.updatePreferences({
-            ...basePreferences,
-            [key]: "en",
-          }).catch((error) => {
-            Alert.alert(
-              t("settings.failedToSave"),
-              error instanceof Error ? error.message : t("settings.failedToSave"),
-            );
-          }),
-      },
-      {
-        text: t("settings.german"),
-        onPress: () =>
-          void auth.updatePreferences({
-            ...basePreferences,
-            [key]: "de",
-          }).catch((error) => {
-            Alert.alert(
-              t("settings.failedToSave"),
-              error instanceof Error ? error.message : t("settings.failedToSave"),
-            );
-          }),
-      },
+      { text: t("settings.english"), onPress: () => save("en") },
+      { text: t("settings.german"), onPress: () => save("de") },
       { text: t("settings.cancel"), style: "cancel" },
     ]);
-  }
-
-  function formatBytes(bytes: number) {
-    if (bytes < 1024) {
-      return `${bytes} B`;
-    }
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(1)} KB`;
-    }
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   }
 
   function handleClearCache() {
@@ -229,12 +114,13 @@ export function SettingsScreen() {
       {
         text: t("settings.clearCache"),
         style: "destructive",
-        onPress: () => void offline.clearCachedDocuments().catch((error) => {
-          Alert.alert(
-            t("settings.clearCacheFailed"),
-            error instanceof Error ? error.message : t("settings.clearCacheFailed"),
-          );
-        }),
+        onPress: () =>
+          void offline.clearCachedDocuments().catch((error) =>
+            Alert.alert(
+              t("settings.clearCacheFailed"),
+              error instanceof Error ? error.message : t("settings.clearCacheFailed"),
+            ),
+          ),
       },
     ]);
   }
@@ -250,148 +136,142 @@ export function SettingsScreen() {
     ]);
   }
 
+  const initials = (auth.user?.displayName ?? "OK")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
   return (
-    <Screen title={t("settings.title")} onBack={() => navigation.goBack()}>
+    <Screen
+      title={t("settings.title")}
+      onBack={() => navigation.goBack()}
+      padded={false}
+    >
       {/* Account */}
-      <SectionLabel label={t("settings.account")} />
-      <Panel padded>
-        <SettingsRow
-          icon="account-circle-outline"
-          label={auth.user?.displayName ?? t("settings.userFallback")}
-          value={auth.user?.email}
-        />
-        {auth.user?.isOwner ? (
-          <>
-            <Divider />
-            <SettingsRow icon="shield-check-outline" label={t("settings.ownerAccount")} />
-          </>
-        ) : null}
-      </Panel>
+      <Row
+        minHeight={74}
+        leading={
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials || "OK"}</Text>
+          </View>
+        }
+        title={auth.user?.displayName ?? t("settings.userFallback")}
+        meta={auth.user?.email ?? ""}
+        metaMono
+      />
 
-      <SectionLabel label={t("settings.languagePreferences")} />
-      <Panel padded>
-        <SettingsRow
-          icon="translate"
-          label={t("settings.uiLanguage")}
-          value={labelForLanguage(auth.user?.preferences.uiLanguage ?? "en")}
-          onPress={() => handleSelectPreference("uiLanguage", t("settings.uiLanguage"))}
-        />
-        <Divider />
-        <SettingsRow
-          icon="brain"
-          label={t("settings.aiProcessingLanguage")}
-          value={labelForLanguage(auth.user?.preferences.aiProcessingLanguage ?? "en")}
-          onPress={() =>
-            handleSelectPreference("aiProcessingLanguage", t("settings.aiProcessingLanguage"))
-          }
-        />
-        <Divider />
-        <SettingsRow
-          icon="message-text-outline"
-          label={t("settings.aiChatLanguage")}
-          value={labelForLanguage(auth.user?.preferences.aiChatLanguage ?? "en")}
-          onPress={() => handleSelectPreference("aiChatLanguage", t("settings.aiChatLanguage"))}
-        />
-      </Panel>
+      <SectionHeader label={t("settings.language")} />
+      <Row
+        minHeight={50}
+        leading={glyph("translate")}
+        title={t("settings.surface")}
+        value={labelForLanguage(auth.user?.preferences.uiLanguage ?? "en")}
+        chevron
+        onPress={() => handleSelectPreference("uiLanguage", t("settings.uiLanguage"))}
+      />
+      <Row
+        minHeight={50}
+        leading={glyph("text-recognition")}
+        title={t("settings.documentsOcr")}
+        value={labelForLanguage(auth.user?.preferences.aiProcessingLanguage ?? "en")}
+        chevron
+        onPress={() =>
+          handleSelectPreference("aiProcessingLanguage", t("settings.aiProcessingLanguage"))
+        }
+      />
+      <Row
+        minHeight={50}
+        leading={glyph("message-outline")}
+        title={t("settings.chat")}
+        value={labelForLanguage(auth.user?.preferences.aiChatLanguage ?? "en")}
+        chevron
+        onPress={() => handleSelectPreference("aiChatLanguage", t("settings.aiChatLanguage"))}
+      />
 
-      <SectionLabel label={t("settings.display")} />
-      <Panel padded>
-        <SettingsRow
-          icon="weather-night"
-          label={t("settings.appearance")}
-          value={labelForAppearance(appearance.preference)}
-          onPress={handleSelectAppearance}
-        />
-      </Panel>
+      <SectionHeader label={t("settings.display")} />
+      <Row
+        minHeight={50}
+        leading={glyph("weather-night")}
+        title={t("settings.appearance")}
+        value={labelForAppearance(appearance.preference)}
+        valueTone="green"
+        chevron
+        onPress={handleSelectAppearance}
+      />
+      <Row
+        minHeight={50}
+        leading={glyph("format-line-spacing")}
+        title={t("settings.density")}
+        value={labelForDensity(appearance.density)}
+        chevron
+        onPress={handleSelectDensity}
+      />
 
-      {/* Archive connection */}
-      <SectionLabel label={t("settings.archive")} />
-      <Panel padded>
-        <SettingsRow
-          icon="server-network"
-          label={t("settings.connectedArchive")}
-          value={auth.apiUrl || t("settings.notConnected")}
-        />
-        <Divider />
-        <SettingsRow
-          icon="database-outline"
-          label={t("settings.cachedDocuments")}
-          value={`${offline.cacheSummary.documentCount} ${t("settings.documentsCached")} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
-        />
-        <Divider />
-        <SettingsRow
-          icon="trash-can-outline"
-          label={t("settings.clearCache")}
-          value={t("settings.clearCacheHint")}
-          onPress={handleClearCache}
-          tone="danger"
-        />
-      </Panel>
+      <SectionHeader label={t("settings.archive")} />
+      <Row
+        minHeight={50}
+        leading={glyph("server-network")}
+        title={t("settings.server")}
+        value={auth.apiUrl || t("settings.notConnected")}
+      />
+      <Row
+        minHeight={50}
+        leading={glyph("database-outline")}
+        title={t("settings.offlineAvailable")}
+        value={`${offline.cacheSummary.documentCount} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
+      />
+      <Row
+        minHeight={50}
+        leading={glyph("trash-can-outline")}
+        title={t("settings.clearCache")}
+        chevron
+        onPress={handleClearCache}
+      />
 
-      {/* About */}
-      <SectionLabel label={t("settings.about")} />
-      <Panel padded>
-        <SettingsRow icon="information-outline" label={t("settings.version")} value={APP_VERSION} />
-        <Divider />
-        <SettingsRow icon="bookshelf" label="OpenKeep" value={t("settings.productTagline")} />
-      </Panel>
-
-      {/* Log out */}
-      <View style={styles.logoutSection}>
-        <Pressable
-          onPress={handleLogout}
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed ? styles.logoutButtonPressed : null,
-          ]}
-        >
-          <MaterialCommunityIcons name="logout" size={18} color={colors.red} />
-          <Text style={styles.logoutText}>{t("settings.logOut")}</Text>
-        </Pressable>
-      </View>
+      <SectionHeader label={t("settings.info")} />
+      <Row
+        minHeight={50}
+        leading={glyph("information-outline")}
+        title={t("settings.version")}
+        value={APP_VERSION}
+      />
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>{`${t("settings.mobileFooter")} ${APP_VERSION}`}</Text>
-        <Text style={styles.footerText}>{t("settings.footerTagline")}</Text>
+        <Button label={t("settings.logOut")} variant="danger" onPress={handleLogout} />
+        <Text style={styles.footerText}>
+          {`${t("settings.mobileFooter")} ${APP_VERSION}`}
+        </Text>
       </View>
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  logoutSection: {
-    marginTop: 4,
-  },
-  logoutButton: {
-    flexDirection: "row",
+  avatar: {
+    height: 44,
+    width: 44,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    minHeight: 54,
     borderRadius: 9,
-    backgroundColor: c.panel,
-    borderWidth: 1,
-    borderColor: c.borderStrong,
+    backgroundColor: c.accentSoft,
   },
-  logoutButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.985 }],
-  },
-  logoutText: {
+  avatarText: {
+    ...text.bodyStrong,
     fontSize: 15,
-    fontFamily: fonts.sans.semibold,
-    color: c.red,
-    letterSpacing: 0.1,
+    color: c.accentSoftInk,
   },
   footer: {
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 4,
+    padding: 16,
+    gap: 14,
   },
   footerText: {
-    fontFamily: fonts.sans.regular,
-    color: c.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    ...text.numeric,
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: c.faint,
+    textAlign: "center",
   },
 }));

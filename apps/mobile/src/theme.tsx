@@ -174,6 +174,15 @@ export const radii = {
 export type ThemePreference = ThemeName | "system";
 
 const PREFERENCE_KEY = "openkeep.appearance";
+const DENSITY_KEY = "openkeep.density";
+
+/** `compact` takes ~15% off every row height. */
+export type Density = "standard" | "compact";
+
+export const DENSITY_SCALE: Record<Density, number> = {
+  standard: 1,
+  compact: 0.85,
+};
 
 type Appearance = {
   /** What the user chose. */
@@ -181,6 +190,8 @@ type Appearance = {
   /** What that resolves to right now. */
   theme: ThemeName;
   setPreference: (preference: ThemePreference) => void;
+  density: Density;
+  setDensity: (density: Density) => void;
   /** False until the stored preference has been read, to avoid a light flash. */
   isReady: boolean;
 };
@@ -189,6 +200,8 @@ const AppearanceContext = createContext<Appearance>({
   preference: "system",
   theme: "light",
   setPreference: () => {},
+  density: "standard",
+  setDensity: () => {},
   isReady: true,
 });
 
@@ -199,14 +212,21 @@ function isPreference(value: string | null): value is ThemePreference {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme();
   const [preference, setStoredPreference] = useState<ThemePreference>("system");
+  const [density, setStoredDensity] = useState<Density>("standard");
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void AsyncStorage.getItem(PREFERENCE_KEY)
-      .then((stored) => {
-        if (!cancelled && isPreference(stored)) {
-          setStoredPreference(stored);
+    void Promise.all([AsyncStorage.getItem(PREFERENCE_KEY), AsyncStorage.getItem(DENSITY_KEY)])
+      .then(([storedTheme, storedDensity]) => {
+        if (cancelled) {
+          return;
+        }
+        if (isPreference(storedTheme)) {
+          setStoredPreference(storedTheme);
+        }
+        if (storedDensity === "compact" || storedDensity === "standard") {
+          setStoredDensity(storedDensity);
         }
       })
       .catch(() => {
@@ -225,6 +245,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setPreference = useCallback((next: ThemePreference) => {
     setStoredPreference(next);
     void AsyncStorage.setItem(PREFERENCE_KEY, next).catch(() => {});
+  }, []);
+
+  const setDensity = useCallback((next: Density) => {
+    setStoredDensity(next);
+    void AsyncStorage.setItem(DENSITY_KEY, next).catch(() => {});
   }, []);
 
   /**
@@ -247,8 +272,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Appearance>(() => {
     const resolved: ThemeName =
       preference === "system" ? (system === "dark" ? "dark" : "light") : preference;
-    return { preference, theme: resolved, setPreference, isReady };
-  }, [preference, system, setPreference, isReady]);
+    return { preference, theme: resolved, setPreference, density, setDensity, isReady };
+  }, [preference, system, setPreference, density, setDensity, isReady]);
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 }

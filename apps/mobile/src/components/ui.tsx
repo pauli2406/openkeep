@@ -18,7 +18,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
-import { createThemedStyles, radii, useColors } from "../theme";
+import { createThemedStyles, DENSITY_SCALE, radii, useAppearance, useColors } from "../theme";
 import { text } from "../typography";
 
 /**
@@ -290,6 +290,7 @@ export function Row({
 }) {
   const styles = useStyles();
   const colors = useColors();
+  const { density } = useAppearance();
 
   const dotStyles: Record<RowDot, ViewStyle> = {
     accent: styles.dotAccent,
@@ -347,7 +348,8 @@ export function Row({
     </>
   );
 
-  const sizing = minHeight === undefined ? null : { minHeight };
+  const scale = DENSITY_SCALE[density];
+  const sizing = { minHeight: Math.round((minHeight ?? 56) * scale) };
   const tinted = tone === "bad" ? styles.rowBad : null;
 
   if (!onPress) {
