@@ -628,8 +628,13 @@ export type CorrespondentInsightsResponse = {
 };
 
 export function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return "-";
+  // Through `parseArchiveDate`: `issueDate`, `dueDate` and `expiryDate` are
+  // date-only, and formatting them from a UTC-midnight Date prints the previous
+  // day west of Greenwich. This is the long label — the review card, the detail
+  // rows and the dossier all read dates through it.
+  const date = parseArchiveDate(value);
+  if (!date) {
+    return value ? value : "-";
   }
 
   try {
@@ -637,9 +642,9 @@ export function formatDate(value: string | null | undefined) {
       year: "numeric",
       month: "short",
       day: "numeric",
-    }).format(new Date(value));
+    }).format(date);
   } catch {
-    return value;
+    return value ?? "-";
   }
 }
 
