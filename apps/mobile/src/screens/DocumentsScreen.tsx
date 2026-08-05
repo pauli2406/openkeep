@@ -1,7 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
@@ -17,6 +17,7 @@ import {
   type PillTone,
   type RowDot,
 } from "../components/ui";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { documentRowState, processingRefetchInterval } from "../document-processing";
 import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
@@ -25,10 +26,12 @@ import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
 import {
+  fetchTaxonomy,
   formatCurrency,
   formatShortDate,
   parseArchiveDate,
   responseToMessage,
+  taxonomyQueryKey,
   titleForDocument,
   type ArchiveDocument,
   type SearchDocumentsResponse,
@@ -127,6 +130,22 @@ export function DocumentsScreen() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<DocFilter>("all");
   const [oldestFirst, setOldestFirst] = useState(false);
+  /** Selection lives in screen state, so it survives scrolling and dies on exit. */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tagSheetOpen, setTagSheetOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
+  const selecting = selected.size > 0;
+
+  const toggleSelected = (documentId: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(documentId)) {
+        next.delete(documentId);
+      } else {
+        next.add(documentId);
+      }
+      return next;
+    });
 
   const currentYear = new Date().getFullYear();
   const insights = useDashboardInsights();
@@ -183,6 +202,65 @@ export function DocumentsScreen() {
       ? false
       : (q) => processingRefetchInterval(q.state.data, (data) => data?.items),
   });
+
+  const tagsQuery = useQuery({
+    queryKey: taxonomyQueryKey(auth.apiUrl, "tags"),
+    enabled: tagSheetOpen && !shouldUseCache,
+    queryFn: () => fetchTaxonomy(auth.authFetch, "tags", t("documents.loadError")),
+  });
+
+  /**
+   * There is no bulk endpoint, so a bulk action is N calls to the per-document
+   * one. `PATCH` replaces `tagIds` wholesale, which is why adding a tag reads
+   * each document's current tags first.
+   */
+  const bulkMutation = useMutation({
+    mutationFn: async (action: { kind: "tag"; tagId: string } | { kind: "done" } | { kind: "delete" }) => {
+      const documents = (documentsQuery.data?.items ?? []).filter((item) => selected.has(item.id));
+      for (const document of documents) {
+        const init: RequestInit =
+          action.kind === "delete"
+            ? { method: "DELETE" }
+            : {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(
+                  action.kind === "tag"
+                    ? {
+                        tagIds: Array.from(
+                          new Set([...document.tags.map((tag) => tag.id), action.tagId]),
+                        ),
+                      }
+                    : { taskCompletedAt: new Date().toISOString() },
+                ),
+              };
+        const response = await auth.authFetch(`/api/documents/${document.id}`, init);
+        if (!response.ok) {
+          throw new Error(await responseToMessage(response));
+        }
+      }
+    },
+    onSuccess: async () => {
+      setSelected(new Set());
+      setTagSheetOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["document-facets"] }),
+      ]);
+    },
+  });
+
+  function confirmDelete() {
+    Alert.alert(t("documents.deleteTitle"), t("documents.deleteBody"), [
+      { text: t("documents.cancel"), style: "cancel" },
+      {
+        text: t("documents.deleteSelected"),
+        style: "destructive",
+        onPress: () => bulkMutation.mutate({ kind: "delete" }),
+      },
+    ]);
+  }
 
   const reprocessMutation = useMutation({
     mutationFn: async (documentId: string) => {
@@ -253,10 +331,17 @@ export function DocumentsScreen() {
 
   return (
     <Screen
-      title={t("documents.title")}
+      title={
+        selecting ? `${selected.size} ${t("documents.selected")}` : t("documents.title")
+      }
       padded={false}
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
       right={
+        selecting ? (
+          <Pressable onPress={() => setSelected(new Set())} hitSlop={12}>
+            <Text style={styles.barAction}>{t("documents.cancel")}</Text>
+          </Pressable>
+        ) : (
         <>
           <Pressable
             accessibilityRole="button"
@@ -284,6 +369,7 @@ export function DocumentsScreen() {
             />
           </Pressable>
         </>
+        )
       }
     >
       <View style={styles.controls}>
@@ -372,6 +458,21 @@ export function DocumentsScreen() {
               <Row
                 key={document.id}
                 minHeight={62}
+                selected={selected.has(document.id)}
+                onLongPress={shouldUseCache ? undefined : () => toggleSelected(document.id)}
+                leading={
+                  selecting ? (
+                    <MaterialCommunityIcons
+                      name={
+                        selected.has(document.id)
+                          ? "checkbox-marked-circle"
+                          : "checkbox-blank-circle-outline"
+                      }
+                      size={19}
+                      color={selected.has(document.id) ? colors.accent : colors.faint}
+                    />
+                  ) : undefined
+                }
                 dot={documentDot(document)}
                 pulse={state === "processing" || state === "queued"}
                 tone={state === "failed" ? "bad" : "default"}
@@ -382,16 +483,101 @@ export function DocumentsScreen() {
                 valueTone={isOverdue(document) ? "red" : "ink"}
                 accessory={pill ? <Pill label={pill.label} tone={pill.tone} /> : undefined}
                 onPress={() =>
-                  navigation.navigate("DocumentDetail", {
-                    documentId: document.id,
-                    title: titleForDocument(document),
-                  })
+                  selecting
+                    ? toggleSelected(document.id)
+                    : navigation.navigate("DocumentDetail", {
+                        documentId: document.id,
+                        title: titleForDocument(document),
+                      })
                 }
               />
             );
           })
         )
       ) : null}
+
+      {selecting ? (
+        <View style={styles.bulkBar}>
+          <View style={styles.bulkSlot}>
+            <Button
+              label={t("documents.addTag")}
+              variant="secondary"
+              size="sm"
+              onPress={() => setTagSheetOpen(true)}
+              loading={bulkMutation.isPending}
+            />
+          </View>
+          <View style={styles.bulkSlot}>
+            <Button
+              label={t("documents.markDone")}
+              variant="secondary"
+              size="sm"
+              onPress={() => bulkMutation.mutate({ kind: "done" })}
+            />
+          </View>
+          <View style={styles.bulkSlot}>
+            <Button
+              label={t("documents.deleteSelected")}
+              variant="danger"
+              size="sm"
+              onPress={confirmDelete}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {bulkMutation.isError ? (
+        <View style={styles.gutter}>
+          <ErrorCard message={t("documents.bulkFailed")} />
+        </View>
+      ) : null}
+
+      <Modal
+        visible={tagSheetOpen}
+        animationType="slide"
+        onRequestClose={() => setTagSheetOpen(false)}
+      >
+        <SafeAreaView style={styles.sheetRoot} edges={["top", "bottom"]}>
+          <View style={styles.sheetBar}>
+            <Text style={styles.sheetTitle}>{t("documents.tagSheetTitle")}</Text>
+            <Pressable onPress={() => setTagSheetOpen(false)} hitSlop={10}>
+              <Text style={styles.barAction}>{t("documents.cancel")}</Text>
+            </Pressable>
+          </View>
+          <View style={styles.controls}>
+            <View style={styles.searchWrap}>
+              <MaterialCommunityIcons name="magnify" size={15} color={colors.dim} />
+              <TextInput
+                value={tagSearch}
+                onChangeText={setTagSearch}
+                placeholder={t("documents.tagSearch")}
+                placeholderTextColor={colors.dim}
+                style={styles.searchInput}
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+          <ScrollView>
+            {(tagsQuery.data ?? [])
+              .filter((tag) =>
+                tagSearch.trim()
+                  ? tag.name.toLowerCase().includes(tagSearch.trim().toLowerCase())
+                  : true,
+              )
+              .map((tag) => (
+                <Row
+                  key={tag.id}
+                  title={tag.name}
+                  chevron
+                  onPress={() => bulkMutation.mutate({ kind: "tag", tagId: tag.id })}
+                />
+              ))}
+            {(tagsQuery.data ?? []).length === 0 ? (
+              <EmptyState title={t("documents.noTags")} />
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* One action for the list rather than a button on every failed row */}
       {failedDocument && !shouldUseCache ? (
@@ -487,5 +673,40 @@ const useStyles = createThemedStyles((c) => ({
   orderText: {
     ...text.numeric,
     color: c.faint,
+  },
+  barAction: {
+    ...text.metaStrong,
+    color: c.accent,
+  },
+  bulkBar: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 11,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+    backgroundColor: c.bar,
+  },
+  bulkSlot: {
+    flex: 1,
+  },
+  sheetRoot: {
+    flex: 1,
+    backgroundColor: c.app,
+  },
+  sheetBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 46,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+    backgroundColor: c.bar,
+  },
+  sheetTitle: {
+    ...text.barTitle,
+    flex: 1,
+    color: c.ink,
   },
 }));

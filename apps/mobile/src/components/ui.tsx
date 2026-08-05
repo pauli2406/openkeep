@@ -250,6 +250,8 @@ export function Row({
   onPress,
   accessibilityActions,
   onAccessibilityAction,
+  onLongPress,
+  selected = false,
   minHeight,
   titleNumberOfLines = 1,
   metaMono = false,
@@ -278,6 +280,9 @@ export function Row({
    */
   accessibilityActions?: Array<{ name: string; label?: string }>;
   onAccessibilityAction?: (event: { nativeEvent: { actionName: string } }) => void;
+  /** Enters selection mode in the documents list. */
+  onLongPress?: () => void;
+  selected?: boolean;
   /** 56 is the default; the design uses 50 for settings and 66 for Today. */
   minHeight?: number;
   titleNumberOfLines?: number;
@@ -351,9 +356,9 @@ export function Row({
   // Compact tightens the list but never past the 44pt tap-target floor.
   const scaled = Math.round((minHeight ?? 56) * DENSITY_SCALE[density]);
   const sizing = { minHeight: onPress ? Math.max(44, scaled) : scaled };
-  const tinted = tone === "bad" ? styles.rowBad : null;
+  const tinted = selected ? styles.rowSelected : tone === "bad" ? styles.rowBad : null;
 
-  if (!onPress) {
+  if (!onPress && !onLongPress) {
     return <View style={[styles.row, sizing, tinted]}>{body}</View>;
   }
 
@@ -365,6 +370,8 @@ export function Row({
       onPress={onPress}
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
+      onLongPress={onLongPress}
+      delayLongPress={350}
       style={({ pressed }) => [styles.row, sizing, tinted, pressed ? styles.rowPressed : null]}
     >
       {body}
@@ -748,6 +755,9 @@ const useStyles = createThemedStyles((c) => ({
   },
   rowBad: {
     backgroundColor: c.redSoft,
+  },
+  rowSelected: {
+    backgroundColor: c.accentSoft,
   },
   rowTextWrap: {
     flex: 1,
