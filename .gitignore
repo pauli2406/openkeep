@@ -23,5 +23,7 @@ apps/mobile/android
 # Playwright visual suite output. The baselines under
 # apps/web/visual/__screenshots__ are committed on purpose.
 apps/web/test-results
+apps/mobile/test-results
+apps/mobile/visual/dist
 apps/web/playwright-report
 apps/web/blob-report

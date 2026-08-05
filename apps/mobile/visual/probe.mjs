@@ -1,0 +1,15 @@
+import { chromium } from "@playwright/test";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 393, height: 852 }, colorScheme: "dark" });
+const errors = [];
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 300)); });
+page.on("pageerror", (e) => errors.push("PAGEERROR: " + (e && e.stack ? e.stack.slice(0, 1200) : String(e))));
+await page.goto("http://localhost:5183/", { waitUntil: "networkidle" });
+await page.waitForTimeout(2500);
+const text = await page.evaluate(() => document.body.innerText.slice(0, 600));
+console.log("=== BODY TEXT ===\n" + text);
+console.log("=== ERRORS ===\n" + errors.slice(0, 6).join("\n---\n"));
+await page.getByText("Documents", { exact: true }).first().click().catch(() => {});
+await page.waitForTimeout(1200);
+await page.screenshot({ path: "/tmp/probe-dark.png" });
+await browser.close();

@@ -20,7 +20,12 @@
     "lint": "tsc --noEmit",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "visual:build": "OPENKEEP_VISUAL=1 expo export --platform web --output-dir visual/dist --clear",
+    "visual:serve": "node visual/serve.mjs",
+    "test:visual": "./visual/run-in-container.sh",
+    "test:visual:update": "./visual/run-in-container.sh --update-snapshots",
+    "test:visual:local": "playwright test"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -57,12 +62,16 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
+    "@expo/metro-runtime": "~6.1.2",
+    "@playwright/test": "^1.62.1",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.17",
     "babel-preset-expo": "~54.0.10",
     "jest": "^29.7.0",
     "jest-expo": "~54.0.17",
+    "react-dom": "19.1.0",
+    "react-native-web": "~0.21.2",
     "react-test-renderer": "19.1.0",
     "typescript": "^5.9.3"
   },

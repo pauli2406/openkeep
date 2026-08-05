@@ -6,9 +6,12 @@ export default {
     name: IS_DEV ? 'OpenKeep (Dev)' : 'OpenKeep',
     "slug": "openkeep-mobile",
     "scheme": "openkeep",
+    // `web` is here for the visual-regression build only (#150); nothing ships
+    // to a browser. See `visual/README.md`.
     "platforms": [
       "ios",
-      "android"
+      "android",
+      "web"
     ],
     "version": "0.1.0",
     "icon": "./assets/icon.png",
