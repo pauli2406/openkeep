@@ -236,6 +236,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (!isReady) {
       return;
     }
+    // Not every platform has the setter, and a missing one must not take the app
+    // down on mount.
+    if (typeof RNAppearance.setColorScheme !== "function") {
+      return;
+    }
     RNAppearance.setColorScheme(preference === "system" ? null : preference);
   }, [preference, isReady]);
 
