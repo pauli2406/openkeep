@@ -544,7 +544,11 @@ const useStyles = createThemedStyles((c) => ({
     textDecorationLine: "line-through",
   },
   changeArrow: {
-    ...text.small,
+    // No `fontFamily`: Public Sans has no arrow glyph, so naming it leaves the
+    // platform to substitute a face of its choosing. The system font is the one
+    // that has the character — same reasoning as the other symbol-only labels.
+    fontSize: 11.5,
+    lineHeight: 16,
     color: c.dim,
   },
   changeAfter: {
