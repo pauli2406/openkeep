@@ -21,6 +21,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles } from "../theme";
+import { fonts } from "../typography";
 import { createPdfFromImages, responseToMessage } from "../lib";
 
 type ScannerModule = {
@@ -248,12 +249,13 @@ const useStyles = createThemedStyles((c) => ({
     gap: 10,
   },
   helper: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     lineHeight: 20,
   },
   error: {
     color: c.red,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
   },
   previewImage: {
     width: "100%",
@@ -269,10 +271,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   pageTitle: {
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   fileText: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     lineHeight: 20,
   },

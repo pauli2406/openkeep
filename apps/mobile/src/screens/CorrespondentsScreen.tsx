@@ -9,6 +9,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts, text } from "../typography";
 import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 10,
   },
   loadingText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     lineHeight: 20,
   },
@@ -164,13 +166,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   name: {
     fontSize: 16,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     letterSpacing: -0.2,
   },
   docCount: {
-    fontSize: 13,
-    fontWeight: "600",
+    ...text.numericMeta,
     color: c.muted,
   },
 }));

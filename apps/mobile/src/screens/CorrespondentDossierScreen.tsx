@@ -11,6 +11,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles } from "../theme";
+import { fonts, text } from "../typography";
 import {
   formatCurrency,
   formatDate,
@@ -117,17 +118,12 @@ const useRibbonStyles = createThemedStyles((c) => ({
     gap: 6,
   },
   label: {
-    fontSize: 10,
-    fontWeight: "800",
+    ...text.sectionLabel,
     color: c.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   value: {
-    fontSize: 22,
-    fontWeight: "800",
+    ...text.statValue,
     color: c.ink,
-    letterSpacing: -0.5,
   },
 }));
 
@@ -196,7 +192,7 @@ const useOverviewStyles = createThemedStyles((c) => ({
   },
   overviewText: {
     fontSize: 17,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 26,
     color: c.ink,
     letterSpacing: -0.2,
@@ -216,12 +212,13 @@ const useOverviewStyles = createThemedStyles((c) => ({
   },
   chipText: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   pendingText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.muted,
     lineHeight: 21,
@@ -295,22 +292,21 @@ const useChangeStyles = createThemedStyles((c) => ({
   title: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   date: {
-    fontSize: 11,
-    fontWeight: "700",
+    ...text.numeric,
     color: c.muted,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
   },
   description: {
+    fontFamily: fonts.sans.regular,
     fontSize: 13,
     color: c.muted,
     lineHeight: 19,
   },
   transition: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
     letterSpacing: 0.2,
@@ -382,7 +378,7 @@ function MonthlyActivity({
 const useActivityStyles = createThemedStyles((c) => ({
   title: {
     fontSize: 22,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     letterSpacing: -0.3,
     marginTop: -8,
@@ -397,11 +393,10 @@ const useActivityStyles = createThemedStyles((c) => ({
     gap: 4,
   },
   yearLabel: {
-    color: c.muted,
+    ...text.numeric,
     fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+    lineHeight: 13,
+    color: c.muted,
     marginBottom: 2,
   },
   yearPlaceholder: {
@@ -419,16 +414,16 @@ const useActivityStyles = createThemedStyles((c) => ({
     backgroundColor: c.accentFill,
   },
   monthLabel: {
-    color: c.muted,
+    ...text.numeric,
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
+    lineHeight: 14,
+    color: c.muted,
   },
   countLabel: {
-    color: c.muted,
+    ...text.numericStrong,
     fontSize: 10,
-    fontWeight: "700",
+    lineHeight: 14,
+    color: c.muted,
   },
 }));
 
@@ -491,17 +486,18 @@ const useFactStyles = createThemedStyles((c) => ({
   },
   label: {
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   value: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   asOf: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
   },
@@ -574,17 +570,18 @@ const useTimelineStyles = createThemedStyles((c) => ({
   title: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   date: {
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   description: {
+    fontFamily: fonts.sans.regular,
     fontSize: 13,
     color: c.muted,
     lineHeight: 19,
@@ -685,14 +682,14 @@ const useInsuranceStyles = createThemedStyles((c) => ({
   },
   factLabel: {
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   factValue: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   chipRow: {
@@ -710,7 +707,7 @@ const useInsuranceStyles = createThemedStyles((c) => ({
   },
   chipText: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     letterSpacing: 0.4,
     textTransform: "uppercase",
@@ -767,11 +764,11 @@ const useTypeStyles = createThemedStyles((c) => ({
   name: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   count: {
-    fontSize: 14,
+    ...text.numericMeta,
     color: c.muted,
   },
 }));
@@ -804,6 +801,7 @@ const useSummaryStyles = createThemedStyles((c) => ({
     paddingVertical: 14,
   },
   text: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.muted,
     lineHeight: 22,
@@ -867,14 +865,14 @@ const useDocStyles = createThemedStyles((c) => ({
     flex: 1,
     color: c.muted,
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   title: {
     color: c.ink,
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 23,
     letterSpacing: -0.2,
   },
@@ -885,6 +883,7 @@ const useDocStyles = createThemedStyles((c) => ({
     gap: 8,
   },
   detail: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 13,
     lineHeight: 18,
@@ -933,6 +932,7 @@ const useEmptyCardStyles = createThemedStyles((c) => ({
     borderColor: c.border,
   },
   text: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.muted,
   },
@@ -946,7 +946,7 @@ const useSectionStyles = createThemedStyles((c) => ({
   eyebrow: {
     color: c.muted,
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
@@ -1190,6 +1190,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 16,
   },
   loadingText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     lineHeight: 20,
   },
@@ -1201,7 +1202,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   documentsTitle: {
     fontSize: 22,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     letterSpacing: -0.3,
   },

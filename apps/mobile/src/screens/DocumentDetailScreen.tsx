@@ -35,6 +35,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts, text } from "../typography";
 import {
   fetchTaxonomy,
   formatCurrency,
@@ -734,11 +735,11 @@ function OverviewTab({
       {/* Quick info */}
       <SectionTitle title={t("documentDetail.overview.details")} />
       <Card>
-        <MetaRow label={t("documentDetail.overview.issueDate")} value={formatDate(document.issueDate)} />
-        <MetaRow label={t("documentDetail.overview.dueDate")} value={formatDate(document.dueDate)} />
-        {document.expiryDate && <MetaRow label={t("documentDetail.overview.expiryDate")} value={formatDate(document.expiryDate)} />}
-        <MetaRow label={t("documentDetail.overview.amount")} value={formatCurrency(document.amount, document.currency ?? "EUR")} />
-        {document.referenceNumber && <MetaRow label={t("documentDetail.overview.reference")} value={document.referenceNumber} />}
+        <MetaRow label={t("documentDetail.overview.issueDate")} value={formatDate(document.issueDate)} numeric />
+        <MetaRow label={t("documentDetail.overview.dueDate")} value={formatDate(document.dueDate)} numeric />
+        {document.expiryDate && <MetaRow label={t("documentDetail.overview.expiryDate")} value={formatDate(document.expiryDate)} numeric />}
+        <MetaRow label={t("documentDetail.overview.amount")} value={formatCurrency(document.amount, document.currency ?? "EUR")} numeric />
+        {document.referenceNumber && <MetaRow label={t("documentDetail.overview.reference")} value={document.referenceNumber} numeric />}
         {document.holderName && <MetaRow label={t("documentDetail.overview.holder")} value={document.holderName} />}
         {document.issuingAuthority && <MetaRow label={t("documentDetail.overview.authority")} value={document.issuingAuthority} />}
         {document.tags.length > 0 && (
@@ -1336,12 +1337,21 @@ function ActivityTab({
 // Shared sub-components
 // ===========================================================================
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+function MetaRow({
+  label,
+  value,
+  numeric,
+}: {
+  label: string;
+  value: string;
+  /** Dates, amounts and reference numbers are set in IBM Plex Mono. */
+  numeric?: boolean;
+}) {
   const styles = useStyles();
   return (
     <View style={styles.metaRow}>
       <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
+      <Text style={[styles.metaValue, numeric ? styles.metaValueNumeric : null]}>{value}</Text>
     </View>
   );
 }
@@ -1556,14 +1566,14 @@ function formatEventType(eventType: string): string {
 
 const useMarkdownStyles = createThemedStyles((c) => ({
   body: {
+    ...text.body,
     color: c.ink,
-    fontSize: 15,
-    lineHeight: 22,
   },
   strong: {
-    fontWeight: "800" as const,
+    fontFamily: fonts.sans.semibold,
   },
   code_inline: {
+    fontFamily: fonts.mono.regular,
     backgroundColor: c.raised,
     color: c.muted,
     fontSize: 13,
@@ -1572,6 +1582,7 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     borderRadius: 4,
   },
   bullet_list_icon: {
+    fontFamily: fonts.sans.regular,
     color: c.accent,
     fontSize: 8,
     marginTop: 8,
@@ -1611,13 +1622,11 @@ const useStyles = createThemedStyles((c) => ({
     flex: 1,
   },
   title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
+    ...text.screenTitle,
     color: c.ink,
-    letterSpacing: -0.6,
   },
   subtitle: {
+    fontFamily: fonts.sans.regular,
     marginTop: 4,
     fontSize: 14,
     lineHeight: 21,
@@ -1647,35 +1656,40 @@ const useStyles = createThemedStyles((c) => ({
   },
   tabText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.2,
   },
   tabTextActive: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
   },
 
   // Shared
   helper: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     textAlign: "center",
   },
   error: {
+    fontFamily: fonts.sans.regular,
     color: c.red,
     fontSize: 14,
   },
   hintText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     lineHeight: 17,
   },
   metaText: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     lineHeight: 20,
     fontSize: 14,
   },
   metaLabel: {
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     fontSize: 12,
     textTransform: "uppercase",
@@ -1687,10 +1701,15 @@ const useStyles = createThemedStyles((c) => ({
     alignItems: "center",
     paddingVertical: 2,
   },
+  metaValueNumeric: {
+    ...text.amount,
+    color: c.ink,
+    textAlign: "right",
+  },
   metaValue: {
     color: c.ink,
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     textAlign: "right",
     flex: 1,
     marginLeft: 12,
@@ -1708,7 +1727,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   reviewBannerTitle: {
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.amber,
   },
   reviewActions: {
@@ -1723,10 +1742,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   errorBannerTitle: {
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.red,
   },
   errorBannerBody: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     fontSize: 13,
     lineHeight: 19,
@@ -1738,7 +1758,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   fieldLabelSmall: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
@@ -1758,11 +1778,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   providerChipText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     textTransform: "capitalize",
   },
   providerChipTextActive: {
+    fontFamily: fonts.sans.regular,
     color: c.accentFillInk,
   },
 
@@ -1775,12 +1796,13 @@ const useStyles = createThemedStyles((c) => ({
   },
   jobStatusLabel: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   jobError: {
+    fontFamily: fonts.sans.regular,
     color: c.red,
     fontSize: 12,
     lineHeight: 17,
@@ -1800,7 +1822,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
@@ -1818,14 +1840,17 @@ const useStyles = createThemedStyles((c) => ({
     justifyContent: "space-between",
   },
   pickerButtonText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 17,
     color: c.ink,
     flex: 1,
   },
   pickerPlaceholder: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
   },
   pickerChevron: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     marginLeft: 8,
@@ -1838,6 +1863,7 @@ const useStyles = createThemedStyles((c) => ({
     overflow: "hidden",
   },
   pickerSearch: {
+    fontFamily: fonts.sans.regular,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
@@ -1854,6 +1880,7 @@ const useStyles = createThemedStyles((c) => ({
     borderBottomColor: c.border,
   },
   pickerCreateInput: {
+    fontFamily: fonts.sans.regular,
     flex: 1,
     minHeight: 42,
     borderRadius: 12,
@@ -1878,10 +1905,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   pickerCreateButtonText: {
     color: c.accentFillInk,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     fontSize: 14,
   },
   pickerCreateError: {
+    fontFamily: fonts.sans.regular,
     paddingHorizontal: 12,
     paddingBottom: 8,
     color: c.red,
@@ -1898,14 +1926,16 @@ const useStyles = createThemedStyles((c) => ({
     backgroundColor: c.accentSoft,
   },
   pickerOptionText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 15,
     color: c.ink,
   },
   pickerOptionTextSelected: {
     color: c.accent,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
   },
   pickerOptionClear: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontStyle: "italic",
   },
@@ -1919,17 +1949,19 @@ const useStyles = createThemedStyles((c) => ({
   },
   intelLabel: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.accent,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   validationError: {
+    fontFamily: fonts.sans.regular,
     color: c.red,
     fontSize: 13,
     lineHeight: 18,
   },
   validationWarning: {
+    fontFamily: fonts.sans.regular,
     color: c.amber,
     fontSize: 13,
     lineHeight: 18,
@@ -1942,6 +1974,7 @@ const useStyles = createThemedStyles((c) => ({
     alignItems: "flex-end",
   },
   qaInput: {
+    fontFamily: fonts.sans.regular,
     flex: 1,
     minHeight: 48,
     maxHeight: 120,
@@ -1971,7 +2004,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   qaButtonText: {
     color: c.accentFillInk,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     fontSize: 14,
   },
   qaAnswer: {
@@ -1986,7 +2019,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   qaHistoryQuestion: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     lineHeight: 21,
   },
@@ -1994,13 +2027,14 @@ const useStyles = createThemedStyles((c) => ({
   // OCR
   pageLabel: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.accent,
     letterSpacing: 0.5,
     textTransform: "uppercase",
     marginBottom: 4,
   },
   ocrText: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     fontSize: 14,
     lineHeight: 22,
@@ -2038,10 +2072,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   historyTitle: {
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   historyMeta: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
     lineHeight: 17,
@@ -2049,7 +2084,7 @@ const useStyles = createThemedStyles((c) => ({
   expandHint: {
     fontSize: 12,
     color: c.accent,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     marginTop: 2,
   },
   payloadWrap: {
@@ -2060,6 +2095,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 4,
   },
   payloadLine: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.ink,
     lineHeight: 17,

@@ -11,6 +11,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles } from "../theme";
+import { fonts } from "../typography";
 import { formatCurrency, formatDate, titleForDocument, type SearchDocumentsResponse } from "../lib";
 
 const statuses = ["all", "pending", "processing", "ready", "failed"] as const;
@@ -87,7 +88,7 @@ export function DocumentsScreen() {
   });
 
   return (
-    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")} showEyebrow>
+    <Screen title={t("documents.title")} subtitle={t("documents.subtitle")}>
       <Card>
         <Field label={t("documents.query")} value={query} onChangeText={setQuery} placeholder={t("documents.placeholder")} />
         <SectionTitle title={t("documents.status")} hint={t("documents.statusHint")} />
@@ -152,12 +153,14 @@ const useStyles = createThemedStyles((c) => ({
   },
   filterText: {
     color: c.ink,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
   },
   filterTextActive: {
+    fontFamily: fonts.sans.regular,
     color: c.accentFillInk,
   },
   helper: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
   },
   titleRow: {
@@ -168,10 +171,11 @@ const useStyles = createThemedStyles((c) => ({
   title: {
     flex: 1,
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   detailLine: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     lineHeight: 20,
   },

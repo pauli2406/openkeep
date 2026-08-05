@@ -5,6 +5,7 @@ import { Card, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts } from "../typography";
 
 const APP_VERSION = "0.1.0";
 
@@ -86,13 +87,15 @@ const useRowStyles = createThemedStyles((c) => ({
   },
   label: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   labelDanger: {
+    fontFamily: fonts.sans.regular,
     color: c.red,
   },
   value: {
+    fontFamily: fonts.sans.regular,
     fontSize: 13,
     color: c.muted,
     lineHeight: 18,
@@ -123,7 +126,7 @@ function SectionLabel({ label }: { label: string }) {
 const useSectionStyles = createThemedStyles((c) => ({
   label: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 1.2,
     textTransform: "uppercase",
@@ -221,7 +224,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <Screen title={t("settings.title")} subtitle={t("settings.subtitle")} showEyebrow>
+    <Screen title={t("settings.title")} subtitle={t("settings.subtitle")}>
       {/* Account */}
       <SectionLabel label={t("settings.account")} />
       <Card>
@@ -337,7 +340,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   logoutText: {
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.red,
     letterSpacing: 0.1,
   },
@@ -347,6 +350,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 4,
   },
   footerText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     lineHeight: 17,

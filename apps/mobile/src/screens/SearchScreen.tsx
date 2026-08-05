@@ -18,6 +18,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts, text } from "../typography";
 import {
   formatCurrency,
   formatDate,
@@ -111,7 +112,6 @@ export function SearchScreen() {
     <Screen
       title={t("search.title")}
       subtitle={t("search.subtitle")}
-      showEyebrow
     >
       {/* ─── Search bar ─── */}
       <View style={styles.searchBarContainer}>
@@ -749,36 +749,38 @@ function ZeroState({
 
 const useMarkdownStyles = createThemedStyles((c) => ({
   body: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     fontSize: 15,
     lineHeight: 24,
   },
   heading1: {
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     marginTop: 16,
     marginBottom: 8,
   },
   heading2: {
     fontSize: 18,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     marginTop: 14,
     marginBottom: 6,
   },
   heading3: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     marginTop: 12,
     marginBottom: 4,
   },
   strong: {
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   em: {
+    fontFamily: fonts.sans.regular,
     fontStyle: "italic",
   },
   bullet_list: {
@@ -800,7 +802,7 @@ const useMarkdownStyles = createThemedStyles((c) => ({
   link: {
     color: c.accent,
     backgroundColor: "#f6ead1",
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     fontSize: 11,
     letterSpacing: 0.3,
     borderRadius: 4,
@@ -818,13 +820,14 @@ const useMarkdownStyles = createThemedStyles((c) => ({
   },
   th: {
     padding: 8,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     fontSize: 13,
     color: c.ink,
     borderBottomWidth: 1,
     borderColor: c.border,
   },
   td: {
+    fontFamily: fonts.sans.regular,
     padding: 8,
     fontSize: 13,
     color: c.ink,
@@ -848,7 +851,7 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     backgroundColor: c.raised,
     color: c.ink,
     fontSize: 13,
-    fontFamily: "Menlo",
+    fontFamily: fonts.mono.regular,
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 2,
@@ -858,7 +861,7 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     borderRadius: 8,
     padding: 12,
     marginVertical: 8,
-    fontFamily: "Menlo",
+    fontFamily: fonts.mono.regular,
     fontSize: 13,
   },
 }));
@@ -886,11 +889,13 @@ const useStyles = createThemedStyles((c) => ({
     minHeight: 50,
   },
   searchIcon: {
+    fontFamily: fonts.sans.regular,
     fontSize: 18,
     color: c.muted,
     marginRight: 8,
   },
   searchInput: {
+    fontFamily: fonts.sans.regular,
     flex: 1,
     fontSize: 16,
     color: c.ink,
@@ -903,7 +908,7 @@ const useStyles = createThemedStyles((c) => ({
   clearButtonText: {
     fontSize: 14,
     color: c.muted,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
   },
   searchButton: {
     // The search action is the accent fill, so its label can be the fill ink.
@@ -925,13 +930,14 @@ const useStyles = createThemedStyles((c) => ({
   searchButtonText: {
     color: c.accentFillInk,
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.2,
   },
   cachedResults: {
     gap: 10,
   },
   mutedText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 14,
     lineHeight: 20,
@@ -958,10 +964,11 @@ const useStyles = createThemedStyles((c) => ({
     flex: 1,
     color: c.ink,
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 20,
   },
   resultMeta: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     lineHeight: 16,
@@ -974,6 +981,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 10,
   },
   searchingText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.muted,
   },
@@ -1030,10 +1038,12 @@ const useStyles = createThemedStyles((c) => ({
     backgroundColor: c.accentFill,
   },
   aiIconText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 16,
     color: c.accent,
   },
   aiIconTextExpanded: {
+    fontFamily: fonts.sans.regular,
     color: c.accentFillInk,
   },
   aiPanelHeaderText: {
@@ -1044,14 +1054,16 @@ const useStyles = createThemedStyles((c) => ({
   },
   aiPanelTitle: {
     fontSize: 14,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   aiPanelStatus: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
   },
   aiChevron: {
+    fontFamily: fonts.sans.regular,
     fontSize: 16,
     color: c.muted,
   },
@@ -1086,11 +1098,13 @@ const useStyles = createThemedStyles((c) => ({
     paddingVertical: 12,
   },
   lowConfidenceHint: {
+    fontFamily: fonts.sans.regular,
     marginTop: 8,
     fontSize: 12,
     color: "#b45309",
   },
   insufficientText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.amber,
     lineHeight: 20,
@@ -1107,10 +1121,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   structuredTitle: {
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   structuredDescription: {
+    fontFamily: fonts.sans.regular,
     fontSize: 13,
     lineHeight: 18,
     color: c.muted,
@@ -1133,10 +1148,11 @@ const useStyles = createThemedStyles((c) => ({
   },
   structuredItemTitle: {
     fontSize: 14,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   structuredItemMeta: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     lineHeight: 16,
     color: c.muted,
@@ -1154,7 +1170,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   structuredChipText: {
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
 
@@ -1167,7 +1183,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   sourcesLabel: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 1.8,
     textTransform: "uppercase",
@@ -1204,25 +1220,25 @@ const useStyles = createThemedStyles((c) => ({
     justifyContent: "center",
   },
   sourceNumberText: {
-    fontSize: 11,
-    fontWeight: "800",
+    ...text.numericStrong,
     color: c.accent,
   },
   sourceTitle: {
     flex: 1,
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
     lineHeight: 17,
   },
   sourceQuote: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
     lineHeight: 16,
   },
   sourcePage: {
     fontSize: 10,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     opacity: 0.7,
   },
@@ -1242,11 +1258,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   zeroSectionTitle: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 2.2,
   },
   zeroClearAll: {
+    fontFamily: fonts.sans.regular,
     fontSize: 13,
     color: c.muted,
   },
@@ -1262,12 +1279,14 @@ const useStyles = createThemedStyles((c) => ({
     opacity: 0.6,
   },
   zeroRowIcon: {
+    fontFamily: fonts.sans.regular,
     fontSize: 18,
     color: c.muted,
     width: 24,
     textAlign: "center",
   },
   zeroRowIconSpark: {
+    fontFamily: fonts.sans.regular,
     fontSize: 16,
     color: c.accent,
     opacity: 0.65,
@@ -1275,6 +1294,7 @@ const useStyles = createThemedStyles((c) => ({
     textAlign: "center",
   },
   zeroRowText: {
+    fontFamily: fonts.sans.regular,
     flex: 1,
     fontSize: 15,
     color: c.ink,
@@ -1284,10 +1304,12 @@ const useStyles = createThemedStyles((c) => ({
     padding: 4,
   },
   zeroRowRemoveText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 12,
     color: c.muted,
   },
   zeroEmptyText: {
+    fontFamily: fonts.sans.regular,
     fontSize: 14,
     color: c.muted,
     lineHeight: 20,

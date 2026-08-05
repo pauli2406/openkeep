@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts, text } from "../typography";
 
 export function Screen({
   title,
@@ -26,7 +27,6 @@ export function Screen({
   contentContainerStyle,
   headerVariant = "default",
   includeTopSafeArea = true,
-  showEyebrow = false,
 }: {
   title: string;
   subtitle?: string;
@@ -36,10 +36,8 @@ export function Screen({
   contentContainerStyle?: ViewStyle;
   headerVariant?: "default" | "compact";
   includeTopSafeArea?: boolean;
-  showEyebrow?: boolean;
 }) {
   const styles = useStyles();
-  const { t } = useI18n();
   const scrollRef = useRef<ScrollView>(null);
 
   useScrollToTop(scrollRef);
@@ -49,11 +47,6 @@ export function Screen({
     <View style={[styles.content, contentContainerStyle]}>
       <View style={[styles.headerRow, compact ? styles.headerRowCompact : null]}>
         <View style={styles.headerTextWrap}>
-          {showEyebrow ? (
-            <Text style={[styles.eyebrow, compact ? styles.eyebrowCompact : null]}>
-              {t("app.brandMobile")}
-            </Text>
-          ) : null}
           <Text style={[styles.title, compact ? styles.titleCompact : null]}>{title}</Text>
           {subtitle ? <Text style={[styles.subtitle, compact ? styles.subtitleCompact : null]}>{subtitle}</Text> : null}
         </View>
@@ -346,56 +339,32 @@ const useStyles = createThemedStyles((c) => ({
   headerTextWrap: {
     flex: 1,
   },
-  eyebrow: {
-    color: c.accent,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginBottom: 2,
-  },
-  eyebrowCompact: {
-    fontSize: 10,
-    letterSpacing: 1.2,
-    marginBottom: 2,
-  } satisfies TextStyle,
   title: {
-    fontSize: 32,
-    lineHeight: 37,
-    fontWeight: "800",
+    ...text.screenTitle,
     color: c.ink,
-    letterSpacing: -0.8,
   },
   titleCompact: {
-    fontSize: 25,
-    lineHeight: 29,
-    letterSpacing: -0.5,
+    ...text.barTitle,
   } satisfies TextStyle,
   subtitle: {
+    ...text.meta,
     marginTop: 4,
-    fontSize: 15,
-    lineHeight: 24,
     color: c.muted,
     maxWidth: 640,
   },
   subtitleCompact: {
     marginTop: 3,
-    fontSize: 14,
-    lineHeight: 21,
   } satisfies TextStyle,
   sectionHeader: {
     gap: 5,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "800",
+    ...text.screenTitle,
     color: c.ink,
-    letterSpacing: -0.3,
   },
   sectionHint: {
+    ...text.meta,
     color: c.muted,
-    fontSize: 13,
-    lineHeight: 18,
   },
   card: {
     backgroundColor: c.panel,
@@ -432,16 +401,19 @@ const useStyles = createThemedStyles((c) => ({
   },
   buttonText: {
     fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.1,
   },
   primaryButtonText: {
+    fontFamily: fonts.sans.regular,
     color: c.accentFillInk,
   },
   secondaryButtonText: {
+    fontFamily: fonts.sans.regular,
     color: c.accentSoftInk,
   },
   dangerButtonText: {
+    fontFamily: fonts.sans.regular,
     color: c.app,
   },
   loadingButtonText: {
@@ -452,12 +424,13 @@ const useStyles = createThemedStyles((c) => ({
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   input: {
+    fontFamily: fonts.sans.regular,
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
@@ -493,20 +466,24 @@ const useStyles = createThemedStyles((c) => ({
   },
   pillText: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   pillTextDefault: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
   },
   pillTextSuccess: {
+    fontFamily: fonts.sans.regular,
     color: c.green,
   },
   pillTextWarning: {
+    fontFamily: fonts.sans.regular,
     color: c.amber,
   },
   pillTextDanger: {
+    fontFamily: fonts.sans.regular,
     color: c.red,
   },
   emptyCard: {
@@ -514,12 +491,11 @@ const useStyles = createThemedStyles((c) => ({
     paddingVertical: 32,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: "800",
+    ...text.screenTitle,
     color: c.ink,
-    letterSpacing: -0.3,
   },
   emptyBody: {
+    fontFamily: fonts.sans.regular,
     marginTop: 10,
     textAlign: "center",
     color: c.muted,
@@ -527,11 +503,11 @@ const useStyles = createThemedStyles((c) => ({
     maxWidth: 320,
   },
   errorTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+    ...text.barTitle,
     color: c.red,
   },
   errorBody: {
+    fontFamily: fonts.sans.regular,
     color: c.ink,
     lineHeight: 21,
   },
@@ -548,11 +524,8 @@ const useStyles = createThemedStyles((c) => ({
     transform: [{ scale: 0.98 }],
   },
   metricLabel: {
-    fontSize: 11,
-    fontWeight: "800",
+    ...text.sectionLabel,
     color: c.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   metricBottomRow: {
     flexDirection: "row",
@@ -560,10 +533,8 @@ const useStyles = createThemedStyles((c) => ({
     justifyContent: "space-between",
   },
   metricValue: {
-    fontSize: 30,
-    fontWeight: "800",
+    ...text.statValue,
     color: c.ink,
-    letterSpacing: -0.8,
   },
   metricChevron: {
     width: 24,
@@ -576,7 +547,7 @@ const useStyles = createThemedStyles((c) => ({
   metricChevronText: {
     color: c.accent,
     fontSize: 18,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     marginTop: -2,
   },
 }));

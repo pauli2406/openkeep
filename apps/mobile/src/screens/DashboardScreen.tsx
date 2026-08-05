@@ -12,6 +12,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts, text } from "../typography";
 import {
   formatCurrency,
   formatDate,
@@ -99,14 +100,14 @@ const useTrendStyles = createThemedStyles((c) => ({
   eyebrow: {
     color: c.muted,
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   title: {
     color: c.ink,
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: -0.3,
   },
   chartScroll: {
@@ -119,11 +120,10 @@ const useTrendStyles = createThemedStyles((c) => ({
     gap: 4,
   },
   yearLabel: {
-    color: c.muted,
+    ...text.numeric,
     fontSize: 9,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
+    lineHeight: 13,
+    color: c.muted,
     marginBottom: 2,
   },
   yearPlaceholder: {
@@ -141,16 +141,16 @@ const useTrendStyles = createThemedStyles((c) => ({
     backgroundColor: c.accentFill,
   },
   monthLabel: {
-    color: c.muted,
+    ...text.numeric,
     fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
+    lineHeight: 14,
+    color: c.muted,
   },
   countLabel: {
-    color: c.muted,
+    ...text.numericStrong,
     fontSize: 10,
-    fontWeight: "700",
+    lineHeight: 14,
+    color: c.muted,
   },
 }));
 
@@ -237,14 +237,14 @@ const useClusterStyles = createThemedStyles((c) => ({
   eyebrow: {
     color: c.muted,
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   title: {
     color: c.ink,
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: -0.3,
   },
   scroll: {
@@ -269,16 +269,15 @@ const useClusterStyles = createThemedStyles((c) => ({
     alignItems: "center",
   },
   docCount: {
-    color: c.muted,
+    ...text.numeric,
     fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
+    lineHeight: 14,
+    color: c.muted,
   },
   name: {
     color: c.ink,
     fontSize: 16,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 21,
     letterSpacing: -0.2,
   },
@@ -304,7 +303,7 @@ const useClusterStyles = createThemedStyles((c) => ({
   typePillText: {
     color: c.muted,
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
   },
   cardFooter: {
     flexDirection: "row",
@@ -313,14 +312,12 @@ const useClusterStyles = createThemedStyles((c) => ({
     marginTop: 2,
   },
   footerDate: {
+    ...text.numericMeta,
     color: c.muted,
-    fontSize: 12,
-    fontWeight: "600",
   },
   footerAmount: {
+    ...text.amount,
     color: c.ink,
-    fontSize: 13,
-    fontWeight: "800",
   },
 }));
 
@@ -444,19 +441,19 @@ const useTaskStyles = createThemedStyles((c) => ({
   correspondent: {
     color: c.ink,
     fontSize: 14,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
   },
   docType: {
     color: c.muted,
     fontSize: 11,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   title: {
     color: c.ink,
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 22,
   },
   metaRow: {
@@ -472,16 +469,13 @@ const useTaskStyles = createThemedStyles((c) => ({
     gap: 3,
   },
   metaLabel: {
+    ...text.sectionLabel,
     color: c.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
   },
   metaValue: {
     color: c.ink,
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
   },
   footerRow: {
     flexDirection: "row",
@@ -492,7 +486,7 @@ const useTaskStyles = createThemedStyles((c) => ({
   deadline: {
     color: c.muted,
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
   },
   doneButton: {
     flexDirection: "row",
@@ -512,7 +506,7 @@ const useTaskStyles = createThemedStyles((c) => ({
   doneText: {
     color: c.accent,
     fontSize: 13,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
   },
 }));
 
@@ -581,18 +575,19 @@ const useDocStyles = createThemedStyles((c) => ({
     flex: 1,
     color: c.muted,
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   title: {
     color: c.ink,
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 23,
     letterSpacing: -0.2,
   },
   helper: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 13,
     lineHeight: 18,
@@ -604,6 +599,7 @@ const useDocStyles = createThemedStyles((c) => ({
     gap: 8,
   },
   detail: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 13,
     lineHeight: 18,
@@ -682,7 +678,6 @@ export function DashboardScreen() {
     <Screen
       title={t("dashboard.screen.title")}
       subtitle={t("dashboard.screen.subtitle")}
-      showEyebrow
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (
@@ -795,6 +790,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 16,
   },
   loadingText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     lineHeight: 20,
   },
@@ -811,14 +807,14 @@ const useStyles = createThemedStyles((c) => ({
   sectionEyebrow: {
     color: c.muted,
     fontSize: 10,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
   sectionTitle: {
     color: c.ink,
     fontSize: 20,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: -0.3,
   },
 }));

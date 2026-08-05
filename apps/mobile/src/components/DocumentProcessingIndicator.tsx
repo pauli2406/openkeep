@@ -3,6 +3,7 @@ import type { ArchiveDocument } from "../lib";
 import { getDocumentProcessingLabel, isDocumentProcessing } from "../document-processing";
 import { useI18n } from "../i18n";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts } from "../typography";
 
 export function DocumentProcessingIndicator({
   document,
@@ -51,7 +52,7 @@ const useStyles = createThemedStyles((c) => ({
   label: {
     color: c.accent,
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },

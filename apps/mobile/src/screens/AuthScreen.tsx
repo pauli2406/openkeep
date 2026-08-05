@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import { createThemedStyles } from "../theme";
+import { fonts } from "../typography";
 
 export function AuthScreen() {
   const styles = useStyles();
@@ -133,23 +134,25 @@ const useStyles = createThemedStyles((c) => ({
   introBadgeText: {
     color: c.accent,
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     letterSpacing: 0.7,
     textTransform: "uppercase",
   },
   introText: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 14,
     lineHeight: 21,
   },
   sectionHint: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     lineHeight: 18,
   },
   error: {
     color: c.red,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     lineHeight: 20,
     backgroundColor: "#f8e2de",
     borderRadius: 16,

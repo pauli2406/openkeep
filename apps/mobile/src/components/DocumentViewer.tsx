@@ -15,6 +15,7 @@ import Pdf, { type PdfRef } from "react-native-pdf";
 import { Buffer } from "buffer";
 import { useI18n } from "../i18n";
 import { createThemedStyles, useColors } from "../theme";
+import { fonts } from "../typography";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -190,7 +191,7 @@ const useProgressStyles = createThemedStyles((c) => ({
   },
   label: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
   },
 }));
@@ -303,7 +304,7 @@ const useNavStyles = createThemedStyles((c) => ({
   },
   pageText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   fullscreenButton: {
@@ -732,7 +733,7 @@ const useStyles = createThemedStyles((c) => ({
   loadingText: {
     color: c.muted,
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
   },
   fallbackContainer: {
     alignItems: "center",
@@ -751,16 +752,17 @@ const useStyles = createThemedStyles((c) => ({
   },
   fallbackIconText: {
     fontSize: 11,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.muted,
     letterSpacing: 0.5,
   },
   fallbackTitle: {
     fontSize: 17,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
     color: c.ink,
   },
   fallbackBody: {
+    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 13,
     textAlign: "center",
@@ -770,7 +772,7 @@ const useStyles = createThemedStyles((c) => ({
   errorText: {
     color: c.red,
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sans.semibold,
     textAlign: "center",
     maxWidth: 280,
   },
@@ -792,7 +794,7 @@ const useStyles = createThemedStyles((c) => ({
   shareButtonText: {
     color: c.accent,
     fontSize: 14,
-    fontWeight: "800",
+    fontFamily: fonts.sans.semibold,
   },
   pdfContainer: {
     alignItems: "center",

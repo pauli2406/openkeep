@@ -9,6 +9,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
 import { I18nProvider, useI18n } from "./src/i18n";
@@ -24,6 +25,7 @@ import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierSc
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { createThemedStyles, useColors } from "./src/theme";
+import { fontAssets, text } from "./src/typography";
 
 export type AppStackParamList = {
   Home: undefined;
@@ -134,7 +136,7 @@ function HomeTabs() {
   );
 }
 
-function AppNavigator() {
+function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   const auth = useAuth();
@@ -143,7 +145,9 @@ function AppNavigator() {
 
   const hasCachedDocuments = offline.cacheSummary.documentCount > 0;
 
-  if (auth.isLoading || !offline.isReady) {
+  // The type scale is only right once the bundled faces are registered, so the
+  // splash keeps the app behind the same gate that already waits on auth.
+  if (!fontsLoaded || auth.isLoading || !offline.isReady) {
     return (
       <SafeAreaView style={styles.loadingRoot}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -237,6 +241,7 @@ function Root() {
 function AppShell() {
   const colors = useColors();
   const auth = useAuth();
+  const [fontsLoaded] = useFonts(fontAssets);
   const theme = useMemo(
     () => ({
       ...DefaultTheme,
@@ -258,7 +263,7 @@ function AppShell() {
       <OfflineArchiveProvider>
         <NavigationContainer theme={theme}>
           <StatusBar style="dark" />
-          <AppNavigator />
+          <AppNavigator fontsLoaded={fontsLoaded} />
         </NavigationContainer>
       </OfflineArchiveProvider>
     </I18nProvider>
@@ -280,12 +285,11 @@ const useStyles = createThemedStyles((c) => ({
     padding: 24,
   },
   loadingTitle: {
-    fontSize: 24,
-    fontWeight: "700",
+    ...text.screenTitle,
     color: c.ink,
   },
   loadingText: {
-    fontSize: 15,
+    ...text.meta,
     color: c.muted,
     textAlign: "center",
   },
@@ -297,8 +301,7 @@ const useStyles = createThemedStyles((c) => ({
     paddingTop: 10,
   },
   tabBarLabel: {
-    fontSize: 11,
-    fontWeight: "700",
+    ...text.small,
     letterSpacing: 0.3,
   },
   fab: {
