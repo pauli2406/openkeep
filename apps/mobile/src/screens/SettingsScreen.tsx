@@ -1,4 +1,4 @@
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
@@ -151,12 +151,21 @@ export function SettingsScreen() {
   }
 
   function handleSelectAppearance() {
-    Alert.alert(t("settings.appearance"), t("settings.selectAppearance"), [
+    // Android's Alert renders at most three buttons, and three options plus a
+    // cancel is four. There the back gesture dismisses instead.
+    const choices = [
       { text: t("settings.appearanceSystem"), onPress: () => appearance.setPreference("system") },
       { text: t("settings.appearanceLight"), onPress: () => appearance.setPreference("light") },
       { text: t("settings.appearanceDark"), onPress: () => appearance.setPreference("dark") },
-      { text: t("settings.cancel"), style: "cancel" },
-    ]);
+    ];
+    Alert.alert(
+      t("settings.appearance"),
+      t("settings.selectAppearance"),
+      Platform.OS === "android"
+        ? choices
+        : [...choices, { text: t("settings.cancel"), style: "cancel" as const }],
+      { cancelable: true },
+    );
   }
 
   function labelForLanguage(language: "en" | "de") {

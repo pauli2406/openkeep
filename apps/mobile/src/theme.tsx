@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Appearance as RNAppearance,
   StyleSheet,
   useColorScheme,
   type ImageStyle,
@@ -225,6 +226,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setStoredPreference(next);
     void AsyncStorage.setItem(PREFERENCE_KEY, next).catch(() => {});
   }, []);
+
+  /**
+   * React styles are not the whole app: alerts, keyboards and pickers are native
+   * and follow the OS unless told otherwise. `setColorScheme(null)` hands them
+   * back to the system, which is what `system` means.
+   */
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+    RNAppearance.setColorScheme(preference === "system" ? null : preference);
+  }, [preference, isReady]);
 
   const value = useMemo<Appearance>(() => {
     const resolved: ThemeName =
