@@ -41,6 +41,10 @@ if (process.env.OPENKEEP_VISUAL === "1") {
     ["expo-sqlite", path.join(stubs, "sqlite.ts")],
     ["expo-secure-store", path.join(stubs, "secure-store.ts")],
     ["pdf-lib", path.join(stubs, "pdf-lib.ts")],
+    // For the web platform Metro reads `browser`/`module`/`main`, never
+    // `react-native` — so the token package resolves to its gitignored `dist/`
+    // and a clean checkout fails to bundle. The source is the same data.
+    ["@openkeep/tokens", path.resolve(workspaceRoot, "packages/tokens/src/index.ts")],
   ]);
   const moduleAliases = new Map([
     [path.resolve(projectRoot, "src/auth"), path.join(stubs, "auth.tsx")],
