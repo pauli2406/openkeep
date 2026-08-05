@@ -89,6 +89,8 @@ The Documents area is the main archive browser. It supports three views:
 
 ### Search
 
+On mobile this tab is called `Chat`; see [Mobile App](./mobile-app.md).
+
 Search combines keyword matching, semantic search, and structured archive answers. Use it for both exploratory questions and operational questions like open invoices, pending review items, or expiring contracts.
 
 ### Review
@@ -125,6 +127,7 @@ looks like the scan.
 - Learn search, summaries, and Q&A in [Search and AI](./search-and-ai.md)
 - Learn review and manual correction workflows in [Review and Corrections](./review-and-corrections.md)
 - Learn admin tools in [Settings and Admin](./settings-and-admin.md)
+- Learn the phone app in [Mobile App](./mobile-app.md)
 
 ## Supported Upload Types
 

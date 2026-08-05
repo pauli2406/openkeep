@@ -19,6 +19,7 @@ Start here if you are using OpenKeep to manage your archive.
 - [Search and AI](./user/search-and-ai.md)
 - [Review and Corrections](./user/review-and-corrections.md)
 - [Settings and Admin](./user/settings-and-admin.md)
+- [Mobile App](./user/mobile-app.md)
 - [FAQ](./user/faq.md)
 
 ### Technical Documentation
@@ -62,7 +63,8 @@ Supporting reference material:
 3. [Search and AI](./user/search-and-ai.md)
 4. [Review and Corrections](./user/review-and-corrections.md)
 5. [Settings and Admin](./user/settings-and-admin.md)
-6. [FAQ](./user/faq.md)
+6. [Mobile App](./user/mobile-app.md)
+7. [FAQ](./user/faq.md)
 
 ### If you are building OpenKeep
 

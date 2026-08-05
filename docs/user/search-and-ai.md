@@ -105,6 +105,11 @@ source document.
 Only extracted text is ever sent to the chat provider — never the original
 file.
 
+On mobile the same markers open the cited document at the cited page with the
+quoted passage highlighted above it. Sources that are not in the device's
+offline copy are marked as such while the archive is unreachable. See
+[Mobile App](./mobile-app.md).
+
 ## How to Judge an AI Answer
 
 Treat AI answers as a convenience layer over your documents, not as the final authority.

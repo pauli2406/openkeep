@@ -45,6 +45,20 @@ Correct anything that is wrong, then choose:
   extraction looks wrong or you changed the provider
 - `Skip` — moves on without deciding
 
+## On Mobile
+
+The phone app presents the same queue one document at a time: the page above,
+only the fields that need confirming below it, and `Confirm` and `Skip` pinned
+at the bottom. Swiping the card away also skips.
+
+Either action can be taken back from the `Back` bar that appears for a few
+seconds afterwards. A confirmation is not sent until that window closes, so
+undoing it changes nothing on the server and starts no reprocessing.
+
+`Show in document` opens the page at the line a value was read from. Editing
+values rather than confirming them happens on the document page under
+`Details`. See [Mobile App](./mobile-app.md).
+
 ## Keyboard
 
 The queue is built to be worked through without the mouse:
