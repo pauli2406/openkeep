@@ -15,45 +15,146 @@ it, and the app has never been tested on a device.
 
 ## One-time setup
 
-### Apple side
+Four things, in this order. Nothing here is repeated per release, and none of it
+puts an Apple credential in this repository — CI never sees your Apple account.
 
-1. **Register the app.** In App Store Connect, create an app for the bundle
-   identifier `com.openkeep.mobile` (team `6DTWU4679K`). The app record has to
-   exist before anything can be uploaded to it.
-2. **Note the app id.** App Store Connect → your app → App Information → General →
-   **Apple ID**. It is a number, not a bundle identifier, and it is not a secret.
-3. **Create an App Store Connect API key.** Users and Access → Integrations → App
-   Store Connect API → generate a key with the **App Manager** role. Download the
-   `.p8` once; it cannot be downloaded again.
-4. **Answer App Privacy** for the app record. OpenKeep stores documents on the
-   archive the user connects to; the app itself collects nothing. Camera use is
-   already declared in the binary (`NSCameraUsageDescription`), and
-   `ITSAppUsesNonExemptEncryption: false` means no export-compliance question per
-   build.
+**Prerequisites:** an active Apple Developer Program membership on team
+`6DTWU4679K`, and an Expo account that owns the project
+(`extra.eas.projectId` in `apps/mobile/app.config.js`).
 
-### EAS side
+### 1. Expo access token
 
-Run this once from `apps/mobile`, logged in as the account that owns the Expo
-project:
+CI authenticates to EAS with a token, and nothing else.
+
+1. Open **[expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens)**
+   — the dashboard path is Settings → Access tokens.
+2. **Create token**, name it for where it will live (`github-actions-openkeep`),
+   and copy the value. It is shown once.
+3. Put it in the repository:
+
+   ```bash
+   # Prompts with hidden input, so the value never reaches your shell history.
+   gh secret set EXPO_TOKEN --repo pauli2406/openkeep
+   ```
+
+4. Check it works:
+
+   ```bash
+   cd apps/mobile
+   EXPO_TOKEN='<paste>' pnpm exec eas whoami
+   ```
+
+A personal token acts on your behalf everywhere you have access. For a shared
+project, prefer a **robot user** with a role scoped to builds (Expo dashboard →
+account settings → robot users); it cannot sign in, only hold a token. Either kind
+is revoked from the same access-tokens page without touching your password.
+
+### 2. The App Store Connect app record
+
+Nothing can be uploaded to an app that does not exist yet.
+
+1. Make sure the bundle identifier is registered: **developer.apple.com →
+   Certificates, Identifiers & Profiles → Identifiers → + → App IDs → App** with
+   `com.openkeep.mobile`. (EAS registers it for you during the first build if you
+   let it manage credentials — step 3 — so this is only needed if you would rather
+   do it by hand.)
+2. **App Store Connect → Apps → + → New App**: platform iOS, the name, primary
+   language, the bundle identifier from above, an SKU of your choosing.
+3. Read the app id off **App Information → General → Apple ID**. It is a number,
+   not the bundle identifier, and it is not a secret:
+
+   ```bash
+   gh variable set ASC_APP_ID --repo pauli2406/openkeep --body '1234567890'
+   ```
+
+   Alternatively put it in `submit.production.ios.ascAppId` in
+   `apps/mobile/eas.json`; the workflow accepts either and fails with an explicit
+   message if it finds neither.
+
+### 3. Signing credentials — let EAS generate them
 
 ```bash
-pnpm exec eas credentials
+cd apps/mobile
+pnpm exec eas credentials --platform ios
 ```
 
-Pick iOS → the production profile, and let EAS **manage the distribution
-certificate and the provisioning profile**. Upload the `.p8` App Store Connect API
-key in the same place. From then on nothing Apple-related lives in this repository
-— no certificates, no keys, no `match` repo.
+Choose the **production** profile, sign in with your Apple ID (a 2FA code is asked
+for once, interactively — this is why the step is not in CI), and let EAS create
+and store:
 
-### Repository side
+- the **distribution certificate** — about you as a developer, not about the app
+- the **provisioning profile** — about this app
 
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `EXPO_TOKEN` | An Expo access token with build permissions (expo.dev → account settings → access tokens). Prefer a robot account over a personal token. |
-| Variable | `ASC_APP_ID` | The App Store Connect Apple ID from step 2. Alternatively put it in `submit.production.ios.ascAppId` in `apps/mobile/eas.json`. |
+Both then live on EAS. There is no certificate in git, no keychain to export, no
+`match` repository to maintain.
 
-The workflow fails with an explicit message if either is missing, before it spends
-a build.
+### 4. App Store Connect API key — let EAS generate that too
+
+In the same `eas credentials --platform ios` session:
+
+1. **App Store Connect: Manage your API Key**
+2. **Set up your project to use an API Key for EAS Submit**
+
+EAS creates the key against your account and keeps it. That is all `--auto-submit`
+needs.
+
+If you would rather create the key yourself: App Store Connect → **Users and
+Access → Integrations → App Store Connect API**, generate a team key with the
+**App Manager** role, download the `.p8` **once** (Apple will not offer it again),
+and note the Key ID and Issuer ID. Then either upload it in the same
+`eas credentials` menu, or set `ascApiKeyPath`, `ascApiKeyId` and
+`ascApiKeyIssuerId` under `submit.production.ios` in `eas.json` — in which case
+keep the `.p8` out of git. Apple moves this part of the UI around; their
+[API key documentation](https://developer.apple.com/documentation/appstoreconnectapi/creating-api-keys-for-app-store-connect-api)
+is the authority if the menu names have changed.
+
+### 5. App Privacy and a TestFlight group
+
+Before a build can be distributed, App Store Connect wants:
+
+- **App Privacy** answers on the app record. OpenKeep stores documents on the
+  archive the user connects to; the app itself collects nothing. Camera use is
+  already declared in the binary (`NSCameraUsageDescription`), and
+  `ITSAppUsesNonExemptEncryption: false` means there is no export-compliance
+  question per build.
+- an **internal TestFlight group** with at least yourself in it, so an uploaded
+  build reaches a device.
+
+### Check the setup without spending a build
+
+The free plan allows fifteen iOS builds a month, so verify everything that can be
+verified for free first:
+
+```bash
+cd apps/mobile
+export EXPO_TOKEN='<paste>'
+
+pnpm exec eas whoami                                        # token works
+pnpm exec eas config --platform ios --profile production     # profile resolves
+pnpm exec eas credentials --platform ios                     # cert + profile + API key are there
+pnpm exec eas build:list --platform ios --limit 5            # project is reachable
+```
+
+Then take the first build with submission turned off — signing gets proven without
+touching App Store Connect:
+
+```bash
+gh workflow run "Release iOS" --repo pauli2406/openkeep \
+  -f version=0.1.0 -f ref=main -f submit=false
+gh run watch --repo pauli2406/openkeep
+```
+
+`0.1.0` is what `app.config.js` says today, so the version check passes without a
+bump.
+
+### What ends up where
+
+| Where | What |
+|---|---|
+| GitHub secret `EXPO_TOKEN` | the only credential in this repository's CI |
+| GitHub variable `ASC_APP_ID` | the App Store Connect app id (not secret) |
+| EAS | distribution certificate, provisioning profile, App Store Connect API key, and the iOS build number |
+| This repository | the user-facing `version`, and nothing else about releasing |
 
 ## Releasing
 
