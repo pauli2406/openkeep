@@ -17,6 +17,7 @@ This section documents how to deploy, configure, monitor, and maintain OpenKeep.
 5. [Runbooks](./runbooks.md)
 6. [Backup, Restore, and Portability](./backup-restore-and-portability.md)
 7. [Monitoring and Health](./monitoring-and-health.md)
+8. [iOS Releases](./mobile-releases.md)
 
 ## Scope
 

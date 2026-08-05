@@ -1,0 +1,224 @@
+name: Release iOS
+
+# Manually triggered iOS release, shaped like the server release workflow:
+#   1. resolves the commit, refuses anything that is not on main
+#   2. refuses a commit whose CI did not pass — the build is not a test run
+#   3. checks the marketing version in app.config.js matches the requested one
+#   4. builds on EAS with the `production` profile and submits to TestFlight
+#   5. creates an annotated git tag + GitHub Release
+#
+# The build number is not in this repo: `eas.json` sets
+# `appVersionSource: "remote"`, so EAS increments `ios.buildNumber` on its own
+# side for every production build. Only the user-facing version lives in git, and
+# it is bumped in a normal PR — this workflow verifies it rather than writing it,
+# so a release never rewrites the source it is releasing.
+#
+# Required repository secrets:
+#   EXPO_TOKEN     Expo access token with build permissions (expo.dev → account
+#                  settings → access tokens). Everything Apple-side — the
+#                  distribution certificate, the provisioning profile and the App
+#                  Store Connect API key — is stored in EAS, not here.
+# Required, either in eas.json or as a repository variable:
+#   ASC_APP_ID     App Store Connect app id (ASC → your app → App Information →
+#                  General → Apple ID). Set it as a repo variable to keep eas.json
+#                  free of it, or put it in `submit.production.ios.ascAppId`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Marketing version, e.g. 0.2.0 (must already match app.config.js)"
+        required: true
+        type: string
+      ref:
+        description: "Commit SHA, branch or tag to release"
+        required: false
+        default: main
+        type: string
+      submit:
+        description: "Submit to TestFlight after the build"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-mobile
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and submit
+    runs-on: ubuntu-latest
+    # The free EAS plan uses a low-priority queue, so the wait can be long. The
+    # runner is only polling; ubuntu minutes are free for this public repository.
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          echo "${{ inputs.version }}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::version must look like 1.2.3 (no leading v — the tag gets the prefix)"; exit 1; }
+
+      - name: Resolve commit
+        id: sha
+        run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse a commit that is not on main
+        env:
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          git fetch origin main --quiet
+          git merge-base --is-ancestor "$SHA" origin/main \
+            || { echo "::error::$SHA is not an ancestor of origin/main — release from main"; exit 1; }
+
+      - name: Refuse a commit whose CI did not pass
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          # `CI` is the aggregate job every other job feeds into (see ci.yml), so
+          # one lookup covers lint, tests, both visual suites and the secret scan.
+          conclusion=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" \
+            --jq '[.check_runs[] | select(.name == "CI")] | sort_by(.completed_at) | last | .conclusion // "missing"')
+          echo "CI on $SHA: $conclusion"
+          [ "$conclusion" = "success" ] \
+            || { echo "::error::CI is '$conclusion' for $SHA — a release build is not the place to find out"; exit 1; }
+
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: release-mobile
+
+      # `expo config` resolves app.config.js the way a build does, so this also
+      # catches a config that no longer evaluates.
+      - name: Check the app version matches the release
+        id: appversion
+        working-directory: apps/mobile
+        env:
+          WANT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          have=$(pnpm exec expo config --json --type public | node -e \
+            "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).version))")
+          echo "app.config.js version: $have"
+          if [ "$have" != "$WANT" ]; then
+            echo "::error::app.config.js says $have but you asked to release $WANT. Bump \`version\` in apps/mobile/app.config.js in a PR first — this workflow does not rewrite the commit it releases."
+            exit 1
+          fi
+
+      - name: Resolve the App Store Connect app id
+        working-directory: apps/mobile
+        env:
+          ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+        run: |
+          set -euo pipefail
+          in_config=$(node -p "require('./eas.json').submit?.production?.ios?.ascAppId ?? ''")
+          if [ -n "$in_config" ]; then
+            echo "using ascAppId from eas.json"
+          elif [ -n "$ASC_APP_ID" ]; then
+            # Written here rather than committed, so the id can live in repository
+            # variables next to the rest of the release configuration.
+            node -e '
+              const fs = require("fs");
+              const easJson = JSON.parse(fs.readFileSync("eas.json", "utf8"));
+              easJson.submit ??= {};
+              easJson.submit.production ??= {};
+              easJson.submit.production.ios = {
+                ...(easJson.submit.production.ios ?? {}),
+                ascAppId: process.env.ASC_APP_ID,
+              };
+              fs.writeFileSync("eas.json", `${JSON.stringify(easJson, null, 2)}\n`);
+            '
+            echo "patched eas.json with ASC_APP_ID from repository variables"
+          else
+            echo "::error::no App Store Connect app id. Set the ASC_APP_ID repository variable, or add submit.production.ios.ascAppId to apps/mobile/eas.json. Find it in App Store Connect → your app → App Information → General → Apple ID."
+            exit 1
+          fi
+
+      - name: Build on EAS and submit to TestFlight
+        id: build
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::EXPO_TOKEN secret is not set"; exit 1
+          fi
+
+          submit=""
+          if [ "${{ inputs.submit }}" = "true" ]; then
+            submit="--auto-submit"
+          fi
+
+          # `--json` so the build id and URL can go in the summary; the CLI still
+          # waits for the build to finish, and with --auto-submit for the upload.
+          set +e
+          pnpm exec eas build \
+            --platform ios \
+            --profile production \
+            --non-interactive \
+            --json \
+            $submit | tee /tmp/eas-build.json
+          status=${PIPESTATUS[0]}
+          set -e
+
+          # Extraction must not be what fails a release that actually built, so
+          # every field is optional.
+          id=$(node -p "try{const b=require('/tmp/eas-build.json');(Array.isArray(b)?b[0]:b).id ?? ''}catch(e){''}" 2>/dev/null || true)
+          url=$(node -p "try{const b=require('/tmp/eas-build.json');(Array.isArray(b)?b[0]:b).buildDetailsPageUrl ?? ''}catch(e){''}" 2>/dev/null || true)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+          exit "$status"
+
+      - name: Create git tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: mobile-v${{ inputs.version }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          set -euo pipefail
+          # The mobile line is tagged `mobile-v*` so it cannot collide with the
+          # server's `v*` tags in the same repository.
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "iOS release $TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" --target "$SHA" --generate-notes \
+            --title "iOS $TAG" \
+            --notes-start-tag "$(git tag --list 'mobile-v*' --sort=-v:refname | sed -n 2p)" \
+            || gh release create "$TAG" --target "$SHA" --generate-notes --title "iOS $TAG"
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ steps.sha.outputs.value }}
+          BUILD_URL: ${{ steps.build.outputs.url }}
+          BUILD_ID: ${{ steps.build.outputs.id }}
+        run: |
+          {
+            echo "## iOS $VERSION"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$SHA\` |"
+            echo "| Tag | \`mobile-v$VERSION\` |"
+            echo "| Submitted | ${{ inputs.submit }} |"
+            echo "| Build | ${BUILD_URL:-see https://expo.dev/accounts} |"
+            echo "| Build id | \`${BUILD_ID:-unknown}\` |"
+            echo
+            echo "The build number was assigned by EAS (\`appVersionSource: remote\`)."
+            echo "TestFlight processing takes a few minutes after the upload; App Store"
+            echo "release stays a deliberate step in App Store Connect."
+            echo
+            echo "**Rollback:** there is no rollback for a shipped binary. Expire the"
+            echo "TestFlight build, or release the previous version from App Store Connect."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,6 @@ const IS_DEV = process.env.APP_VARIANT === 'development';
 
 export default {
   "expo": {
-    "name": "OpenKeep",
     name: IS_DEV ? 'OpenKeep (Dev)' : 'OpenKeep',
     "slug": "openkeep-mobile",
     "scheme": "openkeep",
@@ -22,13 +21,6 @@ export default {
       "expo-document-picker",
       "expo-font"
     ],
-    "build": {
-      "development": {
-        "ios": {
-          "simulator": true
-        }
-      }
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": IS_DEV ? "com.openkeep.mobile.dev" : "com.openkeep.mobile",

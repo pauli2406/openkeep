@@ -44,6 +44,7 @@ Start here if you are deploying or operating OpenKeep.
 
 - [Operations Overview](./operations/README.md)
 - [Deployment Guide](./operations/deployment-guide.md)
+- [iOS Releases](./operations/mobile-releases.md)
 - [Cloudflare Pages and Oracle Typesense](./operations/cloudflare-pages-and-oracle-typesense.md)
 - [Configuration Reference](./operations/configuration-reference.md)
 - [Runbooks](./operations/runbooks.md)
