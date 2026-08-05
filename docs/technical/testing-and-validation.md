@@ -211,3 +211,42 @@ For most product changes, the practical validation path is:
 - [Backend Notes](../backend.md)
 - [Manual Smoke Checklist](../phase-3-smoke.md)
 - [Runbooks](../operations/runbooks.md)
+
+## Mobile Unit and Component Tests
+
+`apps/mobile` runs Jest through `jest-expo`, in the repo's `pnpm test` pipeline:
+
+```bash
+pnpm --filter @openkeep/mobile test          # once
+pnpm --filter @openkeep/mobile test:watch    # while working
+```
+
+These are not screenshots. They cover the layer where the mobile redesign kept
+going wrong:
+
+| Suite | What it holds in place |
+|---|---|
+| `dates` | date-only values parse as local calendar dates; the suite runs in `America/Los_Angeles` so a UTC-midnight regression fails |
+| `document-state` | an active processing job outranks a stale `failed` status |
+| `passage` | prefix matching stays opt-in for chat quotes; review evidence needs the full value; the cited page is searched first |
+| `i18n` | both locales carry the same keys, once each, and every literal `t()` key resolves |
+| `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
+| `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
+| `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |
+
+Native modules with no JavaScript fallback are mocked in `jest.setup.js` — SQLite,
+the OS document scanner, the PDF view, the file viewer, secure storage. Screens
+mock `../auth` and `../offline-archive` at the module boundary; the screen's own
+logic is never mocked.
+
+Two constraints worth knowing before adding a suite:
+
+- A `QueryClient` created per test needs `gcTime: 0` and a `clear()` afterwards,
+  or its garbage-collection timer keeps the Jest worker alive.
+- Rendering a screen under fake timers fights the queue's `refetchInterval`.
+  Where a timed window has to be closed, unmount instead — leaving the screen
+  closes it too.
+
+What this does **not** cover: how a screen actually looks on a device. Nothing
+here would catch a clipped header, a wrong inset, or text that overflows at real
+font metrics.

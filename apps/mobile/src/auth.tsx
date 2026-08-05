@@ -354,10 +354,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       Object.assign(headers, cfAccessHeaders());
 
+      // `expo/fetch` types `body` as `BodyInit | undefined` while the ambient
+      // `RequestInit` these callers use allows `null`. The wrapper passes
+      // whatever it was given straight through, so it takes the init type of the
+      // fetch it calls rather than asserting the two agree.
       return expoFetch(resolveUrl(currentApiUrl, path), {
         ...init,
         headers,
-      });
+      } as Parameters<typeof expoFetch>[1]);
     },
     [apiUrl],
   );
