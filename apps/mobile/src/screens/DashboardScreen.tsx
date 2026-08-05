@@ -1,13 +1,14 @@
 import { useNavigation } from "@react-navigation/native";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
+import { AvatarButton } from "../components/AvatarButton";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { Panel, EmptyState, ErrorCard, Metric, Pill, Screen, SectionHeader } from "../components/ui";
-import { processingRefetchInterval } from "../document-processing";
+import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -620,23 +621,7 @@ export function DashboardScreen() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
-  const insightsQuery = useQuery({
-    queryKey: ["dashboard", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
-    queryFn: async () => {
-      if (shouldUseCache) {
-        return offline.loadCachedDashboard();
-      }
-
-      const response = await auth.authFetch("/api/dashboard/insights");
-      if (!response.ok) {
-        throw new Error(t("dashboard.screen.loadInsights"));
-      }
-      return (await response.json()) as DashboardInsights;
-    },
-    refetchInterval: shouldUseCache
-      ? false
-      : (query) => processingRefetchInterval(query.state.data, (data) => data?.recentDocuments),
-  });
+  const insightsQuery = useDashboardInsights();
 
   const completeMutation = useMutation({
     mutationFn: async (documentId: string) => {
@@ -677,6 +662,7 @@ export function DashboardScreen() {
   return (
     <Screen
       title={t("dashboard.screen.title")}
+      right={<AvatarButton />}
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (
@@ -700,7 +686,7 @@ export function DashboardScreen() {
             <Metric
               label={t("dashboard.screen.pendingReview")}
               value={data.stats.pendingReview}
-              onPress={() => navigation.navigate("Review")}
+              onPress={() => navigation.navigate("Home", { screen: "Review" } as never)}
             />
           </View>
           <View style={styles.metricGrid}>

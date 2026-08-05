@@ -24,24 +24,36 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { createThemedStyles, useColors } from "./src/theme";
-import { fontAssets, text } from "./src/typography";
+import { createThemedStyles, radii, useColors } from "./src/theme";
+import { fontAssets, fonts, text } from "./src/typography";
+import { useDashboardInsights } from "./src/hooks/useDashboardInsights";
 
 export type AppStackParamList = {
   Home: undefined;
   DocumentDetail: { documentId: string; title?: string };
-  Review: undefined;
   Scan: undefined;
+  Settings: undefined;
   Correspondents: undefined;
   CorrespondentDossier: { slug: string; name: string };
 };
 
+/** Review is a tab, not a stack screen — it is the daily job. */
 export type HomeTabParamList = {
-  Dashboard: undefined;
+  Today: undefined;
   Documents: undefined;
-  Search: undefined;
-  Settings: undefined;
+  Review: undefined;
+  Chat: undefined;
 };
+
+const TAB_ICONS: Record<keyof HomeTabParamList, string> = {
+  Today: "view-list-outline",
+  Documents: "file-multiple-outline",
+  Review: "check-circle-outline",
+  Chat: "message-outline",
+};
+
+/** Without the bottom inset. */
+const TAB_BAR_HEIGHT = 54;
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -52,10 +64,16 @@ function HomeTabs() {
   const styles = useStyles();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Dashboard");
+  const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Today");
   const { t } = useI18n();
+  const insights = useDashboardInsights();
 
-  const showFab = activeTab !== "Settings";
+  const pendingReview = insights.data?.stats.pendingReview ?? 0;
+  const totalDocuments = insights.data?.stats.totalDocuments ?? 0;
+
+  // The FAB sits above the tab bar everywhere except Review, where confirm and
+  // skip are the two primary actions and nothing may compete with them.
+  const showFab = activeTab !== "Review";
 
   return (
     <View style={styles.flex}>
@@ -71,65 +89,69 @@ function HomeTabs() {
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.muted,
+          tabBarInactiveTintColor: colors.faint,
           tabBarStyle: [
             styles.tabBar,
             {
-              height: 62 + insets.bottom,
-              paddingBottom: Math.max(insets.bottom, 10),
+              height: TAB_BAR_HEIGHT + insets.bottom,
+              paddingBottom: insets.bottom,
             },
           ],
           tabBarLabelStyle: styles.tabBarLabel,
-          tabBarIcon: ({ color, size }) => {
-            const iconMap: Record<keyof HomeTabParamList, string> = {
-              Dashboard: "view-dashboard-outline",
-              Documents: "file-document-outline",
-              Search: "text-box-search-outline",
-              Settings: "cog-outline",
-            };
-
-            return (
-              <MaterialCommunityIcons
-                name={iconMap[route.name] as never}
-                size={size}
-                color={color}
-              />
-            );
-          },
+          tabBarIcon: ({ color }) => (
+            <MaterialCommunityIcons
+              name={TAB_ICONS[route.name] as never}
+              size={21}
+              color={color}
+            />
+          ),
         })}
       >
         <Tabs.Screen
-          name="Dashboard"
+          name="Today"
           component={DashboardScreen}
-          options={{ title: t("tabs.dashboard"), tabBarLabel: t("tabs.dashboard") }}
+          options={{ title: t("tabs.today"), tabBarLabel: t("tabs.today") }}
         />
         <Tabs.Screen
           name="Documents"
           component={DocumentsScreen}
-          options={{ title: t("tabs.documents"), tabBarLabel: t("tabs.documents") }}
+          options={{
+            title: t("tabs.documents"),
+            tabBarLabel: t("tabs.documents"),
+            tabBarBadge: totalDocuments > 0 ? totalDocuments : undefined,
+            tabBarBadgeStyle: styles.countBadge,
+          }}
         />
         <Tabs.Screen
-          name="Search"
+          name="Review"
+          component={ReviewScreen}
+          options={{
+            title: t("tabs.review"),
+            tabBarLabel: t("tabs.review"),
+            // A dot, not a number: the count is already the first Today stat.
+            tabBarBadge: pendingReview > 0 ? "" : undefined,
+            tabBarBadgeStyle: styles.dotBadge,
+          }}
+        />
+        <Tabs.Screen
+          name="Chat"
           component={SearchScreen}
-          options={{ title: t("tabs.search"), tabBarLabel: t("tabs.search") }}
-        />
-        <Tabs.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: t("tabs.settings"), tabBarLabel: t("tabs.settings") }}
+          options={{ title: t("tabs.chat"), tabBarLabel: t("tabs.chat") }}
         />
       </Tabs.Navigator>
 
       {showFab ? (
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("screens.scanUpload")}
           onPress={() => navigation.navigate("Scan")}
           style={({ pressed }) => [
             styles.fab,
-            { bottom: 62 + insets.bottom + 14 },
+            { bottom: TAB_BAR_HEIGHT + insets.bottom + 12 },
             pressed ? styles.fabPressed : null,
           ]}
         >
-          <MaterialCommunityIcons name="camera-document" size={26} color={colors.accentFillInk} />
+          <MaterialCommunityIcons name="line-scan" size={23} color={colors.accentFillInk} />
         </Pressable>
       ) : null}
     </View>
@@ -197,8 +219,8 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
           options={{ title: "" }}
         />
         <Stack.Screen
-          name="Review"
-          component={ReviewScreen}
+          name="Settings"
+          component={SettingsScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
@@ -298,22 +320,39 @@ const useStyles = createThemedStyles((c) => ({
     textAlign: "center",
   },
   tabBar: {
-    backgroundColor: c.panel,
+    backgroundColor: c.bar,
+    borderTopWidth: 1,
     borderTopColor: c.border,
-    height: 72,
-    paddingBottom: 10,
-    paddingTop: 10,
+    paddingTop: 6,
   },
   tabBarLabel: {
-    ...text.small,
-    letterSpacing: 0.3,
+    fontFamily: fonts.sans.medium,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  countBadge: {
+    ...text.numeric,
+    fontSize: 9.5,
+    lineHeight: 13,
+    minWidth: 16,
+    height: 14,
+    borderRadius: radii.sm,
+    backgroundColor: c.raised,
+    color: c.dim,
+  },
+  dotBadge: {
+    minWidth: 7,
+    width: 7,
+    height: 7,
+    borderRadius: radii.pill,
+    backgroundColor: c.amber,
   },
   fab: {
     position: "absolute",
-    right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: c.accentFill,
     alignItems: "center",
     justifyContent: "center",

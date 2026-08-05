@@ -1,5 +1,6 @@
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
 import { Panel, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
@@ -137,6 +138,7 @@ const useSectionStyles = createThemedStyles((c) => ({
 export function SettingsScreen() {
   const colors = useColors();
   const styles = useStyles();
+  const navigation = useNavigation();
   const auth = useAuth();
   const offline = useOfflineArchive();
   const { t } = useI18n();
@@ -224,7 +226,7 @@ export function SettingsScreen() {
   }
 
   return (
-    <Screen title={t("settings.title")}>
+    <Screen title={t("settings.title")} onBack={() => navigation.goBack()}>
       {/* Account */}
       <SectionLabel label={t("settings.account")} />
       <Panel padded>
