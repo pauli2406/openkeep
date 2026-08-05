@@ -859,7 +859,9 @@ const useStyles = createThemedStyles((c) => ({
     padding: 16,
   },
   textContent: {
-    fontFamily: "monospace",
+    // The bundled face, not the platform keyword: `"monospace"` is Android-only,
+    // so a text preview rendered in the system font on iOS.
+    fontFamily: fonts.mono.regular,
     fontSize: 13,
     lineHeight: 20,
     color: c.ink,
