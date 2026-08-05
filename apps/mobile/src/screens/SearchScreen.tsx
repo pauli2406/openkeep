@@ -184,8 +184,14 @@ function TurnView({
               // open it rather than swallowing the tap.
               return true;
             }
-            const documentId = url.slice("/documents/".length);
-            const citation = citations.find((item) => item.documentId === documentId);
+            const [documentId, marker] = url.slice("/documents/".length).split("#c");
+            const index = marker ? Number(marker) : null;
+            const citation =
+              (index !== null && Number.isFinite(index)
+                ? citations.find(
+                    (item) => item.documentId === documentId && item.index === index,
+                  )
+                : undefined) ?? citations.find((item) => item.documentId === documentId);
             if (citation && (!cachedIds || cachedIds.has(citation.documentId))) {
               onOpenCitation(citation);
             }

@@ -835,7 +835,9 @@ export function linkifyCitations(
       return marker;
     }
     const pageSuffix = citation.pageFrom ? `, p.${citation.pageFrom}` : "";
-    return `[[${digits}${pageSuffix}]](/documents/${citation.documentId})`;
+    // The marker number rides along: one document can be cited more than once,
+    // and the tap has to resolve to the excerpt that was clicked.
+    return `[[${digits}${pageSuffix}]](/documents/${citation.documentId}#c${digits})`;
   });
 
   // Legacy blocks may contain multiple semicolon-separated references:
@@ -860,7 +862,7 @@ export function linkifyCitations(
       }
       const pageSuffix = page ? `, p.${page}` : "";
       const ordinal = citation.index ?? citations.indexOf(citation) + 1;
-      parts.push(`[[${ordinal}${pageSuffix}]](/documents/${citation.documentId})`);
+      parts.push(`[[${ordinal}${pageSuffix}]](/documents/${citation.documentId}#c${ordinal})`);
     }
     return parts.length > 0 ? parts.join(" ") : block;
   });

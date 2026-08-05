@@ -38,7 +38,12 @@ export function DocumentTab({
   const { ensureCachedFile, isConnected } = useOfflineArchive();
   // A citation locates itself in the recognised text, so the page number is
   // real rather than taken on trust from the answer.
-  const passage = citation ? findPassage(textBlocks as never, citation.quote) : null;
+  const passage = citation
+    ? findPassage(textBlocks as never, citation.quote, {
+        allowPrefix: true,
+        page: citation.page,
+      })
+    : null;
   const [page, setPage] = useState(passage?.page ?? citation?.page ?? 1);
   /** What the PDF itself reports, which beats a missing `metadata.pageCount`. */
   const [viewerPages, setViewerPages] = useState(0);

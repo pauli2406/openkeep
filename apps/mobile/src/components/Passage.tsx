@@ -18,6 +18,17 @@ export type Passage = {
 export function findPassage(
   blocks: DocumentTextResponse["blocks"] | undefined,
   needle: string | null,
+  options?: {
+    /**
+     * Match on the opening words when the whole needle is not on one line. A
+     * chat quote spans lines and wants this; a review field does not — a 40
+     * character prefix of a title matching some other line would point the
+     * evidence at the wrong place.
+     */
+    allowPrefix?: boolean;
+    /** Look here first. Headers and footers repeat across pages. */
+    page?: number | null;
+  },
 ): Passage | null {
   if (!blocks || blocks.length === 0) {
     return null;
@@ -29,13 +40,26 @@ export function findPassage(
     return null;
   }
 
-  // A quote can be longer than one OCR line, so fall back to its opening words.
-  const probes = [target, target.slice(0, 40), target.slice(0, 20)];
-  let index = -1;
-  for (const probe of probes) {
-    if (probe.length < 3) continue;
-    index = blocks.findIndex((block) => squash(block.text).includes(probe));
-    if (index !== -1) break;
+  const probes = options?.allowPrefix
+    ? [target, target.slice(0, 40), target.slice(0, 20)]
+    : [target];
+  const page = options?.page ?? null;
+
+  const locate = (restrictToPage: boolean) => {
+    for (const probe of probes) {
+      if (probe.length < 3) continue;
+      const found = blocks.findIndex(
+        (block) =>
+          (!restrictToPage || block.page === page) && squash(block.text).includes(probe),
+      );
+      if (found !== -1) return found;
+    }
+    return -1;
+  };
+
+  let index = page === null ? locate(false) : locate(true);
+  if (index === -1 && page !== null) {
+    index = locate(false);
   }
   if (index === -1) {
     return null;
