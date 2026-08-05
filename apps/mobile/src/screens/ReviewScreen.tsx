@@ -53,6 +53,8 @@ type ReviewField = {
   name: string;
   label: string;
   value: string | null;
+  /** What the extractor stored, for locating the passage in the OCR text. */
+  raw: string | null;
   /** Mono, because it is a number, a date or an identifier. */
   mono: boolean;
   missing: boolean;
@@ -70,7 +72,25 @@ const MONO_FIELDS = new Set([
   "referenceNumber",
 ]);
 
-function rawFieldValue(document: ArchiveDocument, field: string): string | null {
+/** The value as stored, before display formatting. */
+function storedFieldValue(document: ArchiveDocument, field: string): string | null {
+  switch (field) {
+    case "issueDate":
+      return document.issueDate ?? null;
+    case "dueDate":
+      return document.dueDate ?? null;
+    case "expiryDate":
+      return document.expiryDate ?? null;
+    case "amount":
+      return document.amount === null || document.amount === undefined
+        ? null
+        : String(document.amount);
+    default:
+      return displayFieldValue(document, field);
+  }
+}
+
+function displayFieldValue(document: ArchiveDocument, field: string): string | null {
   switch (field) {
     case "issueDate":
       return document.issueDate ? formatDate(document.issueDate) : null;
@@ -119,12 +139,13 @@ function reviewFields(document: ArchiveDocument, t: Translate): ReviewField[] {
 
   const names = required.length > 0 ? required : Array.from(missing);
   return names.map((name) => {
-    const value = rawFieldValue(document, name);
+    const value = displayFieldValue(document, name);
     const isMissing = missing.has(name) || value === null;
     return {
       name,
       label: fieldLabel(name, t),
       value,
+      raw: storedFieldValue(document, name),
       mono: MONO_FIELDS.has(name),
       missing: isMissing,
       low: !isMissing && confidence !== null && confidence < threshold,
@@ -223,6 +244,7 @@ function Reader({
   pageCount,
   authFetch,
   offlineMode,
+  localFileUri,
   onClose,
 }: {
   document: ArchiveDocument;
@@ -231,6 +253,8 @@ function Reader({
   pageCount: number;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   offlineMode: boolean;
+  /** `DocumentViewer` can only render offline from a file it already has. */
+  localFileUri: string | null;
   onClose: () => void;
 }) {
   const styles = useStyles();
@@ -260,7 +284,9 @@ function Reader({
             authFetch={authFetch}
             documentId={document.id}
             mimeType={document.mimeType}
-            searchablePdfAvailable={Boolean(document.metadata?.searchablePdfGenerated)}
+            searchablePdfAvailable={document.searchablePdfAvailable}
+            localFileUri={localFileUri}
+            hasLocalFile={Boolean(localFileUri)}
             offlineMode={offlineMode}
             canFetchOnline={!offlineMode}
           />
@@ -325,7 +351,14 @@ export function ReviewScreen() {
   const queryClient = useQueryClient();
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
-  const [index, setIndex] = useState(0);
+  /**
+   * Confirming invalidates `["review"]`, so the refetched queue no longer holds
+   * the confirmed document. A numeric cursor into that list would skip the next
+   * item — for `[A, B, C]`, confirming A and moving to 1 lands on C once the
+   * refetch returns `[B, C]`. Handled ids are tracked instead and filtered out,
+   * which is stable across refetches.
+   */
+  const [handled, setHandled] = useState<Set<string>>(new Set());
   const [readerField, setReaderField] = useState<string | null>(null);
   const [readerOpen, setReaderOpen] = useState(false);
 
@@ -347,9 +380,18 @@ export function ReviewScreen() {
       : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
   });
 
-  const items = reviewQuery.data?.items ?? [];
-  const cleared = items.length > 0 && index >= items.length;
-  const document = cleared ? null : (items[index] ?? null);
+  const allItems = reviewQuery.data?.items ?? [];
+  const items = allItems.filter((item) => !handled.has(item.id));
+  const cleared = allItems.length > 0 && items.length === 0;
+  const document = items[0] ?? null;
+  const position = allItems.length - items.length + (document ? 1 : 0);
+
+  // The cached record carries the file the offline reader needs.
+  const cachedRecordQuery = useQuery({
+    queryKey: ["cached-document-record", document?.id, offline.cacheSummary.updatedAt],
+    enabled: readerOpen && Boolean(document),
+    queryFn: () => (document ? offline.loadCachedDocument(document.id) : null),
+  });
 
   const textQuery = useQuery({
     queryKey: ["document-text", document?.id, shouldUseCache, offline.cacheSummary.updatedAt],
@@ -399,23 +441,41 @@ export function ReviewScreen() {
     fields[0] ??
     null;
 
-  const passage = useMemo(
-    () => findPassage(blocks, activeField?.value ?? null) ?? firstLines(blocks, 4),
-    [blocks, activeField?.value],
-  );
+  /**
+   * The lookup uses the stored value, not the formatted one: an `issueDate` of
+   * `2024-03-18` renders as `18 Mar 2024`, which never matches OCR text reading
+   * `18.03.2024`. Dates are also tried in day-first order, since that is how a
+   * German invoice prints them.
+   */
+  const passage = useMemo(() => {
+    const raw = activeField?.raw ?? null;
+    const candidates = [raw, activeField?.value ?? null];
+    const dateOnly = raw ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw) : null;
+    if (dateOnly) {
+      candidates.push(`${dateOnly[3]}.${dateOnly[2]}.${dateOnly[1]}`);
+      candidates.push(`${dateOnly[3]}.${dateOnly[2]}.${dateOnly[1].slice(2)}`);
+    }
+    for (const candidate of candidates) {
+      const found = findPassage(blocks, candidate);
+      if (found) {
+        return found;
+      }
+    }
+    return firstLines(blocks, 4);
+  }, [blocks, activeField?.raw, activeField?.value]);
 
   const pageCount = document?.metadata?.pageCount ?? passage?.page ?? 1;
   const uncertainCount = fields.filter((field) => field.missing || field.low).length;
 
-  const advance = useCallback(() => {
+  const advance = useCallback((documentId: string) => {
     setReaderField(null);
-    setIndex((current) => current + 1);
+    setHandled((current) => new Set(current).add(documentId));
   }, []);
 
   const confirm = useCallback(() => {
     if (!document) return;
     mutation.mutate({ id: document.id, action: "resolve" });
-    advance();
+    advance(document.id);
   }, [advance, document, mutation]);
 
   const openReader = useCallback((field?: string) => {
@@ -425,16 +485,16 @@ export function ReviewScreen() {
     setReaderOpen(true);
   }, []);
 
-  const position =
-    items.length === 0 ? "" : `${Math.min(index + 1, items.length)} / ${items.length}`;
-  const progress = items.length === 0 ? 1 : Math.min(index, items.length) / items.length;
+  const positionLabel =
+    allItems.length === 0 ? "" : `${Math.max(position, 1)} / ${allItems.length}`;
+  const progress = allItems.length === 0 ? 1 : handled.size / allItems.length;
 
   return (
     <Screen
       title={t("review.title")}
       padded={false}
       scroll={false}
-      right={position ? <Text style={styles.position}>{position}</Text> : undefined}
+      right={positionLabel ? <Text style={styles.position}>{positionLabel}</Text> : undefined}
       notice={shouldUseCache ? <Notice label={t("state.offlineReadOnly")} /> : undefined}
     >
       <View style={styles.progressTrack}>
@@ -468,7 +528,7 @@ export function ReviewScreen() {
               variant="secondary"
               size="sm"
               onPress={() => {
-                setIndex(0);
+                setHandled(new Set());
                 void reviewQuery.refetch();
               }}
             />
@@ -478,11 +538,10 @@ export function ReviewScreen() {
 
       {document ? (
         <Swipeable
-          enabled={!shouldUseCache}
           overshootRight={false}
           onSwipeableOpen={(direction) => {
             if (direction === "right") {
-              advance();
+              advance(document.id);
             }
           }}
           renderRightActions={() => (
@@ -528,7 +587,12 @@ export function ReviewScreen() {
                 <Text style={styles.fieldSectionNote}>
                   {uncertainCount > 0
                     ? `${uncertainCount} ${t("review.uncertain")}`
-                    : t("review.allClear")}
+                    : fields.length === 0
+                      ? // `processing_failed`, `ocr_empty` and `unsupported_format`
+                        // carry no field evidence, so "all clear" would invite
+                        // confirming a document that plainly needs a look.
+                        t("review.noFieldEvidence")
+                      : t("review.allClear")}
                 </Text>
               </View>
 
@@ -606,8 +670,7 @@ export function ReviewScreen() {
                 <Button
                   label={t("review.skip")}
                   variant="secondary"
-                  disabled={shouldUseCache}
-                  onPress={advance}
+                  onPress={() => advance(document.id)}
                 />
               </View>
               <View style={styles.confirmSlot}>
@@ -631,6 +694,7 @@ export function ReviewScreen() {
           pageCount={pageCount}
           authFetch={auth.authFetch}
           offlineMode={shouldUseCache}
+          localFileUri={cachedRecordQuery.data?.fileUri ?? null}
           onClose={() => setReaderOpen(false)}
         />
       ) : null}
