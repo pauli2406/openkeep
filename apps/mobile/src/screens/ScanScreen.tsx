@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
 import {
   Button,
@@ -85,6 +86,7 @@ export function ScanScreen() {
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
+  const insets = useSafeAreaInsets();
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
@@ -257,7 +259,11 @@ export function ScanScreen() {
       }
       notice={shouldUseCache ? <Notice label={t("state.offlineScan")} tone="warn" /> : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        style={styles.scrollFlex}
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Optional title — everything else is read off the document */}
         <View style={styles.titleBlock}>
           <Text style={styles.titleLabel}>{t("scan.titleOptional")}</Text>
@@ -340,7 +346,9 @@ export function ScanScreen() {
 
         {/* Import is the alternative, not a competing primary action */}
         <SectionHeader label={t("scan.importInstead")} />
-        {pages.length === 0 && !pdfUri ? (
+        {/* Captured pages have their own Rescan link in the section header; a PDF
+            draft has nothing, so the camera row stays for it. */}
+        {pages.length === 0 ? (
           <Row
             leading={
               <MaterialCommunityIcons name="line-scan" size={19} color={colors.muted} />
@@ -382,7 +390,7 @@ export function ScanScreen() {
       </ScrollView>
 
       {/* One primary action */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 12 + insets.bottom }]}>
         <Button
           label={pdfUri ? t("scan.uploadPdfFile") : t("scan.createAndUpload")}
           onPress={() => void uploadMutation.mutateAsync()}
@@ -400,6 +408,9 @@ export function ScanScreen() {
 }
 
 const useStyles = createThemedStyles((c) => ({
+  scrollFlex: {
+    flex: 1,
+  },
   scroll: {
     paddingBottom: 16,
   },
