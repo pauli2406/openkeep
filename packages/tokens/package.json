@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     ".": {
+      "react-native": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
@@ -13,7 +14,8 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
@@ -21,5 +23,6 @@
     "test": "node ../../scripts/tokens/check.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "tokens:generate": "node ../../scripts/tokens/generate.mjs"
-  }
+  },
+  "react-native": "./src/index.ts"
 }
