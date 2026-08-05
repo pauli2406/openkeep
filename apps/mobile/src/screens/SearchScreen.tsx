@@ -19,7 +19,7 @@ import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
-import { text } from "../typography";
+import { fonts, text } from "../typography";
 import {
   formatCurrency,
   formatShortDate,
@@ -71,9 +71,13 @@ function StructuredTable({
 }) {
   const styles = useStyles();
 
+  // Mixed currencies (and deadlines with no amounts at all) leave `totalAmount`
+  // null, which would render as a bare dash. The open count is always there.
   const total =
     data.kind === "deadline_items"
-      ? formatCurrency(data.totalAmount, data.currency ?? "EUR")
+      ? data.totalAmount === null
+        ? String(data.totalOpenCount)
+        : formatCurrency(data.totalAmount, data.currency ?? "EUR")
       : String(data.totalCount);
 
   return (
@@ -104,7 +108,13 @@ function StructuredTable({
               minHeight={56}
               title={titleForDocument(document)}
               meta={document.correspondent?.name ?? t("documents.unfiled")}
-              valueMeta={formatShortDate(document.issueDate ?? document.createdAt)}
+              // "which contracts expire this month" is a question about expiry
+              // dates; an issue date answers a different one.
+              valueMeta={formatShortDate(
+                data.kind === "expiring_contracts"
+                  ? (document.expiryDate ?? document.issueDate ?? document.createdAt)
+                  : (document.issueDate ?? document.createdAt),
+              )}
               onPress={() => onOpen(document.id, titleForDocument(document))}
             />
           ))}
@@ -164,7 +174,12 @@ function TurnView({
         <Markdown
           style={markdownStyles}
           onLinkPress={(url) => {
-            const documentId = url.replace("/documents/", "");
+            if (!url.startsWith("/documents/")) {
+              // An ordinary http link in the answer: let the markdown component
+              // open it rather than swallowing the tap.
+              return true;
+            }
+            const documentId = url.slice("/documents/".length);
             const citation = citations.find((item) => item.documentId === documentId);
             if (citation) {
               onOpenDocument(citation.documentId, citation.documentTitle);
@@ -174,6 +189,12 @@ function TurnView({
         >
           {linkifyCitations(state.answerText, state.citations, state.searchResults)}
         </Markdown>
+      ) : null}
+
+      {state?.lowConfidence && state.status === "done" ? (
+        <View style={styles.insufficient}>
+          <Text style={styles.insufficientText}>{t("chat.lowConfidence")}</Text>
+        </View>
       ) : null}
 
       {state?.answerStatus === "insufficient_evidence" ? (
@@ -278,10 +299,14 @@ export function SearchScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  const busy = status === "searching" || status === "streaming";
+
   const ask = useCallback(
     (question: string) => {
       const trimmed = question.trim();
-      if (!trimmed || shouldUseCache) {
+      // A second question would abort the first stream, and only the last turn
+      // reads the live state — the aborted one would sit there answerless.
+      if (!trimmed || shouldUseCache || status === "searching" || status === "streaming") {
         return;
       }
       turnCounter.current += 1;
@@ -295,7 +320,7 @@ export function SearchScreen() {
       inputRef.current?.blur();
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     },
-    [addSearch, answerStream, shouldUseCache],
+    [addSearch, answerStream, shouldUseCache, status],
   );
 
   const newThread = useCallback(() => {
@@ -350,7 +375,7 @@ export function SearchScreen() {
         </>
       }
     >
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.thread}>
+      <ScrollView ref={scrollRef} style={styles.threadScroll} contentContainerStyle={styles.thread}>
         {turns.length === 0 && !shouldUseCache ? (
           <EmptyState title={t("chat.placeholder")} body={t("search.subtitle")} />
         ) : null}
@@ -400,6 +425,7 @@ export function SearchScreen() {
               <Pressable
                 key={suggestion}
                 onPress={() => ask(suggestion)}
+                disabled={busy}
                 style={styles.suggestionChip}
               >
                 <Text style={styles.suggestionText}>{suggestion}</Text>
@@ -424,10 +450,10 @@ export function SearchScreen() {
             accessibilityRole="button"
             accessibilityLabel={t("chat.send")}
             onPress={() => ask(draft)}
-            disabled={!draft.trim() || shouldUseCache || status === "streaming"}
+            disabled={!draft.trim() || shouldUseCache || busy}
             style={({ pressed }) => [
               styles.sendButton,
-              !draft.trim() || shouldUseCache ? styles.sendButtonDisabled : null,
+              !draft.trim() || shouldUseCache || busy ? styles.sendButtonDisabled : null,
               pressed ? styles.sendButtonPressed : null,
             ]}
           >
@@ -469,6 +495,12 @@ export function SearchScreen() {
                   chevron
                   onPress={() => {
                     setHistoryOpen(false);
+                    if (shouldUseCache) {
+                      // The assistant is unavailable offline, but the draft is
+                      // what drives the local cache search.
+                      setDraft(entry.query);
+                      return;
+                    }
                     ask(entry.query);
                   }}
                 />
@@ -482,6 +514,11 @@ export function SearchScreen() {
 }
 
 const useStyles = createThemedStyles((c) => ({
+  // Without a bounded height the thread grows past the viewport and pushes the
+  // composer off screen instead of scrolling.
+  threadScroll: {
+    flex: 1,
+  },
   thread: {
     padding: 16,
     gap: 16,
@@ -744,7 +781,8 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     color: c.ink,
   },
   em: {
-    fontStyle: "italic",
+    // Android will not synthesise an italic for a named face, so name the face.
+    fontFamily: fonts.sans.italic,
   },
   paragraph: {
     marginTop: 0,

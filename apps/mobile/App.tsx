@@ -77,8 +77,9 @@ function HomeTabs() {
   const totalDocuments = insights.data?.stats.totalDocuments ?? 0;
 
   // The FAB sits above the tab bar everywhere except Review, where confirm and
-  // skip are the two primary actions and nothing may compete with them.
-  const showFab = activeTab !== "Review";
+  // skip are the two primary actions and nothing may compete with them, and
+  // Chat, where the composer occupies the same corner.
+  const showFab = activeTab !== "Review" && activeTab !== "Chat";
 
   return (
     <View style={styles.flex}>
