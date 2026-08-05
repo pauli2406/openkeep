@@ -197,7 +197,7 @@ export function ScanScreen() {
   }
 
   return (
-    <Screen includeTopSafeArea={false} title={t("scan.title")}>
+    <Screen title={t("scan.title")} onBack={() => navigation.goBack()}>
       <Panel padded>
         <Field label={t("scan.titleOverride")} value={title} onChangeText={setTitle} placeholder={t("scan.optionalTitle")} />
         <View style={styles.buttonStack}>

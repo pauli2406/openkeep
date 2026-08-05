@@ -1035,7 +1035,7 @@ export function CorrespondentDossierScreen() {
     return (
       <Screen
         title={name}
-        includeTopSafeArea={false}
+        onBack={() => navigation.goBack()}
         contentContainerStyle={styles.content}
       >
         <Panel padded>
@@ -1052,7 +1052,7 @@ export function CorrespondentDossierScreen() {
     return (
       <Screen
         title={name}
-        includeTopSafeArea={false}
+        onBack={() => navigation.goBack()}
         contentContainerStyle={styles.content}
       >
         <ErrorCard
@@ -1081,7 +1081,7 @@ export function CorrespondentDossierScreen() {
   return (
     <Screen
       title={name}
-      includeTopSafeArea={false}
+      onBack={() => navigation.goBack()}
       contentContainerStyle={styles.content}
     >
       {data ? (

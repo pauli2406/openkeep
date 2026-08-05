@@ -72,7 +72,7 @@ export function CorrespondentsScreen() {
   return (
     <Screen
       title={t("correspondents.title")}
-      includeTopSafeArea={false}
+      onBack={() => navigation.goBack()}
       contentContainerStyle={styles.content}
     >
       {isLoading ? (

@@ -64,7 +64,7 @@ export function ReviewScreen() {
   });
 
   return (
-    <Screen includeTopSafeArea={false} title={t("review.title")}>
+    <Screen title={t("review.title")} onBack={() => navigation.goBack()}>
       {reviewQuery.isLoading ? <Panel padded><Text style={styles.helper}>{t("review.loading")}</Text></Panel> : null}
       {reviewQuery.isError ? <ErrorCard message={t("review.loadError")} onRetry={() => reviewQuery.refetch()} /> : null}
 

@@ -199,24 +199,22 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="Review"
           component={ReviewScreen}
-          options={{ title: t("screens.reviewQueue") }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Scan"
           component={ScanScreen}
-          options={{ title: t("screens.scanUpload") }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="Correspondents"
           component={CorrespondentsScreen}
-          options={{ title: t("screens.correspondents") }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen
           name="CorrespondentDossier"
           component={CorrespondentDossierScreen}
-          options={({ route }) => ({
-            title: route.params.name,
-          })}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </>

@@ -32,6 +32,7 @@ export function Screen({
   children,
   scroll = true,
   right,
+  onBack,
   contentContainerStyle,
   includeTopSafeArea = true,
   padded = true,
@@ -40,24 +41,49 @@ export function Screen({
   children: ReactNode;
   scroll?: boolean;
   right?: ReactNode;
+  /**
+   * A stack screen carries its back affordance in this bar. Every route that
+   * renders a `Screen` has its native header switched off, so without this the
+   * screen would be a dead end.
+   */
+  onBack?: () => void;
   contentContainerStyle?: ViewStyle;
   includeTopSafeArea?: boolean;
   padded?: boolean;
 }) {
   const styles = useStyles();
+  const colors = useColors();
   const scrollRef = useRef<ScrollView>(null);
 
   useScrollToTop(scrollRef);
 
+  // A non-scrolling screen pins things to the bottom, so its body has to fill
+  // the space rather than size to its children.
   const body = (
-    <View style={[padded ? styles.contentPadded : styles.content, contentContainerStyle]}>
+    <View
+      style={[
+        padded ? styles.contentPadded : styles.content,
+        scroll ? null : styles.contentFlex,
+        contentContainerStyle,
+      ]}
+    >
       {children}
     </View>
   );
 
   return (
     <SafeAreaView edges={includeTopSafeArea ? ["top"] : []} style={styles.safeArea}>
-      <View style={styles.appBar}>
+      <View style={[styles.appBar, onBack ? styles.appBarWithBack : null]}>
+        {onBack ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={onBack}
+            hitSlop={12}
+            style={({ pressed }) => [styles.backButton, pressed ? styles.backButtonPressed : null]}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={22} color={colors.accent} />
+          </Pressable>
+        ) : null}
         <Text style={styles.appBarTitle} numberOfLines={1}>
           {title}
         </Text>
@@ -197,9 +223,15 @@ export function Row({
         (value !== undefined || valueMeta !== undefined ? (
           <View style={styles.rowValueWrap}>
             {value !== undefined ? (
-              <Text style={[styles.rowValue, valueTones[valueTone ?? "ink"]]}>{value}</Text>
+              <Text style={[styles.rowValue, valueTones[valueTone ?? "ink"]]} numberOfLines={1}>
+                {value}
+              </Text>
             ) : null}
-            {valueMeta !== undefined ? <Text style={styles.rowValueMeta}>{valueMeta}</Text> : null}
+            {valueMeta !== undefined ? (
+              <Text style={styles.rowValueMeta} numberOfLines={1}>
+                {valueMeta}
+              </Text>
+            ) : null}
           </View>
         ) : null)}
       {chevron ? (
@@ -433,6 +465,17 @@ const useStyles = createThemedStyles((c) => ({
     flex: 1,
     color: c.ink,
   },
+  appBarWithBack: {
+    paddingLeft: 6,
+    paddingRight: 12,
+    gap: 9,
+  },
+  backButton: {
+    padding: 4,
+  },
+  backButtonPressed: {
+    opacity: 0.7,
+  },
   appBarActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -443,6 +486,9 @@ const useStyles = createThemedStyles((c) => ({
   },
   content: {
     paddingBottom: 16,
+  },
+  contentFlex: {
+    flex: 1,
   },
   contentPadded: {
     padding: 16,
@@ -504,7 +550,10 @@ const useStyles = createThemedStyles((c) => ({
     color: c.dim,
   },
   rowValueWrap: {
-    flexShrink: 0,
+    // Shrinkable and capped, so a long value truncates instead of squeezing the
+    // title off screen. A server URL is the case that found this.
+    flexShrink: 1,
+    maxWidth: "55%",
     alignItems: "flex-end",
   },
   rowValue: {
