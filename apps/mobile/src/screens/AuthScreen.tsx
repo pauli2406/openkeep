@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Button, Panel, Field, Screen } from "../components/ui";
+import { Button, Field, Panel, Screen } from "../components/ui";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";

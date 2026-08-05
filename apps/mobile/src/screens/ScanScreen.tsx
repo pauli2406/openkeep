@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
-import { Button, Panel, EmptyState, ErrorCard, Field, Screen, SectionHeader } from "../components/ui";
+import { Button, EmptyState, ErrorCard, Field, Notice, Panel, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -197,7 +197,11 @@ export function ScanScreen() {
   }
 
   return (
-    <Screen title={t("scan.title")} onBack={() => navigation.goBack()}>
+    <Screen
+      title={t("scan.title")}
+      onBack={() => navigation.goBack()}
+      notice={shouldUseCache ? <Notice label={t("state.offlineScan")} tone="warn" /> : undefined}
+    >
       <Panel padded>
         <Field label={t("scan.titleOverride")} value={title} onChangeText={setTitle} placeholder={t("scan.optionalTitle")} />
         <View style={styles.buttonStack}>
@@ -205,7 +209,6 @@ export function ScanScreen() {
           <Button label={t("scan.importImages")} variant="secondary" onPress={() => void handlePickImages()} />
           <Button label={t("scan.importPdf")} variant="secondary" onPress={() => void handlePickFile()} />
         </View>
-        {shouldUseCache ? <Text style={styles.helper}>{t("scan.uploadsPaused")}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </Panel>
 

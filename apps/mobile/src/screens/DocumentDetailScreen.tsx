@@ -17,15 +17,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import Markdown from "react-native-markdown-display";
 import { useAuth } from "../auth";
-import {
-  Button,
-  Panel,
-  EmptyState,
-  ErrorCard,
-  Field,
-  Pill,
-  SectionHeader,
-} from "../components/ui";
+import { Button, EmptyState, ErrorCard, Field, Notice, Panel, Pill, SectionHeader } from "../components/ui";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
 import { processingRefetchInterval } from "../document-processing";
 import { DocumentViewer } from "../components/DocumentViewer";
@@ -210,7 +202,10 @@ export function DocumentDetailScreen() {
   // ---- Loading / error ----
   if (documentQuery.isLoading) {
     return (
-      <ScreenShell title={t("documentDetail.doc")}>
+      <ScreenShell
+        title={t("documentDetail.doc")}
+        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
+      >
         <Panel padded>
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.helper}>{t("documentDetail.loadingDetail")}</Text>
@@ -221,7 +216,10 @@ export function DocumentDetailScreen() {
 
   if (documentQuery.isError || !documentQuery.data) {
     return (
-      <ScreenShell title={t("documentDetail.doc")}>
+      <ScreenShell
+        title={t("documentDetail.doc")}
+        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
+      >
         <ErrorCard message={t("documentDetail.loadError")} onRetry={() => documentQuery.refetch()} />
       </ScreenShell>
     );
@@ -232,6 +230,7 @@ export function DocumentDetailScreen() {
   return (
     <ScreenShell
       title={titleForDocument(document)}
+      notice={shouldUseCache ? <Notice label={t("state.offlineReadOnly")} /> : undefined}
     >
       {/* Status row */}
       <View style={styles.statusRow}>
@@ -302,14 +301,17 @@ export function DocumentDetailScreen() {
 
 function ScreenShell({
   title,
+  notice,
   children,
 }: {
   title: string;
+  notice?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const styles = useStyles();
   return (
     <View style={styles.root}>
+      {notice}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"

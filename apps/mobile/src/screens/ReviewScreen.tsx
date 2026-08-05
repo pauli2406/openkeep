@@ -5,13 +5,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Button, Panel, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { Button, EmptyState, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles } from "../theme";
-import { fonts } from "../typography";
+import { fonts, text } from "../typography";
 import { responseToMessage, titleForDocument, type ReviewQueueResponse } from "../lib";
 
 export function ReviewScreen() {
@@ -64,7 +64,10 @@ export function ReviewScreen() {
   });
 
   return (
-    <Screen title={t("review.title")}>
+    <Screen
+      title={t("review.title")}
+      notice={shouldUseCache ? <Notice label={t("state.offlineReadOnly")} /> : undefined}
+    >
       {reviewQuery.isLoading ? <Panel padded><Text style={styles.helper}>{t("review.loading")}</Text></Panel> : null}
       {reviewQuery.isError ? <ErrorCard message={t("review.loadError")} onRetry={() => reviewQuery.refetch()} /> : null}
 
@@ -84,27 +87,30 @@ export function ReviewScreen() {
                   <Pill key={reason} label={reason.replace(/_/g, " ")} tone="warn" />
                 ))}
               </View>
-              <View style={styles.actionRow}>
-                <Button
-                  label={t("review.resolve")}
-                  variant="secondary"
-                  loading={busyId === `${document.id}:resolve`}
-                  disabled={shouldUseCache}
-                  onPress={() => {
-                    setBusyId(`${document.id}:resolve`);
-                    mutation.mutate({ id: document.id, action: "resolve" });
-                  }}
-                />
-                <Button
-                  label={t("review.requeue")}
-                  loading={busyId === `${document.id}:requeue`}
-                  disabled={shouldUseCache}
-                  onPress={() => {
-                    setBusyId(`${document.id}:requeue`);
-                    mutation.mutate({ id: document.id, action: "requeue" });
-                  }}
-                />
-              </View>
+              {shouldUseCache ? (
+                // Two dead buttons say nothing; one line says why.
+                <Text style={styles.readOnly}>{t("review.readOnlyHint")}</Text>
+              ) : (
+                <View style={styles.actionRow}>
+                  <Button
+                    label={t("review.resolve")}
+                    variant="secondary"
+                    loading={busyId === `${document.id}:resolve`}
+                    onPress={() => {
+                      setBusyId(`${document.id}:resolve`);
+                      mutation.mutate({ id: document.id, action: "resolve" });
+                    }}
+                  />
+                  <Button
+                    label={t("review.requeue")}
+                    loading={busyId === `${document.id}:requeue`}
+                    onPress={() => {
+                      setBusyId(`${document.id}:requeue`);
+                      mutation.mutate({ id: document.id, action: "requeue" });
+                    }}
+                  />
+                </View>
+              )}
             </Panel>
           ))
         )
@@ -131,5 +137,9 @@ const useStyles = createThemedStyles((c) => ({
   actionRow: {
     flexDirection: "row",
     gap: 10,
+  },
+  readOnly: {
+    ...text.meta,
+    color: c.dim,
   },
 }));

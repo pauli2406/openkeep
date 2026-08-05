@@ -13,7 +13,7 @@ import {
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Markdown from "react-native-markdown-display";
 import { useAuth } from "../auth";
-import { Panel, ErrorCard, Screen } from "../components/ui";
+import { ErrorCard, Notice, Panel, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -111,6 +111,7 @@ export function SearchScreen() {
   return (
     <Screen
       title={t("search.title")}
+      notice={shouldUseCache ? <Notice label={t("state.offlineChat")} /> : undefined}
     >
       {/* ─── Search bar ─── */}
       <View style={styles.searchBarContainer}>

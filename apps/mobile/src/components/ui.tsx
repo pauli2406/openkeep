@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useScrollToTop } from "@react-navigation/native";
 import {
   ActivityIndicator,
+  Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -33,6 +34,7 @@ export function Screen({
   scroll = true,
   right,
   onBack,
+  notice,
   contentContainerStyle,
   includeTopSafeArea = true,
   padded = true,
@@ -47,6 +49,8 @@ export function Screen({
    * screen would be a dead end.
    */
   onBack?: () => void;
+  /** A full-bleed strip between the bar and the body — see `Notice`. */
+  notice?: ReactNode;
   contentContainerStyle?: ViewStyle;
   includeTopSafeArea?: boolean;
   padded?: boolean;
@@ -89,6 +93,7 @@ export function Screen({
         </Text>
         {right ? <View style={styles.appBarActions}>{right}</View> : null}
       </View>
+      {notice}
       <KeyboardAvoidingView
         style={styles.flexFill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -108,6 +113,55 @@ export function Screen({
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+export type NoticeTone = "neutral" | "warn" | "bad";
+
+/**
+ * A one-line strip on the `bar` surface. Offline, read-only and queued all
+ * announce themselves here rather than as a failed request. (#120)
+ */
+export function Notice({
+  label,
+  tone = "neutral",
+  action,
+  onAction,
+}: {
+  label: string;
+  tone?: NoticeTone;
+  action?: string;
+  onAction?: () => void;
+}) {
+  const styles = useStyles();
+  const boxMap: Record<NoticeTone, ViewStyle> = {
+    neutral: styles.noticeNeutral,
+    warn: styles.noticeWarn,
+    bad: styles.noticeBad,
+  };
+  const dotMap: Record<NoticeTone, ViewStyle> = {
+    neutral: styles.dotFaint,
+    warn: styles.dotAmber,
+    bad: styles.dotRed,
+  };
+  const textMap: Record<NoticeTone, TextStyle> = {
+    neutral: styles.noticeTextNeutral,
+    warn: styles.noticeTextWarn,
+    bad: styles.noticeTextBad,
+  };
+
+  return (
+    <View style={[styles.notice, boxMap[tone]]}>
+      <View style={[styles.noticeDot, dotMap[tone]]} />
+      <Text style={[styles.noticeText, textMap[tone]]} numberOfLines={2}>
+        {label}
+      </Text>
+      {action && onAction ? (
+        <Pressable onPress={onAction} hitSlop={10}>
+          <Text style={styles.noticeAction}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -170,6 +224,8 @@ export function Row({
   onPress,
   minHeight,
   titleNumberOfLines = 1,
+  tone = "default",
+  pulse = false,
 }: {
   title: string;
   meta?: string;
@@ -188,6 +244,10 @@ export function Row({
   /** 56 is the default; the design uses 50 for settings and 66 for Today. */
   minHeight?: number;
   titleNumberOfLines?: number;
+  /** `bad` tints the row for a failed document. */
+  tone?: "default" | "bad";
+  /** A document still being processed breathes, so it reads as in flight. */
+  pulse?: boolean;
 }) {
   const styles = useStyles();
   const colors = useColors();
@@ -208,7 +268,14 @@ export function Row({
 
   const body = (
     <>
-      {leading ?? (dot ? <View style={[styles.dot, dotStyles[dot]]} /> : null)}
+      {leading ??
+        (dot ? (
+          pulse ? (
+            <PulsingDot style={dotStyles[dot]} />
+          ) : (
+            <View style={[styles.dot, dotStyles[dot]]} />
+          )
+        ) : null)}
       <View style={styles.rowTextWrap}>
         <Text style={styles.rowTitle} numberOfLines={titleNumberOfLines}>
           {title}
@@ -241,9 +308,10 @@ export function Row({
   );
 
   const sizing = minHeight === undefined ? null : { minHeight };
+  const tinted = tone === "bad" ? styles.rowBad : null;
 
   if (!onPress) {
-    return <View style={[styles.row, sizing]}>{body}</View>;
+    return <View style={[styles.row, sizing, tinted]}>{body}</View>;
   }
 
   return (
@@ -252,11 +320,30 @@ export function Row({
       // that it can be opened.
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.row, sizing, pressed ? styles.rowPressed : null]}
+      style={({ pressed }) => [styles.row, sizing, tinted, pressed ? styles.rowPressed : null]}
     >
       {body}
     </Pressable>
   );
+}
+
+/** The dot on a row whose document is still being processed. */
+export function PulsingDot({ style }: { style?: StyleProp<ViewStyle> }) {
+  const styles = useStyles();
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.35, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return <Animated.View style={[styles.dot, style, { opacity }]} />;
 }
 
 export function Button({
@@ -383,12 +470,28 @@ export function Pill({ label, tone = "outline" }: { label: string; tone?: PillTo
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body: string }) {
+export function EmptyState({
+  title,
+  body,
+  action,
+  onAction,
+}: {
+  title: string;
+  body?: string;
+  /** A way back — "show all" after a filter turned up nothing. */
+  action?: string;
+  onAction?: () => void;
+}) {
   const styles = useStyles();
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
+      {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
+      {action && onAction ? (
+        <Pressable onPress={onAction} hitSlop={12} style={styles.emptyAction}>
+          <Text style={styles.emptyActionText}>{action}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -493,6 +596,48 @@ const useStyles = createThemedStyles((c) => ({
   scrollContent: {
     flexGrow: 1,
   },
+  notice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  noticeNeutral: {
+    backgroundColor: c.bar,
+  },
+  noticeWarn: {
+    backgroundColor: c.amberSoft,
+  },
+  noticeBad: {
+    backgroundColor: c.redSoft,
+  },
+  noticeDot: {
+    width: 6,
+    height: 6,
+    flexShrink: 0,
+    borderRadius: radii.pill,
+  },
+  noticeText: {
+    ...text.small,
+    flex: 1,
+  },
+  noticeTextNeutral: {
+    color: c.dim,
+  },
+  noticeTextWarn: {
+    color: c.amber,
+  },
+  noticeTextBad: {
+    color: c.red,
+  },
+  noticeAction: {
+    ...text.smallStrong,
+    color: c.accent,
+  },
   content: {
     paddingBottom: 16,
   },
@@ -544,6 +689,9 @@ const useStyles = createThemedStyles((c) => ({
   },
   rowPressed: {
     backgroundColor: c.raised,
+  },
+  rowBad: {
+    backgroundColor: c.redSoft,
   },
   rowTextWrap: {
     flex: 1,
@@ -734,6 +882,14 @@ const useStyles = createThemedStyles((c) => ({
     color: c.dim,
     textAlign: "center",
     maxWidth: 300,
+  },
+  emptyAction: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  emptyActionText: {
+    ...text.metaStrong,
+    color: c.accent,
   },
   errorTitle: {
     ...text.bodyStrong,

@@ -7,7 +7,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { AvatarButton } from "../components/AvatarButton";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Panel, EmptyState, ErrorCard, Metric, Pill, Screen, SectionHeader } from "../components/ui";
+import { EmptyState, ErrorCard, Metric, Notice, Panel, Pill, Screen, SectionHeader } from "../components/ui";
 import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -661,6 +661,7 @@ export function DashboardScreen() {
     <Screen
       title={t("dashboard.screen.title")}
       right={<AvatarButton />}
+      notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
       contentContainerStyle={styles.content}
     >
       {insightsQuery.isLoading ? (

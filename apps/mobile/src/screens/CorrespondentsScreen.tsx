@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
-import { Panel, EmptyState, ErrorCard, Screen } from "../components/ui";
+import { EmptyState, ErrorCard, Notice, Panel, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -73,6 +73,7 @@ export function CorrespondentsScreen() {
     <Screen
       title={t("correspondents.title")}
       onBack={() => navigation.goBack()}
+      notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
       contentContainerStyle={styles.content}
     >
       {isLoading ? (

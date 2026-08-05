@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
 import { DocumentProcessingIndicator } from "../components/DocumentProcessingIndicator";
-import { Panel, EmptyState, ErrorCard, Pill, Screen } from "../components/ui";
+import { EmptyState, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
@@ -1036,6 +1036,7 @@ export function CorrespondentDossierScreen() {
       <Screen
         title={name}
         onBack={() => navigation.goBack()}
+        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
         contentContainerStyle={styles.content}
       >
         <Panel padded>
@@ -1053,6 +1054,7 @@ export function CorrespondentDossierScreen() {
       <Screen
         title={name}
         onBack={() => navigation.goBack()}
+        notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
         contentContainerStyle={styles.content}
       >
         <ErrorCard
@@ -1082,6 +1084,7 @@ export function CorrespondentDossierScreen() {
     <Screen
       title={name}
       onBack={() => navigation.goBack()}
+      notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
       contentContainerStyle={styles.content}
     >
       {data ? (
