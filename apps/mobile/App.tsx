@@ -25,6 +25,7 @@ import { DocumentsScreen } from "./src/screens/DocumentsScreen";
 import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { ScanScreen } from "./src/screens/ScanScreen";
+import { OfflineArchiveScreen } from "./src/screens/OfflineArchiveScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
@@ -38,6 +39,7 @@ export type AppStackParamList = {
   DocumentDetail: { documentId: string; title?: string };
   Scan: undefined;
   Settings: undefined;
+  OfflineArchive: undefined;
   Correspondents: undefined;
   CorrespondentDossier: { slug: string; name: string };
 };
@@ -230,6 +232,11 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="OfflineArchive"
+          component={OfflineArchiveScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen

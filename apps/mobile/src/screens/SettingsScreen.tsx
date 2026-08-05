@@ -108,23 +108,6 @@ export function SettingsScreen() {
     ]);
   }
 
-  function handleClearCache() {
-    Alert.alert(t("settings.clearCacheTitle"), t("settings.clearCacheText"), [
-      { text: t("settings.cancel"), style: "cancel" },
-      {
-        text: t("settings.clearCache"),
-        style: "destructive",
-        onPress: () =>
-          void offline.clearCachedDocuments().catch((error) =>
-            Alert.alert(
-              t("settings.clearCacheFailed"),
-              error instanceof Error ? error.message : t("settings.clearCacheFailed"),
-            ),
-          ),
-      },
-    ]);
-  }
-
   function handleLogout() {
     Alert.alert(t("settings.logOutConfirmTitle"), t("settings.logOutConfirmText"), [
       { text: t("settings.cancel"), style: "cancel" },
@@ -221,13 +204,8 @@ export function SettingsScreen() {
         leading={glyph("database-outline")}
         title={t("settings.offlineAvailable")}
         value={`${offline.cacheSummary.documentCount} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
-      />
-      <Row
-        minHeight={50}
-        leading={glyph("trash-can-outline")}
-        title={t("settings.clearCache")}
         chevron
-        onPress={handleClearCache}
+        onPress={() => navigation.navigate("OfflineArchive" as never)}
       />
 
       <SectionHeader label={t("settings.info")} />
