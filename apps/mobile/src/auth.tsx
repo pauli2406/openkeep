@@ -52,6 +52,12 @@ type AuthContextValue = {
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   revalidateSession: () => Promise<boolean>;
+  /**
+   * Enter the offline session on purpose. Until #118 this only happened at boot
+   * when the server was unreachable, so the Connect screen had no way to offer
+   * the local copy as a choice.
+   */
+  openOfflineCopy: () => Promise<boolean>;
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
@@ -369,6 +375,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, [persistUser]);
 
+  const openOfflineCopy = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(USER_KEY);
+    if (!raw) {
+      return false;
+    }
+    try {
+      return await restoreCachedSession(JSON.parse(raw) as User);
+    } catch {
+      return false;
+    }
+  }, [restoreCachedSession]);
+
   const revalidateSession = useCallback(async () => {
     if (
       !apiUrlRef.current ||
@@ -605,6 +623,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: Boolean(user),
       isLoading,
       isOfflineSession: sessionMode === "offline",
+      openOfflineCopy,
       setApiUrl,
       probeServer,
       connect,
