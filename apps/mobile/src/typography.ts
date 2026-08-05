@@ -18,6 +18,8 @@ export const fonts = {
     medium: "PublicSans-Medium",
     semibold: "PublicSans-SemiBold",
     bold: "PublicSans-Bold",
+    /** React Native will not synthesise italics for a named face on Android. */
+    italic: "PublicSans-Italic",
   },
   mono: {
     regular: "IBMPlexMono-Regular",
@@ -32,6 +34,7 @@ export const fontAssets = {
   [fonts.sans.medium]: require("../assets/fonts/PublicSans-Medium.ttf"),
   [fonts.sans.semibold]: require("../assets/fonts/PublicSans-SemiBold.ttf"),
   [fonts.sans.bold]: require("../assets/fonts/PublicSans-Bold.ttf"),
+  [fonts.sans.italic]: require("../assets/fonts/PublicSans-Italic.ttf"),
   [fonts.mono.regular]: require("../assets/fonts/IBMPlexMono-Regular.ttf"),
   [fonts.mono.medium]: require("../assets/fonts/IBMPlexMono-Medium.ttf"),
   [fonts.mono.semibold]: require("../assets/fonts/IBMPlexMono-SemiBold.ttf"),

@@ -1850,7 +1850,6 @@ const useStyles = createThemedStyles((c) => ({
     color: c.muted,
   },
   pickerChevron: {
-    fontFamily: fonts.sans.regular,
     color: c.muted,
     fontSize: 12,
     marginLeft: 8,
@@ -1935,9 +1934,8 @@ const useStyles = createThemedStyles((c) => ({
     fontFamily: fonts.sans.semibold,
   },
   pickerOptionClear: {
-    fontFamily: fonts.sans.regular,
+    fontFamily: fonts.sans.italic,
     color: c.muted,
-    fontStyle: "italic",
   },
 
   // Intelligence

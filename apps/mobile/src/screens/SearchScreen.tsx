@@ -780,8 +780,9 @@ const useMarkdownStyles = createThemedStyles((c) => ({
     color: c.ink,
   },
   em: {
-    fontFamily: fonts.sans.regular,
-    fontStyle: "italic",
+    // A real italic face, because React Native does not synthesise one for a
+    // named family on Android.
+    fontFamily: fonts.sans.italic,
   },
   bullet_list: {
     marginTop: 4,
@@ -889,7 +890,8 @@ const useStyles = createThemedStyles((c) => ({
     minHeight: 50,
   },
   searchIcon: {
-    fontFamily: fonts.sans.regular,
+    // A symbol Text node: Public Sans has no glyph for it, so leave the
+    // family to the system font.
     fontSize: 18,
     color: c.muted,
     marginRight: 8,
@@ -1038,7 +1040,8 @@ const useStyles = createThemedStyles((c) => ({
     backgroundColor: c.accentFill,
   },
   aiIconText: {
-    fontFamily: fonts.sans.regular,
+    // A symbol Text node: Public Sans has no glyph for it, so leave the
+    // family to the system font.
     fontSize: 16,
     color: c.accent,
   },
@@ -1279,14 +1282,16 @@ const useStyles = createThemedStyles((c) => ({
     opacity: 0.6,
   },
   zeroRowIcon: {
-    fontFamily: fonts.sans.regular,
+    // A symbol Text node: Public Sans has no glyph for it, so leave the
+    // family to the system font.
     fontSize: 18,
     color: c.muted,
     width: 24,
     textAlign: "center",
   },
   zeroRowIconSpark: {
-    fontFamily: fonts.sans.regular,
+    // A symbol Text node: Public Sans has no glyph for it, so leave the
+    // family to the system font.
     fontSize: 16,
     color: c.accent,
     opacity: 0.65,
@@ -1304,7 +1309,8 @@ const useStyles = createThemedStyles((c) => ({
     padding: 4,
   },
   zeroRowRemoveText: {
-    fontFamily: fonts.sans.regular,
+    // A symbol Text node: Public Sans has no glyph for it, so leave the
+    // family to the system font.
     fontSize: 12,
     color: c.muted,
   },

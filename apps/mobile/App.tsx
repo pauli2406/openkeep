@@ -284,12 +284,18 @@ const useStyles = createThemedStyles((c) => ({
     gap: 12,
     padding: 24,
   },
+  // This screen is what shows *while* `useFonts` is still resolving, so it must
+  // not name a bundled face — React Native raises "fontFamily is not a system
+  // font and has not been loaded" for an unregistered family.
   loadingTitle: {
-    ...text.screenTitle,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.4,
     color: c.ink,
   },
   loadingText: {
-    ...text.meta,
+    fontSize: 12.5,
+    lineHeight: 17,
     color: c.muted,
     textAlign: "center",
   },

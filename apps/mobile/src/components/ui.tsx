@@ -405,15 +405,18 @@ const useStyles = createThemedStyles((c) => ({
     letterSpacing: 0.1,
   },
   primaryButtonText: {
-    fontFamily: fonts.sans.regular,
+    // Colour only — `buttonText` owns the family, and a family here would
+    // silently undo its weight.
     color: c.accentFillInk,
   },
   secondaryButtonText: {
-    fontFamily: fonts.sans.regular,
+    // Colour only — `buttonText` owns the family, and a family here would
+    // silently undo its weight.
     color: c.accentSoftInk,
   },
   dangerButtonText: {
-    fontFamily: fonts.sans.regular,
+    // Colour only — `buttonText` owns the family, and a family here would
+    // silently undo its weight.
     color: c.app,
   },
   loadingButtonText: {
