@@ -37,7 +37,9 @@
     "test:e2e:mistral-embeddings": "pnpm --filter @openkeep/api test:e2e:mistral-embeddings",
     "typecheck": "turbo run typecheck",
     "openapi:generate": "pnpm --filter @openkeep/api openapi:generate",
-    "db:migrate": "pnpm --filter @openkeep/db db:migrate"
+    "db:migrate": "pnpm --filter @openkeep/db db:migrate",
+    "tokens:generate": "node scripts/tokens/generate.mjs",
+    "tokens:check": "node scripts/tokens/check.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.13.5",

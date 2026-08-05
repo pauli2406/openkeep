@@ -1,134 +1,20 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* Generated from packages/tokens — see scripts/tokens/generate.mjs. */
+@import "./tokens.css";
+
 /* ─────────────────────────────────────────────────────────────
-   OpenKeep design tokens (#40)
+   OpenKeep design tokens (#40, shared in #124)
 
-   `--ok-*` is the single source of truth for color. `:root` holds
-   the light theme, `[data-theme="dark"]` overrides it. Everything
-   else in this file — the shadcn `--color-*` names, the radius
-   scale, the legacy `--explorer-*` aliases — points at these.
+   `--ok-*` is the single source of truth for color, and it is
+   generated from `packages/tokens` — the same module the mobile app
+   imports — into `./tokens.css`. Edit the package, then run
+   `node scripts/tokens/generate.mjs`.
 
-   Values are taken from design/prototype/openkeep-workspace.dc.html,
-   which is what rendered design/screens/*.png.
+   Everything else in this file — the shadcn `--color-*` names, the
+   radius scale, the legacy `--explorer-*` aliases — points at those.
    ───────────────────────────────────────────────────────────── */
-
-:root {
-  color-scheme: light;
-
-  /* surfaces */
-  --ok-app: #fcfcfb;
-  --ok-bar: #f7f8f7;
-  --ok-panel: #ffffff;
-  --ok-raised: #f2f4f2;
-  --ok-sunken: #eceeec;
-
-  /* borders */
-  --ok-border: #e3e6e3;
-  --ok-border-soft: #eef0ee;
-  --ok-border-strong: #d6dad7;
-
-  /* text */
-  --ok-ink: #26302a;
-  --ok-muted: #5b615c;
-  --ok-dim: #8b9089;
-  --ok-faint: #9aa09a;
-
-  /* accent (green) */
-  --ok-accent: #14544d;
-  --ok-accent-soft: #e7edea;
-  --ok-accent-soft-ink: #14544d;
-  --ok-accent-fill: #14544d;
-  --ok-accent-fill-ink: #ffffff;
-
-  /* amber */
-  --ok-amber: #8a5a19;
-  --ok-amber-soft: #fdf1e3;
-
-  /* red */
-  --ok-red: #a8462f;
-  --ok-red-soft: #fdeeea;
-
-  /* status green (distinct from the accent, used for "done"/"ok") */
-  --ok-green: #4a7d5a;
-  --ok-green-soft: #e8f0ea;
-
-  /* A scan is a scan: the document preview surface stays light in both
-     themes, it just sits on a darker sunken surface in dark mode. */
-  --ok-paper: #ffffff;
-  --ok-paper-ink: #26302a;
-  --ok-paper-border: #e3e6e3;
-
-  /* citation / search highlight drawn on --ok-paper */
-  --ok-highlight: #fdf1e3;
-  --ok-highlight-rule: #8a5a19;
-
-  /* modal scrim */
-  --ok-overlay: rgba(20, 26, 24, 0.45);
-
-  /* categorical palette for tag/type dots and charts */
-  --ok-cat-1: #14544d;
-  --ok-cat-2: #2f6f9e;
-  --ok-cat-3: #7a5ba6;
-  --ok-cat-4: #4a7d5a;
-  --ok-cat-5: #8a6a2f;
-  --ok-cat-6: #a8462f;
-  --ok-cat-7: #8a2d55;
-  --ok-cat-8: #6b716c;
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-
-  --ok-app: #0f1214;
-  --ok-bar: #14181a;
-  --ok-panel: #161a1c;
-  --ok-raised: #1b2023;
-  --ok-sunken: #0b0e0f;
-
-  --ok-border: #252b2e;
-  --ok-border-soft: #1e2325;
-  --ok-border-strong: #2c3336;
-
-  --ok-ink: #e6e9e7;
-  --ok-muted: #a7afa9;
-  --ok-dim: #8b938d;
-  --ok-faint: #7d857f;
-
-  --ok-accent: #5fb3a3;
-  --ok-accent-soft: #16302c;
-  --ok-accent-soft-ink: #7fc9b8;
-  --ok-accent-fill: #1c6b60;
-  --ok-accent-fill-ink: #f2fbf8;
-
-  --ok-amber: #d9ae6a;
-  --ok-amber-soft: #2e2415;
-
-  --ok-red: #dd8d78;
-  --ok-red-soft: #331d1a;
-
-  --ok-green: #7fb98d;
-  --ok-green-soft: #16301c;
-
-  /* paper stays light; only its frame darkens */
-  --ok-paper: #e9ebe9;
-  --ok-paper-ink: #26302a;
-  --ok-paper-border: #2c3336;
-
-  --ok-highlight: #f3e4c8;
-  --ok-highlight-rule: #8a5a19;
-
-  --ok-overlay: rgba(0, 0, 0, 0.6);
-
-  --ok-cat-1: #5fb3a3;
-  --ok-cat-2: #6ea8d8;
-  --ok-cat-3: #b095db;
-  --ok-cat-4: #7fb98d;
-  --ok-cat-5: #d9ae6a;
-  --ok-cat-6: #dd8d78;
-  --ok-cat-7: #d187a8;
-  --ok-cat-8: #9aa39c;
-}
 
 @theme {
   /* shadcn/Radix primitives keep working by aliasing onto --ok-* */

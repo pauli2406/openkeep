@@ -1,9 +1,9 @@
 /**
- * OpenKeep mobile design tokens (#104)
+ * OpenKeep mobile theming (#104, shared in #124)
  *
- * The values are taken verbatim from `apps/web/src/index.css` — the web and the
- * mobile client share one palette and must not drift. Light is the base theme,
- * dark is a full peer rather than an inversion.
+ * The palette itself now lives in `@openkeep/tokens`, which the web client
+ * generates its `--ok-*` properties from — so a colour changes in one place and
+ * both clients follow. This module is what turns it into React Native styles.
  *
  * Colours are read through `useColors()` / `createThemedStyles()` so a theme
  * change re-renders. A module-level `import { colors }` cannot do that, which is
@@ -27,148 +27,12 @@ import {
   type ViewStyle,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { palettes, radii, type Palette, type ThemeName } from "@openkeep/tokens";
 
-export type ThemeName = "light" | "dark";
-
-/** The categorical ramp (`--ok-cat-1…8`) for tag and document-type dots. */
-export type CategoricalRamp = readonly [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-];
-
-const light = {
-  /* surfaces */
-  app: "#fcfcfb",
-  bar: "#f7f8f7",
-  panel: "#ffffff",
-  raised: "#f2f4f2",
-  sunken: "#eceeec",
-
-  /* borders */
-  border: "#e3e6e3",
-  borderSoft: "#eef0ee",
-  borderStrong: "#d6dad7",
-
-  /* text */
-  ink: "#26302a",
-  muted: "#5b615c",
-  dim: "#8b9089",
-  faint: "#9aa09a",
-
-  /* accent (green) */
-  accent: "#14544d",
-  accentSoft: "#e7edea",
-  accentSoftInk: "#14544d",
-  accentFill: "#14544d",
-  accentFillInk: "#ffffff",
-
-  /* amber — "needs attention" */
-  amber: "#8a5a19",
-  amberSoft: "#fdf1e3",
-
-  /* red — overdue and failed */
-  red: "#a8462f",
-  redSoft: "#fdeeea",
-
-  /* status green, distinct from the accent: "done" / "ok" */
-  green: "#4a7d5a",
-  greenSoft: "#e8f0ea",
-
-  /* A scan is a scan: the page surface stays light in both themes. */
-  paper: "#ffffff",
-  paperInk: "#26302a",
-  paperBorder: "#e3e6e3",
-
-  /* citation / search highlight drawn on `paper` */
-  highlight: "#fdf1e3",
-  highlightRule: "#8a5a19",
-
-  /* modal scrim */
-  overlay: "rgba(20, 26, 24, 0.45)",
-
-  cat: [
-    "#14544d",
-    "#2f6f9e",
-    "#7a5ba6",
-    "#4a7d5a",
-    "#8a6a2f",
-    "#a8462f",
-    "#8a2d55",
-    "#6b716c",
-  ] as CategoricalRamp,
-};
-
-export type Colors = typeof light;
-
-const dark: Colors = {
-  app: "#0f1214",
-  bar: "#14181a",
-  panel: "#161a1c",
-  raised: "#1b2023",
-  sunken: "#0b0e0f",
-
-  border: "#252b2e",
-  borderSoft: "#1e2325",
-  borderStrong: "#2c3336",
-
-  ink: "#e6e9e7",
-  muted: "#a7afa9",
-  dim: "#8b938d",
-  faint: "#7d857f",
-
-  accent: "#5fb3a3",
-  accentSoft: "#16302c",
-  accentSoftInk: "#7fc9b8",
-  accentFill: "#1c6b60",
-  accentFillInk: "#f2fbf8",
-
-  amber: "#d9ae6a",
-  amberSoft: "#2e2415",
-
-  red: "#dd8d78",
-  redSoft: "#331d1a",
-
-  green: "#7fb98d",
-  greenSoft: "#16301c",
-
-  /* the paper stays light; only its frame darkens */
-  paper: "#e9ebe9",
-  paperInk: "#26302a",
-  paperBorder: "#2c3336",
-
-  highlight: "#f3e4c8",
-  highlightRule: "#8a5a19",
-
-  overlay: "rgba(0, 0, 0, 0.6)",
-
-  cat: [
-    "#5fb3a3",
-    "#6ea8d8",
-    "#b095db",
-    "#7fb98d",
-    "#d9ae6a",
-    "#dd8d78",
-    "#d187a8",
-    "#9aa39c",
-  ] as CategoricalRamp,
-};
-
-export const palettes: Record<ThemeName, Colors> = { light, dark };
-
-/** Radii top out at 10. The pill value is for filter chips only. */
-export const radii = {
-  sm: 4,
-  md: 6,
-  lg: 8,
-  xl: 10,
-  pill: 999,
-} as const;
+/** Re-exported so screens keep importing colours and radii from one place. */
+export { palettes, radii };
+export type { ThemeName };
+export type Colors = Palette;
 
 /** What the user chose. `system` follows the OS. */
 export type ThemePreference = ThemeName | "system";
