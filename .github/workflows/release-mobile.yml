@@ -129,6 +129,20 @@ jobs:
             waited=$((waited + 30))
           done
 
+      # A tag that already exists would only be discovered after the build, when
+      # the release step fails — twenty minutes and one of fifteen monthly builds
+      # after the fact.
+      - name: Refuse a version that is already tagged
+        if: inputs.submit
+        env:
+          TAG: mobile-v${{ inputs.version }}
+        run: |
+          git fetch origin --tags --quiet
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists. Bump the version, or delete the tag with 'gh release delete $TAG --cleanup-tag' if it was a dry run."
+            exit 1
+          fi
+
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: release-mobile

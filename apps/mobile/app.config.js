@@ -12,7 +12,7 @@ export default {
       "android",
       "web"
     ],
-    "version": "0.1.0",
+    "version": "0.2.0",
     "icon": "./assets/icon.png",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
