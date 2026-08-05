@@ -61,7 +61,7 @@ export function EditFieldsSheet({
             <Text style={styles.action}>{t("settings.cancel")}</Text>
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={styles.body}>
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Field
             label={t("documentDetail.overview.title")}
             value={form.title}

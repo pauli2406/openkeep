@@ -33,13 +33,15 @@ export function DocumentTab({
   const { t } = useI18n();
   const { ensureCachedFile, isConnected } = useOfflineArchive();
   const [page, setPage] = useState(1);
+  /** What the PDF itself reports, which beats a missing `metadata.pageCount`. */
+  const [viewerPages, setViewerPages] = useState(0);
 
   const persistOnlineFile = useCallback(
     () => ensureCachedFile(authFetch, document),
     [authFetch, document, ensureCachedFile],
   );
 
-  const pageCount = document.metadata?.pageCount ?? 1;
+  const pageCount = Math.max(document.metadata?.pageCount ?? 1, viewerPages);
   const overdue = isOverdue(document);
 
   const facts = [
@@ -96,6 +98,9 @@ export function DocumentTab({
           canFetchOnline={!offlineMode || isConnected}
           onPersistOnlineFile={persistOnlineFile}
           textBlocks={textBlocks}
+          page={page}
+          onPageChange={setPage}
+          onTotalPagesChange={setViewerPages}
         />
       </View>
 

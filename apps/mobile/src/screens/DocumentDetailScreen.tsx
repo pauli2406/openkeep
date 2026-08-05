@@ -32,6 +32,7 @@ import {
   type ArchiveDocument,
   type DocumentHistoryResponse,
   type DocumentTextResponse,
+  type HealthProvidersResponse,
   type QaHistoryEntry,
 } from "../lib";
 import { AskComposer, AskTab } from "./document-detail/AskTab";
@@ -68,6 +69,7 @@ export function DocumentDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("document");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [providerPickerOpen, setProviderPickerOpen] = useState(false);
 
   const qa = useDocumentQa(auth.streamFetch, documentId);
 
@@ -162,6 +164,18 @@ export function DocumentDetailScreen() {
     };
   }, [correspondentsResult.data, documentTypesResult.data, tagsResult.data]);
 
+  // Reprocessing may need a different parser than the active one; the endpoint
+  // still accepts `parseProvider`, so the choice stays available on mobile.
+  const providersQuery = useQuery({
+    queryKey: ["health-providers", auth.apiUrl],
+    enabled: documentQuery.isSuccess && !shouldUseCache,
+    queryFn: async () => {
+      const response = await auth.authFetch("/api/health/providers");
+      if (!response.ok) throw new Error(t("documentDetail.loadProvidersFailed"));
+      return (await response.json()) as HealthProvidersResponse;
+    },
+  });
+
   const qaHistoryQuery = useQuery({
     queryKey: ["document-qa-history", documentId, shouldUseCache],
     enabled: documentQuery.isSuccess && activeTab === "questions" && !shouldUseCache,
@@ -243,7 +257,22 @@ export function DocumentDetailScreen() {
     ]);
   }
 
+  const reprocess = useCallback(
+    (parseProvider?: string) => {
+      setMenuOpen(false);
+      setProviderPickerOpen(false);
+      actionMutation.mutate({
+        path: `/api/documents/${documentId}/reprocess`,
+        body: parseProvider ? { force: true, parseProvider } : { force: true },
+      });
+    },
+    [actionMutation, documentId],
+  );
+
   const document = documentQuery.data;
+  const availableProviders = (providersQuery.data?.parseProviders ?? []).filter(
+    (provider) => provider.available,
+  );
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
@@ -358,17 +387,55 @@ export function DocumentDetailScreen() {
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
         <Pressable style={styles.scrim} onPress={() => setMenuOpen(false)}>
           <View style={styles.menu}>
-            <Row
-              title={t("documentDetail.overview.reprocessDocument")}
-              onPress={() => {
-                setMenuOpen(false);
-                actionMutation.mutate({
-                  path: `/api/documents/${documentId}/reprocess`,
-                  body: { force: true },
-                });
-              }}
-            />
-            <Row title={t("documentDetail.overview.deleteDocument")} onPress={confirmDelete} />
+            {shouldUseCache ? (
+              // Both entries mutate the server. The session is read-only, and a
+              // reconnect mid-session must not turn that into a delete.
+              <Row title={t("state.offlineReadOnly")} />
+            ) : (
+              <>
+                <Row
+                  title={t("documentDetail.overview.reprocessDocument")}
+                  meta={
+                    availableProviders.length > 1
+                      ? t("documentDetail.overview.reprocessWith")
+                      : undefined
+                  }
+                  onPress={() => {
+                    if (availableProviders.length > 1) {
+                      setMenuOpen(false);
+                      setProviderPickerOpen(true);
+                      return;
+                    }
+                    reprocess();
+                  }}
+                />
+                <Row
+                  title={t("documentDetail.overview.deleteDocument")}
+                  onPress={confirmDelete}
+                />
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Which parser to rerun with, when more than one is configured */}
+      <Modal
+        visible={providerPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProviderPickerOpen(false)}
+      >
+        <Pressable style={styles.scrim} onPress={() => setProviderPickerOpen(false)}>
+          <View style={styles.menu}>
+            <Row title={t("documentDetail.overview.defaultProvider")} onPress={() => reprocess()} />
+            {availableProviders.map((provider) => (
+              <Row
+                key={provider.id}
+                title={provider.id.replace(/-/g, " ")}
+                onPress={() => reprocess(provider.id)}
+              />
+            ))}
           </View>
         </Pressable>
       </Modal>

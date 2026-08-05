@@ -34,6 +34,13 @@ type ViewerProps = {
   onPersistOnlineFile?: () => Promise<string | null>;
   /** Pre-fetched OCR text blocks (optional). Falls back to fetching. */
   textBlocks?: Array<{ page: number; text: string }>;
+  /**
+   * 1-based page to show, for callers that render their own page bar. The
+   * viewer still owns the PDF; this only tells it where to go.
+   */
+  page?: number;
+  onPageChange?: (page: number) => void;
+  onTotalPagesChange?: (total: number) => void;
 };
 
 type FileState =
@@ -333,6 +340,9 @@ export function DocumentViewer({
   canFetchOnline = true,
   onPersistOnlineFile,
   textBlocks,
+  page,
+  onPageChange,
+  onTotalPagesChange,
 }: ViewerProps) {
   const colors = useColors();
   const styles = useStyles();
@@ -343,7 +353,7 @@ export function DocumentViewer({
 
   // PDF-specific state
   const pdfRef = useRef<PdfRef>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(page ?? 1);
   const [totalPages, setTotalPages] = useState(0);
   const [loadProgress, setLoadProgress] = useState(0);
   const [openingNativeViewer, setOpeningNativeViewer] = useState(false);
@@ -354,7 +364,7 @@ export function DocumentViewer({
     setFileState({ status: "idle" });
     setTextContent(null);
     lastLoadedUriRef.current = null;
-    setCurrentPage(1);
+    setCurrentPage(page ?? 1);
     setTotalPages(0);
     setLoadProgress(0);
   }, [documentId, mimeType]);
@@ -516,6 +526,15 @@ export function DocumentViewer({
     }
   }, [authFetch, documentId, localFileUri, mimeType, offlineMode, t]);
 
+  // Follow the caller's page bar. `setPage` does nothing before the document has
+  // loaded, so the jump waits for `totalPages`.
+  useEffect(() => {
+    if (!page || totalPages === 0 || page === currentPage) {
+      return;
+    }
+    pdfRef.current?.setPage(Math.min(Math.max(page, 1), totalPages));
+  }, [currentPage, page, totalPages]);
+
   // PDF navigation handlers
   const handlePrevPage = useCallback(() => {
     if (currentPage > 1) pdfRef.current?.setPage(currentPage - 1);
@@ -632,10 +651,13 @@ export function DocumentViewer({
             onLoadComplete={(numberOfPages) => {
               setTotalPages(numberOfPages);
               setLoadProgress(1);
+              onTotalPagesChange?.(numberOfPages);
             }}
-            onPageChanged={(page, numberOfPages) => {
-              setCurrentPage(page);
+            onPageChanged={(shownPage, numberOfPages) => {
+              setCurrentPage(shownPage);
               setTotalPages(numberOfPages);
+              onPageChange?.(shownPage);
+              onTotalPagesChange?.(numberOfPages);
             }}
             onError={(error) => {
               setFileState({

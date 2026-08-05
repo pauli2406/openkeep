@@ -27,6 +27,12 @@ import {
 
 type FieldRow = {
   name: string;
+  /**
+   * Where the extraction confidence lives, when it is not `name`. The edit sheet
+   * keys taxonomy fields by id (`correspondentId`); the pipeline records what it
+   * read off the page (`correspondentName`).
+   */
+  confidenceKey?: string;
   label: string;
   value: string;
   mono: boolean;
@@ -84,6 +90,7 @@ function detailRows(document: ArchiveDocument, t: Translate): FieldRow[] {
       : null,
     {
       name: "correspondentId",
+      confidenceKey: "correspondentName",
       label: t("documentDetail.overview.correspondent"),
       value: document.correspondent?.name ?? "-",
       mono: false,
@@ -92,6 +99,7 @@ function detailRows(document: ArchiveDocument, t: Translate): FieldRow[] {
     },
     {
       name: "documentTypeId",
+      confidenceKey: "documentTypeName",
       label: t("documentDetail.overview.documentType"),
       value: document.documentType?.name ?? "-",
       mono: false,
@@ -121,7 +129,7 @@ function detailRows(document: ArchiveDocument, t: Translate): FieldRow[] {
   ];
 
   return rows.filter((row): row is FieldRow => row !== null).map((row) => {
-    const recorded = fieldConfidence(document, row.name);
+    const recorded = fieldConfidence(document, row.confidenceKey ?? row.name);
     return {
       ...row,
       // The badge belongs to the field, and only when the value is uncertain.
@@ -368,7 +376,14 @@ export function DetailsTab({
             : null
         }
         disabled={offlineReadOnly}
-        onClose={() => setEditing(false)}
+        onClose={() => {
+          // Cancelling drops the edits. Keeping them would silently include them
+          // in whatever the next save sends.
+          syncedFormRef.current = initialForm;
+          setForm(initialForm);
+          setNewCorrespondentName("");
+          setEditing(false);
+        }}
       />
     </>
   );
