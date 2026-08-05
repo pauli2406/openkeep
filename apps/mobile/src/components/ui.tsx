@@ -30,6 +30,7 @@ import { text } from "../typography";
  */
 export function Screen({
   title,
+  titleMeta,
   children,
   scroll = true,
   right,
@@ -41,6 +42,8 @@ export function Screen({
   padded = true,
 }: {
   title: string;
+  /** A mono sub-line under the bar title — Chat names the scope there. */
+  titleMeta?: string;
   children: ReactNode;
   scroll?: boolean;
   right?: ReactNode;
@@ -92,9 +95,20 @@ export function Screen({
           </Pressable>
         ) : null}
         {leading}
-        <Text style={styles.appBarTitle} numberOfLines={1}>
-          {title}
-        </Text>
+        {titleMeta ? (
+          <View style={styles.appBarTitleWrap}>
+            <Text style={styles.appBarTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={styles.appBarTitleMeta} numberOfLines={1}>
+              {titleMeta}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.appBarTitle} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
         {right ? <View style={styles.appBarActions}>{right}</View> : null}
       </View>
       {notice}
@@ -605,6 +619,17 @@ const useStyles = createThemedStyles((c) => ({
   },
   backButtonPressed: {
     opacity: 0.7,
+  },
+  appBarTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  appBarTitleMeta: {
+    ...text.numeric,
+    fontSize: 10.5,
+    lineHeight: 14,
+    marginTop: 1,
+    color: c.faint,
   },
   appBarActions: {
     flexDirection: "row",
