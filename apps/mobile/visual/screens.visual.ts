@@ -50,23 +50,29 @@ const SCREENS: Screen[] = [
     ready: "Add tag",
     reach: async (page) => {
       await tab("Documents")(page);
+      // The chip row grows when the dashboard query supplies the review count,
+      // which pushes the list down by a few pixels. Measuring a row before that
+      // lands is how a long press ends up on the row below the intended one — it
+      // did, on a runner. Wait for the final chip row and the count strip first.
+      await onScreen(page, "Review · 1").waitFor();
+      await onScreen(page, "5 documents").waitFor();
+
       // `.last()`, not `.first()`: the navigator leaves the Today copy of this row
       // mounted, and Playwright still counts it as visible. The list screen is the
       // one that mounted last.
       const row = page.getByText("Stromabrechnung 2026").filter({ visible: true }).last();
       await row.waitFor();
-      // Long press is the only way into selection mode, and a synthesised one
-      // occasionally lands while the list is mid-refetch — so it gets retried
-      // rather than being allowed to fail the screenshot.
+
+      // Long press is the only way into selection mode. `?settled=1` keeps the
+      // list from polling, so the row's box is stable enough to measure; the
+      // result is verified and retried rather than trusted.
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        // `force`: the actionability check waits for the row to be "stable", and
-        // on a loaded runner the list is still settling when the attempt starts.
-        // A missed press is caught by the check below and retried instead.
-        await row.hover({ force: true }).catch(() => {});
+        const box = await row.boundingBox();
+        await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
         await page.mouse.down();
         await page.waitForTimeout(700);
         await page.mouse.up();
-        if (await onScreen(page, "Add tag").isVisible().catch(() => false)) {
+        if (await onScreen(page, "1 selected").isVisible().catch(() => false)) {
           // Off the row again: a hovered row draws its pressed tint, which no
           // phone ever shows.
           await page.mouse.move(0, 0);
