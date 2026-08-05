@@ -5,7 +5,7 @@
  * modules, and this is the only thing between them.
  */
 import type { useI18n } from "../../i18n";
-import type { ArchiveDocument } from "../../lib";
+import { parseArchiveDate, type ArchiveDocument } from "../../lib";
 
 export type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -109,8 +109,10 @@ export function isOverdue(document: ArchiveDocument) {
   if (!document.dueDate) {
     return false;
   }
-  const due = new Date(document.dueDate);
-  if (Number.isNaN(due.getTime())) {
+  // `dueDate` is date-only, so it has to be read as a calendar date — parsed as
+  // UTC midnight, a document due today is already overdue west of Greenwich.
+  const due = parseArchiveDate(document.dueDate);
+  if (!due) {
     return false;
   }
   const startOfToday = new Date();
