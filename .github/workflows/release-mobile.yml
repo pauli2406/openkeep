@@ -78,18 +78,56 @@ jobs:
           git merge-base --is-ancestor "$SHA" origin/main \
             || { echo "::error::$SHA is not an ancestor of origin/main — release from main"; exit 1; }
 
-      - name: Refuse a commit whose CI did not pass
+      - name: Wait for CI, and refuse a commit it did not pass
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ steps.sha.outputs.value }}
         run: |
+          set -euo pipefail
           # `CI` is the aggregate job every other job feeds into (see ci.yml), so
           # one lookup covers lint, tests, both visual suites and the secret scan.
-          conclusion=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" \
-            --jq '[.check_runs[] | select(.name == "CI")] | sort_by(.completed_at) | last | .conclusion // "missing"')
-          echo "CI on $SHA: $conclusion"
-          [ "$conclusion" = "success" ] \
-            || { echo "::error::CI is '$conclusion' for $SHA — a release build is not the place to find out"; exit 1; }
+          #
+          # Releasing right after a merge is the normal case, and then CI is still
+          # running on the merge commit — so this waits for it rather than reading
+          # an empty conclusion as "no CI ran".
+          waited=0
+          grace=180        # seconds to allow for the run to be queued at all
+          deadline=2700    # 45 minutes; the suite takes about ten
+
+          while :; do
+            run=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" \
+              --jq '[.check_runs[] | select(.name == "CI")] | sort_by(.started_at) | last')
+            # No matching run gives jq nothing at all, not `null`, so the empty
+            # case has to be handled before jq sees it.
+            if [ -z "$run" ] || [ "$run" = "null" ]; then
+              status="absent"
+              conclusion=""
+            else
+              status=$(printf '%s' "$run" | jq -r '.status // "absent"')
+              conclusion=$(printf '%s' "$run" | jq -r '.conclusion // ""')
+            fi
+
+            if [ "$status" = "completed" ]; then
+              echo "CI on $SHA: $conclusion"
+              [ "$conclusion" = "success" ] && break
+              echo "::error::CI concluded '$conclusion' for $SHA — release the fix, not this commit"
+              exit 1
+            fi
+
+            if [ "$status" = "absent" ] && [ "$waited" -ge "$grace" ]; then
+              echo "::error::no CI run for $SHA after ${grace}s. CI runs on pushes to main and on pull requests; a commit with no run is not releasable."
+              exit 1
+            fi
+
+            if [ "$waited" -ge "$deadline" ]; then
+              echo "::error::CI was still '$status' after ${deadline}s — check the run before releasing"
+              exit 1
+            fi
+
+            echo "CI is '$status' for $SHA — waiting (${waited}s)"
+            sleep 30
+            waited=$((waited + 30))
+          done
 
       - uses: ./.github/actions/setup
         with:
