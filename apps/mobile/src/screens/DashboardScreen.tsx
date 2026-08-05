@@ -132,18 +132,25 @@ function documentDot(document: ArchiveDocument): RowDot {
  */
 function NumberStrip({
   data,
+  dueCount,
   onReview,
   onDocuments,
 }: {
   data: DashboardInsights;
+  /** What the groups below actually show — the payload caps its lists at six. */
+  dueCount: number;
   onReview: () => void;
   onDocuments: () => void;
 }) {
   const styles = useStyles();
   const { t } = useI18n();
 
-  const dueCount = data.overdueItems.length + data.upcomingDeadlines.length;
-  const newThisMonth = (data.monthlyActivity ?? []).at(-1)?.count ?? 0;
+  // `monthlyActivity` is grouped from real document months and is not
+  // zero-filled, so the last point can be an earlier month. A month with no
+  // arrivals means zero, not "the last month that had some".
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const latest = (data.monthlyActivity ?? []).at(-1);
+  const newThisMonth = latest?.month === currentMonth ? latest.count : 0;
 
   return (
     <View style={styles.numberStrip}>
@@ -187,6 +194,14 @@ function TaskRow({
   const row = (
     <Row
       dot={item.isOverdue ? "red" : "amber"}
+      accessibilityActions={
+        onComplete ? [{ name: "done", label: t("dashboard.tasks.done") }] : undefined
+      }
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "done") {
+          onComplete?.();
+        }
+      }}
       title={item.title}
       meta={
         item.documentTypeName
@@ -226,6 +241,7 @@ function TaskRow({
 
 export function DashboardScreen() {
   const styles = useStyles();
+  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -284,7 +300,23 @@ export function DashboardScreen() {
     <Screen
       title={t("today.brand")}
       leading={<Image source={require("../../assets/icon.png")} style={styles.logoMark} />}
-      right={<AvatarButton />}
+      right={
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("today.correspondents")}
+            onPress={() => navigation.navigate("Correspondents")}
+            hitSlop={12}
+          >
+            <MaterialCommunityIcons
+              name="account-multiple-outline"
+              size={18}
+              color={colors.muted}
+            />
+          </Pressable>
+          <AvatarButton />
+        </>
+      }
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
       padded={false}
     >
@@ -309,6 +341,7 @@ export function DashboardScreen() {
         <>
           <NumberStrip
             data={data}
+            dueCount={overdue.length + thisWeek.length}
             onReview={() => navigation.navigate("Home", { screen: "Review" } as never)}
             onDocuments={() => navigation.navigate("Home", { screen: "Documents" } as never)}
           />

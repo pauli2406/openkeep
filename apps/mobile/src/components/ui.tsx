@@ -226,6 +226,8 @@ export function Row({
   trailing,
   chevron,
   onPress,
+  accessibilityActions,
+  onAccessibilityAction,
   minHeight,
   titleNumberOfLines = 1,
   tone = "default",
@@ -245,6 +247,12 @@ export function Row({
   trailing?: ReactNode;
   chevron?: boolean;
   onPress?: () => void;
+  /**
+   * A gesture-free route to a swipe action, for VoiceOver / TalkBack / switch
+   * control. Passed straight through to the pressable.
+   */
+  accessibilityActions?: Array<{ name: string; label?: string }>;
+  onAccessibilityAction?: (event: { nativeEvent: { actionName: string } }) => void;
   /** 56 is the default; the design uses 50 for settings and 66 for Today. */
   minHeight?: number;
   titleNumberOfLines?: number;
@@ -324,6 +332,8 @@ export function Row({
       // that it can be opened.
       accessibilityRole="button"
       onPress={onPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       style={({ pressed }) => [styles.row, sizing, tinted, pressed ? styles.rowPressed : null]}
     >
       {body}
