@@ -12,9 +12,14 @@ import {
   type Density,
   type ThemePreference,
 } from "../theme";
+import Constants from "expo-constants";
 import { text } from "../typography";
 
-const APP_VERSION = "0.1.0";
+/**
+ * Read from the config the binary was built with, not written here: a hardcoded
+ * copy drifts the moment a release bumps `version` in `app.config.js`, and it did.
+ */
+const APP_VERSION = Constants.expoConfig?.version ?? "—";
 
 /** `1,8 GB` — what the read-through cache is holding. */
 function formatBytes(bytes: number) {

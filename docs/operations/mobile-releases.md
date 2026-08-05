@@ -159,9 +159,10 @@ bump.
 ## Releasing
 
 1. **Bump the version in a PR.** `version` in `apps/mobile/app.config.js` — for
-   example `0.1.0` → `0.2.0`. The release workflow verifies this matches what you
-   asked it to release; it deliberately does not rewrite the commit it is
-   releasing.
+   example `0.1.0` → `0.2.0`. That one line is the whole bump: the Settings screen
+   reads the version out of the config it was built with, so nothing else needs
+   editing. The release workflow verifies this matches what you asked it to
+   release; it deliberately does not rewrite the commit it is releasing.
 2. **CI has to be green on the commit.** The workflow reads the `CI` check and
    waits for it if it is still running — releasing straight after a merge is the
    normal case, and the merge commit's CI is usually still in flight. It refuses a
