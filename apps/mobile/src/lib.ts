@@ -643,13 +643,29 @@ export function formatDate(value: string | null | undefined) {
   }
 }
 
+/**
+ * Parses a date the way the archive means it.
+ *
+ * `issueDate` and `dueDate` arrive as `YYYY-MM-DD`, and `new Date("2026-08-05")`
+ * is UTC midnight — which in any negative-offset zone is the 4th locally. Every
+ * comparison and label here is calendar-based, so a date-only value is built as
+ * a local date.
+ */
+export function parseArchiveDate(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  const date = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 /** `18.03.` — the trailing date on a dense row. */
 export function formatShortDate(value: string | null | undefined) {
-  if (!value) {
-    return "-";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseArchiveDate(value);
+  if (!date) {
     return "-";
   }
   return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.`;

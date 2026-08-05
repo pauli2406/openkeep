@@ -27,6 +27,7 @@ import { text } from "../typography";
 import {
   formatCurrency,
   formatShortDate,
+  parseArchiveDate,
   responseToMessage,
   titleForDocument,
   type ArchiveDocument,
@@ -47,11 +48,12 @@ type DocFilter = "all" | "review" | "due" | "year";
 const PAGE_SIZE = 30;
 
 function isOverdue(document: ArchiveDocument) {
-  if (!document.dueDate) {
+  // A finished task is never overdue — the deadline queues exclude it too.
+  if (!document.dueDate || document.taskCompletedAt) {
     return false;
   }
-  const due = new Date(document.dueDate);
-  if (Number.isNaN(due.getTime())) {
+  const due = parseArchiveDate(document.dueDate);
+  if (!due) {
     return false;
   }
   const startOfToday = new Date();
@@ -204,22 +206,48 @@ export function DocumentsScreen() {
     },
   });
 
+  // The offline mirror stores `created_at` but no issue or due date, so `Fällig`
+  // and a year cannot be honoured there. Offering a chip that quietly does
+  // nothing is worse than not offering it.
   const chips: Array<{ key: DocFilter; label: string; count?: number }> = [
     { key: "all", label: t("documents.filter.all") },
     { key: "review", label: t("documents.filter.review"), count: reviewCount },
-    { key: "due", label: t("documents.filter.due") },
-    { key: "year", label: String(currentYear) },
+    ...(shouldUseCache
+      ? []
+      : [
+          { key: "due" as const, label: t("documents.filter.due") },
+          { key: "year" as const, label: String(currentYear) },
+        ]),
   ];
 
-  const orderLabel =
-    filter === "due"
+  const orderLabel = shouldUseCache
+    ? t("documents.sortRecentlyOpened")
+    : filter === "due"
       ? t("documents.sortDue")
       : oldestFirst
         ? t("documents.sortOldest")
         : t("documents.sortNewest");
 
   const isFiltered = filter !== "all" || query.trim().length > 0;
-  const failedDocument = documentsQuery.data?.items.find(
+
+  /**
+   * `/api/documents/review` takes no `query`, so a search while the Review chip
+   * is active is applied to the fetched page here rather than silently ignored.
+   * The count strip reflects what is on screen, not the queue total.
+   */
+  const needle = query.trim().toLowerCase();
+  const reviewFiltered =
+    filter === "review" && needle.length > 0 && !shouldUseCache
+      ? (documentsQuery.data?.items ?? []).filter((document) =>
+          [titleForDocument(document), document.correspondent?.name, document.documentType?.name]
+            .filter(Boolean)
+            .some((value) => value!.toLowerCase().includes(needle)),
+        )
+      : null;
+  const visibleItems = reviewFiltered ?? documentsQuery.data?.items ?? [];
+  const visibleTotal = reviewFiltered ? reviewFiltered.length : documentsQuery.data?.total ?? 0;
+
+  const failedDocument = visibleItems.find(
     (document) => documentRowState(document) === "failed",
   );
 
@@ -247,12 +275,12 @@ export function DocumentsScreen() {
             accessibilityLabel={t("documents.sortAction")}
             onPress={() => setOldestFirst((current) => !current)}
             hitSlop={12}
-            disabled={filter === "due"}
+            disabled={filter === "due" || shouldUseCache}
           >
             <MaterialCommunityIcons
               name="arrow-up-down"
               size={18}
-              color={filter === "due" ? colors.faint : colors.muted}
+              color={filter === "due" || shouldUseCache ? colors.faint : colors.muted}
             />
           </Pressable>
         </>
@@ -302,7 +330,7 @@ export function DocumentsScreen() {
       {documentsQuery.data ? (
         <View style={styles.countStrip}>
           <Text style={styles.countText}>
-            {`${documentsQuery.data.total.toLocaleString()} ${t("documents.count")}`}
+            {`${visibleTotal.toLocaleString()} ${t("documents.count")}`}
           </Text>
           <Text style={styles.orderText}>{orderLabel}</Text>
         </View>
@@ -323,7 +351,7 @@ export function DocumentsScreen() {
       ) : null}
 
       {documentsQuery.data ? (
-        documentsQuery.data.items.length === 0 ? (
+        visibleItems.length === 0 ? (
           isFiltered ? (
             <EmptyState
               title={query.trim() ? t("state.emptySearch") : t("state.emptyFiltered")}
@@ -337,7 +365,7 @@ export function DocumentsScreen() {
             <EmptyState title={t("documents.noneTitle")} body={t("documents.noneBody")} />
           )
         ) : (
-          documentsQuery.data.items.map((document) => {
+          visibleItems.map((document) => {
             const state = documentRowState(document);
             const pill = documentPill(document, t);
             return (
