@@ -13,6 +13,7 @@ export type {
   ArchiveCredentials,
   ArchiveProfile,
   ArchiveProfileInput,
+  ArchiveProfileWithCredentials,
   CredentialCipher,
   DesktopStorageSnapshot,
   StorageFileSystem,

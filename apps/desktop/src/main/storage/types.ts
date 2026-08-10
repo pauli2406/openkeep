@@ -22,6 +22,11 @@ export interface ArchiveCredentials {
   cfAccessClientSecret?: string;
 }
 
+export interface ArchiveProfileWithCredentials {
+  profile: ArchiveProfile;
+  credentials: ArchiveCredentials;
+}
+
 export interface StoredDesktopStateV1 {
   version: typeof DESKTOP_STORAGE_VERSION;
   lastActiveProfileId: string | null;

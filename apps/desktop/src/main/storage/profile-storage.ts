@@ -7,6 +7,7 @@ import {
   type ArchiveCredentials,
   type ArchiveProfile,
   type ArchiveProfileInput,
+  type ArchiveProfileWithCredentials,
   type CredentialCipher,
   type DesktopStorageSnapshot,
   type StorageFileSystem,
@@ -95,19 +96,40 @@ function isSafeArchiveUrl(value: unknown): value is string {
   }
 }
 
+function normalizeArchiveUrl(value: unknown): string {
+  if (!isSafeArchiveUrl(value)) {
+    throw new DesktopStorageError("Archive URL is invalid.");
+  }
+
+  const url = new URL(value.trim());
+  if (url.search || url.hash) {
+    throw new DesktopStorageError("Archive URL is invalid.");
+  }
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  return url.toString().replace(/\/$/, "");
+}
+
+function assertValidProfileId(profileId: string): void {
+  if (!UUID_PATTERN.test(profileId)) {
+    throw new DesktopStorageError("Archive profile identifier is invalid.");
+  }
+}
+
 function parseProfile(value: unknown, expectedId: string): ArchiveProfile {
   if (!isRecord(value)) {
     throw new DesktopStorageError();
   }
 
-  const { id, archiveUrl, label, allowInsecureHttp, createdAt, updatedAt } = value;
+  const { id, archiveUrl, label, allowInsecureHttp, createdAt, updatedAt } =
+    value;
   if (
     typeof id !== "string" ||
     id !== expectedId ||
     !UUID_PATTERN.test(id) ||
     !isSafeArchiveUrl(archiveUrl) ||
     (label !== undefined && typeof label !== "string") ||
-    (allowInsecureHttp !== undefined && typeof allowInsecureHttp !== "boolean") ||
+    (allowInsecureHttp !== undefined &&
+      typeof allowInsecureHttp !== "boolean") ||
     !isValidTimestamp(createdAt) ||
     !isValidTimestamp(updatedAt)
   ) {
@@ -259,8 +281,38 @@ export class ProfileStorage {
     };
   }
 
+  async getLastActiveProfileId(): Promise<string | null> {
+    return (await this.#readState()).lastActiveProfileId;
+  }
+
   async getCredentials(profileId: string): Promise<ArchiveCredentials | null> {
+    assertValidProfileId(profileId);
     const state = await this.#readState();
+    return this.#decryptCredentials(state, profileId);
+  }
+
+  async loadProfile(
+    profileId: string,
+  ): Promise<ArchiveProfileWithCredentials | null> {
+    assertValidProfileId(profileId);
+    const state = await this.#readState();
+    const profile = state.profiles[profileId];
+    if (profile === undefined) {
+      return null;
+    }
+
+    const credentials = await this.#decryptCredentials(state, profileId);
+    if (credentials === null) {
+      throw new DesktopCredentialError();
+    }
+
+    return { profile, credentials };
+  }
+
+  async #decryptCredentials(
+    state: StoredDesktopStateV1,
+    profileId: string,
+  ): Promise<ArchiveCredentials | null> {
     const blob = state.credentialBlobs[profileId];
     if (blob === undefined) {
       return null;
@@ -293,7 +345,10 @@ export class ProfileStorage {
       return null;
     }
 
-    const credentials = await this.getCredentials(state.lastActiveProfileId);
+    const credentials = await this.#decryptCredentials(
+      state,
+      state.lastActiveProfileId,
+    );
     if (credentials === null) {
       throw new DesktopCredentialError();
     }
@@ -308,27 +363,36 @@ export class ProfileStorage {
     input: ArchiveProfileInput,
     credentials: ArchiveCredentials,
   ): Promise<ArchiveProfile> {
-    if (!isSafeArchiveUrl(input.archiveUrl)) {
-      throw new DesktopStorageError("Archive URL is invalid.");
-    }
+    const archiveUrl = normalizeArchiveUrl(input.archiveUrl);
     if (input.label !== undefined && typeof input.label !== "string") {
+      throw new DesktopStorageError("Archive profile metadata is invalid.");
+    }
+    if (
+      input.allowInsecureHttp !== undefined &&
+      typeof input.allowInsecureHttp !== "boolean"
+    ) {
       throw new DesktopStorageError("Archive profile metadata is invalid.");
     }
 
     const normalizedCredentials = normalizeCredentials(credentials);
     const state = await this.#readState();
     const id = input.id ?? this.#createId();
-    if (!UUID_PATTERN.test(id)) {
-      throw new DesktopStorageError("Archive profile identifier is invalid.");
+    assertValidProfileId(id);
+    if (input.id === undefined && id in state.profiles) {
+      throw new DesktopStorageError(
+        "Archive profile identifier already exists.",
+      );
     }
 
     const existing = state.profiles[id];
+    const label = input.label ?? existing?.label;
     const timestamp = this.#now().toISOString();
     const profile: ArchiveProfile = {
       id,
-      archiveUrl: input.archiveUrl,
-      ...(input.label === undefined ? {} : { label: input.label }),
-      allowInsecureHttp: input.allowInsecureHttp ?? existing?.allowInsecureHttp ?? false,
+      archiveUrl,
+      ...(label === undefined ? {} : { label }),
+      allowInsecureHttp:
+        input.allowInsecureHttp ?? existing?.allowInsecureHttp ?? false,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
     };
@@ -361,7 +425,23 @@ export class ProfileStorage {
   }
 
   async setActiveProfile(profileId: string): Promise<void> {
+    await this.setLastActiveProfile(profileId);
+  }
+
+  async setLastActiveProfile(profileId: string | null): Promise<void> {
+    if (profileId !== null) {
+      assertValidProfileId(profileId);
+    }
     const state = await this.#readState();
+    if (state.lastActiveProfileId === profileId) {
+      return;
+    }
+    if (profileId === null) {
+      state.lastActiveProfileId = null;
+      await this.#writeState(state);
+      return;
+    }
+
     if (!(profileId in state.profiles)) {
       throw new DesktopStorageError("Archive profile was not found.");
     }
@@ -369,7 +449,37 @@ export class ProfileStorage {
     await this.#writeState(state);
   }
 
+  async renameProfile(
+    profileId: string,
+    label: string | undefined,
+  ): Promise<ArchiveProfile> {
+    assertValidProfileId(profileId);
+    if (label !== undefined && typeof label !== "string") {
+      throw new DesktopStorageError("Archive profile metadata is invalid.");
+    }
+
+    const state = await this.#readState();
+    const existing = state.profiles[profileId];
+    if (existing === undefined) {
+      throw new DesktopStorageError("Archive profile was not found.");
+    }
+
+    const profile: ArchiveProfile = {
+      ...existing,
+      updatedAt: this.#now().toISOString(),
+    };
+    if (label === undefined) {
+      delete profile.label;
+    } else {
+      profile.label = label;
+    }
+    state.profiles[profileId] = profile;
+    await this.#writeState(state);
+    return profile;
+  }
+
   async deleteProfile(profileId: string): Promise<void> {
+    assertValidProfileId(profileId);
     const state = await this.#readState();
     if (!(profileId in state.profiles)) {
       return;
@@ -378,7 +488,7 @@ export class ProfileStorage {
     delete state.profiles[profileId];
     delete state.credentialBlobs[profileId];
     if (state.lastActiveProfileId === profileId) {
-      state.lastActiveProfileId = Object.keys(state.profiles)[0] ?? null;
+      state.lastActiveProfileId = null;
     }
 
     if (Object.keys(state.profiles).length === 0) {

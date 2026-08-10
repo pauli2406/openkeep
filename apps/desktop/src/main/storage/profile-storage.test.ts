@@ -16,7 +16,9 @@ import {
 import type { CredentialCipher, StorageFileSystem } from "./types";
 
 const PROFILE_ID = "c6315ec9-9b56-45f3-a04d-8f4bc371fbef";
+const SECOND_PROFILE_ID = "ad7bd600-4459-4c76-83d6-e1b204d24655";
 const TEMP_ID = "209057a9-17a5-4608-bdc4-5746722459ca";
+const SECOND_TEMP_ID = "59f6da17-4e29-49a9-a142-e40d97db4234";
 const API_TOKEN = "openkeep-secret-token";
 const CF_CLIENT_ID = "cloudflare-client-id";
 const CF_CLIENT_SECRET = "cloudflare-client-secret";
@@ -48,6 +50,14 @@ function xorCipher(): CredentialCipher {
       ).toString("utf8");
     },
   };
+}
+
+function createIdSequence(...ids: string[]): () => string {
+  const createId = vi.fn<() => string>();
+  for (const id of ids) {
+    createId.mockReturnValueOnce(id);
+  }
+  return createId;
 }
 
 describe("ProfileStorage", () => {
@@ -144,6 +154,186 @@ describe("ProfileStorage", () => {
     expect(updated.createdAt).toBe(original.createdAt);
     expect(updated.updatedAt).toBe("2026-08-10T09:00:00.000Z");
   });
+
+  it("keeps profiles distinct when labels and normalized archive URLs match", async () => {
+    const storage = new ProfileStorage({
+      filePath: await createTestPath(),
+      cipher: xorCipher(),
+      createId: createIdSequence(
+        PROFILE_ID,
+        TEMP_ID,
+        SECOND_PROFILE_ID,
+        SECOND_TEMP_ID,
+      ),
+    });
+
+    const first = await storage.saveProfile(
+      { archiveUrl: "https://keep.example.test/base/", label: "Personal" },
+      { apiToken: "first-token" },
+    );
+    const second = await storage.saveProfile(
+      { archiveUrl: "https://keep.example.test/base", label: "Personal" },
+      { apiToken: "second-token" },
+    );
+
+    expect(first.id).not.toBe(second.id);
+    expect(first.archiveUrl).toBe("https://keep.example.test/base");
+    expect(second.archiveUrl).toBe(first.archiveUrl);
+    await expect(storage.snapshot()).resolves.toMatchObject({
+      profiles: [first, second],
+    });
+  });
+
+  it("loads any stored profile and its own decrypted credentials by UUID", async () => {
+    const storage = new ProfileStorage({
+      filePath: await createTestPath(),
+      cipher: xorCipher(),
+      createId: createIdSequence(
+        PROFILE_ID,
+        TEMP_ID,
+        SECOND_PROFILE_ID,
+        SECOND_TEMP_ID,
+      ),
+    });
+    const first = await storage.saveProfile(
+      { archiveUrl: "https://first.example.test" },
+      { apiToken: "first-token" },
+    );
+    await storage.saveProfile(
+      { archiveUrl: "https://second.example.test" },
+      { apiToken: "second-token" },
+    );
+
+    await expect(storage.loadProfile(first.id)).resolves.toEqual({
+      profile: first,
+      credentials: { apiToken: "first-token" },
+    });
+  });
+
+  it("gets and changes the last active profile independently of profile data", async () => {
+    const storage = new ProfileStorage({
+      filePath: await createTestPath(),
+      cipher: xorCipher(),
+      createId: createIdSequence(
+        PROFILE_ID,
+        TEMP_ID,
+        SECOND_PROFILE_ID,
+        SECOND_TEMP_ID,
+        TEMP_ID,
+        SECOND_TEMP_ID,
+      ),
+    });
+    const first = await storage.saveProfile(
+      { archiveUrl: "https://first.example.test" },
+      { apiToken: "first-token" },
+    );
+    await storage.saveProfile(
+      { archiveUrl: "https://second.example.test" },
+      { apiToken: "second-token" },
+    );
+
+    await expect(storage.getLastActiveProfileId()).resolves.toBe(
+      SECOND_PROFILE_ID,
+    );
+    await storage.setLastActiveProfile(first.id);
+    await expect(storage.getLastActiveProfileId()).resolves.toBe(first.id);
+    await storage.setLastActiveProfile(null);
+    await expect(storage.getLastActiveProfileId()).resolves.toBeNull();
+  });
+
+  it("renames a profile without changing its UUID or re-encrypting credentials", async () => {
+    const cipher = xorCipher();
+    const encrypt = vi.spyOn(cipher, "encrypt");
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date("2026-08-10T08:00:00.000Z"))
+      .mockReturnValueOnce(new Date("2026-08-10T09:00:00.000Z"));
+    const storage = new ProfileStorage({
+      filePath: await createTestPath(),
+      cipher,
+      createId: createIdSequence(PROFILE_ID, TEMP_ID, SECOND_TEMP_ID),
+      now,
+    });
+    const original = await storage.saveProfile(
+      { archiveUrl: "https://keep.example.test", label: "Old name" },
+      { apiToken: API_TOKEN },
+    );
+
+    const renamed = await storage.renameProfile(original.id, "New name");
+
+    expect(renamed).toEqual({
+      ...original,
+      label: "New name",
+      updatedAt: "2026-08-10T09:00:00.000Z",
+    });
+    expect(encrypt).toHaveBeenCalledTimes(1);
+    await expect(storage.loadProfile(original.id)).resolves.toEqual({
+      profile: renamed,
+      credentials: { apiToken: API_TOKEN },
+    });
+  });
+
+  it("deletes only the selected profile and credential blob", async () => {
+    const storage = new ProfileStorage({
+      filePath: await createTestPath(),
+      cipher: xorCipher(),
+      createId: createIdSequence(
+        PROFILE_ID,
+        TEMP_ID,
+        SECOND_PROFILE_ID,
+        SECOND_TEMP_ID,
+        TEMP_ID,
+      ),
+    });
+    const first = await storage.saveProfile(
+      { archiveUrl: "https://first.example.test" },
+      { apiToken: "first-token" },
+    );
+    const second = await storage.saveProfile(
+      { archiveUrl: "https://second.example.test" },
+      { apiToken: "second-token" },
+    );
+
+    await storage.deleteProfile(first.id);
+
+    await expect(storage.loadProfile(first.id)).resolves.toBeNull();
+    await expect(storage.loadProfile(second.id)).resolves.toEqual({
+      profile: second,
+      credentials: { apiToken: "second-token" },
+    });
+    await expect(storage.snapshot()).resolves.toEqual({
+      lastActiveProfileId: second.id,
+      profiles: [second],
+    });
+  });
+
+  it.each([
+    ["load", (storage: ProfileStorage) => storage.loadProfile("not-a-uuid")],
+    [
+      "activate",
+      (storage: ProfileStorage) => storage.setLastActiveProfile("not-a-uuid"),
+    ],
+    [
+      "rename",
+      (storage: ProfileStorage) => storage.renameProfile("not-a-uuid", "Name"),
+    ],
+    [
+      "delete",
+      (storage: ProfileStorage) => storage.deleteProfile("not-a-uuid"),
+    ],
+  ])(
+    "rejects an invalid UUID when attempting to %s a profile",
+    async (_name, run) => {
+      const storage = new ProfileStorage({
+        filePath: await createTestPath(),
+        cipher: xorCipher(),
+      });
+
+      await expect(run(storage)).rejects.toEqual(
+        new DesktopStorageError("Archive profile identifier is invalid."),
+      );
+    },
+  );
 
   it.each([
     ["invalid JSON", "not-json"],
