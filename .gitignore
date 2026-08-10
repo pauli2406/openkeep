@@ -5,8 +5,10 @@
 !.env.example
 !.env.*.example
 .turbo
+.vite
 coverage
 dist
+out
 node_modules
 tmp
 data

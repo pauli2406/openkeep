@@ -9,7 +9,7 @@ function getBaseUrl() {
     return "";
   }
 
-  return window.location.origin;
+  return new URL("/", window.location.href).toString();
 }
 
 function toApiUrl(input: string) {
