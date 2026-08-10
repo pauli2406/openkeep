@@ -21,6 +21,7 @@ import { useAuth, type RouterContext } from "@/hooks/use-auth";
 import { Omnibar, openOmnibar } from "@/components/omnibar/omnibar";
 import { fetchDashboardInsights } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { useShellAccessory } from "@/lib/host-shell";
 import { useTheme } from "@/hooks/use-theme";
 
 /** Top-bar tab. `count` is rendered as a mono badge when present. */
@@ -67,6 +68,7 @@ function RootComponent() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const ShellAccessory = useShellAccessory();
   const publicPaths = ["/login", "/setup"];
   const isPublicRoute = publicPaths.some((path) => location.pathname === path);
   const isAuthed = auth.isAuthenticated;
@@ -158,6 +160,12 @@ function RootComponent() {
                 ⌘K
               </kbd>
             </button>
+
+            {ShellAccessory ? (
+              <div className="flex-shrink-0">
+                <ShellAccessory />
+              </div>
+            ) : null}
 
             <Button asChild className="flex-shrink-0">
               <Link to="/upload">

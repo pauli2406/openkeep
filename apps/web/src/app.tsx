@@ -3,6 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
 import { AuthProvider as BrowserAuthProvider, useAuth } from "./hooks/use-auth";
+import {
+  ShellAccessoryProvider,
+  type ShellAccessory,
+} from "./lib/host-shell";
 import { I18nProvider } from "./lib/i18n";
 
 export function createAppQueryClient() {
@@ -59,15 +63,21 @@ export function AppRouter({
 
 export interface AppProps {
   AuthProvider?: ComponentType<{ children: ReactNode }>;
+  ShellAccessory?: ShellAccessory;
 }
 
-export function App({ AuthProvider = BrowserAuthProvider }: AppProps = {}) {
+export function App({
+  AuthProvider = BrowserAuthProvider,
+  ShellAccessory,
+}: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
   return (
     <QueryClientProvider client={appInstance.queryClient}>
       <AuthProvider>
-        <AppRouter {...appInstance} />
+        <ShellAccessoryProvider accessory={ShellAccessory}>
+          <AppRouter {...appInstance} />
+        </ShellAccessoryProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
