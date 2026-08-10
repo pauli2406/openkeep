@@ -6,16 +6,24 @@ describe("preload bridge contract", () => {
     const invoke = vi.fn(async () => ({ ok: true }));
     const bridge = createDesktopBridge(invoke);
 
-    await bridge.connection.checkHealth({ serverUrl: "https://archive.example.com" });
+    await bridge.session.restore();
+    await bridge.session.connect({
+      serverUrl: "https://archive.example.com",
+      apiToken: "secret",
+    });
+    await bridge.session.retry();
+    await bridge.session.signOut();
     await bridge.runtime.getInfo();
 
-    expect(invoke).toHaveBeenNthCalledWith(
-      1,
-      DESKTOP_CHANNELS.connectionCheckHealth,
-      { serverUrl: "https://archive.example.com" },
-    );
-    expect(invoke).toHaveBeenNthCalledWith(2, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
+    expect(invoke).toHaveBeenNthCalledWith(2, DESKTOP_CHANNELS.sessionConnect, {
+      serverUrl: "https://archive.example.com",
+      apiToken: "secret",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, DESKTOP_CHANNELS.sessionRetry);
+    expect(invoke).toHaveBeenNthCalledWith(4, DESKTOP_CHANNELS.sessionSignOut);
+    expect(invoke).toHaveBeenNthCalledWith(5, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(Object.isFrozen(bridge)).toBe(true);
-    expect(Object.keys(bridge)).toEqual(["connection", "runtime"]);
+    expect(Object.keys(bridge)).toEqual(["session", "runtime"]);
   });
 });

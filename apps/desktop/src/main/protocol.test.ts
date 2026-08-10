@@ -6,6 +6,19 @@ const rendererRoot = path.resolve("/virtual/openkeep-renderer");
 const indexPath = path.join(rendererRoot, "index.html");
 const assetPath = path.join(rendererRoot, "assets", "app.js");
 const fileExists = (filePath: string) => [indexPath, assetPath].includes(filePath);
+const activeSession = {
+  profile: {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    label: "archive.example.com",
+    serverUrl: "https://archive.example.com/base",
+    allowInsecureHttp: false,
+  },
+  credentials: {
+    apiToken: "desktop-api-token",
+    cfAccessClientId: "client.access",
+    cfAccessClientSecret: "cloudflare-secret",
+  },
+};
 
 describe("renderer asset resolver", () => {
   it("serves the index for root and allowlisted client routes", () => {
@@ -40,7 +53,7 @@ describe("openkeep protocol handler", () => {
   it("adds the production CSP to application HTML", async () => {
     const handler = createAppProtocolHandler({
       rendererRoot,
-      connection: { getActiveArchiveUrl: () => null },
+      archiveSession: { getActiveSession: () => null },
       fileExists,
       fetchRequest: async () => new Response("<html></html>", { status: 200 }),
     });
@@ -52,32 +65,154 @@ describe("openkeep protocol handler", () => {
   });
 
   it("keeps API traffic out of the static renderer", async () => {
-    const fetchRequest = vi.fn(async () => new Response("ok"));
+    const fetchRequest = vi.fn(
+      async (_input: string | Request, _init?: RequestInit) => new Response("ok"),
+    );
     const disconnected = createAppProtocolHandler({
       rendererRoot,
-      connection: { getActiveArchiveUrl: () => null },
+      archiveSession: { getActiveSession: () => null },
       fileExists,
       fetchRequest,
     });
     expect((await disconnected(new Request("openkeep://app/api/health"))).status).toBe(503);
-    expect((await disconnected(new Request("openkeep://app/api/documents"))).status).toBe(501);
+    expect((await disconnected(new Request("openkeep://app/api/documents"))).status).toBe(503);
     expect(fetchRequest).not.toHaveBeenCalled();
   });
 
-  it("forwards only health to the active archive during the foundation slice", async () => {
-    const fetchRequest = vi.fn(async () => new Response("ok"));
+  it("forwards authenticated API traffic without renderer-supplied credentials", async () => {
+    let forwardedBody = "";
+    const fetchRequest = vi.fn(
+      async (_input: string | Request, init?: RequestInit) => {
+        forwardedBody = await new Response(init?.body).text();
+        return new Response("ok");
+      },
+    );
     const handler = createAppProtocolHandler({
       rendererRoot,
-      connection: { getActiveArchiveUrl: () => "https://archive.example.com/base" },
+      archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest,
     });
 
-    const response = await handler(new Request("openkeep://app/api/health"));
+    const response = await handler(
+      new Request("openkeep://app/api/documents?page=2", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer renderer-spoof",
+          "cf-access-client-secret": "renderer-spoof",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ title: "Upload" }),
+        duplex: "half",
+      } as RequestInit & { duplex: "half" }),
+    );
     expect(response.status).toBe(200);
     expect(fetchRequest).toHaveBeenCalledWith(
-      "https://archive.example.com/base/api/health",
-      expect.objectContaining({ method: "GET" }),
+      "https://archive.example.com/base/api/documents?page=2",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.anything(),
+        redirect: "manual",
+      }),
     );
+    const headers = new Headers(fetchRequest.mock.calls[0][1]?.headers);
+    expect(headers.get("authorization")).toBe("Bearer desktop-api-token");
+    expect(headers.get("cf-access-client-id")).toBe("client.access");
+    expect(headers.get("cf-access-client-secret")).toBe("cloudflare-secret");
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(forwardedBody).toBe(JSON.stringify({ title: "Upload" }));
+  });
+
+  it("preserves multipart uploads without rebuilding their body or content type", async () => {
+    let uploadedBody = "";
+    let uploadedContentType = "";
+    const fetchRequest = vi.fn(
+      async (_input: string | Request, init?: RequestInit) => {
+        uploadedContentType = new Headers(init?.headers).get("content-type") ?? "";
+        uploadedBody = await new Response(init?.body).text();
+        return new Response(null, { status: 201 });
+      },
+    );
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest,
+    });
+    const boundary = "openkeep-desktop-boundary";
+    const multipartBody = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="document"; filename="archive.txt"',
+      "Content-Type: text/plain",
+      "",
+      "desktop-upload",
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+
+    const response = await handler(
+      new Request("openkeep://app/api/documents/upload", {
+        method: "POST",
+        headers: { "content-type": `multipart/form-data; boundary=${boundary}` },
+        body: multipartBody,
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(uploadedContentType).toMatch(/^multipart\/form-data; boundary=/);
+    expect(uploadedBody).toContain("desktop-upload");
+    expect(uploadedBody).toContain('filename="archive.txt"');
+  });
+
+  it("preserves binary downloads as ordinary responses", async () => {
+    const bytes = new Uint8Array([0, 23, 42, 255]);
+    const download = new Response(bytes, {
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-disposition": 'attachment; filename="document.bin"',
+      },
+    });
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest: vi.fn(async () => download),
+    });
+
+    const response = await handler(new Request("openkeep://app/api/documents/42/download"));
+    expect(response).toBe(download);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+  });
+
+  it("preserves SSE responses as ordinary streaming responses", async () => {
+    const sse = new Response("event: token\ndata: hello\n\n", {
+      headers: { "content-type": "text/event-stream" },
+    });
+    const fetchRequest = vi.fn(async () => sse);
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = await handler(new Request("openkeep://app/api/search/answer/stream"));
+    expect(response).toBe(sse);
+    expect(await response.text()).toContain("event: token");
+  });
+
+  it("returns a sanitized gateway error without leaking fetch details", async () => {
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest: async () => {
+        throw new Error("secret token and certificate details");
+      },
+    });
+
+    const response = await handler(new Request("openkeep://app/api/documents"));
+    expect(response.status).toBe(502);
+    expect(await response.text()).not.toContain("secret token");
   });
 });

@@ -100,13 +100,14 @@ function parseProfile(value: unknown, expectedId: string): ArchiveProfile {
     throw new DesktopStorageError();
   }
 
-  const { id, archiveUrl, label, createdAt, updatedAt } = value;
+  const { id, archiveUrl, label, allowInsecureHttp, createdAt, updatedAt } = value;
   if (
     typeof id !== "string" ||
     id !== expectedId ||
     !UUID_PATTERN.test(id) ||
     !isSafeArchiveUrl(archiveUrl) ||
     (label !== undefined && typeof label !== "string") ||
+    (allowInsecureHttp !== undefined && typeof allowInsecureHttp !== "boolean") ||
     !isValidTimestamp(createdAt) ||
     !isValidTimestamp(updatedAt)
   ) {
@@ -117,6 +118,7 @@ function parseProfile(value: unknown, expectedId: string): ArchiveProfile {
     id,
     archiveUrl,
     ...(label === undefined ? {} : { label }),
+    allowInsecureHttp: allowInsecureHttp ?? false,
     createdAt,
     updatedAt,
   };
@@ -245,6 +247,10 @@ export class ProfileStorage {
     this.#now = options.now ?? (() => new Date());
   }
 
+  async assertSecureStorageAvailable(): Promise<void> {
+    await this.#cipher.assertAvailable?.();
+  }
+
   async snapshot(): Promise<DesktopStorageSnapshot> {
     const state = await this.#readState();
     return {
@@ -322,6 +328,7 @@ export class ProfileStorage {
       id,
       archiveUrl: input.archiveUrl,
       ...(input.label === undefined ? {} : { label: input.label }),
+      allowInsecureHttp: input.allowInsecureHttp ?? existing?.allowInsecureHttp ?? false,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
     };

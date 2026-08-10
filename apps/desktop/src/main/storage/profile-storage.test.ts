@@ -73,6 +73,7 @@ describe("ProfileStorage", () => {
       id: PROFILE_ID,
       archiveUrl: "https://keep.example.test",
       label: "Home",
+      allowInsecureHttp: false,
       createdAt: "2026-08-10T08:00:00.000Z",
       updatedAt: "2026-08-10T08:00:00.000Z",
     });

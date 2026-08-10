@@ -1,4 +1,5 @@
 export { ProfileStorage } from "./profile-storage";
+export { createArchiveProfileRepository } from "./archive-profile-repository";
 export { DesktopCredentialError, DesktopStorageError } from "./profile-storage";
 export {
   createSafeStorageCipher,

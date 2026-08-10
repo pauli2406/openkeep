@@ -4,6 +4,7 @@ export interface ArchiveProfile {
   id: string;
   archiveUrl: string;
   label?: string;
+  allowInsecureHttp: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -12,6 +13,7 @@ export interface ArchiveProfileInput {
   id?: string;
   archiveUrl: string;
   label?: string;
+  allowInsecureHttp?: boolean;
 }
 
 export interface ArchiveCredentials {
@@ -33,6 +35,7 @@ export interface DesktopStorageSnapshot {
 }
 
 export interface CredentialCipher {
+  assertAvailable?(): Promise<void> | void;
   encrypt(plaintext: string): Promise<Uint8Array> | Uint8Array;
   decrypt(ciphertext: Uint8Array): Promise<string> | string;
 }

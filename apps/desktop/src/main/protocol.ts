@@ -1,12 +1,13 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { ConnectionService, DesktopFetch } from "./connection";
+import type { ArchiveSessionService } from "./archive-session";
+import { resolveArchiveApiUrl, type DesktopFetch } from "./connection";
 import { APP_HOST, isApplicationRoute } from "./security";
 
 type ProtocolHandlerOptions = {
   rendererRoot: string;
   rendererDevServerUrl?: string;
-  connection: Pick<ConnectionService, "getActiveArchiveUrl">;
+  archiveSession: Pick<ArchiveSessionService, "getActiveSession">;
   fetchRequest: DesktopFetch;
   fileExists: (filePath: string) => boolean;
 };
@@ -116,7 +117,16 @@ function withProductionCsp(response: Response): Response {
 
 function createForwardHeaders(headers: Headers): Headers {
   const forwarded = new Headers(headers);
-  for (const name of ["host", "origin", "referer", "content-length"]) {
+  for (const name of [
+    "host",
+    "origin",
+    "referer",
+    "content-length",
+    "cookie",
+    "authorization",
+    "cf-access-client-id",
+    "cf-access-client-secret",
+  ]) {
     forwarded.delete(name);
   }
   return forwarded;
@@ -135,26 +145,41 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
       return textResponse(404, "Unknown OpenKeep host.");
     }
 
-    if (url.pathname === "/api/health") {
-      if (request.method !== "GET" && request.method !== "HEAD") {
-        return textResponse(405, "Method not allowed for archive health checks.");
-      }
-
-      const activeArchiveUrl = options.connection.getActiveArchiveUrl();
-      if (!activeArchiveUrl) {
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+      const active = options.archiveSession.getActiveSession();
+      if (!active) {
         return textResponse(503, "Connect to an OpenKeep archive first.");
       }
 
-      const target = `${activeArchiveUrl}${url.pathname}${url.search}`;
-      return options.fetchRequest(target, {
-        method: "GET",
-        headers: createForwardHeaders(request.headers),
-        signal: request.signal,
-      });
-    }
+      const headers = createForwardHeaders(request.headers);
+      headers.set("authorization", `Bearer ${active.credentials.apiToken}`);
+      if (
+        active.credentials.cfAccessClientId &&
+        active.credentials.cfAccessClientSecret
+      ) {
+        headers.set("cf-access-client-id", active.credentials.cfAccessClientId);
+        headers.set("cf-access-client-secret", active.credentials.cfAccessClientSecret);
+      }
 
-    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-      return textResponse(501, "Authenticated desktop API access is not available yet.");
+      const target = resolveArchiveApiUrl(
+        active.profile.serverUrl,
+        `${url.pathname}${url.search}`,
+      );
+      const supportsBody = request.method !== "GET" && request.method !== "HEAD";
+      try {
+        return await options.fetchRequest(target, {
+          method: request.method,
+          headers,
+          body: supportsBody ? request.body : undefined,
+          signal: request.signal,
+          redirect: "manual",
+          // Required by Node-compatible Fetch implementations for a streaming
+          // upload body; Electron ignores the field when it is unnecessary.
+          duplex: supportsBody ? "half" : undefined,
+        } as RequestInit & { duplex?: "half" });
+      } catch {
+        return textResponse(502, "The active OpenKeep archive could not be reached.");
+      }
     }
 
     if (request.method !== "GET" && request.method !== "HEAD") {

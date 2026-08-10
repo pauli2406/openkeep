@@ -75,6 +75,22 @@
   font-weight: 600;
 }
 
+.desktop-connect-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.desktop-connect-label-row button {
+  border: 0;
+  background: transparent;
+  color: var(--ok-accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+}
+
 .desktop-connect-control {
   display: flex;
   align-items: center;
@@ -128,7 +144,7 @@
   color: var(--ok-red);
 }
 
-.desktop-connect-form button {
+.desktop-connect-form > button[type="submit"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -145,14 +161,104 @@
   transition: filter 140ms ease, transform 140ms ease;
 }
 
-.desktop-connect-form button:hover:not(:disabled) {
+.desktop-connect-form > button[type="submit"]:hover:not(:disabled) {
   filter: brightness(1.04);
   transform: translateY(-1px);
 }
 
-.desktop-connect-form button:disabled {
+.desktop-connect-form > button[type="submit"]:disabled {
   cursor: wait;
   opacity: 0.7;
+}
+
+.desktop-connect-advanced {
+  margin-top: 6px;
+  border-top: 1px solid var(--ok-border);
+  border-bottom: 1px solid var(--ok-border);
+}
+
+.desktop-connect-advanced summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 0;
+  color: var(--ok-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.desktop-connect-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-connect-advanced summary span {
+  color: var(--ok-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+
+.desktop-connect-advanced-fields {
+  display: grid;
+  gap: 7px;
+  padding: 4px 0 14px;
+}
+
+.desktop-connect-advanced-fields input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-md);
+  outline: 0;
+  background: var(--ok-app);
+  color: var(--ok-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.desktop-connect-advanced-fields input:focus {
+  border-color: var(--ok-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-accent) 14%, transparent);
+}
+
+.desktop-connect-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 4px 36px 36px;
+}
+
+.desktop-connect-actions button {
+  min-height: 42px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--ok-accent-fill);
+  color: var(--ok-accent-fill-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.desktop-connect-actions .desktop-secondary-button {
+  border: 1px solid var(--ok-border-strong);
+  background: var(--ok-panel);
+  color: var(--ok-ink);
+}
+
+.desktop-connect-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  color: var(--ok-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.desktop-connect-status-dot--warning {
+  background: var(--ok-red);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-red) 12%, transparent);
 }
 
 .desktop-connect-panel footer {
@@ -182,7 +288,8 @@
   }
 
   .desktop-connect-copy,
-  .desktop-connect-form {
+  .desktop-connect-form,
+  .desktop-connect-actions {
     padding-left: 22px;
     padding-right: 22px;
   }

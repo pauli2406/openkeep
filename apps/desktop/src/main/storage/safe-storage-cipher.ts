@@ -49,6 +49,7 @@ export function createSafeStorageCipher(
   };
 
   return {
+    assertAvailable: assertSecureStorageAvailable,
     encrypt(plaintext) {
       assertSecureStorageAvailable();
       return safeStorage.encryptString(plaintext);

@@ -1,14 +1,34 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { DesktopBridge } from "../shared/desktop-api";
+import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
 import { ConnectionScreen } from "./connection-screen";
 
+const currentUser = {
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  email: "owner@example.com",
+  displayName: "Archive Owner",
+  isOwner: true,
+  twoFactorEnabled: false,
+  preferences: {
+    uiLanguage: "en" as const,
+    aiProcessingLanguage: "en" as const,
+    aiChatLanguage: "en" as const,
+  },
+  createdAt: "2026-08-10T00:00:00.000Z",
+};
+
 function createBridge(
-  result: Awaited<ReturnType<DesktopBridge["connection"]["checkHealth"]>>,
+  connectResult: DesktopSessionState,
+  retryResult: DesktopSessionState = connectResult,
 ): DesktopBridge {
   return {
-    connection: { checkHealth: vi.fn(async () => result) },
+    session: {
+      restore: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "no-profile" })),
+      connect: vi.fn(async () => connectResult),
+      retry: vi.fn(async () => retryResult),
+      signOut: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "signed-out" })),
+    },
     runtime: {
       getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
     },
@@ -16,41 +36,119 @@ function createBridge(
 }
 
 describe("desktop connection screen", () => {
-  it("opens the shared application after a successful archive check", async () => {
-    const onConnected = vi.fn();
-    const bridge = createBridge({
-      ok: true,
-      serverUrl: "https://archive.example.com",
-      serverStatus: "ok",
-    });
+  it("opens the shared application after token verification", async () => {
+    const onStateChange = vi.fn();
+    const connected: DesktopSessionState = {
+      status: "connected",
+      profile: {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        label: "archive.example.com",
+        serverUrl: "https://archive.example.com",
+      },
+      user: currentUser,
+    };
+    const bridge = createBridge(connected);
     const user = userEvent.setup();
-    render(<ConnectionScreen bridge={bridge} onConnected={onConnected} />);
+    render(
+      <ConnectionScreen
+        bridge={bridge}
+        initialState={{ status: "disconnected", reason: "no-profile" }}
+        onStateChange={onStateChange}
+      />,
+    );
 
-    const input = screen.getByLabelText("Archive address");
-    await user.clear(input);
-    await user.type(input, "https://archive.example.com");
-    await user.click(screen.getByRole("button", { name: /check and open/i }));
+    const address = screen.getByLabelText("Archive address");
+    await user.clear(address);
+    await user.type(address, "https://archive.example.com");
+    await user.type(screen.getByLabelText("API token"), "openkeep_api_token");
+    await user.click(screen.getByRole("button", { name: /connect archive/i }));
 
-    expect(bridge.connection.checkHealth).toHaveBeenCalledWith({
+    expect(bridge.session.connect).toHaveBeenCalledWith({
       serverUrl: "https://archive.example.com",
+      apiToken: "openkeep_api_token",
+      cfAccessClientId: "",
+      cfAccessClientSecret: "",
+      allowInsecureHttp: false,
     });
-    expect(onConnected).toHaveBeenCalledOnce();
+    expect(onStateChange).toHaveBeenCalledWith(connected);
     expect(await screen.findByText("Desktop 0.1.0 · darwin")).toBeInTheDocument();
   });
 
-  it("shows a sanitized connection failure", async () => {
+  it("shows a sanitized connection failure and clears a rejected token", async () => {
     const bridge = createBridge({
-      ok: false,
-      code: "unreachable",
-      message: "Could not reach the OpenKeep server.",
+      status: "error",
+      code: "invalid-credentials",
+      message: "The API token was not accepted.",
     });
     const user = userEvent.setup();
-    render(<ConnectionScreen bridge={bridge} onConnected={vi.fn()} />);
+    render(
+      <ConnectionScreen
+        bridge={bridge}
+        initialState={{ status: "disconnected", reason: "no-profile" }}
+        onStateChange={vi.fn()}
+      />,
+    );
 
-    await user.click(screen.getByRole("button", { name: /check and open/i }));
+    const token = screen.getByLabelText("API token");
+    await user.type(token, "rejected-token");
+    await user.click(screen.getByRole("button", { name: /connect archive/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Could not reach the OpenKeep server.",
+      "The API token was not accepted.",
+    );
+    expect(token).toHaveValue("");
+  });
+
+  it("requires a second explicit action for remote plaintext HTTP", async () => {
+    const warning: DesktopSessionState = {
+      status: "error",
+      code: "insecure-http-confirmation-required",
+      message: "The API token could be read in transit.",
+      serverUrl: "http://archive.example.com",
+    };
+    const bridge = createBridge(warning);
+    const user = userEvent.setup();
+    render(
+      <ConnectionScreen
+        bridge={bridge}
+        initialState={{ status: "disconnected", reason: "no-profile" }}
+        onStateChange={vi.fn()}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Archive address"));
+    await user.type(screen.getByLabelText("Archive address"), "http://archive.example.com");
+    await user.type(screen.getByLabelText("API token"), "token");
+    await user.click(screen.getByRole("button", { name: /connect archive/i }));
+
+    expect(await screen.findByRole("button", { name: /connect over plaintext http/i }))
+      .toBeInTheDocument();
+  });
+
+  it("offers retry and edit when a stored archive is unavailable", async () => {
+    const unavailable: DesktopSessionState = {
+      status: "unavailable",
+      profile: {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        label: "archive.example.com",
+        serverUrl: "https://archive.example.com",
+      },
+      message: "The archive could not be reached.",
+    };
+    const bridge = createBridge(unavailable, unavailable);
+    const user = userEvent.setup();
+    render(
+      <ConnectionScreen
+        bridge={bridge}
+        initialState={unavailable}
+        onStateChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/could not reach archive.example.com/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /edit connection/i }));
+    expect(screen.getByLabelText("Archive address")).toHaveValue(
+      "https://archive.example.com",
     );
   });
 });
