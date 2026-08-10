@@ -1,8 +1,10 @@
 import type { BrowserWindowConstructorOptions } from "electron";
+import { DESKTOP_SHELL_PARTITION } from "./profile-partition";
 
 export function createMainWindowOptions(
   preloadPath: string,
   isPackaged: boolean,
+  partition = DESKTOP_SHELL_PARTITION,
 ): BrowserWindowConstructorOptions {
   return {
     width: 1_280,
@@ -14,6 +16,7 @@ export function createMainWindowOptions(
     title: "OpenKeep",
     webPreferences: {
       preload: preloadPath,
+      partition,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
