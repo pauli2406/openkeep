@@ -39,6 +39,10 @@ Important:
 - a newly created token is only shown once
 - store it securely when it is generated
 
+The [Desktop App](./desktop-app.md) uses one of these tokens to connect to an
+existing archive. Revoking that token causes the desktop app to remove its
+stored connection the next time the server verifies it.
+
 ## Tags and Taxonomy
 
 `Settings -> Tags & taxonomy` curates the labels used across the archive.
