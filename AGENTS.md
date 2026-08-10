@@ -15,7 +15,7 @@ OpenKeep is a self-hosted, AI-assisted document archive: NestJS API, async proce
 - `apps/web` — TanStack Router web client
 - `apps/docs` — Docusaurus renderer for the root `docs/` content
 - `apps/mobile` — Expo/React Native client with offline archive support
-- `apps/desktop` — placeholder, not an active development target
+- `apps/desktop` — Electron Forge client that reuses the web application
 - `packages/config` — environment parsing and provider configuration
 - `packages/db` — Drizzle schema and migrations
 - `packages/types` — shared Zod schemas and public API types

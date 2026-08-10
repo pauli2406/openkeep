@@ -23,6 +23,8 @@ OpenKeep is a self-hosted document archive that combines:
 - `apps/api`: NestJS API and most backend orchestration
 - `apps/worker`: background worker runtime for queued processing
 - `apps/web`: TanStack Router web application
+- `apps/desktop`: Electron Forge client using the shared web application
+- `apps/mobile`: Expo/React Native client with an offline archive
 - `packages/config`: shared config parsing and provider configuration
 - `packages/db`: schema, migrations, and database package
 - `packages/types`: shared public types and schemas
@@ -71,9 +73,12 @@ In production-style builds, the API also serves the built web SPA assets.
 OpenKeep currently ships with:
 
 - a web SPA
+- an Electron desktop client that runs the shared web UI behind a local trusted protocol
 - a React Native mobile app
 
-Both clients consume the same archive-wide search APIs and SSE answer stream contract.
+The clients consume the same archive-wide APIs and SSE answer stream contract. The
+desktop main process owns its archive network boundary; archive servers never supply
+executable renderer code.
 
 ### Worker
 
@@ -197,5 +202,6 @@ The web app is built around a small set of user surfaces:
 - [API and Data Flows](./api-and-data-flows.md)
 - [Agentic Document Intelligence](./agentic-document-intelligence.md)
 - [Web Application](./web-application.md)
+- [Desktop Application](./desktop-application.md)
 - [Deployment Guide](../operations/deployment-guide.md)
 - [Backend Notes](../backend.md)
