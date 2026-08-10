@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { routeTree } from "./routeTree.gen";
-import { AuthProvider, useAuth } from "./hooks/use-auth";
+import { AuthProvider as BrowserAuthProvider, useAuth } from "./hooks/use-auth";
 import { I18nProvider } from "./lib/i18n";
 
 export function createAppQueryClient() {
@@ -57,7 +57,11 @@ export function AppRouter({
   );
 }
 
-export function App() {
+export interface AppProps {
+  AuthProvider?: ComponentType<{ children: ReactNode }>;
+}
+
+export function App({ AuthProvider = BrowserAuthProvider }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
   return (

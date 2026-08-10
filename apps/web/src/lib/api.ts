@@ -4,6 +4,8 @@ import type { paths } from "@openkeep/sdk";
 const ACCESS_TOKEN_STORAGE_KEY = "openkeep.access-token";
 const REFRESH_TOKEN_STORAGE_KEY = "openkeep.refresh-token";
 
+export type ApiAuthMode = "browser" | "main-owned";
+
 function getBaseUrl() {
   if (typeof window === "undefined") {
     return "";
@@ -30,7 +32,7 @@ function fetchWithCurrentGlobal(input: RequestInfo | URL, init?: RequestInit) {
 }
 
 function readStoredToken(key: string): string | null {
-  if (typeof window === "undefined") {
+  if (apiAuthMode === "main-owned" || typeof window === "undefined") {
     return null;
   }
 
@@ -38,7 +40,7 @@ function readStoredToken(key: string): string | null {
 }
 
 function writeStoredToken(key: string, value: string | null) {
-  if (typeof window === "undefined") {
+  if (apiAuthMode === "main-owned" || typeof window === "undefined") {
     return;
   }
 
@@ -53,9 +55,35 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let tokensInitialized = false;
 let onAuthFailure: (() => void) | null = null;
+let apiAuthMode: ApiAuthMode = "browser";
 const retryableRequests = new WeakMap<Request, Request>();
 
+/**
+ * Selects who owns authentication for API requests made by the shared UI.
+ *
+ * Browser mode keeps the existing local JWT and refresh-token flow. In
+ * main-owned mode the host transport is responsible for authentication, so
+ * renderer code neither accesses token storage nor retries 401 responses.
+ */
+export function configureApiAuthMode(mode: ApiAuthMode) {
+  if (mode === apiAuthMode) {
+    return;
+  }
+
+  apiAuthMode = mode;
+  accessToken = null;
+  refreshToken = null;
+  tokensInitialized = mode === "main-owned";
+}
+
 function ensureTokensInitialized() {
+  if (apiAuthMode === "main-owned") {
+    accessToken = null;
+    refreshToken = null;
+    tokensInitialized = true;
+    return;
+  }
+
   if (!tokensInitialized) {
     tokensInitialized = true;
     accessToken = readStoredToken(ACCESS_TOKEN_STORAGE_KEY);
@@ -64,12 +92,26 @@ function ensureTokensInitialized() {
 }
 
 export function syncTokensFromStorage() {
+  if (apiAuthMode === "main-owned") {
+    accessToken = null;
+    refreshToken = null;
+    tokensInitialized = true;
+    return;
+  }
+
   tokensInitialized = true;
   accessToken = readStoredToken(ACCESS_TOKEN_STORAGE_KEY);
   refreshToken = readStoredToken(REFRESH_TOKEN_STORAGE_KEY);
 }
 
 export function setTokens(access: string, refresh: string) {
+  if (apiAuthMode === "main-owned") {
+    accessToken = null;
+    refreshToken = null;
+    tokensInitialized = true;
+    return;
+  }
+
   accessToken = access;
   refreshToken = refresh;
   writeStoredToken(ACCESS_TOKEN_STORAGE_KEY, access);
@@ -79,6 +121,11 @@ export function setTokens(access: string, refresh: string) {
 export function clearTokens() {
   accessToken = null;
   refreshToken = null;
+  if (apiAuthMode === "main-owned") {
+    tokensInitialized = true;
+    return;
+  }
+
   writeStoredToken(ACCESS_TOKEN_STORAGE_KEY, null);
   writeStoredToken(REFRESH_TOKEN_STORAGE_KEY, null);
 }
@@ -129,6 +176,10 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
 let refreshInFlight: Promise<boolean> | null = null;
 
 function refreshAccessToken(): Promise<boolean> {
+  if (apiAuthMode === "main-owned") {
+    return Promise.resolve(false);
+  }
+
   if (!refreshInFlight) {
     refreshInFlight = doRefreshAccessToken().finally(() => {
       refreshInFlight = null;
@@ -138,6 +189,10 @@ function refreshAccessToken(): Promise<boolean> {
 }
 
 async function doRefreshAccessToken(): Promise<boolean> {
+  if (apiAuthMode === "main-owned") {
+    return false;
+  }
+
   ensureTokensInitialized();
   if (!refreshToken) {
     return false;
@@ -164,6 +219,10 @@ async function doRefreshAccessToken(): Promise<boolean> {
 }
 
 export async function authFetch(input: string, init?: RequestInit): Promise<Response> {
+  if (apiAuthMode === "main-owned") {
+    return fetchWithCurrentGlobal(toApiUrl(input), init);
+  }
+
   ensureTokensInitialized();
   const headers = new Headers(init?.headers);
   if (accessToken) {
@@ -200,6 +259,10 @@ const client = createApiClient<paths>({
 // Add auth middleware
 client.use({
   async onRequest({ request }) {
+    if (apiAuthMode === "main-owned") {
+      return request;
+    }
+
     ensureTokensInitialized();
     if (accessToken) {
       request.headers.set("Authorization", `Bearer ${accessToken}`);
@@ -208,6 +271,10 @@ client.use({
     return request;
   },
   async onResponse({ response, request }) {
+    if (apiAuthMode === "main-owned") {
+      return response;
+    }
+
     // If we get a 401 and have a refresh token, try to refresh
     const isRefreshableAuthRequest =
       request.url.includes("/api/auth/me") || request.url.includes("/api/auth/tokens");
