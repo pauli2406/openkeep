@@ -26,6 +26,7 @@ describe("renderer asset resolver", () => {
 
   it.each([
     "openkeep://evil/",
+    "openkeep://user@app/",
     "openkeep://app/%2e%2e/secret",
     "openkeep://app/%252e%252e/secret",
     "openkeep://app/%5csecret",

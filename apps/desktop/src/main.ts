@@ -189,7 +189,7 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   app.setAppUserModelId("de.openkeep.desktop");
   configureSessionSecurity();
   registerIpcHandlers();
@@ -219,6 +219,9 @@ app.whenReady().then(async () => {
       mainWindow?.show();
     }
   });
+}).catch((error: unknown) => {
+  console.error("OpenKeep desktop failed to start.", error);
+  app.exit(1);
 });
 
 app.on("window-all-closed", () => {

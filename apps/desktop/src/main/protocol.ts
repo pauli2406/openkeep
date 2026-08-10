@@ -61,7 +61,12 @@ export function resolveRendererAsset(
     return { ok: false, status: 400 };
   }
 
-  if (url.host !== APP_HOST || url.pathname.includes("\0")) {
+  if (
+    url.host !== APP_HOST ||
+    url.username ||
+    url.password ||
+    url.pathname.includes("\0")
+  ) {
     return { ok: false, status: 400 };
   }
 
@@ -126,7 +131,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
       return textResponse(400, "Invalid OpenKeep URL.");
     }
 
-    if (url.host !== APP_HOST) {
+    if (url.host !== APP_HOST || url.username || url.password) {
       return textResponse(404, "Unknown OpenKeep host.");
     }
 
