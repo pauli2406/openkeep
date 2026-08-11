@@ -233,7 +233,10 @@ export function createArchiveSessionService(
       try {
         await repository.assertSecureStorageAvailable();
         const stored = await repository.loadActive();
-        return stored ? checkStoredSession(stored) : disconnected("no-profile");
+        // Awaited inside the try: a rejection while clearing a rejected
+        // credential must surface as the secure-storage error state, not as
+        // an unhandled rejection that leaves the renderer waiting forever.
+        return stored ? await checkStoredSession(stored) : disconnected("no-profile");
       } catch {
         activeSession = null;
         return {
@@ -346,7 +349,10 @@ export function createArchiveSessionService(
       try {
         await repository.assertSecureStorageAvailable();
         const stored = await repository.loadActive();
-        return stored ? checkStoredSession(stored) : disconnected("no-profile");
+        // Awaited inside the try: a rejection while clearing a rejected
+        // credential must surface as the secure-storage error state, not as
+        // an unhandled rejection that leaves the renderer waiting forever.
+        return stored ? await checkStoredSession(stored) : disconnected("no-profile");
       } catch {
         return {
           status: "error",

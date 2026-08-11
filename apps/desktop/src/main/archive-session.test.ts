@@ -212,6 +212,25 @@ describe("desktop archive session", () => {
     expect(repository.clear).toHaveBeenCalledOnce();
   });
 
+  it("resolves to the storage error when clearing a rejected credential fails", async () => {
+    const repository = createRepository(storedSession);
+    (repository.clear as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("keyring locked"),
+    );
+    const fetchRequest = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(health))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    const service = createArchiveSessionService(fetchRequest, repository, () => "unused");
+
+    // Must resolve, not reject: the renderer awaits this over IPC, and a
+    // rejection would leave it on the restoring screen forever.
+    await expect(service.restore()).resolves.toMatchObject({
+      status: "error",
+      code: "secure-storage-unavailable",
+    });
+  });
+
   it("keeps stored secrets for retry when the server is unavailable", async () => {
     const repository = createRepository(storedSession);
     const service = createArchiveSessionService(
