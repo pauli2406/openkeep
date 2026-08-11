@@ -7,7 +7,7 @@ description: Manage tokens, taxonomies, portability, provider visibility, and sy
 
 The `Settings` page is the administrative control area for OpenKeep. It has
 three sections in its left navigation: `General` (language preferences, watch
-folder, archive import/export, system health), `Tags & taxonomy`, and
+folder, archive import/export, processing activity, system health), `Tags & taxonomy`, and
 `AI providers`.
 
 Account management — your profile, two-factor authentication and API tokens —
@@ -42,6 +42,13 @@ Important:
 The [Desktop App](./desktop-app.md) uses one of these tokens to connect to an
 existing archive. Revoking that token causes the desktop app to remove its
 stored connection the next time the server verifies it.
+
+An owner can also manage two-factor authentication and API tokens from a connected
+desktop app. The desktop runtime keeps its connection token outside the shared UI;
+the page receives only token names, prefixes, dates, and a newly created token's
+one-time value. If you revoke the same token the active desktop profile is using,
+the profile disconnects on its next authenticated request and needs a replacement
+token.
 
 ## Tags and Taxonomy
 
@@ -111,6 +118,9 @@ Use replace only when you fully understand the consequences for the current arch
 ### Scan Watch Folder
 
 Use `Scan Watch Folder` to trigger ingestion from the configured watch folder.
+The status panel shows whether the archive server has configured the folder, its
+server-side path, and the last scan and import. In the desktop app this is still a
+folder on the remote archive server, not a folder on the desktop machine.
 
 The page can show:
 
@@ -125,9 +135,10 @@ Dry-run mode is useful when you want to inspect what would happen without import
 
 ## AI Providers
 
-`Settings -> AI providers` is the single place to see both what is configured
-and what the pipeline is doing. Processing activity used to be a separate
-section; it now lives here.
+`Settings -> AI providers` is the detailed place to see both what is configured
+and what the pipeline is doing. General settings also carries a compact processing
+activity section with queue depths, document status counts, pending review, and
+recent jobs.
 
 ### At a Glance
 

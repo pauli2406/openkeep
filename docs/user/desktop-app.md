@@ -172,6 +172,42 @@ browser storage. They return when you reopen that profile, never appear in anoth
 profile, and are deleted with the local profile state when you remove it. Server-side
 document Q&A history remains data of the remote archive.
 
+## Administer the Active Archive
+
+Desktop opens the same `Profile` and `Settings` routes as the web app. From the
+active archive you can:
+
+- view the owner identity and archive statistics, change UI and AI language
+  preferences, enroll or disable two-factor authentication, and create or revoke
+  API tokens
+- create, rename, merge, and delete tags, correspondents, and document types
+- inspect the server-selected parse, embedding, and chat providers, queue activity,
+  recent processing jobs, readiness, and system health
+- inspect the archive server's watch-folder configuration, trigger dry-run or live
+  scans, export a snapshot through the operating-system save dialog, and paste a
+  snapshot for merge or replacement import
+
+The desktop connection profile and the API tokens listed inside `Profile` are
+different things. The connection profile is local metadata plus one encrypted
+Bearer token used by the desktop runtime. The token list is remote archive data.
+Revoking a different token does not alter the saved desktop profile. Revoking the
+token currently used by that profile succeeds on the server, then disconnects that
+profile when its next request is rejected; reconnect it with a replacement token.
+
+Desktop never exposes the connection token to these shared pages and never opens the
+web login or first-owner setup flow. Account-security operations are authorized by
+the connected owner's API token. Disabling two-factor authentication still requires
+the owner's password and a current authenticator or recovery code.
+
+All settings forms, queries, pending mutations, and error messages are discarded on
+a profile switch. Server-side changes already accepted by the archive remain there,
+but an unfinished form or late response from the archive you left cannot appear in
+the destination profile.
+
+The watch folder shown in General settings belongs to the remote archive server. It
+is not a folder on the desktop computer and is separate from desktop-local
+watch-folder integration.
+
 ## Save Documents and Archive Exports
 
 Desktop uses the operating system's save dialog instead of the browser download

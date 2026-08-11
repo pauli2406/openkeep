@@ -78,6 +78,15 @@ all other profiles remain usable.
 The session is intentionally online-only. Desktop has no local document archive or
 offline fallback.
 
+Desktop does not use the web login, refresh-token, or initial-owner setup routes.
+After verification, `DesktopAuthProvider` presents the already authenticated owner
+to the shared application. Account-security endpoints authorize the owner identity
+behind either a JWT or an API token, so the desktop can administer language
+preferences, TOTP, and remote API tokens without main exposing its connection
+credential or minting a browser session. TOTP disable keeps its password plus
+current-code proof. Non-owner principals receive a server `403`, whose message is
+shown without request headers or credential values.
+
 ## Profile Session Isolation
 
 The unconnected connection shell and archive chooser use the dedicated ephemeral
@@ -104,6 +113,11 @@ That automatically scopes conversations and recent searches without adding profi
 IDs to the web client's storage keys. The authenticated shared app is also keyed by
 profile UUID, so its in-memory state remounts immediately while main replaces the
 `BrowserWindow`.
+The remount creates a new TanStack Router and QueryClient as well as new route
+components. Administration queries, mutation results, dialogs, pasted snapshots,
+taxonomy selections, and authorization errors therefore share the same profile
+isolation guarantee as document and search state. Main's active-profile signal
+aborts an outgoing administration request before a late response can be applied.
 Future background imports, watch folders, and notifications must carry the stable
 profile UUID and be cancelled or routed by that identity rather than by label or
 URL. App-level Electron runtime settings remain global where applicable; server-side
@@ -295,10 +309,22 @@ applications directory. Neither path makes OpenKeep the default application. The
 operating system forwards one or more selected paths to the single running process,
 which focuses or restores its existing window and runs the same validation pipeline.
 
+The same rule applies to administration. `/profile`, `/settings`,
+`/settings/taxonomy`, and `/settings/providers` are shared web routes rather than
+Electron copies. The shared host file-saver seam sends archive export to native save;
+snapshot import remains the existing validated server mutation. The General route
+polls server watch-folder status, processing status, health, and readiness. The
+watch-folder data names the server's configured ingestion directory and is not the
+future desktop-local watch-folder capability. Provider selection stays read-only in
+the client because active providers come only from server environment configuration.
+
 Desktop parity tests mount those shared routes with main-owned authentication and
 the same fixture semantics as the browser smoke tests. They cover the core browse
 surfaces, keyboard navigation, empty/loading/failure states, and remounting the App
-across profile changes. The web smoke suite remains the canonical behavior test;
+across profile changes. Administration coverage exercises profile/TOTP/token
+surfaces, native export and import, server watch-folder and health state, provider
+visibility, taxonomy mutations, sanitized authorization failures, and clean admin
+state after a profile remount. The web smoke suite remains the canonical behavior test;
 the desktop suite proves that Electron's bootstrap, protocol, and profile seams do
 not alter it.
 
