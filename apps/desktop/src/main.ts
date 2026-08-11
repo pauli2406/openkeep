@@ -21,6 +21,8 @@ import type {
   DesktopProfileRenameInput,
   DesktopSaveRequest,
   DesktopSessionState,
+  DesktopWatchFolderIdInput,
+  DesktopWatchFolderPauseInput,
 } from "./shared/desktop-api";
 import { DESKTOP_CHANNELS } from "./shared/desktop-api";
 import { createArchiveSessionService, type ArchiveSessionService } from "./main/archive-session";
@@ -62,6 +64,14 @@ import {
   type DesktopTrayLifecycle,
 } from "./main/tray-lifecycle";
 import { createElectronTrayLifecycleHost } from "./main/electron-tray-host";
+import { createDesktopWatchFolderStore } from "./main/watch-folder-state";
+import { createWatchFolderUploader } from "./main/watch-folder-uploader";
+import {
+  createDesktopWatchFolderService,
+  createIntervalWatchFolderTimer,
+  nodeWatchFolderFileSystem,
+  type DesktopWatchFolderService,
+} from "./main/watch-folder-service";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -94,6 +104,18 @@ function focusMainWindow() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+async function chooseWatchFolderPath(parent?: BrowserWindow) {
+  const options: Electron.OpenDialogOptions = {
+    title: "Watch a folder for new documents",
+    buttonLabel: "Watch folder",
+    properties: ["openDirectory", "createDirectory"],
+  };
+  const selection = parent
+    ? await dialog.showOpenDialog(parent, options)
+    : await dialog.showOpenDialog(options);
+  return selection.canceled ? null : selection.filePaths[0] ?? null;
 }
 
 async function chooseImportPaths(parent?: BrowserWindow) {
@@ -136,6 +158,8 @@ function registerIpcHandlers(
   ) => void,
   onDesktopStateChanged: () => void,
   lifecycle: DesktopTrayLifecycle,
+  watchFolders: DesktopWatchFolderService,
+  chooseWatchFolder: (parent?: BrowserWindow) => Promise<string | null>,
 ) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
@@ -171,6 +195,11 @@ function registerIpcHandlers(
         shouldResetProfilePartition(previous, state.profile)
           ? state.profile.id
           : undefined;
+      if (resetProfileId) {
+        // A profile pointed at a different server is a different archive, so
+        // its local watch folders and import checkpoints no longer apply.
+        await watchFolders.forgetProfile(resetProfileId);
+      }
       transitionWindow(event.sender.id, state, { resetProfileId });
       onDesktopStateChanged();
       return state;
@@ -247,6 +276,9 @@ function registerIpcHandlers(
         (profile) => profile.id === input?.profileId,
       );
       const state = await archiveSession.removeProfile(input?.profileId);
+      if (profileExisted && state.status !== "error" && input?.profileId) {
+        await watchFolders.forgetProfile(input.profileId);
+      }
       transitionWindow(event.sender.id, state, {
         clearProfileId:
           profileExisted && state.status !== "error"
@@ -316,6 +348,66 @@ function registerIpcHandlers(
     async (event, input: DesktopSaveRequest) => {
       assertIpcEvent(event);
       return nativeSave.save(windowProfileIds.get(event.sender.id), input);
+    },
+  );
+
+  /**
+   * Watch folders belong to the archive of the requesting window. A renderer
+   * never names a folder itself: main opens the operating-system picker, so the
+   * only local paths that enter are ones the user selected there.
+   */
+  function assertWatchFolderOwner(event: Electron.IpcMainInvokeEvent) {
+    assertIpcEvent(event);
+    const profileId = windowProfileIds.get(event.sender.id);
+    if (!profileId || profileId !== watchFolders.snapshot().profileId) {
+      throw new Error("Connect this archive before changing its watch folders.");
+    }
+  }
+
+  ipcMain.handle(DESKTOP_CHANNELS.watchFoldersList, async (event) => {
+    assertIpcEvent(event);
+    return windowProfileIds.get(event.sender.id)
+      ? watchFolders.snapshot()
+      : { profileId: null, folders: [] };
+  });
+
+  ipcMain.handle(DESKTOP_CHANNELS.watchFoldersAdd, async (event) => {
+    assertWatchFolderOwner(event);
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const selected = await chooseWatchFolder(parent);
+    if (!selected) return { status: "cancelled" };
+    try {
+      return { status: "added", snapshot: await watchFolders.add(selected) };
+    } catch (error) {
+      return {
+        status: "failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "That folder could not be watched.",
+      };
+    }
+  });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.watchFoldersSetPaused,
+    async (event, input: DesktopWatchFolderPauseInput) => {
+      assertWatchFolderOwner(event);
+      if (!input || typeof input.folderId !== "string") {
+        throw new Error("A watch folder is required.");
+      }
+      return watchFolders.setPaused(input.folderId, input.paused === true);
+    },
+  );
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.watchFoldersRemove,
+    async (event, input: DesktopWatchFolderIdInput) => {
+      assertWatchFolderOwner(event);
+      if (!input || typeof input.folderId !== "string") {
+        throw new Error("A watch folder is required.");
+      }
+      return watchFolders.remove(input.folderId);
     },
   );
 }
@@ -476,6 +568,28 @@ void app.whenReady().then(async () => {
       }
       focusMainWindow();
     },
+  });
+  const watchFolderStore = createDesktopWatchFolderStore({
+    filePath: path.join(app.getPath("userData"), "desktop-watch-folders.json"),
+  });
+  await watchFolderStore.load();
+  const watchFolders = createDesktopWatchFolderService({
+    store: watchFolderStore,
+    fileSystem: nodeWatchFolderFileSystem(),
+    uploader: createWatchFolderUploader({
+      imports: importService,
+      archiveSession,
+      fetchRequest: (input, init) => net.fetch(input, init),
+    }),
+    timer: createIntervalWatchFolderTimer(),
+    activeProfileId: () => archiveSession.getActiveSession()?.profile.id ?? null,
+    onChanged: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(DESKTOP_CHANNELS.watchFoldersChanged);
+      }
+      void trayLifecycle?.refreshMenu();
+    },
+    reportError: (message, error) => console.error(message, error),
   });
   const nativeSave = createNativeSaveService({
     archiveSession,
@@ -726,6 +840,7 @@ void app.whenReady().then(async () => {
         archiveSession.getActiveSession()?.profile.id ?? null,
       );
     },
+    watchFolderSummary: () => watchFolders.summary(),
     async cleanup() {
       // Remember the active route first: quit destroys the window after this
       // cleanup, which is too late for the close handler's unawaited write, so
@@ -743,6 +858,7 @@ void app.whenReady().then(async () => {
             });
         }
       }
+      await watchFolders.stop();
       archiveSession.dispose();
       await Promise.all(
         [...configuredPartitions].map((partition) =>
@@ -758,9 +874,17 @@ void app.whenReady().then(async () => {
     importCoordinator,
     nativeSave,
     transitionWindow,
-    () => { void trayLifecycle?.refreshMenu(); },
+    () => {
+      void trayLifecycle?.refreshMenu();
+      // A newly connected, switched, or signed-out archive changes which watch
+      // folders apply and whether they may run at all.
+      void watchFolders.scan();
+    },
     trayLifecycle,
+    watchFolders,
+    chooseWatchFolderPath,
   );
+  watchFolders.start();
   await createMainWindow(null);
   await launchLifecycle.connect(async (paths) => {
     await importCoordinator.receivePaths(paths);

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   classifyWatchFolderEntry,
@@ -380,6 +381,19 @@ export function createDesktopWatchFolderService({
       return snapshot();
     },
 
+    /**
+     * Drops the watch folders and checkpoints of a profile that was removed or
+     * repointed at a different server. A sign-out must not come here: those
+     * folders are waiting for the next sign-in, not obsolete.
+     */
+    async forgetProfile(profileId: string) {
+      await store.forgetProfile(profileId);
+      if (lastProfileId === profileId) lastProfileId = null;
+      conditions.clear();
+      onChanged();
+      return snapshot();
+    },
+
     /** Counts for the tray, without exposing any local path. */
     summary() {
       const folders = snapshot().folders;
@@ -401,6 +415,28 @@ export function createDesktopWatchFolderService({
 export type DesktopWatchFolderService = ReturnType<
   typeof createDesktopWatchFolderService
 >;
+
+export function nodeWatchFolderFileSystem(): WatchFolderFileSystem {
+  return {
+    async readDirectory(directory) {
+      const entries = await readdir(directory, { withFileTypes: true });
+      return entries.map((entry) => ({
+        name: entry.name,
+        kind: entry.isFile() ? "file" : entry.isDirectory() ? "directory" : "other",
+      }));
+    },
+    async stat(filePath) {
+      // `stat` follows a symbolic link on purpose: a linked document is a
+      // document. A link to a directory is filtered out by its kind.
+      const stats = await stat(filePath);
+      return {
+        size: stats.size,
+        mtimeMs: stats.mtimeMs,
+        kind: stats.isFile() ? "file" : stats.isDirectory() ? "directory" : "other",
+      };
+    },
+  };
+}
 
 export function createIntervalWatchFolderTimer(): WatchFolderTimer {
   let handle: ReturnType<typeof setInterval> | null = null;

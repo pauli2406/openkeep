@@ -592,6 +592,264 @@
   color: var(--ok-red);
 }
 
+.desktop-watch-folders {
+  position: relative;
+  display: grid;
+  color: var(--ok-ink);
+}
+
+.desktop-watch-folders__trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--ok-panel) 92%, var(--ok-app));
+  color: var(--ok-muted);
+  cursor: pointer;
+}
+
+.desktop-watch-folders__trigger:hover,
+.desktop-watch-folders__trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--ok-accent) 58%, var(--ok-border-strong));
+  background: var(--ok-panel);
+  color: var(--ok-accent);
+}
+
+.desktop-watch-folders__trigger:focus-visible,
+.desktop-watch-folders__panel button:focus-visible {
+  outline: 2px solid var(--ok-accent);
+  outline-offset: 2px;
+}
+
+.desktop-watch-folders__trigger svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.desktop-watch-folders__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--ok-accent);
+  color: var(--ok-panel);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.desktop-watch-folders__panel {
+  position: absolute;
+  z-index: 126;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(430px, calc(100vw - 28px));
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-lg);
+  background: var(--ok-panel);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--ok-ink) 18%, transparent);
+  animation: desktop-archive-menu-in 120ms ease-out;
+}
+
+.desktop-watch-folders__panel > header {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 13px 9px;
+  border-bottom: 1px solid var(--ok-border);
+  color: var(--ok-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.desktop-watch-folders__panel > header strong {
+  color: var(--ok-accent);
+  font-weight: 600;
+}
+
+.desktop-watch-folders__hint {
+  margin: 0;
+  padding: 12px 16px 4px;
+  color: var(--ok-dim);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.desktop-watch-folders__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+.desktop-watch-folders__list > li {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  border: 1px solid var(--ok-border);
+  border-radius: var(--r-md);
+  background: var(--ok-app);
+}
+
+.desktop-watch-folders__list > li[data-state="missing"],
+.desktop-watch-folders__list > li[data-state="unreadable"] {
+  border-color: color-mix(in srgb, var(--ok-red) 46%, var(--ok-border));
+}
+
+.desktop-watch-folders__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-watch-folders__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.desktop-watch-folders__identity strong {
+  font-size: 11.5px;
+}
+
+.desktop-watch-folders__identity small {
+  overflow: hidden;
+  color: var(--ok-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.desktop-watch-folders__state {
+  flex: none;
+  color: var(--ok-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-watch-folders__list > li[data-state="missing"] .desktop-watch-folders__state,
+.desktop-watch-folders__list > li[data-state="unreadable"] .desktop-watch-folders__state {
+  color: var(--ok-red);
+}
+
+.desktop-watch-folders__notice {
+  margin: 0;
+  color: var(--ok-red);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.desktop-watch-folders__counts {
+  display: flex;
+  gap: 10px;
+  color: var(--ok-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+.desktop-watch-folders__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.desktop-watch-folders__actions button,
+.desktop-watch-folders__add {
+  padding: 5px 9px;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--ok-panel);
+  color: var(--ok-muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.desktop-watch-folders__actions button:hover:not(:disabled),
+.desktop-watch-folders__add:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ok-accent) 58%, var(--ok-border-strong));
+  color: var(--ok-accent);
+}
+
+.desktop-watch-folders__actions button:disabled,
+.desktop-watch-folders__add:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.desktop-watch-folders__history {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--ok-border);
+  list-style: none;
+}
+
+.desktop-watch-folders__history > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  color: var(--ok-muted);
+  font-size: 10.5px;
+}
+
+.desktop-watch-folders__history > li > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-watch-folders__history > li > span:last-of-type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.desktop-watch-folders__history > li[data-outcome="failed"] > span:last-of-type {
+  color: var(--ok-red);
+}
+
+.desktop-watch-folders__history small {
+  grid-column: 1 / -1;
+  color: var(--ok-dim);
+  font-size: 9.5px;
+}
+
+.desktop-watch-folders__add {
+  margin: 0 16px 12px;
+  justify-self: start;
+}
+
+.desktop-watch-folders__error {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: var(--ok-red);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
 .desktop-archive-accessory__error {
   position: absolute;
   z-index: 130;

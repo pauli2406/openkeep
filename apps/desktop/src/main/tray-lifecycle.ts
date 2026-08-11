@@ -45,6 +45,13 @@ export type TrayLifecycleHost = {
   reportError?(message: string, error: unknown): void;
 };
 
+/** Watch-folder counts only: the tray must never show a local path. */
+export type WatchFolderSummary = {
+  total: number;
+  watching: number;
+  attention: number;
+};
+
 type LifecycleStatePort = {
   snapshot(): DesktopLifecycleState;
   setCloseBehavior(closeBehavior: DesktopCloseBehavior): Promise<unknown>;
@@ -58,6 +65,7 @@ export function createDesktopTrayLifecycle({
   activateProfile,
   startImport,
   ensureWindow,
+  watchFolderSummary,
   cleanup,
 }: {
   host: TrayLifecycleHost;
@@ -66,6 +74,7 @@ export function createDesktopTrayLifecycle({
   activateProfile: (profileId: string) => Promise<void>;
   startImport: () => Promise<void>;
   ensureWindow: () => Promise<void>;
+  watchFolderSummary: () => WatchFolderSummary;
   cleanup: () => Promise<void>;
 }) {
   let tray: TrayHandle | null = null;
@@ -151,6 +160,18 @@ export function createDesktopTrayLifecycle({
     } as const;
   }
 
+  function describeWatchFolders() {
+    const summary = watchFolderSummary();
+    if (summary.total === 0) return "No watch folders";
+    if (summary.attention > 0) {
+      return `Watch folders: ${summary.attention} of ${summary.total} need attention`;
+    }
+    if (summary.watching === 0) return `Watch folders: ${summary.total} paused`;
+    return summary.watching === summary.total
+      ? `Watch folders: ${summary.total} active`
+      : `Watch folders: ${summary.watching} of ${summary.total} active`;
+  }
+
   async function refreshMenu() {
     if (!tray) return;
     const generation = ++menuGeneration;
@@ -202,6 +223,7 @@ export function createDesktopTrayLifecycle({
           await startImport();
         },
       },
+      { label: describeWatchFolders(), enabled: false },
       { type: "separator" },
       {
         label: "Keep OpenKeep running when the window closes",

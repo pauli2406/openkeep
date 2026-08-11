@@ -36,6 +36,7 @@ function createHarness(options: {
   trayAvailable?: boolean;
   closeBehavior?: "tray" | "quit";
   confirmQuitOnClose?: boolean;
+  watchFolderSummary?: { total: number; watching: number; attention: number };
 } = {}) {
   const menus: TrayMenuItem[][] = [];
   const trayHandlers = new Map<string, () => void>();
@@ -61,6 +62,11 @@ function createHarness(options: {
     onBeforeQuit: vi.fn((handler) => beforeQuit.push(handler)),
   };
   const cleanup = vi.fn(async () => undefined);
+  let watchFolderSummary = options.watchFolderSummary ?? {
+    total: 0,
+    watching: 0,
+    attention: 0,
+  };
   const activateProfile = vi.fn(async () => undefined);
   const startImport = vi.fn(async () => undefined);
   const ensureWindow = vi.fn(async () => undefined);
@@ -77,6 +83,7 @@ function createHarness(options: {
     activateProfile,
     startImport,
     ensureWindow,
+    watchFolderSummary: () => watchFolderSummary,
     cleanup,
   });
   return {
@@ -184,6 +191,24 @@ describe("desktop tray lifecycle", () => {
     await findItem(menu, "Import documents…").click?.();
     expect(fake.window.show).toHaveBeenCalled();
     expect(harness.startImport).toHaveBeenCalledOnce();
+  });
+
+  it("summarizes watch folders in counts, never in paths", async () => {
+    const quiet = createHarness();
+    await quiet.lifecycle.initialize();
+    expect(findItem(quiet.menus.at(-1)!, "No watch folders").enabled).toBe(false);
+
+    const active = createHarness({
+      watchFolderSummary: { total: 3, watching: 2, attention: 0 },
+    });
+    await active.lifecycle.initialize();
+    findItem(active.menus.at(-1)!, "Watch folders: 2 of 3 active");
+
+    const broken = createHarness({
+      watchFolderSummary: { total: 2, watching: 1, attention: 1 },
+    });
+    await broken.lifecycle.initialize();
+    findItem(broken.menus.at(-1)!, "Watch folders: 1 of 2 need attention");
   });
 
   it("falls back to quit on Linux when a tray cannot be created", async () => {

@@ -8,6 +8,7 @@ import { ArchiveSwitcher } from "./archive-switcher";
 import { ConnectionScreen } from "./connection-screen";
 import { DesktopSessionContext } from "./desktop-auth-provider";
 import { DesktopLifecycleControl } from "./desktop-lifecycle-control";
+import { DesktopWatchFolders } from "./desktop-watch-folders";
 
 type ProfileEditor =
   | { mode: "add" }
@@ -118,6 +119,7 @@ export function DesktopArchiveAccessory() {
           onEdit={(profile) => setEditor({ mode: "edit", profile })}
           onRemove={(profile) => removeProfile(profile)}
         />
+        <DesktopWatchFolders />
         <DesktopLifecycleControl />
         {message ? (
           <span className="desktop-archive-accessory__error" role="alert">
