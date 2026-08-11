@@ -238,8 +238,53 @@ but an unfinished form or late response from the archive you left cannot appear 
 the destination profile.
 
 The watch folder shown in General settings belongs to the remote archive server. It
-is not a folder on the desktop computer and is separate from desktop-local
-watch-folder integration.
+is not a folder on the desktop computer, and it is separate from the desktop watch
+folders described above.
+
+## Watch Folders on This Computer
+
+A watch folder is a folder on your own computer that OpenKeep imports new documents
+from while it is running. Open the folder control beside the archive switcher to add,
+pause, resume, inspect, or stop watching one. Each archive profile has its own
+folders, and adding one always goes through the operating system's folder picker.
+
+New PDF, JPEG, PNG, TIFF, and HEIC files are imported into the active archive through
+the same upload path as a manual import. OpenKeep never deletes, moves, renames, or
+edits anything in a watched folder — importing only reads the file.
+
+A file is imported once it has finished being written: OpenKeep waits until its size
+and modification time stop changing, so a large scan still being copied or downloaded
+is not imported half-finished. Partial-download files (`.part`, `.crdownload`,
+`.tmp`), editor backups, hidden files, subfolders, and unsupported file types are
+skipped. An unsupported file is reported once in the folder's history so you can see
+why it stayed behind.
+
+Each folder shows how many files were imported, how many were already filed, and how
+many failed, plus a recent per-file history you can open. `Already filed` means the
+archive already holds those exact contents — renaming or copying a document you
+already imported does not create a second one. A file that genuinely changed is
+imported again as a new version of your record.
+
+Watch folders keep running while the main window is hidden in the tray. They stop
+when OpenKeep quits, because they are part of the desktop app rather than the server.
+They also pause whenever their archive is not connected, and continue after you
+reconnect or restart — nothing is imported twice as a result. Import checkpoints are
+stored on this computer, so a restart in the middle of a copy costs at most one extra
+check.
+
+If a folder is deleted, renamed, on a removable drive that was ejected, or no longer
+readable, that folder is marked in the panel and the others keep working. It resumes
+by itself when the folder is available again. A file the archive rejects for good —
+the wrong format, or larger than 64 MiB — is reported as failed and not retried until
+its contents change; a temporary problem such as an unreachable server is retried
+automatically.
+
+The folder paths you choose stay on this computer. They are used only to read the
+files you selected and are never sent to the archive.
+
+The watch folder in the archive's own `Settings` is a different feature: it is a
+folder on the server, configured by the archive, and it works whether or not the
+desktop app is running. Desktop watch folders belong to this workstation.
 
 ## Save Documents and Archive Exports
 
@@ -304,7 +349,8 @@ boundary even when two profiles have the same name or server address.
 | Query state, conversations, and recent searches | The installed desktop app and its version |
 | In-progress upload state, assigned Open-with batches, and active response streams |  |
 | Temporary preview/object URLs |  |
-| Future watch-folder, notification, and other background work |  |
+| Watch folders and their import checkpoints |  |
+| Future notification and other background work |  |
 
 Server-side account preferences naturally belong to the server and user behind
 the active profile. App-level runtime preferences remain global where applicable.

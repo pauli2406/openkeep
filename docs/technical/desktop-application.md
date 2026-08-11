@@ -118,7 +118,7 @@ components. Administration queries, mutation results, dialogs, pasted snapshots,
 taxonomy selections, and authorization errors therefore share the same profile
 isolation guarantee as document and search state. Main's active-profile signal
 aborts an outgoing administration request before a late response can be applied.
-Background imports and future watch folders or notifications must carry the stable
+Background imports, watch folders, and future notifications must carry the stable
 profile UUID and be cancelled or routed by that identity rather than by label or
 URL. App-level Electron runtime settings remain global where applicable; server-side
 user settings remain data of the selected archive.
@@ -414,6 +414,77 @@ files, cold and warm launch ordering, exactly-once consumption, one- and multi-p
 routing, native picker delivery, drag/drop rejection, association metadata, shared
 queue progress, duplicate handling, retryable failures, and terminal failures.
 
+Watch-folder tests cover the settle period against a growing copy and a clock-skewed
+share, temporary/hidden/unsupported/directory entries, import-once and its survival
+across a restart, renames and genuine changes, transient retry versus permanent
+abandonment, missing folders and revoked permissions and their recovery, disconnect and
+reconnect, pause and resume, burst coalescing, bounded retention, and the uploader's
+request shape, duplicate answers, and status classification.
+
+## Workstation Watch Folders
+
+Desktop watch folders are workstation-local and must not be confused with the
+archive's server-side watch folder (`GET/POST /archive/watch-folder`), which the
+server scans independently of any client. The desktop feature is three modules with
+one seam each:
+
+- `watch-folder-rules.ts` decides whether a directory entry is a finished document.
+  It is pure, so eligibility and the quiet-period rule are testable without a
+  filesystem, and it reads the accepted-format table from `@openkeep/types` — the same
+  table the web drop zone and the interactive desktop import use.
+- `watch-folder-state.ts` owns durable per-profile configuration and import
+  checkpoints in `desktop-watch-folders.json`, written atomically through the shared
+  helper the lifecycle state file uses. It is deliberately separate from encrypted
+  credentials and from global lifecycle state: it records local paths, which never
+  reach an archive.
+- `watch-folder-service.ts` is the controller. Filesystem access, the clock, the
+  timer, and the uploader are injected, so every recovery path below is covered by
+  in-memory tests.
+
+The service polls rather than subscribing to native filesystem events. A poll
+survives sleep and resume, a removable volume returning, an unreliable network share,
+and a bulk-copy burst — cases where a native watcher goes silent or floods. Each cycle
+re-reads its own durable checkpoints, so an interruption mid-copy costs one extra
+poll, never a duplicate document. Scans coalesce: a request arriving during a pass
+schedules exactly one more pass rather than queuing per event.
+
+A file is uploaded only after its size and modification time are unchanged for the
+settle period, which is measured from this machine's first sighting rather than from
+the file's timestamp, so a clock-skewed network share still settles. Eligible files go
+through `import-service`'s existing validation — extension, magic-byte signature, and
+the 64 MiB limit — and are then posted to `POST /api/documents` with the active
+profile's credentials, the same endpoint the web import uses. The upload carries the
+active session's abort signal, so a profile switch cancels it.
+
+Duplicate suppression uses two indexes per profile. The path index skips a file whose
+size and modification time already produced an import, without reading it. The
+checksum index recognizes the same bytes under a different name, which is what makes a
+rename or a copy cheap instead of a second document; the uploader hashes before it
+sends, so a recognized rename never reaches the network. A changed size or
+modification time reopens the file, and a changed checksum is a genuine new import.
+Both indexes and per-folder history are bounded.
+
+Failure handling distinguishes permanent from transient. A wrong format, an oversized
+file, or a 4xx other than 408/429 is recorded as failed and not retried until that
+file's size or modification time changes. An unreachable archive, a 5xx, a throttle,
+or a still-locked file is retried on later cycles up to a bounded attempt count, and
+only the first attempt is written to history so a long outage cannot flood it. A
+missing or unreadable folder becomes that folder's reported state while the other
+folders keep working, and it recovers on its own when the folder returns.
+
+Watching is profile-aware and connection-aware. Only the connected archive's folders
+are scanned; a disconnect leaves them listed as `waiting` rather than making them
+disappear, and reconnection resumes them. Removing a profile, or repointing it at
+another server, forgets its folders and checkpoints. Signing out does not, because
+those folders are waiting for the next sign-in. Explicit quit stops the timer and
+flushes pending checkpoint writes as part of the tray lifecycle's single cleanup path.
+
+The IPC surface is `list`, `add`, `set-paused`, `remove`, and a `changed`
+notification. A renderer cannot name a folder: `add` opens the operating-system
+directory picker in main, so the only paths that enter are ones the user chose there.
+Every mutation additionally requires that the calling window's profile is the
+connected archive. The tray shows watch state as counts only, never a path.
+
 ## Contributor Commands
 
 From the repository root:
@@ -441,8 +512,10 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. Desktop has no offline document cache, launch-at-login setting, local watch
-folders, notifications, signing, or release automation.
+archives. Desktop has no offline document cache, launch-at-login setting,
+notifications, signing, or release automation. Watch folders run only while the
+desktop process runs, and they never move or rewrite a source file, so any
+processed-folder workflow remains a separate feature.
 
 ## Related Documents
 
