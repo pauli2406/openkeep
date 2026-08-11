@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
+import { createDesktopBridgeStub } from "../test/desktop-bridge-stub";
 import { ConnectionScreen } from "./connection-screen";
 
 const currentUser = {
@@ -22,47 +23,15 @@ function createBridge(
   connectResult: DesktopSessionState,
   retryResult: DesktopSessionState = connectResult,
 ): DesktopBridge {
-  return {
+  return createDesktopBridgeStub({
     session: {
-      restore: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "no-profile" })),
       connect: vi.fn(async () => connectResult),
       retry: vi.fn(async () => retryResult),
-      signOut: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "signed-out" })),
     },
     profiles: {
-      list: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
       activate: vi.fn(async () => connectResult),
-      rename: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
-      remove: vi.fn(async (): Promise<DesktopSessionState> => ({
-        status: "disconnected",
-        reason: "no-profile",
-      })),
     },
-    imports: {
-      pick: vi.fn(async () => ({ files: [], rejected: [] })),
-      pending: vi.fn(async () => ({ batches: [] })),
-      assign: vi.fn(),
-      consume: vi.fn(async () => ({ files: [], rejected: [] })),
-      onChanged: vi.fn(() => () => undefined),
-    },
-    save: {
-      request: vi.fn(async () => ({ status: "cancelled" as const })),
-    },
-    watchFolders: {
-      list: vi.fn(async () => ({ profileId: null, folders: [] })),
-      add: vi.fn(async () => ({ status: "cancelled" as const })),
-      setPaused: vi.fn(async () => ({ profileId: null, folders: [] })),
-      remove: vi.fn(async () => ({ profileId: null, folders: [] })),
-      onChanged: vi.fn(() => () => undefined),
-    },
-    lifecycle: {
-      getSettings: vi.fn(async () => ({ closeBehavior: "tray" as const, trayAvailable: true })),
-      setCloseBehavior: vi.fn(),
-    },
-    runtime: {
-      getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
-    },
-  };
+  });
 }
 
 describe("desktop connection screen", () => {

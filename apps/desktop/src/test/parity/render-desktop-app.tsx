@@ -14,6 +14,10 @@ import type {
   DesktopProfileSummary,
   DesktopSessionState,
 } from "../../shared/desktop-api";
+import {
+  createDesktopBridgeStub,
+  type DesktopBridgeOverrides,
+} from "../desktop-bridge-stub";
 
 configureApiAuthMode("main-owned");
 
@@ -21,10 +25,6 @@ const DEFAULT_PROFILE: DesktopProfileSummary = {
   id: "11111111-aaaa-aaaa-aaaa-111111111111",
   label: "Personal archive",
   serverUrl: "https://archive.example.test",
-};
-
-type DesktopBridgeOverrides = {
-  [Group in keyof DesktopBridge]?: Partial<DesktopBridge[Group]>;
 };
 
 type RenderDesktopArchiveOptions = {
@@ -37,12 +37,12 @@ function createBridge(
   connected: Extract<DesktopSessionState, { status: "connected" }>,
   overrides: DesktopBridgeOverrides = {},
 ): DesktopBridge {
-  return {
+  return createDesktopBridgeStub({
+    ...overrides,
     session: {
       restore: async () => connected,
       connect: async () => connected,
       retry: async () => connected,
-      signOut: async () => ({ status: "disconnected", reason: "signed-out" }),
       ...overrides.session,
     },
     profiles: {
@@ -55,12 +55,9 @@ function createBridge(
         profiles: [connected.profile],
         activeProfileId: connected.profile.id,
       }),
-      remove: async () => ({ status: "disconnected", reason: "no-profile" }),
       ...overrides.profiles,
     },
     imports: {
-      pick: async () => ({ files: [], rejected: [] }),
-      pending: async () => ({ batches: [] }),
       assign: async (input) => ({
         id: input.batchId,
         source: "open-with",
@@ -68,35 +65,15 @@ function createBridge(
         files: [],
         rejected: [],
       }),
-      consume: async () => ({ files: [], rejected: [] }),
-      onChanged: () => () => undefined,
       ...overrides.imports,
-    },
-    save: {
-      request: async () => ({ status: "cancelled" }),
-      ...overrides.save,
     },
     watchFolders: {
       list: async () => ({ profileId: connected.profile.id, folders: [] }),
-      add: async () => ({ status: "cancelled" }),
       setPaused: async () => ({ profileId: connected.profile.id, folders: [] }),
       remove: async () => ({ profileId: connected.profile.id, folders: [] }),
-      onChanged: () => () => undefined,
       ...overrides.watchFolders,
     },
-    lifecycle: {
-      getSettings: async () => ({ closeBehavior: "tray", trayAvailable: true }),
-      setCloseBehavior: async ({ closeBehavior }) => ({
-        closeBehavior,
-        trayAvailable: true,
-      }),
-      ...overrides.lifecycle,
-    },
-    runtime: {
-      getInfo: async () => ({ platform: "darwin", version: "test" }),
-      ...overrides.runtime,
-    },
-  };
+  });
 }
 
 function DesktopArchiveHost({

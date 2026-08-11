@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { HostSaveRequest, HostSaveResult } from "@openkeep/web/app";
 import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
+import { createDesktopBridgeStub } from "../test/desktop-bridge-stub";
 import { DesktopApp } from "./desktop-app";
 import { DesktopSessionContext } from "./desktop-auth-provider";
 
@@ -76,7 +77,7 @@ function StatefulSharedApp({
 
 describe("desktop authenticated renderer", () => {
   it("remounts shared UI state immediately when the active profile changes", async () => {
-    const bridge: DesktopBridge = {
+    const bridge: DesktopBridge = createDesktopBridgeStub({
       session: {
         restore: vi.fn(async () => profileOne),
         connect: vi.fn(async () => profileOne),
@@ -95,37 +96,7 @@ describe("desktop authenticated renderer", () => {
         })),
         remove: vi.fn(async () => chooseProfile),
       },
-      imports: {
-        pick: vi.fn(async () => ({ files: [], rejected: [] })),
-        pending: vi.fn(async () => ({ batches: [] })),
-        assign: vi.fn(),
-        consume: vi.fn(async () => ({ files: [], rejected: [] })),
-        onChanged: vi.fn(() => () => undefined),
-      },
-      save: {
-        request: vi.fn(async () => ({ status: "cancelled" as const })),
-      },
-      watchFolders: {
-        list: vi.fn(async () => ({ profileId: null, folders: [] })),
-        add: vi.fn(async () => ({ status: "cancelled" as const })),
-        setPaused: vi.fn(async () => ({ profileId: null, folders: [] })),
-        remove: vi.fn(async () => ({ profileId: null, folders: [] })),
-        onChanged: vi.fn(() => () => undefined),
-      },
-      lifecycle: {
-        getSettings: vi.fn(async () => ({
-          closeBehavior: "tray" as const,
-          trayAvailable: true,
-        })),
-        setCloseBehavior: vi.fn(),
-      },
-      runtime: {
-        getInfo: vi.fn(async () => ({
-          platform: "darwin" as const,
-          version: "0.1.0",
-        })),
-      },
-    };
+    });
     Object.defineProperty(window, "openkeepDesktop", {
       configurable: true,
       value: bridge,

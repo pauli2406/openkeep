@@ -7,6 +7,7 @@ import type {
   DesktopProfileSummary,
   DesktopSessionState,
 } from "../shared/desktop-api";
+import { createDesktopBridgeStub } from "../test/desktop-bridge-stub";
 import { DesktopImportHost } from "./desktop-import-host";
 
 const home: DesktopProfileSummary = {
@@ -64,12 +65,11 @@ function bridge({
   profiles: DesktopProfileSummary[];
   pending: DesktopBridge["imports"]["pending"];
 }): DesktopBridge {
-  return {
+  return createDesktopBridgeStub({
     session: {
       restore: async () => connected(home),
       connect: async () => connected(home),
       retry: async () => connected(home),
-      signOut: async () => ({ status: "disconnected", reason: "signed-out" }),
     },
     profiles: {
       list: vi.fn(async () => ({ profiles, activeProfileId: home.id })),
@@ -77,13 +77,8 @@ function bridge({
         connected(profiles.find((profile) => profile.id === profileId)!),
       ),
       rename: vi.fn(async () => ({ profiles, activeProfileId: home.id })),
-      remove: vi.fn(async (): Promise<DesktopSessionState> => ({
-        status: "disconnected",
-        reason: "no-profile",
-      })),
     },
     imports: {
-      pick: vi.fn(async () => ({ files: [], rejected: [] })),
       pending,
       assign: vi.fn(async ({ batchId, profileId }) => ({
         ...incoming(profileId),
@@ -98,26 +93,8 @@ function bridge({
         ],
         rejected: [],
       })),
-      onChanged: vi.fn(() => () => undefined),
     },
-    save: {
-      request: vi.fn(async () => ({ status: "cancelled" as const })),
-    },
-    watchFolders: {
-      list: vi.fn(async () => ({ profileId: null, folders: [] })),
-      add: vi.fn(async () => ({ status: "cancelled" as const })),
-      setPaused: vi.fn(async () => ({ profileId: null, folders: [] })),
-      remove: vi.fn(async () => ({ profileId: null, folders: [] })),
-      onChanged: vi.fn(() => () => undefined),
-    },
-    lifecycle: {
-      getSettings: vi.fn(async () => ({ closeBehavior: "tray" as const, trayAvailable: true })),
-      setCloseBehavior: vi.fn(),
-    },
-    runtime: {
-      getInfo: async () => ({ platform: "darwin", version: "test" }),
-    },
-  };
+  });
 }
 
 describe("desktop open-with host", () => {
