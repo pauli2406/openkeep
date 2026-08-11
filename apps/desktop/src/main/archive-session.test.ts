@@ -394,9 +394,9 @@ describe("desktop archive session", () => {
     expect(repository.remove).toHaveBeenCalledWith(storedSession.profile.id);
   });
 
-  it("resolves to the storage error when clearing a rejected credential fails", async () => {
+  it("resolves to the storage error when removing a rejected credential fails", async () => {
     const repository = createRepository(storedSession);
-    (repository.clear as ReturnType<typeof vi.fn>).mockRejectedValue(
+    (repository.remove as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("keyring locked"),
     );
     const fetchRequest = vi
