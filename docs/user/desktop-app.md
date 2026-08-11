@@ -172,6 +172,34 @@ browser storage. They return when you reopen that profile, never appear in anoth
 profile, and are deleted with the local profile state when you remove it. Server-side
 document Q&A history remains data of the remote archive.
 
+## Save Documents and Archive Exports
+
+Desktop uses the operating system's save dialog instead of the browser download
+shelf for files that should remain on your computer:
+
+- `Download original` saves the exact uploaded document.
+- `Download searchable PDF` saves the derived PDF when the archive provides one.
+- `Export archive` in Profile and `Export snapshot` in Settings save the current
+  archive JSON snapshot.
+
+The dialog starts with a filename suggested by the archive and the matching file
+extension. OpenKeep removes path separators, invalid characters, and reserved
+Windows device names before showing that suggestion. You can still choose another
+name and folder. If the destination already exists, the operating system asks
+whether to replace it.
+
+Selecting `Cancel` makes no file and is not treated as an error. If the archive,
+destination, or permissions fail, the page reports that the file was not saved.
+OpenKeep writes to a temporary file in the selected folder and publishes it only
+after the complete response has been written, so an interrupted download is not
+presented as a finished file.
+
+Credentials and file bytes stay out of the web renderer during a desktop save. The
+trusted desktop process downloads the response and streams it directly to disk.
+The web app keeps its existing browser-native download behavior; in Settings, web
+also continues to place an exported snapshot in the JSON editor for manual copying
+or import.
+
 ## Manage a Saved Profile
 
 Open the active archive control to manage profiles:

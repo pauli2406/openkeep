@@ -177,6 +177,45 @@ credential-bearing upstream request. Citation routes carry the canonical documen
 UUID and cited page into the normal document detail route; the profile partition
 still determines which archive receives the document request.
 
+## Native Save Capability
+
+The shared web application has an optional host file-saver seam. A browser mount
+does not provide an adapter and retains Blob plus download-link behavior. The
+desktop mount supplies one adapter that accepts only three discriminated requests:
+original document by UUID, searchable PDF by UUID, or archive export. The shared
+routes receive only `saved`, `cancelled`, or a sanitized failure message.
+
+Preload maps that seam to the fixed `desktop:save:request` channel. It exposes no
+destination path, directory listing, arbitrary URL, write primitive, or generic IPC
+invocation to the renderer. Main authorizes the sender as a registered top-level
+OpenKeep frame and binds the request to the profile UUID assigned to that window.
+The native-save module rejects malformed IDs, extra fields, shell windows, and a
+profile that is no longer active before opening a dialog or making a request.
+
+Main resolves one of the three fixed archive endpoints, attaches the active Bearer
+and optional Cloudflare Access credentials, uses manual redirects, and combines the
+operation with the active profile signal. For document responses it prefers the
+UTF-8 `filename*` disposition parameter and falls back to `filename`. Suggestions
+are normalized and stripped of traversal separators, control or platform-invalid
+characters, trailing dots/spaces, dotfile ambiguity, and Windows reserved device
+names. Searchable PDFs and JSON exports receive their required extension; original
+documents keep a safe server extension or a MIME-derived fallback.
+
+The operating-system dialog owns folder selection and overwrite confirmation. Once
+approved, main reads the response body incrementally into a unique mode-`0600`
+temporary file beside the destination, flushes and closes it, then renames it into
+place. No binary body is serialized over IPC or buffered in renderer memory. Dialog
+cancellation cancels the response and returns a normal no-op. Stream, network,
+permission, dialog, and rename failures cancel or close the body, remove the partial
+temporary file on a best-effort basis, and return a fixed user-safe error that does
+not include credentials or local paths.
+
+Native-save tests exercise the public save interface with byte-for-byte original,
+searchable-PDF, and JSON output; UTF-8, traversal, invalid, and reserved filenames;
+cancellation; confirmed overwrite; profile/request rejection; filesystem failure;
+and mid-stream cleanup. Shared-route tests verify both the desktop adapter path and
+the unchanged browser path.
+
 ## Security Invariants
 
 - `openkeep` is registered as a standard, secure, Fetch-capable scheme before Electron
