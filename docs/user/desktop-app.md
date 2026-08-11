@@ -66,6 +66,30 @@ At startup:
 - if no valid profile can be restored, the app opens the archive chooser so you
   can select, reconnect, edit, or add a profile
 
+## Browse the Archive
+
+Once connected, desktop uses the same authenticated archive interface as the web
+app rather than a separate desktop copy:
+
+- **Today** shows live archive statistics, work needing attention, previews, and
+  recently added documents.
+- **Documents** keeps the list, timeline, and grouped views together with the
+  existing facets, filters, selection, and bulk actions.
+- **Correspondent dossiers** show the correspondent's insights, document timeline,
+  and linked records.
+- The **omnibar** opens from the search control or with `Command+K` on macOS and
+  `Ctrl+K` on Windows and Linux, then navigates to the same archive results as web.
+
+Back and forward navigation, deep document and correspondent links, theme, and the
+English/German interface behave the same way in both clients. Loading, empty,
+processing, unauthorized, and temporarily unavailable states still depend on the
+active server. Desktop does not substitute stale content from another profile or
+an offline cache when a request fails.
+
+Switching profiles creates a fresh shared-app instance in that profile's isolated
+window. Rows, filters, previews, selections, and query results from the previous
+archive therefore cannot remain visible in the destination archive.
+
 ## Manage a Saved Profile
 
 Open the active archive control to manage profiles:

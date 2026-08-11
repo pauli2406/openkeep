@@ -168,6 +168,20 @@ own `main.tsx` mount; Electron has a separate bootstrap that shows the connectio
 surface and then mounts the same `App`. Desktop Vite and TypeScript resolve the web
 app's `@/` alias identically, and desktop builds are the guard against alias drift.
 
+The optional host-shell accessory seam adds only the archive-profile control to the
+authenticated top bar. Today, the document explorer and its list/timeline/group
+views, the omnibar, and correspondent dossiers remain the exact web route modules.
+Browser history and deep links continue through TanStack Router at the trusted
+`openkeep://app` origin; the custom protocol returns the application entry point only
+for allowlisted client routes.
+
+Desktop parity tests mount those shared routes with main-owned authentication and
+the same fixture semantics as the browser smoke tests. They cover the core browse
+surfaces, keyboard navigation, empty/loading/failure states, and remounting the App
+across profile changes. The web smoke suite remains the canonical behavior test;
+the desktop suite proves that Electron's bootstrap, protocol, and profile seams do
+not alter it.
+
 ## Contributor Commands
 
 From the repository root:
