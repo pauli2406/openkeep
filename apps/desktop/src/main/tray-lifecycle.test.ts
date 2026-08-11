@@ -48,7 +48,11 @@ function createHarness(options: {
   };
   let closeBehavior = options.closeBehavior ?? "tray";
   const state = {
-    snapshot: vi.fn(() => ({ closeBehavior, profileRoutes: {} })),
+    snapshot: vi.fn(() => ({
+      closeBehavior,
+      profileRoutes: {},
+      notifications: { completed: true, failed: true, review: true },
+    })),
     setCloseBehavior: vi.fn(async (next: "tray" | "quit") => { closeBehavior = next; }),
     setWindowBounds: vi.fn(async () => undefined),
   };

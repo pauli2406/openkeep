@@ -10,6 +10,7 @@ export const DESKTOP_CHANNELS = {
   profilesRename: "desktop:profiles:rename",
   profilesRemove: "desktop:profiles:remove",
   importsPick: "desktop:imports:pick",
+  importsReportCreated: "desktop:imports:report-created",
   importsPending: "desktop:imports:pending",
   importsAssign: "desktop:imports:assign",
   importsConsume: "desktop:imports:consume",
@@ -20,6 +21,8 @@ export const DESKTOP_CHANNELS = {
   watchFoldersSetPaused: "desktop:watch-folders:set-paused",
   watchFoldersRemove: "desktop:watch-folders:remove",
   watchFoldersChanged: "desktop:watch-folders:changed",
+  notificationsGetSettings: "desktop:notifications:get-settings",
+  notificationsSetPreference: "desktop:notifications:set-preference",
   lifecycleGetSettings: "desktop:lifecycle:get-settings",
   lifecycleSetCloseBehavior: "desktop:lifecycle:set-close-behavior",
   runtimeGetInfo: "desktop:runtime:get-info",
@@ -105,7 +108,35 @@ export type DesktopCloseBehaviorInput = {
   closeBehavior: DesktopCloseBehavior;
 };
 
-export type DesktopImportSource = "picker" | "open-with";
+/**
+ * Which desktop entry point produced an import. Watch folders upload from main;
+ * the other two are uploaded by the renderer and reported back to main so every
+ * source shares one outcome tracker.
+ */
+export type DesktopImportSource = "picker" | "open-with" | "watch-folder";
+
+export type DesktopNotificationKind = "completed" | "failed" | "review";
+
+export type DesktopNotificationPreferences = Record<
+  DesktopNotificationKind,
+  boolean
+>;
+
+export type DesktopNotificationSettings = {
+  preferences: DesktopNotificationPreferences;
+  /** False when the operating system offers no usable notification service. */
+  supported: boolean;
+};
+
+export type DesktopNotificationPreferenceInput = {
+  kind: DesktopNotificationKind;
+  enabled: boolean;
+};
+
+/** Documents the renderer just created, so main can follow their processing. */
+export type DesktopCreatedDocumentsInput = {
+  documents: Array<{ documentId: string; name: string }>;
+};
 
 export type DesktopImportRejectionCode =
   | "unsupported-format"
@@ -249,6 +280,7 @@ export type DesktopBridge = {
     pending: () => Promise<DesktopImportsSnapshot>;
     assign: (input: DesktopImportAssignInput) => Promise<DesktopImportBatch>;
     consume: () => Promise<DesktopImportDelivery>;
+    reportCreated: (input: DesktopCreatedDocumentsInput) => Promise<void>;
     onChanged: (listener: () => void) => () => void;
   };
   save: {
@@ -264,6 +296,12 @@ export type DesktopBridge = {
       input: DesktopWatchFolderIdInput,
     ) => Promise<DesktopWatchFoldersSnapshot>;
     onChanged: (listener: () => void) => () => void;
+  };
+  notifications: {
+    getSettings: () => Promise<DesktopNotificationSettings>;
+    setPreference: (
+      input: DesktopNotificationPreferenceInput,
+    ) => Promise<DesktopNotificationSettings>;
   };
   lifecycle: {
     getSettings: () => Promise<DesktopLifecycleSettings>;
@@ -313,6 +351,8 @@ export function createDesktopBridge(
         invoke(DESKTOP_CHANNELS.importsAssign, input) as Promise<DesktopImportBatch>,
       consume: () =>
         invoke(DESKTOP_CHANNELS.importsConsume) as Promise<DesktopImportDelivery>,
+      reportCreated: (input: DesktopCreatedDocumentsInput) =>
+        invoke(DESKTOP_CHANNELS.importsReportCreated, input) as Promise<void>,
       onChanged: (listener: () => void) =>
         subscribe(DESKTOP_CHANNELS.importsChanged, listener),
     }),
@@ -341,6 +381,17 @@ export function createDesktopBridge(
         ) as Promise<DesktopWatchFoldersSnapshot>,
       onChanged: (listener: () => void) =>
         subscribe(DESKTOP_CHANNELS.watchFoldersChanged, listener),
+    }),
+    notifications: Object.freeze({
+      getSettings: () =>
+        invoke(
+          DESKTOP_CHANNELS.notificationsGetSettings,
+        ) as Promise<DesktopNotificationSettings>,
+      setPreference: (input: DesktopNotificationPreferenceInput) =>
+        invoke(
+          DESKTOP_CHANNELS.notificationsSetPreference,
+          input,
+        ) as Promise<DesktopNotificationSettings>,
     }),
     lifecycle: Object.freeze({
       getSettings: () =>

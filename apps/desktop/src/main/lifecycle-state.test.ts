@@ -37,9 +37,11 @@ describe("desktop lifecycle state", () => {
     expect(store.snapshot()).toEqual({
       closeBehavior: "tray",
       profileRoutes: {},
+      notifications: { completed: true, failed: true, review: true },
     });
 
     await store.setCloseBehavior("quit");
+    await store.setNotificationPreference("completed", false);
     await store.setWindowBounds({ x: 40, y: 50, width: 1280, height: 820 });
     await store.rememberProfileRoute("profile-one", "openkeep://app/documents/1");
 
@@ -48,6 +50,7 @@ describe("desktop lifecycle state", () => {
       closeBehavior: "quit",
       windowBounds: { x: 40, y: 50, width: 1280, height: 820 },
       profileRoutes: { "profile-one": "openkeep://app/documents/1" },
+      notifications: { completed: false, failed: true, review: true },
     });
   });
 
@@ -57,6 +60,7 @@ describe("desktop lifecycle state", () => {
       closeBehavior: "hide-forever",
       windowBounds: { x: "secret", y: 0, width: -1, height: 0 },
       profileRoutes: { profile: 42 },
+      notifications: { completed: "yes" },
     }));
     const store = createDesktopLifecycleStateStore({
       filePath: "/state/desktop-lifecycle.json",
@@ -65,9 +69,11 @@ describe("desktop lifecycle state", () => {
 
     await store.load();
 
+    // A malformed file must not silence notifications: enabled is the safe default.
     expect(store.snapshot()).toEqual({
       closeBehavior: "tray",
       profileRoutes: {},
+      notifications: { completed: true, failed: true, review: true },
     });
   });
 

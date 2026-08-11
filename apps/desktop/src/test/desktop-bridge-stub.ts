@@ -44,6 +44,7 @@ export function createDesktopBridgeStub(
       pending: vi.fn(async () => ({ batches: [] })),
       assign: vi.fn(),
       consume: vi.fn(async () => ({ files: [], rejected: [] })),
+      reportCreated: vi.fn(async () => undefined),
       onChanged: vi.fn(() => () => undefined),
       ...overrides.imports,
     },
@@ -58,6 +59,17 @@ export function createDesktopBridgeStub(
       remove: vi.fn(async () => ({ profileId: null, folders: [] })),
       onChanged: vi.fn(() => () => undefined),
       ...overrides.watchFolders,
+    },
+    notifications: {
+      getSettings: vi.fn(async () => ({
+        preferences: { completed: true, failed: true, review: true },
+        supported: true,
+      })),
+      setPreference: vi.fn(async () => ({
+        preferences: { completed: true, failed: true, review: true },
+        supported: true,
+      })),
+      ...overrides.notifications,
     },
     lifecycle: {
       getSettings: vi.fn(async () => ({

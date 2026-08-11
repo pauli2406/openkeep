@@ -23,6 +23,9 @@ describe("preload bridge contract", () => {
     await bridge.imports.pending();
     await bridge.imports.assign({ batchId: "batch-id", profileId: "profile-id" });
     await bridge.imports.consume();
+    await bridge.imports.reportCreated({
+      documents: [{ documentId: "document-id", name: "invoice.pdf" }],
+    });
     const stop = bridge.imports.onChanged(() => undefined);
     await bridge.save.request({
       kind: "document-original",
@@ -33,6 +36,8 @@ describe("preload bridge contract", () => {
     await bridge.watchFolders.setPaused({ folderId: "folder-id", paused: true });
     await bridge.watchFolders.remove({ folderId: "folder-id" });
     const stopWatching = bridge.watchFolders.onChanged(() => undefined);
+    await bridge.notifications.getSettings();
+    await bridge.notifications.setPreference({ kind: "review", enabled: false });
     await bridge.lifecycle.getSettings();
     await bridge.lifecycle.setCloseBehavior({ closeBehavior: "quit" });
     await bridge.runtime.getInfo();
@@ -62,32 +67,46 @@ describe("preload bridge contract", () => {
       profileId: "profile-id",
     });
     expect(invoke).toHaveBeenNthCalledWith(12, DESKTOP_CHANNELS.importsConsume);
-    expect(invoke).toHaveBeenNthCalledWith(13, DESKTOP_CHANNELS.saveRequest, {
+    expect(invoke).toHaveBeenNthCalledWith(
+      13,
+      DESKTOP_CHANNELS.importsReportCreated,
+      { documents: [{ documentId: "document-id", name: "invoice.pdf" }] },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.saveRequest, {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
-    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.watchFoldersList);
-    expect(invoke).toHaveBeenNthCalledWith(15, DESKTOP_CHANNELS.watchFoldersAdd);
+    expect(invoke).toHaveBeenNthCalledWith(15, DESKTOP_CHANNELS.watchFoldersList);
+    expect(invoke).toHaveBeenNthCalledWith(16, DESKTOP_CHANNELS.watchFoldersAdd);
     expect(invoke).toHaveBeenNthCalledWith(
-      16,
+      17,
       DESKTOP_CHANNELS.watchFoldersSetPaused,
       { folderId: "folder-id", paused: true },
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      17,
+      18,
       DESKTOP_CHANNELS.watchFoldersRemove,
       { folderId: "folder-id" },
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      18,
+      19,
+      DESKTOP_CHANNELS.notificationsGetSettings,
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      20,
+      DESKTOP_CHANNELS.notificationsSetPreference,
+      { kind: "review", enabled: false },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      21,
       DESKTOP_CHANNELS.lifecycleGetSettings,
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      19,
+      22,
       DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
       { closeBehavior: "quit" },
     );
-    expect(invoke).toHaveBeenNthCalledWith(20, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(23, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(subscribe).toHaveBeenCalledWith(
       DESKTOP_CHANNELS.importsChanged,
       expect.any(Function),
@@ -106,6 +125,7 @@ describe("preload bridge contract", () => {
       "imports",
       "save",
       "watchFolders",
+      "notifications",
       "lifecycle",
       "runtime",
     ]);

@@ -3,6 +3,10 @@ import {
   createAtomicJsonFile,
   type AtomicJsonFileSystem,
 } from "./storage/atomic-json-file";
+import type {
+  DesktopNotificationKind,
+  DesktopNotificationPreferences,
+} from "../shared/desktop-api";
 
 export type DesktopCloseBehavior = "tray" | "quit";
 
@@ -17,13 +21,21 @@ export type DesktopLifecycleState = {
   closeBehavior: DesktopCloseBehavior;
   windowBounds?: DesktopWindowBounds;
   profileRoutes: Record<string, string>;
+  notifications: DesktopNotificationPreferences;
 };
 
 export type LifecycleStateFileSystem = AtomicJsonFileSystem;
 
+const DEFAULT_NOTIFICATIONS: DesktopNotificationPreferences = {
+  completed: true,
+  failed: true,
+  review: true,
+};
+
 const DEFAULT_STATE: DesktopLifecycleState = {
   closeBehavior: "tray",
   profileRoutes: {},
+  notifications: DEFAULT_NOTIFICATIONS,
 };
 
 function cloneState(state: DesktopLifecycleState): DesktopLifecycleState {
@@ -31,7 +43,21 @@ function cloneState(state: DesktopLifecycleState): DesktopLifecycleState {
     closeBehavior: state.closeBehavior,
     ...(state.windowBounds ? { windowBounds: { ...state.windowBounds } } : {}),
     profileRoutes: { ...state.profileRoutes },
+    notifications: { ...state.notifications },
   };
+}
+
+/**
+ * An unknown or malformed notification preference falls back to enabled. Silence
+ * is the surprising outcome, so it is never the result of a bad file.
+ */
+function parseNotifications(value: unknown): DesktopNotificationPreferences {
+  if (!isRecord(value)) return { ...DEFAULT_NOTIFICATIONS };
+  const parsed = { ...DEFAULT_NOTIFICATIONS };
+  for (const kind of Object.keys(DEFAULT_NOTIFICATIONS) as DesktopNotificationKind[]) {
+    if (typeof value[kind] === "boolean") parsed[kind] = value[kind];
+  }
+  return parsed;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,6 +106,7 @@ function parseState(serialized: string): DesktopLifecycleState {
       closeBehavior,
       ...(windowBounds ? { windowBounds } : {}),
       profileRoutes,
+      notifications: parseNotifications(value.notifications),
     };
   } catch {
     return cloneState(DEFAULT_STATE);
@@ -141,6 +168,10 @@ export function createDesktopLifecycleStateStore({
 
     setCloseBehavior(closeBehavior: DesktopCloseBehavior) {
       return update((next) => { next.closeBehavior = closeBehavior; });
+    },
+
+    setNotificationPreference(kind: DesktopNotificationKind, enabled: boolean) {
+      return update((next) => { next.notifications[kind] = enabled; });
     },
 
     setWindowBounds(windowBounds: DesktopWindowBounds) {
