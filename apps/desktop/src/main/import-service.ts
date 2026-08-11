@@ -1,5 +1,6 @@
 import { open, realpath } from "node:fs/promises";
 import path from "node:path";
+import { IMPORT_MAX_BYTES, importMimeTypeForExtension } from "@openkeep/types";
 import type {
   DesktopImportBatch,
   DesktopImportDelivery,
@@ -9,17 +10,7 @@ import type {
   DesktopImportSource,
 } from "../shared/desktop-api";
 
-export const DESKTOP_IMPORT_MAX_BYTES = 67_108_864;
-
-const FORMAT_BY_EXTENSION = new Map<string, string>([
-  [".pdf", "application/pdf"],
-  [".jpg", "image/jpeg"],
-  [".jpeg", "image/jpeg"],
-  [".png", "image/png"],
-  [".tif", "image/tiff"],
-  [".tiff", "image/tiff"],
-  [".heic", "image/heic"],
-]);
+export const DESKTOP_IMPORT_MAX_BYTES = IMPORT_MAX_BYTES;
 
 type ImportReference = {
   id: string;
@@ -111,8 +102,7 @@ async function inspectPath(
   maxBytes: number,
 ): Promise<Omit<ImportReference, "id"> | ImportFailure> {
   const name = path.basename(inputPath) || "Unnamed file";
-  const extension = path.extname(name).toLowerCase();
-  const mimeType = FORMAT_BY_EXTENSION.get(extension);
+  const mimeType = importMimeTypeForExtension(path.extname(name));
   if (!mimeType) {
     return importFailure("unsupported-format", rejectionMessage("unsupported-format"));
   }

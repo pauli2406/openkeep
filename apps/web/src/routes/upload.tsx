@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { File as FileIcon, Loader2, Upload as UploadIcon } from "lucide-react";
+import {
+  IMPORT_MAX_BYTES,
+  importExtensions,
+  importMimeTypes,
+} from "@openkeep/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, authFetch } from "@/lib/api";
@@ -16,17 +21,9 @@ export const Route = createFileRoute("/upload")({
   component: ImportPage,
 });
 
-const ACCEPTED_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/tiff",
-  "image/heic",
-];
-
-const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.tiff,.tif,.heic";
-const ACCEPTED_EXTENSION_SET = new Set(ACCEPTED_EXTENSIONS.split(","));
-const DESKTOP_IMPORT_MAX_BYTES = 67_108_864;
+const ACCEPTED_EXTENSIONS = importExtensions.join(",");
+const ACCEPTED_EXTENSION_SET = new Set<string>(importExtensions);
+const ACCEPTED_TYPE_SET = new Set<string>(importMimeTypes);
 
 /** Upload → OCR → Extract → Embed, plus the terminal states. */
 type Stage = "upload" | "ocr" | "extract" | "embed" | "done" | "duplicate" | "failed";
@@ -298,16 +295,13 @@ function ImportPage() {
       const rejected: Array<{ id: string; name: string; message: string }> = [];
       for (const file of Array.from(files)) {
         const extension = `.${file.name.toLowerCase().split(".").at(-1) ?? ""}`;
-        if (
-          !ACCEPTED_TYPES.includes(file.type) &&
-          !ACCEPTED_EXTENSION_SET.has(extension)
-        ) {
+        if (!ACCEPTED_TYPE_SET.has(file.type) && !ACCEPTED_EXTENSION_SET.has(extension)) {
           rejected.push({
             id: crypto.randomUUID(),
             name: file.name,
             message: t("import.unsupportedFormat"),
           });
-        } else if (file.size > DESKTOP_IMPORT_MAX_BYTES) {
+        } else if (file.size > IMPORT_MAX_BYTES) {
           rejected.push({
             id: crypto.randomUUID(),
             name: file.name,

@@ -36,6 +36,46 @@ export const reviewReasons = [
 ] as const;
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
+// --- Accepted import formats ---
+//
+// One table for every client-side import surface: the web drop zone, desktop
+// Open-with and picker imports, and desktop watch folders. They previously kept
+// separate lists, which is how an extension could be accepted in one place and
+// rejected in another.
+
+export const importFormats = [
+  { mimeType: "application/pdf", extensions: [".pdf"] },
+  { mimeType: "image/jpeg", extensions: [".jpg", ".jpeg"] },
+  { mimeType: "image/png", extensions: [".png"] },
+  { mimeType: "image/tiff", extensions: [".tif", ".tiff"] },
+  { mimeType: "image/heic", extensions: [".heic"] },
+] as const;
+
+export type ImportMimeType = (typeof importFormats)[number]["mimeType"];
+
+export const importMimeTypes: readonly ImportMimeType[] = importFormats.map(
+  (format) => format.mimeType,
+);
+
+export const importExtensions: readonly string[] = importFormats.flatMap(
+  (format) => [...format.extensions],
+);
+
+/** The upload limit clients enforce before transferring anything. 64 MiB. */
+export const IMPORT_MAX_BYTES = 67_108_864;
+
+/** Resolves a lower-case extension including its dot, or `null` if unsupported. */
+export function importMimeTypeForExtension(
+  extension: string,
+): ImportMimeType | null {
+  const normalized = extension.toLowerCase();
+  return (
+    importFormats.find((format) =>
+      (format.extensions as readonly string[]).includes(normalized),
+    )?.mimeType ?? null
+  );
+}
+
 export const ProcessingModeSchema = z.enum(processingModes);
 export const AppLanguageSchema = z.enum(appLanguages);
 export const ParseProviderSchema = z.enum(parseProviders);
