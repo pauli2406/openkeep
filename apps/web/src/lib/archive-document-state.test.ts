@@ -19,7 +19,7 @@ describe("archive document state", () => {
 
     await refreshArchiveDocumentState(client, "document-1");
 
-    expect(invalidate.mock.calls.map(([filter]) => filter.queryKey)).toEqual([
+    expect(invalidate.mock.calls.map(([filter]) => filter?.queryKey)).toEqual([
       ["document", "document-1"],
       ["document-history", "document-1"],
       ["documents"],
@@ -44,7 +44,7 @@ describe("archive document state", () => {
 
     await evictDeletedArchiveDocument(client, "document-3");
 
-    expect(remove.mock.calls.map(([filter]) => filter.queryKey)).toEqual([
+    expect(remove.mock.calls.map(([filter]) => filter?.queryKey)).toEqual([
       ["document", "document-3"],
       ["document-history", "document-3"],
       ["document-text", "document-3"],
