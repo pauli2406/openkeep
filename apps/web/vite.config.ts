@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@openkeep/fonts": path.resolve(__dirname, "../mobile/assets/fonts"),
     },
   },
   build: {
@@ -47,6 +48,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: {
+      allow: [
+        path.resolve(__dirname, "."),
+        path.resolve(__dirname, "../mobile/assets/fonts"),
+      ],
+    },
     proxy: {
       "/api": {
         target: "http://localhost:3000",

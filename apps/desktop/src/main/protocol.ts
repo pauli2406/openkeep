@@ -33,10 +33,23 @@ const PRODUCTION_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-function textResponse(status: number, message: string) {
+function textResponse(
+  status: number,
+  message: string,
+  headers?: HeadersInit,
+) {
   return new Response(message, {
     status,
-    headers: { "content-type": "text/plain; charset=utf-8" },
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      ...Object.fromEntries(new Headers(headers)),
+    },
+  });
+}
+
+function unavailableResponse(status: 502 | 503, message: string) {
+  return textResponse(status, message, {
+    "x-openkeep-desktop-error": "archive-unavailable",
   });
 }
 
@@ -149,7 +162,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       const active = options.archiveSession.getActiveSession();
       if (!active || !options.profileId || active.profile.id !== options.profileId) {
-        return textResponse(503, "Connect to an OpenKeep archive first.");
+        return unavailableResponse(503, "Connect to an OpenKeep archive first.");
       }
 
       const headers = createForwardHeaders(request.headers);
@@ -179,7 +192,10 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
           duplex: supportsBody ? "half" : undefined,
         } as RequestInit & { duplex?: "half" });
       } catch {
-        return textResponse(502, "The active OpenKeep archive could not be reached.");
+        return unavailableResponse(
+          502,
+          "The active OpenKeep archive could not be reached.",
+        );
       }
     }
 

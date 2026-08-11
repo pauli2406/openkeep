@@ -26,6 +26,7 @@ import { api } from "@/lib/api";
 import { useAnswerStream, linkifyCitations } from "@/hooks/use-answer-stream";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
 import { useI18n } from "@/lib/i18n";
+import { usePrimaryModifierLabel } from "@/lib/host-shell";
 import {
   fetchExplorerFacets,
   fetchDashboardInsights,
@@ -226,6 +227,9 @@ export function Omnibar() {
 
   const navigate = useNavigate();
   const { t } = useI18n();
+  const primaryModifier = usePrimaryModifierLabel();
+  const askShortcut =
+    primaryModifier === "⌘" ? "⌘↵" : `${primaryModifier}+↵`;
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // The palette rows the arrows walk. `>` switches to command mode.
@@ -535,7 +539,7 @@ export function Omnibar() {
                   <div className="ok-num flex flex-shrink-0 items-center gap-3 border-t bg-[var(--ok-bar)] px-4 py-1.5 text-[10.5px] text-muted-foreground">
                     <span>↑↓ {t("omnibar.footerNavigate")}</span>
                     <span>↵ {t("omnibar.footerOpen")}</span>
-                    <span>⌘↵ {t("omnibar.footerAsk")}</span>
+                    <span>{askShortcut} {t("omnibar.footerAsk")}</span>
                     <span className="ml-auto">&gt; {t("omnibar.footerCommands")}</span>
                   </div>
                 ) : null}

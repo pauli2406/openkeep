@@ -82,6 +82,20 @@ describe("App auth provider", () => {
     ).toBeInTheDocument();
   });
 
+  it("uses the host platform for primary keyboard shortcut labels", async () => {
+    render(
+      <App
+        AuthProvider={AuthenticatedHostProvider}
+        platform="win32"
+      />,
+    );
+
+    expect(
+      await screen.findByText("Ctrl+K"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("⌘K")).not.toBeInTheDocument();
+  });
+
   it("omits the shell accessory by default", async () => {
     render(<App AuthProvider={AuthenticatedHostProvider} />);
 

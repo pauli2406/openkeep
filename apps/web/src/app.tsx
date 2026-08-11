@@ -5,6 +5,7 @@ import { routeTree } from "./routeTree.gen";
 import { AuthProvider as BrowserAuthProvider, useAuth } from "./hooks/use-auth";
 import {
   ShellAccessoryProvider,
+  type HostPlatform,
   type ShellAccessory,
 } from "./lib/host-shell";
 import { I18nProvider } from "./lib/i18n";
@@ -64,18 +65,20 @@ export function AppRouter({
 export interface AppProps {
   AuthProvider?: ComponentType<{ children: ReactNode }>;
   ShellAccessory?: ShellAccessory;
+  platform?: HostPlatform;
 }
 
 export function App({
   AuthProvider = BrowserAuthProvider,
   ShellAccessory,
+  platform,
 }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
   return (
     <QueryClientProvider client={appInstance.queryClient}>
       <AuthProvider>
-        <ShellAccessoryProvider accessory={ShellAccessory}>
+        <ShellAccessoryProvider accessory={ShellAccessory} platform={platform}>
           <AppRouter {...appInstance} />
         </ShellAccessoryProvider>
       </AuthProvider>

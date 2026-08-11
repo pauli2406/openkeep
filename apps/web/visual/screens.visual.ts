@@ -94,10 +94,8 @@ for (const viewport of VIEWPORTS) {
           await page.locator(screen.ready).first().waitFor({ state: "visible" });
 
           // Web fonts change text metrics, so every box on the page depends on
-          // them. `index.css` pulls Public Sans and IBM Plex Mono from Google
-          // Fonts, which means these baselines need network access — without
-          // it the browser falls back and every screenshot differs. Fail with
-          // that sentence rather than thousands of unexplained pixel diffs.
+          // them. `index.css` bundles Public Sans and IBM Plex Mono from the
+          // shared mobile assets, so wait for font decoding before capture.
           // `.then(() => true)` because the FontFaceSet itself is not
           // serializable across the CDP boundary.
           await page.evaluate(() => document.fonts.ready.then(() => true));
@@ -106,7 +104,7 @@ for (const viewport of VIEWPORTS) {
           );
           expect(
             fontLoaded,
-            "Public Sans did not load — visual baselines require network access to Google Fonts",
+            "Public Sans did not load — visual baselines require the bundled font asset",
           ).toBe(true);
 
           await expect(page.locator("[data-pending], .animate-spin")).toHaveCount(0, {

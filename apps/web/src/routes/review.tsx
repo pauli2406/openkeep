@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { useI18n } from "@/lib/i18n";
+import { createObjectUrlLease } from "@/lib/object-url";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/review")({
@@ -242,7 +243,7 @@ function ReviewPage() {
 
   // Small preview of the selected document.
   useEffect(() => {
-    let objectUrl: string | null = null;
+    const objectUrl = createObjectUrlLease();
     let cancelled = false;
     setPreviewUrl(null);
     if (!selected) return;
@@ -250,12 +251,12 @@ function ReviewPage() {
       const response = await authFetch(`/api/documents/${selected.id}/download`);
       if (!response.ok || cancelled) return;
       const blob = await response.blob();
-      objectUrl = URL.createObjectURL(blob);
-      if (!cancelled) setPreviewUrl(objectUrl);
+      const nextUrl = objectUrl.replace(blob);
+      if (nextUrl) setPreviewUrl(nextUrl);
     })().catch(() => {});
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl.dispose();
     };
   }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 

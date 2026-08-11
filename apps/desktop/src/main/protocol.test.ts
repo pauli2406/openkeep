@@ -76,7 +76,11 @@ describe("openkeep protocol handler", () => {
       fetchRequest,
     });
     expect((await disconnected(new Request("openkeep://app/api/health"))).status).toBe(503);
-    expect((await disconnected(new Request("openkeep://app/api/documents"))).status).toBe(503);
+    const response = await disconnected(new Request("openkeep://app/api/documents"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-openkeep-desktop-error")).toBe(
+      "archive-unavailable",
+    );
     expect(fetchRequest).not.toHaveBeenCalled();
   });
 
@@ -259,6 +263,9 @@ describe("openkeep protocol handler", () => {
 
     const response = await handler(new Request("openkeep://app/api/documents"));
     expect(response.status).toBe(502);
+    expect(response.headers.get("x-openkeep-desktop-error")).toBe(
+      "archive-unavailable",
+    );
     expect(await response.text()).not.toContain("secret token");
   });
 });

@@ -24,8 +24,8 @@ export function DesktopAuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const response = await authFetch("/api/auth/me");
     if (response.status === 401) {
-      const disconnected = await window.openkeepDesktop.session.signOut();
-      session.setState(disconnected);
+      // The shared failure seam asks main to re-verify the profile. Main alone
+      // decides whether its encrypted credentials need to be removed.
       throw new Error("The desktop archive session is no longer valid.");
     }
     if (!response.ok) {

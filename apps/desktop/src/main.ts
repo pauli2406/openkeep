@@ -28,11 +28,11 @@ import {
 import {
   APP_HOST,
   APP_SCHEME,
-  APP_URL,
   assertTrustedIpcSender,
   classifyNavigation,
+  isTrustedRendererUrl,
 } from "./main/security";
-import { createMainWindowOptions } from "./main/window";
+import { createMainWindowOptions, getProfileWindowUrl } from "./main/window";
 import {
   createProfilePartition,
   DESKTOP_SHELL_PARTITION,
@@ -58,6 +58,7 @@ const isSmokeTest = process.argv.includes("--smoke-test");
 let mainWindow: BrowserWindow | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
+const profileRoutes = new Map<string, string>();
 
 function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
   const senderFrame = event.senderFrame;
@@ -337,6 +338,7 @@ void app.whenReady().then(async () => {
   }
 
   async function resetProfilePartition(profileId: string) {
+    profileRoutes.delete(profileId);
     const { targetSession } = await preparePartition(profileId);
     await targetSession.closeAllConnections();
     await Promise.all([
@@ -352,6 +354,11 @@ void app.whenReady().then(async () => {
     const previousWindow = mainWindow;
     if (previousWindow && !previousWindow.isDestroyed()) {
       const previousId = previousWindow.webContents.id;
+      const previousProfileId = windowProfileIds.get(previousId);
+      const previousUrl = previousWindow.webContents.getURL();
+      if (previousProfileId && isTrustedRendererUrl(previousUrl)) {
+        profileRoutes.set(previousProfileId, previousUrl);
+      }
       trustedWebContentsIds.delete(previousId);
       windowProfileIds.delete(previousId);
       previousWindow.destroy();
@@ -392,7 +399,13 @@ void app.whenReady().then(async () => {
         mainWindow = null;
       }
     });
-    void window.loadURL(APP_URL);
+    window.on("close", () => {
+      const currentUrl = window.webContents.getURL();
+      if (profileId && isTrustedRendererUrl(currentUrl)) {
+        profileRoutes.set(profileId, currentUrl);
+      }
+    });
+    void window.loadURL(getProfileWindowUrl(profileId, profileRoutes));
     mainWindow = window;
   }
 
