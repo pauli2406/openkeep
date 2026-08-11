@@ -124,6 +124,45 @@ describe("openkeep protocol handler", () => {
     await expect(response).resolves.toMatchObject({ status: 502 });
   });
 
+  it("aborts a pending document mutation before another profile can become active", async () => {
+    const activeController = new AbortController();
+    let forwardedSignal: AbortSignal | undefined;
+    const fetchRequest = vi.fn(
+      (_input: string | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          forwardedSignal = init?.signal ?? undefined;
+          forwardedSignal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: {
+        getActiveSession: () => ({ ...activeSession, signal: activeController.signal }),
+      },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = handler(
+      new Request("openkeep://app/api/documents/document-1", {
+        method: "DELETE",
+      }),
+    );
+    activeController.abort();
+
+    expect(forwardedSignal?.aborted).toBe(true);
+    await expect(response).resolves.toMatchObject({ status: 502 });
+    expect(fetchRequest).toHaveBeenCalledWith(
+      "https://archive.example.com/base/api/documents/document-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("forwards authenticated API traffic without renderer-supplied credentials", async () => {
     let forwardedBody = "";
     const fetchRequest = vi.fn(
