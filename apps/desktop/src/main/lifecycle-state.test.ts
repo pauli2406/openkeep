@@ -71,6 +71,39 @@ describe("desktop lifecycle state", () => {
     });
   });
 
+  it("recovers persistence after one failed write", async () => {
+    const memory = memoryFileSystem();
+    let failNextWrite = true;
+    const fileSystem = {
+      ...memory.fileSystem,
+      writeFile: vi.fn(async (filePath: string, contents: string) => {
+        if (failNextWrite) {
+          failNextWrite = false;
+          throw new Error("transient filesystem lock");
+        }
+        return memory.fileSystem.writeFile(filePath, contents);
+      }),
+    };
+    const store = createDesktopLifecycleStateStore({
+      filePath: "/state/desktop-lifecycle.json",
+      fileSystem,
+      createTemporaryId: () => "temp",
+    });
+    await store.load();
+
+    // The failed write reports to its caller...
+    await expect(store.setCloseBehavior("quit")).rejects.toThrow(
+      "transient filesystem lock",
+    );
+
+    // ...and must not disable every later write until restart.
+    await store.setWindowBounds({ x: 1, y: 2, width: 1280, height: 820 });
+    await store.idle();
+    expect(JSON.parse(memory.contents()!)).toMatchObject({
+      windowBounds: { x: 1, y: 2, width: 1280, height: 820 },
+    });
+  });
+
   it("serializes concurrent updates without losing fields", async () => {
     const memory = memoryFileSystem();
     const store = createDesktopLifecycleStateStore({

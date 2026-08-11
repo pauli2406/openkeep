@@ -123,13 +123,21 @@ export function createDesktopLifecycleStateStore({
   }
 
   function update(mutate: (next: DesktopLifecycleState) => void) {
-    writes = writes.then(async () => {
+    const run = writes.then(async () => {
       const next = cloneState(state);
       mutate(next);
       await persist(next);
       state = next;
     });
-    return writes;
+    // The stored chain must always settle. One transient write failure — an
+    // antivirus lock, a full disk — must not leave the chain rejected and
+    // disable every later close-preference, bounds, and route write until the
+    // application restarts. The caller still sees its own failure via `run`.
+    writes = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   return {

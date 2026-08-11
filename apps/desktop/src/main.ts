@@ -727,6 +727,22 @@ void app.whenReady().then(async () => {
       );
     },
     async cleanup() {
+      // Remember the active route first: quit destroys the window after this
+      // cleanup, which is too late for the close handler's unawaited write, so
+      // a quit taken from the tray or the OS would restore a stale route.
+      const currentWindow = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+      if (currentWindow) {
+        const currentProfileId = windowProfileIds.get(currentWindow.webContents.id);
+        const currentUrl = currentWindow.webContents.getURL();
+        if (currentProfileId && isTrustedRendererUrl(currentUrl)) {
+          profileRoutes.set(currentProfileId, currentUrl);
+          await lifecycleState
+            .rememberProfileRoute(currentProfileId, currentUrl)
+            .catch(() => {
+              console.error("OpenKeep could not remember the active archive route.");
+            });
+        }
+      }
       archiveSession.dispose();
       await Promise.all(
         [...configuredPartitions].map((partition) =>
