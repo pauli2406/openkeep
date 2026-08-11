@@ -216,11 +216,18 @@ export function createDesktopWatchFolderStore({
   }
 
   function update(mutate: (profiles: Record<string, StoredProfile>) => void) {
-    writes = writes.then(async () => {
+    const run = writes.then(async () => {
       mutate(profiles);
       await file.write({ version: 1, profiles });
     });
-    return writes;
+    // The stored chain must always settle: one transient write failure must
+    // not disable folder changes and import checkpoints until restart. The
+    // caller still sees its own failure via `run`.
+    writes = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   return {

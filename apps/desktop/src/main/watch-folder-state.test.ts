@@ -180,6 +180,37 @@ describe("desktop watch folder state", () => {
     expect(store.knowsChecksum("home", "sha-1")).toBe(false);
   });
 
+  it("recovers checkpointing after one failed write", async () => {
+    const { files, fileSystem } = memoryFileSystem();
+    let failNextWrite = true;
+    const store = createStore({
+      ...fileSystem,
+      writeFile: async (filePath, contents) => {
+        if (failNextWrite) {
+          failNextWrite = false;
+          throw new Error("transient filesystem lock");
+        }
+        return fileSystem.writeFile(filePath, contents);
+      },
+    });
+    await store.load();
+
+    // The failed write reports to its caller...
+    await expect(store.add("home", "/Users/keeper/Scans")).rejects.toThrow(
+      "transient filesystem lock",
+    );
+
+    // ...and must not disable every later checkpoint until restart.
+    await store.recordImported(
+      "home",
+      "/Users/keeper/Scans/invoice.pdf",
+      { size: 12, mtimeMs: 34, checksum: "sha-1" },
+      1_000,
+    );
+    await store.idle();
+    expect(files.get("/state/desktop-watch-folders.json")).toContain("sha-1");
+  });
+
   it("falls back to no watch folders when the state file is unusable", async () => {
     const { files, fileSystem } = memoryFileSystem();
     files.set("/state/desktop-watch-folders.json", "{ not json");
