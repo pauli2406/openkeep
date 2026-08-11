@@ -306,6 +306,38 @@ describe("desktop import outcome tracker", () => {
     expect(harness.tracker.pendingCount()).toBe(1);
   });
 
+  it("recovers checkpointing after one failed write", async () => {
+    const memory = memoryFileSystem();
+    let failNextWrite = true;
+    const harness = createHarness({
+      fileSystem: {
+        ...memory.fileSystem,
+        writeFile: async (filePath, contents) => {
+          if (failNextWrite) {
+            failNextWrite = false;
+            throw new Error("transient filesystem lock");
+          }
+          return memory.fileSystem.writeFile(filePath, contents);
+        },
+      },
+    });
+    await harness.tracker.load();
+
+    // The failed write reports to its caller...
+    await expect(
+      harness.tracker.track("home", "picker", [
+        { documentId: "doc-1", name: "invoice.pdf" },
+      ]),
+    ).rejects.toThrow("transient filesystem lock");
+
+    // ...and must not disable every later checkpoint until restart.
+    await harness.tracker.track("home", "picker", [
+      { documentId: "doc-2", name: "receipt.pdf" },
+    ]);
+    await harness.tracker.stop();
+    expect(memory.files.get("/state/outcomes.json")).toContain("doc-2");
+  });
+
   it("drops the pending imports of a removed profile", async () => {
     const harness = createHarness();
     await harness.tracker.load();

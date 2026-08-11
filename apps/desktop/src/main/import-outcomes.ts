@@ -156,8 +156,15 @@ export function createDesktopImportOutcomeTracker({
   let stopped = false;
 
   function persist() {
-    writes = writes.then(() => file.write({ version: 1, pending, notified }));
-    return writes;
+    const run = writes.then(() => file.write({ version: 1, pending, notified }));
+    // The stored chain must always settle: one transient write failure must
+    // not disable outcome checkpointing until restart. The caller still sees
+    // its own failure via `run`.
+    writes = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   function markNotified(entries: TrackedImport[]) {
