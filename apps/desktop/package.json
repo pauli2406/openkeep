@@ -34,6 +34,7 @@
     "@vitejs/plugin-react": "^4.5.2",
     "electron": "43.3.0",
     "jsdom": "^26.1.0",
+    "msw": "^2.11.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "typescript": "^5.9.3",
