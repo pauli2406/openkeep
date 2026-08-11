@@ -48,6 +48,18 @@ describe("desktop auth provider", () => {
         retry: vi.fn(async () => connected),
         signOut: vi.fn(async () => signedOut),
       },
+      profiles: {
+        list: vi.fn(async () => ({
+          profiles: [connected.profile],
+          activeProfileId: connected.profile.id,
+        })),
+        activate: vi.fn(async () => connected),
+        rename: vi.fn(async () => ({
+          profiles: [connected.profile],
+          activeProfileId: connected.profile.id,
+        })),
+        remove: vi.fn(async () => signedOut),
+      },
       runtime: {
         getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
       },

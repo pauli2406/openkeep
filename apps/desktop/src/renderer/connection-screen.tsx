@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type {
   DesktopBridge,
+  DesktopProfileSummary,
+  DesktopProfilesSnapshot,
   DesktopSessionState,
 } from "../shared/desktop-api";
 
@@ -8,22 +10,30 @@ type ConnectionScreenProps = {
   bridge?: DesktopBridge;
   initialState: Exclude<DesktopSessionState, { status: "connected" }>;
   onStateChange: (state: DesktopSessionState) => void;
+  profile?: DesktopProfileSummary;
+  onCancel?: () => void;
+  onProfilesChanged?: (snapshot: DesktopProfilesSnapshot) => void;
 };
 
 export function ConnectionScreen({
   bridge = window.openkeepDesktop,
   initialState,
   onStateChange,
+  profile,
+  onCancel,
+  onProfilesChanged,
 }: ConnectionScreenProps) {
   const unavailable = initialState.status === "unavailable" ? initialState : null;
+  const editingProfile = profile ?? unavailable?.profile;
   const initialServerUrl =
     initialState.status === "disconnected" || initialState.status === "error"
       ? initialState.serverUrl
       : undefined;
   const [editing, setEditing] = useState(!unavailable);
   const [serverUrl, setServerUrl] = useState(
-    unavailable?.profile.serverUrl || initialServerUrl || "http://localhost:3000",
+    editingProfile?.serverUrl || initialServerUrl || "http://localhost:3000",
   );
+  const [label, setLabel] = useState(editingProfile?.label ?? "");
   const [apiToken, setApiToken] = useState("");
   const [revealToken, setRevealToken] = useState(false);
   const [cfOpen, setCfOpen] = useState(false);
@@ -59,6 +69,8 @@ export function ConnectionScreen({
     setStatus("checking");
     setMessage("");
     const result = await bridge.session.connect({
+      ...(editingProfile ? { profileId: editingProfile.id } : {}),
+      ...(label.trim() ? { label: label.trim() } : {}),
       serverUrl,
       apiToken,
       cfAccessClientId,
@@ -106,6 +118,25 @@ export function ConnectionScreen({
     );
   }
 
+  async function renameProfile() {
+    if (!editingProfile || !label.trim()) {
+      return;
+    }
+    setStatus("checking");
+    setMessage("");
+    try {
+      const snapshot = await bridge.profiles.rename({
+        profileId: editingProfile.id,
+        label: label.trim(),
+      });
+      onProfilesChanged?.(snapshot);
+      onCancel?.();
+    } catch {
+      setStatus("error");
+      setMessage("OpenKeep could not rename this archive profile.");
+    }
+  }
+
   if (unavailable && !editing) {
     return (
       <main className="desktop-connect-shell">
@@ -144,7 +175,9 @@ export function ConnectionScreen({
 
         <div className="desktop-connect-copy">
           <p className="desktop-connect-eyebrow">OPENKEEP · DESKTOP</p>
-          <h1 id="connect-title">Connect your archive</h1>
+          <h1 id="connect-title">
+            {editingProfile ? "Edit archive connection" : "Connect your archive"}
+          </h1>
           <p>
             Use an API token from your OpenKeep profile. Credentials are encrypted by
             your operating system and never enter the web interface.
@@ -152,6 +185,20 @@ export function ConnectionScreen({
         </div>
 
         <form className="desktop-connect-form" onSubmit={(event) => void connect(event)}>
+          <label htmlFor="profile-label">Profile name</label>
+          <div className="desktop-connect-control">
+            <span aria-hidden="true">Aa</span>
+            <input
+              id="profile-label"
+              name="profile-label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Home archive"
+              maxLength={120}
+              disabled={status === "checking"}
+            />
+          </div>
+
           <label htmlFor="server-url">Archive address</label>
           <div className="desktop-connect-control">
             <span aria-hidden="true">↗</span>
@@ -242,6 +289,26 @@ export function ConnectionScreen({
             </span>
             <span aria-hidden="true">{status === "checking" ? "···" : "→"}</span>
           </button>
+          {editingProfile && label.trim() !== editingProfile.label ? (
+            <button
+              type="button"
+              className="desktop-secondary-button"
+              onClick={() => void renameProfile()}
+              disabled={status === "checking" || !label.trim()}
+            >
+              Save profile name only
+            </button>
+          ) : null}
+          {onCancel ? (
+            <button
+              type="button"
+              className="desktop-secondary-button"
+              onClick={onCancel}
+              disabled={status === "checking"}
+            >
+              Cancel
+            </button>
+          ) : null}
         </form>
 
         <footer>

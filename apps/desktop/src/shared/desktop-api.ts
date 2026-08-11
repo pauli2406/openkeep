@@ -5,6 +5,10 @@ export const DESKTOP_CHANNELS = {
   sessionConnect: "desktop:session:connect",
   sessionRetry: "desktop:session:retry",
   sessionSignOut: "desktop:session:sign-out",
+  profilesList: "desktop:profiles:list",
+  profilesActivate: "desktop:profiles:activate",
+  profilesRename: "desktop:profiles:rename",
+  profilesRemove: "desktop:profiles:remove",
   runtimeGetInfo: "desktop:runtime:get-info",
 } as const;
 
@@ -15,6 +19,8 @@ export type DesktopProfileSummary = {
 };
 
 export type DesktopConnectInput = {
+  profileId?: string;
+  label?: string;
   serverUrl: string;
   apiToken: string;
   cfAccessClientId?: string;
@@ -26,7 +32,12 @@ export type DesktopSessionState =
   | {
       status: "disconnected";
       serverUrl?: string;
-      reason?: "invalid-credentials" | "signed-out" | "no-profile";
+      reason?:
+        | "invalid-credentials"
+        | "signed-out"
+        | "no-profile"
+        | "choose-profile"
+        | "superseded";
     }
   | {
       status: "connected";
@@ -52,6 +63,19 @@ export type DesktopSessionState =
       serverUrl?: string;
     };
 
+export type DesktopProfilesSnapshot = {
+  profiles: DesktopProfileSummary[];
+  activeProfileId: string | null;
+};
+
+export type DesktopProfileIdInput = {
+  profileId: string;
+};
+
+export type DesktopProfileRenameInput = DesktopProfileIdInput & {
+  label: string;
+};
+
 export type DesktopRuntimeInfo = {
   platform: NodeJS.Platform;
   version: string;
@@ -63,6 +87,12 @@ export type DesktopBridge = {
     connect: (input: DesktopConnectInput) => Promise<DesktopSessionState>;
     retry: () => Promise<DesktopSessionState>;
     signOut: () => Promise<DesktopSessionState>;
+  };
+  profiles: {
+    list: () => Promise<DesktopProfilesSnapshot>;
+    activate: (input: DesktopProfileIdInput) => Promise<DesktopSessionState>;
+    rename: (input: DesktopProfileRenameInput) => Promise<DesktopProfilesSnapshot>;
+    remove: (input: DesktopProfileIdInput) => Promise<DesktopSessionState>;
   };
   runtime: {
     getInfo: () => Promise<DesktopRuntimeInfo>;
@@ -82,6 +112,16 @@ export function createDesktopBridge(invoke: Invoke): DesktopBridge {
         invoke(DESKTOP_CHANNELS.sessionRetry) as Promise<DesktopSessionState>,
       signOut: () =>
         invoke(DESKTOP_CHANNELS.sessionSignOut) as Promise<DesktopSessionState>,
+    }),
+    profiles: Object.freeze({
+      list: () =>
+        invoke(DESKTOP_CHANNELS.profilesList) as Promise<DesktopProfilesSnapshot>,
+      activate: (input: DesktopProfileIdInput) =>
+        invoke(DESKTOP_CHANNELS.profilesActivate, input) as Promise<DesktopSessionState>,
+      rename: (input: DesktopProfileRenameInput) =>
+        invoke(DESKTOP_CHANNELS.profilesRename, input) as Promise<DesktopProfilesSnapshot>,
+      remove: (input: DesktopProfileIdInput) =>
+        invoke(DESKTOP_CHANNELS.profilesRemove, input) as Promise<DesktopSessionState>,
     }),
     runtime: Object.freeze({
       getInfo: () =>

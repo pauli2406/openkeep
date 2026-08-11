@@ -13,6 +13,10 @@ describe("preload bridge contract", () => {
     });
     await bridge.session.retry();
     await bridge.session.signOut();
+    await bridge.profiles.list();
+    await bridge.profiles.activate({ profileId: "profile-id" });
+    await bridge.profiles.rename({ profileId: "profile-id", label: "Home" });
+    await bridge.profiles.remove({ profileId: "profile-id" });
     await bridge.runtime.getInfo();
 
     expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
@@ -22,8 +26,19 @@ describe("preload bridge contract", () => {
     });
     expect(invoke).toHaveBeenNthCalledWith(3, DESKTOP_CHANNELS.sessionRetry);
     expect(invoke).toHaveBeenNthCalledWith(4, DESKTOP_CHANNELS.sessionSignOut);
-    expect(invoke).toHaveBeenNthCalledWith(5, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(5, DESKTOP_CHANNELS.profilesList);
+    expect(invoke).toHaveBeenNthCalledWith(6, DESKTOP_CHANNELS.profilesActivate, {
+      profileId: "profile-id",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(7, DESKTOP_CHANNELS.profilesRename, {
+      profileId: "profile-id",
+      label: "Home",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(8, DESKTOP_CHANNELS.profilesRemove, {
+      profileId: "profile-id",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(9, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(Object.isFrozen(bridge)).toBe(true);
-    expect(Object.keys(bridge)).toEqual(["session", "runtime"]);
+    expect(Object.keys(bridge)).toEqual(["session", "profiles", "runtime"]);
   });
 });

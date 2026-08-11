@@ -12,6 +12,11 @@ import {
   shell,
 } from "electron";
 import type { DesktopConnectInput } from "./shared/desktop-api";
+import type {
+  DesktopProfileIdInput,
+  DesktopProfileRenameInput,
+  DesktopSessionState,
+} from "./shared/desktop-api";
 import { DESKTOP_CHANNELS } from "./shared/desktop-api";
 import { createArchiveSessionService, type ArchiveSessionService } from "./main/archive-session";
 import { createAppProtocolHandler } from "./main/protocol";
@@ -28,6 +33,11 @@ import {
   classifyNavigation,
 } from "./main/security";
 import { createMainWindowOptions } from "./main/window";
+import {
+  createProfilePartition,
+  DESKTOP_SHELL_PARTITION,
+  shouldResetProfilePartition,
+} from "./main/profile-partition";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -47,6 +57,7 @@ app.enableSandbox();
 const isSmokeTest = process.argv.includes("--smoke-test");
 let mainWindow: BrowserWindow | null = null;
 const trustedWebContentsIds = new Set<number>();
+const windowProfileIds = new Map<number, string | null>();
 
 function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
   const senderFrame = event.senderFrame;
@@ -57,12 +68,32 @@ function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
   );
 }
 
-function registerIpcHandlers(archiveSession: ArchiveSessionService) {
+function registerIpcHandlers(
+  archiveSession: ArchiveSessionService,
+  transitionWindow: (
+    senderId: number,
+    state: DesktopSessionState,
+    options?: { resetProfileId?: string; clearProfileId?: string },
+  ) => void,
+) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
     async (event) => {
       assertIpcEvent(event);
-      return archiveSession.restore();
+      const profiles = await archiveSession.listProfiles().catch(() => null);
+      const restoredProfileId =
+        profiles?.profiles.length === 1
+          ? profiles.profiles[0]!.id
+          : profiles?.activeProfileId ?? undefined;
+      const state = await archiveSession.restore();
+      transitionWindow(event.sender.id, state, {
+        clearProfileId:
+          state.status === "disconnected" &&
+          state.reason === "invalid-credentials"
+            ? restoredProfileId
+            : undefined,
+      });
+      return state;
     },
   );
 
@@ -70,19 +101,93 @@ function registerIpcHandlers(archiveSession: ArchiveSessionService) {
     DESKTOP_CHANNELS.sessionConnect,
     async (event, input: DesktopConnectInput) => {
       assertIpcEvent(event);
-      return archiveSession.connect(input);
+      const previous = archiveSession.getActiveSession()?.profile;
+      const state = await archiveSession.connect(input);
+      const resetProfileId =
+        previous &&
+        state.status === "connected" &&
+        shouldResetProfilePartition(previous, state.profile)
+          ? state.profile.id
+          : undefined;
+      transitionWindow(event.sender.id, state, { resetProfileId });
+      return state;
     },
   );
 
   ipcMain.handle(DESKTOP_CHANNELS.sessionRetry, async (event) => {
     assertIpcEvent(event);
-    return archiveSession.retry();
+    const profiles = await archiveSession.listProfiles().catch(() => null);
+    const state = await archiveSession.retry();
+    transitionWindow(event.sender.id, state, {
+      clearProfileId:
+        state.status === "disconnected" &&
+        state.reason === "invalid-credentials"
+          ? profiles?.activeProfileId ?? undefined
+          : undefined,
+    });
+    return state;
   });
 
   ipcMain.handle(DESKTOP_CHANNELS.sessionSignOut, async (event) => {
     assertIpcEvent(event);
-    return archiveSession.signOut();
+    const profileId = archiveSession.getActiveSession()?.profile.id;
+    const state = await archiveSession.signOut();
+    transitionWindow(event.sender.id, state, {
+      clearProfileId:
+        state.status === "disconnected" && state.reason === "signed-out"
+          ? profileId
+          : undefined,
+    });
+    return state;
   });
+
+  ipcMain.handle(DESKTOP_CHANNELS.profilesList, async (event) => {
+    assertIpcEvent(event);
+    return archiveSession.listProfiles();
+  });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.profilesActivate,
+    async (event, input: DesktopProfileIdInput) => {
+      assertIpcEvent(event);
+      const state = await archiveSession.activate(input?.profileId);
+      transitionWindow(event.sender.id, state, {
+        clearProfileId:
+          state.status === "disconnected" &&
+          state.reason === "invalid-credentials"
+            ? input?.profileId
+            : undefined,
+      });
+      return state;
+    },
+  );
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.profilesRename,
+    async (event, input: DesktopProfileRenameInput) => {
+      assertIpcEvent(event);
+      return archiveSession.renameProfile(input);
+    },
+  );
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.profilesRemove,
+    async (event, input: DesktopProfileIdInput) => {
+      assertIpcEvent(event);
+      const profiles = await archiveSession.listProfiles().catch(() => null);
+      const profileExisted = profiles?.profiles.some(
+        (profile) => profile.id === input?.profileId,
+      );
+      const state = await archiveSession.removeProfile(input?.profileId);
+      transitionWindow(event.sender.id, state, {
+        clearProfileId:
+          profileExisted && state.status !== "error"
+            ? input?.profileId
+            : undefined,
+      });
+      return state;
+    },
+  );
 
   ipcMain.handle(DESKTOP_CHANNELS.runtimeGetInfo, async (event) => {
     assertIpcEvent(event);
@@ -93,9 +198,9 @@ function registerIpcHandlers(archiveSession: ArchiveSessionService) {
   });
 }
 
-function configureSessionSecurity() {
-  session.defaultSession.setPermissionCheckHandler(() => false);
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+function configureSessionSecurity(targetSession: Electron.Session) {
+  targetSession.setPermissionCheckHandler(() => false);
+  targetSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
 }
@@ -166,7 +271,7 @@ async function completeSmokeTest(window: BrowserWindow) {
 
     const passed =
       result.heading === "Connect your archive" &&
-      result.bridgeKeys.join(",") === "session,runtime" &&
+      result.bridgeKeys.join(",") === "session,profiles,runtime" &&
       !result.hasProcess &&
       !result.hasRequire &&
       result.csp?.includes("default-src 'none'");
@@ -188,38 +293,12 @@ async function completeSmokeTest(window: BrowserWindow) {
   }
 }
 
-function createMainWindow() {
-  const preloadPath = path.join(__dirname, "preload.js");
-  const window = new BrowserWindow(createMainWindowOptions(preloadPath, app.isPackaged));
-  trustedWebContentsIds.add(window.webContents.id);
-  attachWindowSecurity(window);
-
-  if (isSmokeTest) {
-    window.webContents.once("did-fail-load", (_event, code, description) => {
-      console.error(`OpenKeep desktop smoke load failed (${code}): ${description}`);
-      app.exit(1);
-    });
-    window.webContents.once("did-finish-load", () => void completeSmokeTest(window));
-  } else {
-    window.once("ready-to-show", () => window.show());
-  }
-  window.on("closed", () => {
-    trustedWebContentsIds.delete(window.webContents.id);
-    if (mainWindow === window) {
-      mainWindow = null;
-    }
-  });
-  void window.loadURL(APP_URL);
-  mainWindow = window;
-}
-
 app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
 void app.whenReady().then(async () => {
   app.setAppUserModelId("de.openkeep.desktop");
-  configureSessionSecurity();
 
   const profileStorage = new ProfileStorage({
     filePath: path.join(app.getPath("userData"), "desktop-state.json"),
@@ -230,29 +309,150 @@ void app.whenReady().then(async () => {
     createArchiveProfileRepository(profileStorage),
     randomUUID,
   );
-  registerIpcHandlers(archiveSession);
-
   const rendererRoot = path.join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME);
   const rendererDevServerUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL || undefined;
-  await protocol.handle(
-    APP_SCHEME,
-    createAppProtocolHandler({
-      rendererRoot,
-      rendererDevServerUrl,
-      archiveSession,
-      fetchRequest: (input, init) => net.fetch(input, init),
-      fileExists: existsSync,
-    }),
-  );
+  const configuredPartitions = new Set<string>();
 
-  createMainWindow();
+  async function preparePartition(profileId: string | null) {
+    const partition = profileId
+      ? createProfilePartition(profileId)
+      : DESKTOP_SHELL_PARTITION;
+    const targetSession = session.fromPartition(partition);
+    if (!configuredPartitions.has(partition)) {
+      configureSessionSecurity(targetSession);
+      await targetSession.protocol.handle(
+        APP_SCHEME,
+        createAppProtocolHandler({
+          rendererRoot,
+          rendererDevServerUrl,
+          profileId: profileId ?? undefined,
+          archiveSession,
+          fetchRequest: (input, init) => targetSession.fetch(input, init),
+          fileExists: existsSync,
+        }),
+      );
+      configuredPartitions.add(partition);
+    }
+    return { partition, targetSession };
+  }
+
+  async function resetProfilePartition(profileId: string) {
+    const { targetSession } = await preparePartition(profileId);
+    await targetSession.closeAllConnections();
+    await Promise.all([
+      targetSession.clearStorageData(),
+      targetSession.clearCache(),
+    ]);
+  }
+
+  async function createMainWindow(
+    profileId: string | null,
+    options: { resetProfileId?: string; clearProfileId?: string } = {},
+  ) {
+    const previousWindow = mainWindow;
+    if (previousWindow && !previousWindow.isDestroyed()) {
+      const previousId = previousWindow.webContents.id;
+      trustedWebContentsIds.delete(previousId);
+      windowProfileIds.delete(previousId);
+      previousWindow.destroy();
+      mainWindow = null;
+    }
+
+    const partitionsToClear = new Set(
+      [options.resetProfileId, options.clearProfileId].filter(
+        (profileId): profileId is string => Boolean(profileId),
+      ),
+    );
+    for (const profileToClear of partitionsToClear) {
+      await resetProfilePartition(profileToClear);
+    }
+    const { partition } = await preparePartition(profileId);
+    const preloadPath = path.join(__dirname, "preload.js");
+    const window = new BrowserWindow(
+      createMainWindowOptions(preloadPath, app.isPackaged, partition),
+    );
+    const webContentsId = window.webContents.id;
+    trustedWebContentsIds.add(webContentsId);
+    windowProfileIds.set(webContentsId, profileId);
+    attachWindowSecurity(window);
+
+    if (isSmokeTest) {
+      window.webContents.once("did-fail-load", (_event, code, description) => {
+        console.error(`OpenKeep desktop smoke load failed (${code}): ${description}`);
+        app.exit(1);
+      });
+      window.webContents.once("did-finish-load", () => void completeSmokeTest(window));
+    } else {
+      window.once("ready-to-show", () => window.show());
+    }
+    window.on("closed", () => {
+      trustedWebContentsIds.delete(webContentsId);
+      windowProfileIds.delete(webContentsId);
+      if (mainWindow === window) {
+        mainWindow = null;
+      }
+    });
+    void window.loadURL(APP_URL);
+    mainWindow = window;
+  }
+
+  function transitionWindow(
+    senderId: number,
+    state: DesktopSessionState,
+    options: { resetProfileId?: string; clearProfileId?: string } = {},
+  ) {
+    const targetProfileId =
+      state.status === "connected"
+        ? state.profile.id
+        : state.status === "disconnected" &&
+            ["signed-out", "no-profile", "choose-profile"].includes(
+              state.reason ?? "",
+            )
+          ? null
+          : undefined;
+    if (targetProfileId === undefined) {
+      if (options.clearProfileId) {
+        setTimeout(() => {
+          void resetProfilePartition(options.clearProfileId!).catch(() => {
+            console.error("OpenKeep could not clear an isolated profile partition.");
+          });
+        }, 25);
+      }
+      return;
+    }
+    const currentProfileId = windowProfileIds.get(senderId);
+    const currentPartitionMustBeCleared =
+      options.resetProfileId === currentProfileId ||
+      options.clearProfileId === currentProfileId;
+    if (currentProfileId === targetProfileId && !currentPartitionMustBeCleared) {
+      if (options.clearProfileId) {
+        setTimeout(() => {
+          void resetProfilePartition(options.clearProfileId!).catch(() => {
+            console.error("OpenKeep could not clear an isolated profile partition.");
+          });
+        }, 25);
+      }
+      return;
+    }
+
+    setTimeout(() => {
+      void createMainWindow(targetProfileId, options).catch(() => {
+        app.exit(1);
+      });
+    }, 25);
+  }
+
+  registerIpcHandlers(archiveSession, transitionWindow);
+  await createMainWindow(null);
 
   app.on("activate", () => {
     if (isSmokeTest) {
       return;
     }
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      void createMainWindow(
+        archiveSession.getActiveSession()?.profile.id ?? null,
+      );
     } else {
       mainWindow?.show();
     }

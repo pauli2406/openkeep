@@ -1,8 +1,19 @@
 import type {
+  ArchiveProfile,
   ArchiveProfileRepository,
   StoredArchiveSession,
 } from "../archive-session";
+import type { ArchiveProfile as StoredArchiveProfile } from "./types";
 import { ProfileStorage } from "./profile-storage";
+
+function toArchiveProfile(profile: StoredArchiveProfile): ArchiveProfile {
+  return {
+    id: profile.id,
+    label: profile.label || new URL(profile.archiveUrl).hostname,
+    serverUrl: profile.archiveUrl,
+    allowInsecureHttp: profile.allowInsecureHttp,
+  };
+}
 
 export function createArchiveProfileRepository(
   storage: ProfileStorage,
@@ -10,23 +21,25 @@ export function createArchiveProfileRepository(
   return {
     assertSecureStorageAvailable: () => storage.assertSecureStorageAvailable(),
 
-    async loadActive(): Promise<StoredArchiveSession | null> {
-      const active = await storage.getActiveProfile();
-      if (!active) {
-        return null;
-      }
+    async snapshot() {
+      const snapshot = await storage.snapshot();
       return {
-        profile: {
-          id: active.profile.id,
-          label: active.profile.label || new URL(active.profile.archiveUrl).hostname,
-          serverUrl: active.profile.archiveUrl,
-          allowInsecureHttp: active.profile.allowInsecureHttp,
-        },
-        credentials: active.credentials,
+        profiles: snapshot.profiles.map(toArchiveProfile),
+        lastActiveProfileId: snapshot.lastActiveProfileId,
       };
     },
 
-    async saveActive(session) {
+    async load(profileId: string): Promise<StoredArchiveSession | null> {
+      const stored = await storage.loadProfile(profileId);
+      return stored
+        ? {
+            profile: toArchiveProfile(stored.profile),
+            credentials: stored.credentials,
+          }
+        : null;
+    },
+
+    async save(session) {
       await storage.saveProfile(
         {
           id: session.profile.id,
@@ -38,9 +51,12 @@ export function createArchiveProfileRepository(
       );
     },
 
-    async clear() {
-      const snapshot = await storage.snapshot();
-      await Promise.all(snapshot.profiles.map((profile) => storage.deleteProfile(profile.id)));
+    setActive: (profileId) => storage.setActiveProfile(profileId),
+
+    async rename(profileId, label) {
+      return toArchiveProfile(await storage.renameProfile(profileId, label));
     },
+
+    remove: (profileId) => storage.deleteProfile(profileId),
   };
 }

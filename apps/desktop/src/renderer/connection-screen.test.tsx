@@ -29,6 +29,15 @@ function createBridge(
       retry: vi.fn(async () => retryResult),
       signOut: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "signed-out" })),
     },
+    profiles: {
+      list: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
+      activate: vi.fn(async () => connectResult),
+      rename: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
+      remove: vi.fn(async (): Promise<DesktopSessionState> => ({
+        status: "disconnected",
+        reason: "no-profile",
+      })),
+    },
     runtime: {
       getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
     },
@@ -150,5 +159,46 @@ describe("desktop connection screen", () => {
     expect(screen.getByLabelText("Archive address")).toHaveValue(
       "https://archive.example.com",
     );
+  });
+
+  it("renames an existing profile without requiring its credentials again", async () => {
+    const profile = {
+      id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      label: "Home",
+      serverUrl: "https://archive.example.com",
+    };
+    const bridge = createBridge({ status: "disconnected", reason: "choose-profile" });
+    const onProfilesChanged = vi.fn();
+    const onCancel = vi.fn();
+    vi.mocked(bridge.profiles.rename).mockResolvedValue({
+      profiles: [{ ...profile, label: "Family" }],
+      activeProfileId: profile.id,
+    });
+    const user = userEvent.setup();
+    render(
+      <ConnectionScreen
+        bridge={bridge}
+        profile={profile}
+        initialState={{ status: "disconnected", reason: "choose-profile" }}
+        onStateChange={vi.fn()}
+        onProfilesChanged={onProfilesChanged}
+        onCancel={onCancel}
+      />,
+    );
+
+    const label = screen.getByLabelText("Profile name");
+    await user.clear(label);
+    await user.type(label, "Family");
+    await user.click(screen.getByRole("button", { name: /save profile name only/i }));
+
+    expect(bridge.profiles.rename).toHaveBeenCalledWith({
+      profileId: profile.id,
+      label: "Family",
+    });
+    expect(onProfilesChanged).toHaveBeenCalledWith({
+      profiles: [{ ...profile, label: "Family" }],
+      activeProfileId: profile.id,
+    });
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 });

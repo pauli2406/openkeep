@@ -282,6 +282,45 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok-accent) 12%, transparent);
 }
 
+.desktop-profile-editor {
+  position: fixed;
+  z-index: 240;
+  inset: 0;
+  overflow: auto;
+}
+
+.desktop-archive-accessory {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.desktop-archive-accessory__error {
+  position: absolute;
+  z-index: 130;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(340px, calc(100vw - 28px));
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--ok-red) 45%, var(--ok-border));
+  border-radius: var(--r-md);
+  background: var(--ok-panel);
+  color: var(--ok-red);
+  box-shadow: 0 12px 35px color-mix(in srgb, var(--ok-ink) 14%, transparent);
+  font-size: 11px;
+}
+
+.desktop-profile-chooser__switcher {
+  display: flex;
+  padding: 0 36px 34px;
+}
+
+.desktop-profile-chooser__switcher .desktop-archive-switcher-wrap,
+.desktop-profile-chooser__switcher .desktop-archive-switcher {
+  width: 100%;
+}
+
 @media (max-width: 640px) {
   .desktop-connect-shell {
     padding: 18px;

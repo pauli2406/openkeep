@@ -7,6 +7,7 @@ import { APP_HOST, isApplicationRoute } from "./security";
 type ProtocolHandlerOptions = {
   rendererRoot: string;
   rendererDevServerUrl?: string;
+  profileId?: string;
   archiveSession: Pick<ArchiveSessionService, "getActiveSession">;
   fetchRequest: DesktopFetch;
   fileExists: (filePath: string) => boolean;
@@ -147,7 +148,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
 
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
       const active = options.archiveSession.getActiveSession();
-      if (!active) {
+      if (!active || !options.profileId || active.profile.id !== options.profileId) {
         return textResponse(503, "Connect to an OpenKeep archive first.");
       }
 
@@ -171,7 +172,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
           method: request.method,
           headers,
           body: supportsBody ? request.body : undefined,
-          signal: request.signal,
+          signal: AbortSignal.any([request.signal, active.signal]),
           redirect: "manual",
           // Required by Node-compatible Fetch implementations for a streaming
           // upload body; Electron ignores the field when it is unnecessary.

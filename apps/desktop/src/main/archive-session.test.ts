@@ -32,16 +32,54 @@ function jsonResponse(payload: unknown, status = 200) {
   });
 }
 
-function createRepository(stored: StoredArchiveSession | null = null) {
-  let current = stored;
+function createRepository(
+  stored: StoredArchiveSession | StoredArchiveSession[] | null = null,
+  initialActiveProfileId?: string | null,
+) {
+  const profiles = new Map<string, StoredArchiveSession>();
+  const storedProfiles = stored
+    ? Array.isArray(stored)
+      ? stored
+      : [stored]
+    : [];
+  for (const entry of storedProfiles) {
+    profiles.set(entry.profile.id, entry);
+  }
+  let lastActiveProfileId =
+    initialActiveProfileId === undefined
+      ? storedProfiles[0]?.profile.id ?? null
+      : initialActiveProfileId;
   const repository: ArchiveProfileRepository = {
     assertSecureStorageAvailable: vi.fn(async () => {}),
-    loadActive: vi.fn(async () => current),
-    saveActive: vi.fn(async (next) => {
-      current = next;
+    snapshot: vi.fn(async () => ({
+      profiles: [...profiles.values()].map((entry) => entry.profile),
+      lastActiveProfileId,
+    })),
+    load: vi.fn(async (profileId) => profiles.get(profileId) ?? null),
+    save: vi.fn(async (next) => {
+      profiles.set(next.profile.id, next);
+      lastActiveProfileId = next.profile.id;
     }),
-    clear: vi.fn(async () => {
-      current = null;
+    setActive: vi.fn(async (profileId) => {
+      if (!profiles.has(profileId)) {
+        throw new Error("missing profile");
+      }
+      lastActiveProfileId = profileId;
+    }),
+    rename: vi.fn(async (profileId, label) => {
+      const current = profiles.get(profileId);
+      if (!current) {
+        throw new Error("missing profile");
+      }
+      const profile = { ...current.profile, label };
+      profiles.set(profileId, { ...current, profile });
+      return profile;
+    }),
+    remove: vi.fn(async (profileId) => {
+      profiles.delete(profileId);
+      if (lastActiveProfileId === profileId) {
+        lastActiveProfileId = [...profiles.keys()][0] ?? null;
+      }
     }),
   };
   return repository;
@@ -60,6 +98,17 @@ const storedSession: StoredArchiveSession = {
     cfAccessClientSecret: "cf_secret",
   },
 };
+
+function siblingSession(
+  id: string,
+  label: string,
+  serverUrl: string,
+): StoredArchiveSession {
+  return {
+    profile: { id, label, serverUrl, allowInsecureHttp: false },
+    credentials: { apiToken: `${label}-token` },
+  };
+}
 
 afterEach(() => vi.useRealTimers());
 
@@ -88,7 +137,7 @@ describe("desktop archive session", () => {
       },
       user,
     });
-    expect(repository.saveActive).toHaveBeenCalledOnce();
+    expect(repository.save).toHaveBeenCalledOnce();
     expect(service.getActiveSession()?.credentials.apiToken).toBe("openkeep_secret_token");
 
     const healthHeaders = new Headers(fetchRequest.mock.calls[0][1]?.headers);
@@ -114,7 +163,7 @@ describe("desktop archive session", () => {
 
     expect(result).toMatchObject({ status: "error", code: "invalid-credentials" });
     expect(JSON.stringify(result)).not.toContain("super-secret-rejected-token");
-    expect(repository.saveActive).not.toHaveBeenCalled();
+    expect(repository.save).not.toHaveBeenCalled();
     expect(service.getActiveSession()).toBeNull();
   });
 
@@ -146,20 +195,21 @@ describe("desktop archive session", () => {
     });
   });
 
-  it("replaces the single stored connection without accumulating profile IDs", async () => {
+  it("edits a profile by stable ID while allowing a separate archive to be added", async () => {
     const repository = createRepository(storedSession);
     const service = createArchiveSessionService(
       vi.fn()
         .mockResolvedValueOnce(jsonResponse(health))
+        .mockResolvedValueOnce(jsonResponse(user))
+        .mockResolvedValueOnce(jsonResponse(health))
         .mockResolvedValueOnce(jsonResponse(user)),
       repository,
-      () => {
-        throw new Error("an existing profile ID should be reused");
-      },
+      () => "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     );
 
     await expect(
       service.connect({
+        profileId: storedSession.profile.id,
         serverUrl: "https://replacement.example.com",
         apiToken: "replacement-token",
       }),
@@ -167,11 +217,21 @@ describe("desktop archive session", () => {
       status: "connected",
       profile: { id: storedSession.profile.id },
     });
-    expect(repository.saveActive).toHaveBeenCalledWith(
+    expect(repository.save).toHaveBeenCalledWith(
       expect.objectContaining({
         profile: expect.objectContaining({ id: storedSession.profile.id }),
       }),
     );
+
+    await expect(
+      service.connect({
+        serverUrl: "https://replacement.example.com",
+        apiToken: "second-token",
+      }),
+    ).resolves.toMatchObject({
+      status: "connected",
+      profile: { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+    });
   });
 
   it("requires Cloudflare Access credentials as a pair", async () => {
@@ -194,7 +254,129 @@ describe("desktop archive session", () => {
     const service = createArchiveSessionService(fetchRequest, repository, () => "unused");
 
     await expect(service.restore()).resolves.toMatchObject({ status: "connected", user });
-    expect(service.getActiveSession()).toEqual(storedSession);
+    expect(service.getActiveSession()).toMatchObject(storedSession);
+  });
+
+  it("restores the last active profile when multiple archives exist", async () => {
+    const work = siblingSession(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Work",
+      "https://work.example.com",
+    );
+    const repository = createRepository(
+      [storedSession, work],
+      work.profile.id,
+    );
+    const service = createArchiveSessionService(
+      vi.fn()
+        .mockResolvedValueOnce(jsonResponse(health))
+        .mockResolvedValueOnce(jsonResponse(user)),
+      repository,
+      () => "unused",
+    );
+
+    await expect(service.restore()).resolves.toMatchObject({
+      status: "connected",
+      profile: { id: work.profile.id },
+    });
+    expect(repository.load).toHaveBeenCalledWith(work.profile.id);
+  });
+
+  it("aborts the previous profile transport before activating another archive", async () => {
+    const work = siblingSession(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Work",
+      "https://work.example.com",
+    );
+    const repository = createRepository([storedSession, work]);
+    const fetchRequest = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(health))
+      .mockResolvedValueOnce(jsonResponse(user))
+      .mockResolvedValueOnce(jsonResponse(health))
+      .mockResolvedValueOnce(jsonResponse(user));
+    const service = createArchiveSessionService(fetchRequest, repository, () => "unused");
+
+    await service.restore();
+    const previousSignal = service.getActiveSession()!.signal;
+    await expect(service.activate(work.profile.id)).resolves.toMatchObject({
+      status: "connected",
+      profile: { id: work.profile.id },
+    });
+
+    expect(previousSignal.aborted).toBe(true);
+    expect(service.getActiveSession()?.profile.id).toBe(work.profile.id);
+  });
+
+  it("removes only a failing profile and keeps the current archive available", async () => {
+    const rejected = siblingSession(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Rejected",
+      "https://rejected.example.com",
+    );
+    const repository = createRepository([storedSession, rejected]);
+    const fetchRequest = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(health))
+      .mockResolvedValueOnce(jsonResponse(user))
+      .mockResolvedValueOnce(jsonResponse(health))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    const service = createArchiveSessionService(fetchRequest, repository, () => "unused");
+
+    await service.restore();
+    await expect(service.activate(rejected.profile.id)).resolves.toMatchObject({
+      status: "disconnected",
+      reason: "invalid-credentials",
+    });
+
+    expect(repository.remove).toHaveBeenCalledWith(rejected.profile.id);
+    expect(repository.remove).not.toHaveBeenCalledWith(storedSession.profile.id);
+    expect(service.getActiveSession()?.profile.id).toBe(storedSession.profile.id);
+  });
+
+  it("prevents a superseded profile check from winning a concurrent switch", async () => {
+    const slow = siblingSession(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Slow",
+      "https://slow.example.com",
+    );
+    const fast = siblingSession(
+      "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "Fast",
+      "https://fast.example.com",
+    );
+    const repository = createRepository([slow, fast], null);
+    const fetchRequest = vi.fn((input: string | Request, init?: RequestInit) => {
+      if (String(input).includes("slow.example.com")) {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        });
+      }
+      return Promise.resolve(
+        String(input).endsWith("/api/health")
+          ? jsonResponse(health)
+          : jsonResponse(user),
+      );
+    });
+    const service = createArchiveSessionService(fetchRequest, repository, () => "unused");
+
+    const slowActivation = service.activate(slow.profile.id);
+    await Promise.resolve();
+    const fastActivation = service.activate(fast.profile.id);
+
+    await expect(fastActivation).resolves.toMatchObject({
+      status: "connected",
+      profile: { id: fast.profile.id },
+    });
+    await expect(slowActivation).resolves.toMatchObject({
+      status: "disconnected",
+      reason: "superseded",
+    });
+    expect(service.getActiveSession()?.profile.id).toBe(fast.profile.id);
+    expect(repository.setActive).toHaveBeenCalledTimes(1);
+    expect(repository.setActive).toHaveBeenCalledWith(fast.profile.id);
   });
 
   it("removes stored secrets when restoration proves the token invalid", async () => {
@@ -209,7 +391,7 @@ describe("desktop archive session", () => {
       status: "disconnected",
       reason: "invalid-credentials",
     });
-    expect(repository.clear).toHaveBeenCalledOnce();
+    expect(repository.remove).toHaveBeenCalledWith(storedSession.profile.id);
   });
 
   it("resolves to the storage error when clearing a rejected credential fails", async () => {
@@ -251,7 +433,7 @@ describe("desktop archive session", () => {
       },
     });
     expect(JSON.stringify(result)).not.toContain("network internals");
-    expect(repository.clear).not.toHaveBeenCalled();
+    expect(repository.remove).not.toHaveBeenCalled();
   });
 
   it("turns request timeouts into a sanitized unreachable state", async () => {
@@ -292,7 +474,7 @@ describe("desktop archive session", () => {
       status: "disconnected",
       reason: "signed-out",
     });
-    expect(repository.clear).toHaveBeenCalledOnce();
+    expect(repository.remove).toHaveBeenCalledWith(storedSession.profile.id);
     expect(active.getActiveSession()).toBeNull();
   });
 });

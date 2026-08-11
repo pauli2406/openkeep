@@ -18,6 +18,7 @@ const activeSession = {
     cfAccessClientId: "client.access",
     cfAccessClientSecret: "cloudflare-secret",
   },
+  signal: new AbortController().signal,
 };
 
 describe("renderer asset resolver", () => {
@@ -79,6 +80,46 @@ describe("openkeep protocol handler", () => {
     expect(fetchRequest).not.toHaveBeenCalled();
   });
 
+  it("never lends active credentials to another profile partition", async () => {
+    const fetchRequest = vi.fn(async () => new Response("unexpected"));
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = await handler(new Request("openkeep://app/api/documents"));
+    expect(response.status).toBe(503);
+    expect(fetchRequest).not.toHaveBeenCalled();
+  });
+
+  it("aborts a proxied request when its active profile is switched", async () => {
+    const activeController = new AbortController();
+    const fetchRequest = vi.fn(
+      (_input: string | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: {
+        getActiveSession: () => ({ ...activeSession, signal: activeController.signal }),
+      },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = handler(new Request("openkeep://app/api/search/answer/stream"));
+    activeController.abort();
+    await expect(response).resolves.toMatchObject({ status: 502 });
+  });
+
   it("forwards authenticated API traffic without renderer-supplied credentials", async () => {
     let forwardedBody = "";
     const fetchRequest = vi.fn(
@@ -89,6 +130,7 @@ describe("openkeep protocol handler", () => {
     );
     const handler = createAppProtocolHandler({
       rendererRoot,
+      profileId: activeSession.profile.id,
       archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest,
@@ -135,6 +177,7 @@ describe("openkeep protocol handler", () => {
     );
     const handler = createAppProtocolHandler({
       rendererRoot,
+      profileId: activeSession.profile.id,
       archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest,
@@ -174,6 +217,7 @@ describe("openkeep protocol handler", () => {
     });
     const handler = createAppProtocolHandler({
       rendererRoot,
+      profileId: activeSession.profile.id,
       archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest: vi.fn(async () => download),
@@ -191,6 +235,7 @@ describe("openkeep protocol handler", () => {
     const fetchRequest = vi.fn(async () => sse);
     const handler = createAppProtocolHandler({
       rendererRoot,
+      profileId: activeSession.profile.id,
       archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest,
@@ -204,6 +249,7 @@ describe("openkeep protocol handler", () => {
   it("returns a sanitized gateway error without leaking fetch details", async () => {
     const handler = createAppProtocolHandler({
       rendererRoot,
+      profileId: activeSession.profile.id,
       archiveSession: { getActiveSession: () => activeSession },
       fileExists,
       fetchRequest: async () => {
