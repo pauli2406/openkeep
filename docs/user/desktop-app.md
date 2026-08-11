@@ -102,6 +102,33 @@ Switching profiles creates a fresh shared-app instance in that profile's isolate
 window. Rows, filters, previews, selections, and query results from the previous
 archive therefore cannot remain visible in the destination archive.
 
+## Import Documents
+
+Desktop accepts PDF, JPEG (`.jpg` and `.jpeg`), PNG, TIFF (`.tif` and `.tiff`),
+and HEIC documents through three entry points:
+
+1. Open `Import` and drag one or more files onto the drop zone.
+2. Select the drop zone to open the operating system's native file picker.
+3. In Finder, File Explorer, or a Linux file manager, choose `Open with` and
+   select OpenKeep. This also starts OpenKeep when it is closed.
+
+All three routes feed the same visible queue. Every file progresses through
+`Upload`, `OCR`, `Extract`, and `Embed`; completed duplicates are identified,
+temporary failures can be retried, and terminal failures stay visible with their
+message. OpenKeep reads source files but never rewrites, moves, or deletes them.
+
+When exactly one valid archive profile exists, files opened with OpenKeep go to
+that archive automatically. With several profiles, OpenKeep asks which archive
+should receive the incoming batch before it reads the complete files or starts an
+upload. Selecting another profile switches into that profile's isolated window and
+then opens its Import queue.
+
+Desktop rejects missing, inaccessible, disguised, unsupported, and larger-than-
+64-MiB files before upload. A server can set a lower `MAX_UPLOAD_BYTES`, in which
+case its limit appears as an ordinary per-file upload failure. The desktop safety
+limit does not grant the shared web interface access to file paths or arbitrary
+files.
+
 ## Review and Manage Documents
 
 Desktop uses the complete web review queue and document page. In `Review`, you can
@@ -178,7 +205,7 @@ boundary even when two profiles have the same name or server address.
 | OpenKeep and Cloudflare Access credentials | Desktop runtime settings that are not owned by an archive |
 | Chromium local storage and network cache | App-wide runtime behavior, where the desktop app exposes such a setting |
 | Query state, conversations, and recent searches | The installed desktop app and its version |
-| In-progress upload state and active response streams |  |
+| In-progress upload state, assigned Open-with batches, and active response streams |  |
 | Temporary preview/object URLs |  |
 | Future watch-folder, notification, and other background work |  |
 
@@ -214,7 +241,7 @@ restart the app and connect again.
 
 The desktop app has no offline archive or document cache. Its profile-specific
 Chromium cache is an isolation mechanism, not an offline copy. The app needs a live
-connection for browsing, search, previews, uploads, downloads, and changes. If
+connection for browsing, search, previews, imports, downloads, and changes. If
 you need read-only access to documents previously opened on a device, that is a
 separate capability of the [mobile app](./mobile-app.md), not the desktop app.
 

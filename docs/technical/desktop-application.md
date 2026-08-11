@@ -218,6 +218,44 @@ Browser history and deep links continue through TanStack Router at the trusted
 `openkeep://app` origin; the custom protocol returns the application entry point only
 for allowlisted client routes.
 
+## Native Import Seam
+
+The shared upload route owns one observable queue for browser-selected, dropped,
+native-picker, and Open-with files. Its existing upload and document-status requests
+remain the only path into the archive, so native imports do not bypass API
+authorization, duplicate detection, processing, or review behavior. An optional
+`HostImportAdapter` supplies validated bytes to that route; the browser build uses
+the normal file input and has no host adapter.
+
+The desktop side separates the flow into deep modules:
+
+- the launch lifecycle owns the single-instance lock, cold-start arguments,
+  macOS `open-file`, warm `second-instance` delivery, ordered deferral until startup,
+  and an injected focus policy that tray/background mode can replace later
+- the import service canonicalizes each concrete path, opens it read-only, checks
+  regular-file status, the 64-MiB ceiling, extension, and PDF/JPEG/PNG/TIFF/HEIC
+  magic bytes, and deduplicates a path while it is pending
+- the coordinator holds sanitized batch descriptors, auto-assigns the only saved
+  profile, requires an explicit valid UUID with multiple profiles, and releases a
+  batch only to a renderer already bound to that profile
+- the renderer adapter converts delivered bytes to browser `File` objects and puts
+  them into the shared queue without exposing the source path
+
+The preload interface contains only `pick`, `pending`, `assign`, `consume`, and a
+fixed change notification. It has no `readFile`, path argument, arbitrary IPC
+channel, or directory capability. Main reopens and revalidates a pending source at
+consumption time, then transfers immutable bytes. Consumption removes the in-memory
+capability before asynchronous reading, so concurrent renderer calls cannot receive
+the same batch twice. Failures become sanitized terminal queue entries, and source
+files are never opened for writing.
+
+Forge adds macOS document types to `Info.plist`. Packaged Windows starts register a
+fixed per-user `OpenWithProgids` entry through `reg.exe` arguments without a command
+shell; packaged Linux starts write OpenKeep's fixed desktop entry under the user's
+applications directory. Neither path makes OpenKeep the default application. The
+operating system forwards one or more selected paths to the single running process,
+which focuses or restores its existing window and runs the same validation pipeline.
+
 Desktop parity tests mount those shared routes with main-owned authentication and
 the same fixture semantics as the browser smoke tests. They cover the core browse
 surfaces, keyboard navigation, empty/loading/failure states, and remounting the App
@@ -246,6 +284,11 @@ actions, missing/failed evidence, preview cleanup, and profile-scoped proxy abor
 These tests intentionally import the shared routes; adding a parallel Electron-only
 review UI would bypass the parity guard.
 
+Import-specific tests exercise signature and size validation with real temporary
+files, cold and warm launch ordering, exactly-once consumption, one- and multi-profile
+routing, native picker delivery, drag/drop rejection, association metadata, shared
+queue progress, duplicate handling, retryable failures, and terminal failures.
+
 ## Contributor Commands
 
 From the repository root:
@@ -273,8 +316,8 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. Desktop has no offline document cache, native integration, signing, or
-release automation.
+archives. Desktop has no offline document cache, tray/background mode, local watch
+folders, notifications, signing, or release automation.
 
 ## Related Documents
 

@@ -14,6 +14,11 @@ Select `Import` in the top bar and either:
 - drag files into the drop zone
 - click the drop zone to choose files manually
 
+The desktop app uses a native picker for the second action and also accepts files
+from the operating system's `Open with OpenKeep` command. See
+[Desktop App](./desktop-app.md#import-documents) for supported types, profile
+selection, and desktop validation rules.
+
 Each file gets its own row in the queue below the drop zone, moving through
 `Upload → OCR → Extract → Embed` independently — the active stage carries the
 accent colour. `Retry` on a failed row reprocesses the document rather than

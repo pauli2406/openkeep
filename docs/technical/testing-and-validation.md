@@ -76,6 +76,13 @@ The current smoke suite covers:
 - upload flow
 - review/settings flows
 - document detail workflows
+- browser and desktop-host import delivery into the shared upload queue
+
+The desktop package adds focused Vitest suites for secure path validation, native
+picker/Open-with batch delivery, single-instance launch ordering, explicit archive
+selection, fixed platform association metadata, and exactly-once consumption. Its
+full verification commands are documented in
+[Desktop Application](./desktop-application.md#contributor-commands).
 
 ### Visual Regression
 
