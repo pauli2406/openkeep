@@ -194,6 +194,9 @@ function ImportPage() {
           id: string;
           duplicateOf: { id: string; title: string } | null;
         };
+        // Tell a desktop host about the document so it can report the outcome
+        // even after this route is gone.
+        hostImports?.reportCreated?.([{ documentId: created.id, name: item.file.name }]);
         if (created.duplicateOf) {
           // Same bytes are already filed. The document was still created —
           // that is deliberate server-side — but say so rather than letting it
@@ -213,7 +216,7 @@ function ImportPage() {
         });
       }
     },
-    [patch],
+    [patch, hostImports],
   );
 
   /**

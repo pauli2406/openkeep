@@ -91,6 +91,7 @@ export function createDesktopWatchFolderService({
   now = () => Date.now(),
   createId = randomUUID,
   onChanged,
+  onImported,
   reportError,
   settleMs = WATCH_FOLDER_SETTLE_MS,
   intervalMs = WATCH_FOLDER_SCAN_INTERVAL_MS,
@@ -103,6 +104,11 @@ export function createDesktopWatchFolderService({
   now?: () => number;
   createId?: () => string;
   onChanged: () => void;
+  /** Reports a document the archive created, so its outcome can be followed. */
+  onImported?: (
+    profileId: string,
+    document: { documentId: string; name: string },
+  ) => void;
   reportError?: (message: string, error: unknown) => void;
   settleMs?: number;
   intervalMs?: number;
@@ -225,6 +231,12 @@ export function createDesktopWatchFolderService({
     if (result.status === "imported" || result.status === "duplicate") {
       attempts.delete(filePath);
       abandoned.delete(filePath);
+      if (result.documentId) {
+        onImported?.(profileId, {
+          documentId: result.documentId,
+          name: entry.name,
+        });
+      }
       await store.recordImported(
         profileId,
         filePath,

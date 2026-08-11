@@ -30,4 +30,20 @@ describe("desktop host import adapter", () => {
     pipeline.publish({ files: [], rejected: [] });
     expect(changed).toHaveBeenCalledOnce();
   });
+
+  it("reports created documents to main so their outcome can be followed", () => {
+    const reportCreated = vi.fn();
+    const pipeline = createDesktopImportAdapter(
+      async () => ({ files: [], rejected: [] }),
+      reportCreated,
+    );
+
+    pipeline.adapter.reportCreated?.([
+      { documentId: "doc-1", name: "invoice.pdf" },
+    ]);
+
+    expect(reportCreated).toHaveBeenCalledWith([
+      { documentId: "doc-1", name: "invoice.pdf" },
+    ]);
+  });
 });

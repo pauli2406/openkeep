@@ -79,12 +79,17 @@ async function createHarness(
       profileId: string;
       isKnownChecksum: (checksum: string) => boolean;
     }): Promise<WatchFolderUploadResult> => {
-      const next = results.shift() ?? { status: "imported", checksum: "sha-default" };
+      const next = results.shift() ?? { status: "imported", checksum: "sha-default", documentId: "doc-sha-default" };
       if (
         (next.status === "imported" || next.status === "duplicate") &&
         isKnownChecksum(next.checksum)
       ) {
-        return { status: "duplicate", checksum: next.checksum, message: "known" };
+        return {
+          status: "duplicate",
+          checksum: next.checksum,
+          documentId: null,
+          message: "known",
+        };
       }
       return next;
     },
@@ -92,6 +97,7 @@ async function createHarness(
 
   const timer = { start: vi.fn(), stop: vi.fn() };
   const onChanged = vi.fn();
+  const onImported = vi.fn();
   const store = createDesktopWatchFolderStore({
     filePath: "/state/watch.json",
     fileSystem: memoryStateFileSystem(),
@@ -112,6 +118,7 @@ async function createHarness(
     now: () => clock,
     createId: () => `event-${++eventSequence}`,
     onChanged,
+    onImported,
     settleMs: 4_000,
   });
 
@@ -122,6 +129,7 @@ async function createHarness(
     upload,
     timer,
     onChanged,
+    onImported,
     entries,
     queueResults(...next: WatchFolderUploadResult[]) {
       results.push(...next);
@@ -152,7 +160,7 @@ describe("desktop watch folder service", () => {
     const harness = await createHarness({
       entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
     });
-    harness.queueResults({ status: "imported", checksum: "sha-invoice" });
+    harness.queueResults({ status: "imported", checksum: "sha-invoice", documentId: "doc-sha-invoice" });
     await harness.service.add("/Users/keeper/Scans");
 
     // The first cycle only observes: a file seen once is not known to be quiet.
@@ -212,13 +220,13 @@ describe("desktop watch folder service", () => {
     const harness = await createHarness({
       entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
     });
-    harness.queueResults({ status: "imported", checksum: "sha-same" });
+    harness.queueResults({ status: "imported", checksum: "sha-same", documentId: "doc-sha-same" });
     await harness.service.add("/Users/keeper/Scans");
     await harness.settleAndScan();
 
     harness.entries.delete("invoice.pdf");
     harness.entries.set("invoice-final.pdf", { size: 120, mtimeMs: 10 });
-    harness.queueResults({ status: "imported", checksum: "sha-same" });
+    harness.queueResults({ status: "imported", checksum: "sha-same", documentId: "doc-sha-same" });
     await harness.settleAndScan();
 
     const folder = harness.service.snapshot().folders[0]!;
@@ -229,12 +237,12 @@ describe("desktop watch folder service", () => {
     const harness = await createHarness({
       entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
     });
-    harness.queueResults({ status: "imported", checksum: "sha-first" });
+    harness.queueResults({ status: "imported", checksum: "sha-first", documentId: "doc-sha-first" });
     await harness.service.add("/Users/keeper/Scans");
     await harness.settleAndScan();
 
     harness.entries.set("invoice.pdf", { size: 400, mtimeMs: 20_000 });
-    harness.queueResults({ status: "imported", checksum: "sha-second" });
+    harness.queueResults({ status: "imported", checksum: "sha-second", documentId: "doc-sha-second" });
     await harness.settleAndScan();
 
     expect(harness.upload).toHaveBeenCalledTimes(2);
@@ -248,7 +256,7 @@ describe("desktop watch folder service", () => {
     harness.queueResults(
       { status: "retry", message: "The archive could not be reached." },
       { status: "retry", message: "The archive could not be reached." },
-      { status: "imported", checksum: "sha-late" },
+      { status: "imported", checksum: "sha-late", documentId: "doc-sha-late" },
     );
     await harness.service.add("/Users/keeper/Scans");
     await harness.settleAndScan();
@@ -359,6 +367,49 @@ describe("desktop watch folder service", () => {
     ]);
 
     expect(harness.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the created document so its outcome can be followed", async () => {
+    const harness = await createHarness({
+      entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
+    });
+    harness.queueResults({
+      status: "imported",
+      checksum: "sha-invoice",
+      documentId: "doc-42",
+    });
+    await harness.service.add("/Users/keeper/Scans");
+    await harness.settleAndScan();
+
+    expect(harness.onImported).toHaveBeenCalledWith("home", {
+      documentId: "doc-42",
+      name: "invoice.pdf",
+    });
+  });
+
+  it("has nothing to follow when a rename was recognized locally", async () => {
+    const harness = await createHarness({
+      entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
+    });
+    harness.queueResults({
+      status: "imported",
+      checksum: "sha-same",
+      documentId: "doc-1",
+    });
+    await harness.service.add("/Users/keeper/Scans");
+    await harness.settleAndScan();
+    harness.onImported.mockClear();
+
+    harness.entries.delete("invoice.pdf");
+    harness.entries.set("invoice-final.pdf", { size: 120, mtimeMs: 10 });
+    harness.queueResults({
+      status: "imported",
+      checksum: "sha-same",
+      documentId: "doc-1",
+    });
+    await harness.settleAndScan();
+
+    expect(harness.onImported).not.toHaveBeenCalled();
   });
 
   it("notifies only when a poll actually changed something", async () => {

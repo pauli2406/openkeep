@@ -65,14 +65,16 @@ export function createDesktopNotificationRouter({
     open,
 
     /**
-     * Called whenever a profile finishes authenticating. A remembered intent is
-     * applied only when it belongs to that profile, and only once.
+     * Consumes a remembered intent for a window that is being created for that
+     * profile, so the new window loads the notification's route directly instead
+     * of loading the remembered route and navigating a second time. Consuming it
+     * once is what keeps a later window from jumping to an old notification.
      */
-    profileConnected(profileId: string) {
-      if (!intent || intent.profileId !== profileId) return;
+    takeTarget(profileId: string | null) {
+      if (!profileId || !intent || intent.profileId !== profileId) return null;
       const target = intent;
       intent = null;
-      apply(target);
+      return target;
     },
 
     pendingTarget() {

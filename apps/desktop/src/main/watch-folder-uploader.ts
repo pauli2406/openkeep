@@ -16,8 +16,8 @@ import type { DesktopImportDelivery } from "../shared/desktop-api";
  * retried; `retry` is transient and should be attempted again later.
  */
 export type WatchFolderUploadResult =
-  | { status: "imported"; checksum: string }
-  | { status: "duplicate"; checksum: string; message: string }
+  | { status: "imported"; checksum: string; documentId: string | null }
+  | { status: "duplicate"; checksum: string; message: string; documentId: string | null }
   | { status: "rejected"; message: string }
   | { status: "retry"; message: string };
 
@@ -73,9 +73,11 @@ export function createWatchFolderUploader({
 
       const checksum = createHash("sha256").update(file.bytes).digest("hex");
       if (isKnownChecksum(checksum)) {
+        // Nothing was sent, so there is no new document to follow.
         return {
           status: "duplicate",
           checksum,
+          documentId: null,
           message: "These contents were already imported into this archive.",
         };
       }
@@ -115,19 +117,21 @@ export function createWatchFolderUploader({
           : { status: "retry", message };
       }
 
-      let created: { duplicateOf?: { id: string } | null } = {};
+      let created: { id?: string; duplicateOf?: { id: string } | null } = {};
       try {
         created = (await response.json()) as typeof created;
       } catch {
         // The upload succeeded; only the confirmation body was unreadable.
       }
+      const documentId = typeof created.id === "string" ? created.id : null;
       return created.duplicateOf
         ? {
             status: "duplicate",
             checksum,
+            documentId,
             message: "The archive already holds a document with these contents.",
           }
-        : { status: "imported", checksum };
+        : { status: "imported", checksum, documentId };
     },
   };
 }

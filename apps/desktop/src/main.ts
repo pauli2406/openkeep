@@ -23,6 +23,8 @@ import type {
   DesktopSessionState,
   DesktopWatchFolderIdInput,
   DesktopWatchFolderPauseInput,
+  DesktopCreatedDocumentsInput,
+  DesktopNotificationPreferenceInput,
 } from "./shared/desktop-api";
 import { DESKTOP_CHANNELS } from "./shared/desktop-api";
 import { createArchiveSessionService, type ArchiveSessionService } from "./main/archive-session";
@@ -72,6 +74,18 @@ import {
   nodeWatchFolderFileSystem,
   type DesktopWatchFolderService,
 } from "./main/watch-folder-service";
+import {
+  createDesktopImportOutcomeTracker,
+  createIntervalImportOutcomeTimer,
+  type DesktopImportOutcomeTracker,
+} from "./main/import-outcomes";
+import { createArchiveDocumentStatusReader } from "./main/document-status";
+import { createDesktopImportNotifier } from "./main/import-notifications";
+import { createElectronNotifier } from "./main/electron-notifier";
+import {
+  createDesktopNotificationRouter,
+  type DesktopNotificationRouter,
+} from "./main/notification-routing";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -91,6 +105,7 @@ app.enableSandbox();
 const isSmokeTest = process.argv.includes("--smoke-test");
 let mainWindow: BrowserWindow | null = null;
 let trayLifecycle: DesktopTrayLifecycle | null = null;
+let notificationRouter: DesktopNotificationRouter | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
 const profileRoutes = new Map<string, string>();
@@ -160,6 +175,14 @@ function registerIpcHandlers(
   lifecycle: DesktopTrayLifecycle,
   watchFolders: DesktopWatchFolderService,
   chooseWatchFolder: (parent?: BrowserWindow) => Promise<string | null>,
+  outcomes: DesktopImportOutcomeTracker,
+  notificationSettings: () => {
+    preferences: { completed: boolean; failed: boolean; review: boolean };
+    supported: boolean;
+  },
+  setNotificationPreference: (
+    input: DesktopNotificationPreferenceInput,
+  ) => Promise<void>,
 ) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
@@ -199,6 +222,7 @@ function registerIpcHandlers(
         // A profile pointed at a different server is a different archive, so
         // its local watch folders and import checkpoints no longer apply.
         await watchFolders.forgetProfile(resetProfileId);
+        await outcomes.forgetProfile(resetProfileId);
       }
       transitionWindow(event.sender.id, state, { resetProfileId });
       onDesktopStateChanged();
@@ -278,6 +302,7 @@ function registerIpcHandlers(
       const state = await archiveSession.removeProfile(input?.profileId);
       if (profileExisted && state.status !== "error" && input?.profileId) {
         await watchFolders.forgetProfile(input.profileId);
+        await outcomes.forgetProfile(input.profileId);
       }
       transitionWindow(event.sender.id, state, {
         clearProfileId:
@@ -388,6 +413,42 @@ function registerIpcHandlers(
       };
     }
   });
+
+  /**
+   * The renderer uploads picker and Open-with files itself, so it reports the
+   * documents the archive created. Main then owns following them, which is what
+   * lets an outcome survive a hidden window, a profile switch, or a restart.
+   */
+  ipcMain.handle(
+    DESKTOP_CHANNELS.importsReportCreated,
+    async (event, input: DesktopCreatedDocumentsInput) => {
+      assertIpcEvent(event);
+      const profileId = windowProfileIds.get(event.sender.id);
+      if (!profileId || !Array.isArray(input?.documents)) return;
+      await outcomes.track(profileId, "picker", input.documents);
+    },
+  );
+
+  ipcMain.handle(DESKTOP_CHANNELS.notificationsGetSettings, async (event) => {
+    assertIpcEvent(event);
+    return notificationSettings();
+  });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.notificationsSetPreference,
+    async (event, input: DesktopNotificationPreferenceInput) => {
+      assertIpcEvent(event);
+      if (
+        !input ||
+        !["completed", "failed", "review"].includes(input.kind) ||
+        typeof input.enabled !== "boolean"
+      ) {
+        throw new Error("Choose a valid notification preference.");
+      }
+      await setNotificationPreference(input);
+      return notificationSettings();
+    },
+  );
 
   ipcMain.handle(
     DESKTOP_CHANNELS.watchFoldersSetPaused,
@@ -569,6 +630,60 @@ void app.whenReady().then(async () => {
       focusMainWindow();
     },
   });
+  const outcomes = createDesktopImportOutcomeTracker({
+    filePath: path.join(app.getPath("userData"), "desktop-import-outcomes.json"),
+    statuses: createArchiveDocumentStatusReader({
+      archiveSession,
+      fetchRequest: (input, init) => net.fetch(input, init),
+    }),
+    activeProfileId: () => archiveSession.getActiveSession()?.profile.id ?? null,
+    notify: (outcome) => importNotifier.present(outcome),
+    timer: createIntervalImportOutcomeTimer(),
+    reportError: (message, error) => console.error(message, error),
+  });
+  await outcomes.load();
+
+  notificationRouter = createDesktopNotificationRouter({
+    activeProfileId: () => archiveSession.getActiveSession()?.profile.id ?? null,
+    async confirmSwitch(profileId) {
+      const profiles = await archiveSession.listProfiles().catch(() => null);
+      const label =
+        profiles?.profiles.find((profile) => profile.id === profileId)?.label ??
+        "another archive";
+      const owner = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+      const options: Electron.MessageBoxOptions = {
+        type: "question",
+        title: "Switch archive?",
+        message: `Open this document in ${label}?`,
+        detail:
+          "Switching archives closes the current archive window, so anything unfinished in it is discarded.",
+        buttons: [`Switch to ${label}`, "Stay here"],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+      };
+      const result = owner
+        ? await dialog.showMessageBox(owner, options)
+        : await dialog.showMessageBox(options);
+      return result.response === 0;
+    },
+    async activateProfile(profileId) {
+      const state = await archiveSession.activate(profileId);
+      if (state.status === "connected") await createMainWindow(state.profile.id);
+    },
+    navigate(url) {
+      if (mainWindow && !mainWindow.isDestroyed()) void mainWindow.loadURL(url);
+    },
+    showWindow: () => focusMainWindow(),
+    reportError: (message, error) => console.error(message, error),
+  });
+
+  const importNotifier = createDesktopImportNotifier({
+    notifier: createElectronNotifier(),
+    preferences: () => lifecycleState.snapshot().notifications,
+    open: (target) => void notificationRouter?.open(target),
+  });
+
   const watchFolderStore = createDesktopWatchFolderStore({
     filePath: path.join(app.getPath("userData"), "desktop-watch-folders.json"),
   });
@@ -588,6 +703,9 @@ void app.whenReady().then(async () => {
         mainWindow.webContents.send(DESKTOP_CHANNELS.watchFoldersChanged);
       }
       void trayLifecycle?.refreshMenu();
+    },
+    onImported: (profileId, document) => {
+      void outcomes.track(profileId, "watch-folder", [document]);
     },
     reportError: (message, error) => console.error(message, error),
   });
@@ -753,7 +871,10 @@ void app.whenReady().then(async () => {
         });
       }
     });
-    void window.loadURL(getProfileWindowUrl(profileId, profileRoutes));
+    // A notification clicked before this archive was ready decides the first
+    // route, rather than loading the remembered one and jumping afterwards.
+    const notified = notificationRouter?.takeTarget(profileId);
+    void window.loadURL(notified?.url ?? getProfileWindowUrl(profileId, profileRoutes));
   }
 
   function transitionWindow(
@@ -859,6 +980,7 @@ void app.whenReady().then(async () => {
         }
       }
       await watchFolders.stop();
+      await outcomes.stop();
       archiveSession.dispose();
       await Promise.all(
         [...configuredPartitions].map((partition) =>
@@ -883,8 +1005,17 @@ void app.whenReady().then(async () => {
     trayLifecycle,
     watchFolders,
     chooseWatchFolderPath,
+    outcomes,
+    () => ({
+      preferences: lifecycleState.snapshot().notifications,
+      supported: importNotifier.supported(),
+    }),
+    async ({ kind, enabled }) => {
+      await lifecycleState.setNotificationPreference(kind, enabled);
+    },
   );
   watchFolders.start();
+  outcomes.start();
   await createMainWindow(null);
   await launchLifecycle.connect(async (paths) => {
     await importCoordinator.receivePaths(paths);

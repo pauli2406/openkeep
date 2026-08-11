@@ -7,6 +7,11 @@ const EMPTY_DELIVERY: HostImportDelivery = { files: [], rejected: [] };
 
 export function createDesktopImportAdapter(
   pickFiles: () => Promise<HostImportDelivery>,
+  reportCreated: (
+    documents: Array<{ documentId: string; name: string }>,
+  ) => void = (documents) => {
+    void window.openkeepDesktop.imports.reportCreated({ documents });
+  },
 ) {
   let pending: HostImportDelivery = EMPTY_DELIVERY;
   const listeners = new Set<() => void>();
@@ -22,6 +27,7 @@ export function createDesktopImportAdapter(
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    reportCreated,
   };
 
   return {

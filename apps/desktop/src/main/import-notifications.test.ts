@@ -138,10 +138,6 @@ function createRouterHarness(activeProfileId: string | null) {
     showWindow,
     confirmSwitch,
     activateProfile,
-    connect(profileId: string) {
-      active = profileId;
-      router.profileConnected(profileId);
-    },
   };
 }
 
@@ -165,18 +161,21 @@ describe("desktop notification routing", () => {
       url: "openkeep://app/documents/d1",
     });
 
+    // Nothing is authenticated yet, so there is no window to navigate.
     expect(harness.navigate).not.toHaveBeenCalled();
     expect(harness.showWindow).toHaveBeenCalledOnce();
+    expect(harness.router.pendingTarget()).toEqual({
+      profileId: "home",
+      url: "openkeep://app/documents/d1",
+    });
 
-    // A different archive connecting first must not consume the intent.
-    harness.router.profileConnected("work");
-    expect(harness.navigate).not.toHaveBeenCalled();
-
-    harness.connect("home");
-    expect(harness.navigate).toHaveBeenCalledWith("openkeep://app/documents/d1");
-
-    harness.router.profileConnected("home");
-    expect(harness.navigate).toHaveBeenCalledOnce();
+    // A different archive restoring first must not consume the intent.
+    expect(harness.router.takeTarget("work")).toBeNull();
+    expect(harness.router.takeTarget("home")).toEqual({
+      profileId: "home",
+      url: "openkeep://app/documents/d1",
+    });
+    expect(harness.router.takeTarget("home")).toBeNull();
   });
 
   it("never switches archives without asking", async () => {
@@ -202,11 +201,13 @@ describe("desktop notification routing", () => {
     });
 
     expect(harness.activateProfile).toHaveBeenCalledWith("home");
-    // Activation replaces the window; the route is applied by the connect signal.
+    // Activation replaces the window, which loads the route as its first URL
+    // rather than navigating a second time.
     expect(harness.navigate).not.toHaveBeenCalled();
-
-    harness.router.profileConnected("home");
-    expect(harness.navigate).toHaveBeenCalledWith("openkeep://app/review");
+    expect(harness.router.takeTarget("home")).toEqual({
+      profileId: "home",
+      url: "openkeep://app/review",
+    });
   });
 
   it("refuses a target that is not a trusted application route", async () => {

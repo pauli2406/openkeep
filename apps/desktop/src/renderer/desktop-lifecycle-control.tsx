@@ -3,7 +3,31 @@ import type {
   DesktopBridge,
   DesktopCloseBehavior,
   DesktopLifecycleSettings,
+  DesktopNotificationKind,
+  DesktopNotificationSettings,
 } from "../shared/desktop-api";
+
+const NOTIFICATION_LABELS: Array<{
+  kind: DesktopNotificationKind;
+  title: string;
+  detail: string;
+}> = [
+  {
+    kind: "completed",
+    title: "Finished imports",
+    detail: "A document has been processed and filed.",
+  },
+  {
+    kind: "review",
+    title: "Documents needing review",
+    detail: "A document was filed but wants your confirmation.",
+  },
+  {
+    kind: "failed",
+    title: "Failed imports",
+    detail: "A document could not be processed.",
+  },
+];
 
 function TrayGlyph() {
   return (
@@ -17,12 +41,14 @@ function TrayGlyph() {
 export function DesktopLifecycleControl({
   bridge = window.openkeepDesktop,
 }: {
-  bridge?: Pick<DesktopBridge, "lifecycle">;
+  bridge?: Pick<DesktopBridge, "lifecycle" | "notifications">;
 }) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<DesktopLifecycleSettings | null>(null);
+  const [notifications, setNotifications] =
+    useState<DesktopNotificationSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -32,6 +58,16 @@ export function DesktopLifecycleControl({
       if (active) setSettings(next);
     }).catch(() => {
       if (active) setMessage("Desktop behavior could not be loaded.");
+    });
+    return () => { active = false; };
+  }, [bridge]);
+
+  useEffect(() => {
+    let active = true;
+    void bridge.notifications.getSettings().then((next) => {
+      if (active) setNotifications(next);
+    }).catch(() => {
+      if (active) setMessage("Notification settings could not be loaded.");
     });
     return () => { active = false; };
   }, [bridge]);
@@ -60,6 +96,18 @@ export function DesktopLifecycleControl({
       setSettings(await bridge.lifecycle.setCloseBehavior({ closeBehavior }));
     } catch {
       setMessage("Desktop behavior could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeNotification(kind: DesktopNotificationKind, enabled: boolean) {
+    setBusy(true);
+    setMessage("");
+    try {
+      setNotifications(await bridge.notifications.setPreference({ kind, enabled }));
+    } catch {
+      setMessage("That notification setting could not be changed.");
     } finally {
       setBusy(false);
     }
@@ -119,6 +167,30 @@ export function DesktopLifecycleControl({
               </span>
             </label>
           </fieldset>
+          <fieldset disabled={busy || !notifications}>
+            <legend>Notify me about</legend>
+            {NOTIFICATION_LABELS.map(({ kind, title, detail }) => (
+              <label key={kind}>
+                <input
+                  type="checkbox"
+                  checked={notifications?.preferences[kind] ?? false}
+                  onChange={(event) =>
+                    void changeNotification(kind, event.target.checked)
+                  }
+                />
+                <span>
+                  <strong>{title}</strong>
+                  <small>{detail}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {notifications && !notifications.supported ? (
+            <p className="desktop-lifecycle-control__notice">
+              This system has no notification service available, so OpenKeep cannot
+              show them. Import results stay visible in the app.
+            </p>
+          ) : null}
           {settings && !settings.trayAvailable ? (
             <p className="desktop-lifecycle-control__notice">
               A usable system tray is unavailable, so closing the window quits
