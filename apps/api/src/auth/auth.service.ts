@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   OnModuleInit,
@@ -289,7 +290,7 @@ export class AuthService implements OnModuleInit {
   // --- Two-factor (TOTP) enrollment ---
 
   async setupTwoFactor(principal: AuthenticatedPrincipal): Promise<TwoFactorSetupResponse> {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
 
     const [user] = await this.databaseService.db
       .select({ totpEnabled: users.totpEnabled })
@@ -323,7 +324,7 @@ export class AuthService implements OnModuleInit {
     principal: AuthenticatedPrincipal,
     input: EnableTwoFactorInput,
   ): Promise<EnableTwoFactorResponse> {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
 
     let payload: EnrollmentPayload;
     try {
@@ -361,7 +362,7 @@ export class AuthService implements OnModuleInit {
     principal: AuthenticatedPrincipal,
     input: DisableTwoFactorInput,
   ): Promise<void> {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
 
     const [user] = await this.databaseService.db
       .select()
@@ -405,7 +406,7 @@ export class AuthService implements OnModuleInit {
     principal: AuthenticatedPrincipal,
     input: CreateApiTokenInput,
   ): Promise<{ id: string; token: string; name: string; expiresAt: string | null }> {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
     const publicId = `okp_${randomBytes(6).toString("hex")}`;
     const secret = randomBytes(24).toString("hex");
     const token = `${publicId}.${secret}`;
@@ -430,7 +431,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async listApiTokens(principal: AuthenticatedPrincipal) {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
     return this.databaseService.db
       .select({
         id: apiTokens.id,
@@ -445,7 +446,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async revokeApiToken(principal: AuthenticatedPrincipal, tokenId: string): Promise<void> {
-    this.assertInteractiveUser(principal);
+    await this.assertOwnerAccountAdministrator(principal);
     await this.databaseService.db
       .delete(apiTokens)
       .where(and(eq(apiTokens.id, tokenId), eq(apiTokens.userId, principal.userId)));
@@ -504,9 +505,23 @@ export class AuthService implements OnModuleInit {
     };
   }
 
-  assertInteractiveUser(principal: AuthenticatedPrincipal): void {
-    if (principal.type !== "user") {
-      throw new UnauthorizedException("Interactive user session required");
+  /**
+   * Account administration belongs to the owner identity, not to one login
+   * mechanism. A JWT session and an API token issued by that owner therefore
+   * cross the same seam. This lets trusted native clients administer the
+   * connected archive without ever receiving the owner's password or JWTs.
+   */
+  private async assertOwnerAccountAdministrator(
+    principal: AuthenticatedPrincipal,
+  ): Promise<void> {
+    const [user] = await this.databaseService.db
+      .select({ isOwner: users.isOwner })
+      .from(users)
+      .where(eq(users.id, principal.userId))
+      .limit(1);
+
+    if (!user?.isOwner) {
+      throw new ForbiddenException("Archive owner access required");
     }
   }
 
