@@ -225,6 +225,27 @@ across profile changes. The web smoke suite remains the canonical behavior test;
 the desktop suite proves that Electron's bootstrap, protocol, and profile seams do
 not alter it.
 
+Review and document management remain shared route modules as well. Their mutations
+use one archive-state invalidation seam rather than maintaining desktop-specific
+caches. A successful correction, resolve, requeue, reprocess, taxonomy change, or
+delete refreshes the affected detail, history, explorer, review, dashboard, and
+taxonomy queries. Deletion additionally evicts the removed document's text and
+preview data immediately.
+
+Route-owned request scopes cancel in-flight review, detail, preview, and mutation
+requests on unmount. The main-process proxy combines those renderer signals with the
+active profile generation signal, so a profile switch aborts a request even when it
+is already being forwarded upstream. Preview blobs use explicit object-URL leases:
+replacement and unmount revoke the old URL, while a completion that arrives after
+cancellation is discarded before it can update React state.
+
+The desktop parity suite exercises the end-to-end review-to-correction-to-resolve and
+requeue flows, batch eligibility and failure feedback, the full document evidence and
+metadata surface, inline taxonomy creation, override removal, confirmed maintenance
+actions, missing/failed evidence, preview cleanup, and profile-scoped proxy aborts.
+These tests intentionally import the shared routes; adding a parallel Electron-only
+review UI would bypass the parity guard.
+
 ## Contributor Commands
 
 From the repository root:

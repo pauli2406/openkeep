@@ -102,6 +102,27 @@ Switching profiles creates a fresh shared-app instance in that profile's isolate
 window. Rows, filters, previews, selections, and query results from the previous
 archive therefore cannot remain visible in the destination archive.
 
+## Review and Manage Documents
+
+Desktop uses the complete web review queue and document page. In `Review`, you can
+filter by review reason, inspect the source preview, correct extracted fields, resolve
+one item, requeue it, or confirm an eligible confidence-only batch. Resolving an item
+moves the queue to the next document; an unsuccessful save or review action remains
+visible as an error and does not silently advance the queue.
+
+The document page exposes the same preview, OCR text, generated intelligence, audit
+history, archive metadata, taxonomy values, and manual overrides as web. You can
+create a missing correspondent or tag while editing, save corrections, unlock an
+override, resolve or requeue review, and reprocess the document. Reprocessing and
+deleting require confirmation. Cancelling a delete leaves the remote document
+untouched.
+
+Successful changes refresh the queue, document lists, dashboard counts, detail data,
+history, and affected taxonomy displays. Switching profiles or closing the window
+cancels requests from the old archive and discards temporary previews, so a late
+response cannot appear in the next archive. For the complete correction workflow,
+see [Review and Corrections](./review-and-corrections.md).
+
 ## Search and AI
 
 Desktop uses the same `Chat`, hybrid search, structured operational answers,
