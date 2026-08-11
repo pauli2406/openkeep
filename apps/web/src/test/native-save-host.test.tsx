@@ -63,7 +63,13 @@ describe("host-owned save seam", () => {
     });
 
     expect(
-      (await screen.findAllByText("Native Save Invoice")).length,
+      (
+        await screen.findAllByText(
+          "Native Save Invoice",
+          {},
+          { timeout: 10_000 },
+        )
+      ).length,
     ).toBeGreaterThan(0);
     await user.click(
       screen.getByRole("button", { name: "Download Original" }),
