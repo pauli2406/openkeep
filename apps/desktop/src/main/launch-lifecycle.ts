@@ -38,7 +38,14 @@ export function installDesktopLaunchLifecycle({
       deferred.push(paths);
       return;
     }
-    delivery = delivery.then(() => receiver!(paths));
+    // Settle every link of the chain: one failed delivery must not leave the
+    // chain rejected, or every later Open-with launch would be dropped
+    // silently until the application restarts.
+    delivery = delivery
+      .then(() => receiver!(paths))
+      .catch((error: unknown) => {
+        console.error("OpenKeep could not deliver opened files.", error);
+      });
   }
 
   app.on("second-instance", (...arguments_) => {

@@ -65,4 +65,27 @@ describe("desktop launch lifecycle", () => {
     expect(preventDefault).toHaveBeenCalledOnce();
     expect(focusWindow).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps delivering after one receiver failure", async () => {
+    const fake = fakeApp();
+    const lifecycle = installDesktopLaunchLifecycle({
+      app: fake.app,
+      defaultApp: false,
+      focusWindow: vi.fn(),
+    })!;
+    const received: string[][] = [];
+    const receiver = vi
+      .fn(async (paths: string[]) => {
+        received.push(paths);
+      })
+      .mockRejectedValueOnce(new Error("upload pipeline hiccup"));
+    await lifecycle.connect(receiver);
+
+    fake.handlers.get("second-instance")?.(undefined, ["openkeep", "/tmp/first.pdf"], "/");
+    fake.handlers.get("second-instance")?.(undefined, ["openkeep", "/tmp/second.pdf"], "/");
+    await lifecycle.idle();
+
+    // The first delivery failed; the second still arrived.
+    expect(received).toEqual([["/tmp/second.pdf"]]);
+  });
 });
