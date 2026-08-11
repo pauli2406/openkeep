@@ -117,6 +117,13 @@ export function createDesktopWatchFolderService({
   let rescan = false;
   let stopped = false;
   /**
+   * Whether this pass produced anything a listener would care about. A quiet
+   * poll must stay quiet: notifying on every cycle would have the renderer
+   * refetch and the tray menu rebuild every few seconds forever.
+   */
+  let changed = false;
+  let scannedProfileId: string | null = null;
+  /**
    * The last archive that was connected. A disconnect must not make its watch
    * folders disappear from the UI — they are waiting, not gone.
    */
@@ -142,7 +149,17 @@ export function createDesktopWatchFolderService({
       at: now(),
       ...(message ? { message } : {}),
     };
+    changed = true;
     return store.recordEvent(profileId, folderId, event);
+  }
+
+  function setCondition(folderId: string, condition: FolderCondition) {
+    const previous = conditions.get(folderId);
+    if (previous?.state === condition.state && previous.message === condition.message) {
+      return;
+    }
+    conditions.set(folderId, condition);
+    changed = true;
   }
 
   async function considerEntry(
@@ -249,14 +266,22 @@ export function createDesktopWatchFolderService({
     if (!profileId) {
       // No connected archive: nothing is scanned, and nothing is lost. The
       // next cycle after reconnection picks the folders up again.
-      conditions.clear();
+      if (conditions.size > 0) {
+        conditions.clear();
+        changed = true;
+      }
       return;
+    }
+    if (scannedProfileId !== profileId) {
+      // Another archive's folder conditions say nothing about this one.
+      conditions.clear();
+      scannedProfileId = profileId;
     }
 
     for (const folder of store.list(profileId)) {
       if (stopped || activeProfileId() !== profileId) return;
       if (folder.paused) {
-        conditions.set(folder.id, { state: "paused" });
+        setCondition(folder.id, { state: "paused" });
         continue;
       }
 
@@ -264,10 +289,10 @@ export function createDesktopWatchFolderService({
       try {
         entries = await fileSystem.readDirectory(folder.path);
       } catch (error) {
-        conditions.set(folder.id, directoryFailure(error));
+        setCondition(folder.id, directoryFailure(error));
         continue;
       }
-      conditions.set(folder.id, { state: "watching" });
+      setCondition(folder.id, { state: "watching" });
 
       for (const entry of entries) {
         if (stopped || activeProfileId() !== profileId) return;
@@ -293,7 +318,10 @@ export function createDesktopWatchFolderService({
       } while (rescan && !stopped);
     } finally {
       scanning = false;
-      onChanged();
+      if (changed) {
+        changed = false;
+        onChanged();
+      }
     }
   }
 
@@ -342,6 +370,7 @@ export function createDesktopWatchFolderService({
       }
       const added = await store.add(profileId, folderPath);
       conditions.delete(added.folder.id);
+      changed = true;
       await scan();
       return snapshot();
     },
@@ -351,11 +380,13 @@ export function createDesktopWatchFolderService({
       if (!profileId) return snapshot();
       await store.setPaused(profileId, folderId, paused);
       if (paused) {
-        conditions.set(folderId, { state: "paused" });
+        setCondition(folderId, { state: "paused" });
+        changed = false;
         onChanged();
         return snapshot();
       }
       conditions.delete(folderId);
+      changed = true;
       await scan();
       return snapshot();
     },

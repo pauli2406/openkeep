@@ -446,7 +446,9 @@ survives sleep and resume, a removable volume returning, an unreliable network s
 and a bulk-copy burst — cases where a native watcher goes silent or floods. Each cycle
 re-reads its own durable checkpoints, so an interruption mid-copy costs one extra
 poll, never a duplicate document. Scans coalesce: a request arriving during a pass
-schedules exactly one more pass rather than queuing per event.
+schedules exactly one more pass rather than queuing per event. A pass notifies
+listeners only when it changed something, so an idle folder does not make the renderer
+refetch and the tray menu rebuild every few seconds.
 
 A file is uploaded only after its size and modification time are unchanged for the
 settle period, which is measured from this machine's first sighting rather than from

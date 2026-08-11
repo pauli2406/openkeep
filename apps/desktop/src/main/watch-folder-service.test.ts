@@ -361,6 +361,22 @@ describe("desktop watch folder service", () => {
     expect(harness.upload).toHaveBeenCalledTimes(1);
   });
 
+  it("notifies only when a poll actually changed something", async () => {
+    const harness = await createHarness({
+      entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
+    });
+    await harness.service.add("/Users/keeper/Scans");
+    await harness.settleAndScan();
+    const afterImport = harness.onChanged.mock.calls.length;
+    expect(afterImport).toBeGreaterThan(0);
+
+    // Nothing new in the folder: further polls must stay silent so the renderer
+    // and the tray are not rebuilt every few seconds.
+    await harness.settleAndScan();
+    await harness.settleAndScan();
+    expect(harness.onChanged).toHaveBeenCalledTimes(afterImport);
+  });
+
   it("forgets a removed folder and summarizes state without paths", async () => {
     const harness = await createHarness({
       entries: { "invoice.pdf": { size: 120, mtimeMs: 10 } },
