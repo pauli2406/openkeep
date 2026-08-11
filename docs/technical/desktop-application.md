@@ -118,10 +118,60 @@ components. Administration queries, mutation results, dialogs, pasted snapshots,
 taxonomy selections, and authorization errors therefore share the same profile
 isolation guarantee as document and search state. Main's active-profile signal
 aborts an outgoing administration request before a late response can be applied.
-Future background imports, watch folders, and notifications must carry the stable
+Background imports and future watch folders or notifications must carry the stable
 profile UUID and be cancelled or routed by that identity rather than by label or
 URL. App-level Electron runtime settings remain global where applicable; server-side
 user settings remain data of the selected archive.
+
+## Tray and Window Lifecycle
+
+`createDesktopTrayLifecycle` is the deep module at the operating-system lifecycle
+seam. Main injects the Electron tray adapter, profile operations, native import entry
+point, persistent state adapter, and one cleanup operation. Callers use a small
+interface to attach a replacement profile window, show or hide it, rebuild the menu,
+capture bounds, or request quit. Tests cross that same interface with in-memory
+adapters; Electron-specific `Tray`, `Menu`, `Dialog`, and application focus behavior
+stay in `electron-tray-host.ts`.
+
+Close-to-tray is the persisted default. The controller prevents the window close,
+captures its bounds, and hides the same `BrowserWindow`, preserving its route and
+profile-bound renderer state. The tray contains only application actions and profile
+labels: show/hide, active archive, profile switching, native import, the close
+preference, and explicit quit. It never receives credentials, server addresses,
+document names, search text, or preview content. macOS uses an 18-pixel template
+menu-bar image; Windows and Linux use appropriately sized monochrome notification-
+area images. Windows and Linux also reveal the window on the conventional tray-icon
+double-click.
+
+Changing close behavior to `quit` crosses the same controller interface whether the
+action begins in the tray or authenticated renderer. Main displays a native warning
+before persistence because closing will stop imports and background work. The
+renderer receives only the `tray`/`quit` value and tray availability through fixed
+IPC channels. If tray creation fails—especially on a Linux desktop without a usable
+status area—the effective behavior is quit even if the stored preference is `tray`;
+this ensures the process cannot be left running without any visible recovery path.
+
+Explicit quit and quit-on-close share one idempotent cleanup path. It marks the
+controller as quitting so the next close is not hidden, aborts active archive fetches
+and SSE streams, closes connections in every configured profile partition, flushes
+global lifecycle state, destroys the tray, and only then calls Electron `app.quit()`.
+Operating-system quit events are intercepted once and enter the same path.
+
+Global state is stored atomically in `desktop-lifecycle.json`, separate from encrypted
+profile credentials. It contains the close preference, last bounds, and allowlisted
+per-profile OpenKeep routes. A remembered rectangle is restored exactly only when it
+fits a current display work area; otherwise the last size is centered and constrained
+to the primary work area. Routes pass the trusted-renderer allowlist both when they
+are captured and restored. Removing a profile or changing its origin clears its
+remembered route together with that partition. The existing profile repository still
+owns the last active UUID.
+
+The single-instance launch lifecycle continues to own cold arguments, macOS
+`open-file`, and warm `second-instance` delivery. Its injected focus policy now calls
+the tray controller, which restores minimized windows and shows and focuses hidden
+windows before Open-with intake is delivered. Tray-native imports use the same native
+picker and import service as the shared Import route, but assign the new batch
+directly to the already active stable profile UUID.
 
 Removing a profile clears its partition storage and cache, closes its network
 connections, and deletes its encrypted credential record after user confirmation.
@@ -381,7 +431,7 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. Desktop has no offline document cache, tray/background mode, local watch
+archives. Desktop has no offline document cache, launch-at-login setting, local watch
 folders, notifications, signing, or release automation.
 
 ## Related Documents

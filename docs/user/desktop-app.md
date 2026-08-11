@@ -102,6 +102,37 @@ Switching profiles creates a fresh shared-app instance in that profile's isolate
 window. Rows, filters, previews, selections, and query results from the previous
 archive therefore cannot remain visible in the destination archive.
 
+## Close, Reopen, and Quit
+
+OpenKeep keeps running in the system tray by default. Closing the main window hides
+it; it does not stop the desktop process. Use the tray menu to show or hide the
+window, see and switch the active archive, start a native file import, or choose
+`Quit OpenKeep`. Files, credentials, server addresses, and document details are not
+shown in the tray menu.
+
+The small desktop-behavior control beside the active archive control changes what
+happens when the window closes:
+
+- **Keep OpenKeep running** hides the window and lets imports and future background
+  work continue.
+- **Quit OpenKeep** stops imports and background work, closes active archive
+  connections, and exits the process whenever the window is closed. OpenKeep shows
+  this consequence for confirmation before saving the change.
+
+The preference is global rather than tied to one archive. Explicit `Quit OpenKeep`
+always exits, regardless of the preference. OpenKeep remembers the last valid window
+size and position, active archive, and that archive's safe route. If a monitor has
+been disconnected or its usable area changed, the next window is centered on the
+current primary display instead of being restored off-screen.
+
+On macOS the tray icon lives in the menu bar. On Windows it lives in the notification
+area; double-clicking its icon reveals a hidden window. Supported Linux desktops use
+their system tray. If Linux cannot provide a usable tray, close-to-tray is disabled
+and closing the window quits, so OpenKeep cannot become an invisible stranded
+process. Starting OpenKeep again, opening a supported file with OpenKeep, or a second
+launch always reveals and focuses the existing hidden window. Launch at login is not
+configured by this preference.
+
 ## Import Documents
 
 Desktop accepts PDF, JPEG (`.jpg` and `.jpeg`), PNG, TIFF (`.tif` and `.tiff`),
@@ -266,7 +297,7 @@ boundary even when two profiles have the same name or server address.
 
 | Profile-specific | Global |
 | --- | --- |
-| OpenKeep and Cloudflare Access credentials | Desktop runtime settings that are not owned by an archive |
+| OpenKeep and Cloudflare Access credentials | Close behavior and last valid window bounds |
 | Chromium local storage and network cache | App-wide runtime behavior, where the desktop app exposes such a setting |
 | Query state, conversations, and recent searches | The installed desktop app and its version |
 | In-progress upload state, assigned Open-with batches, and active response streams |  |
