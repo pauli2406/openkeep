@@ -33,9 +33,15 @@ import {
   type ExplorerFacets,
 } from "@/lib/explorer";
 import type {
+  AnswerCitation,
   DashboardInsightsResponse,
   SemanticSearchResult,
 } from "@openkeep/types";
+
+function citationPageHash(citations: AnswerCitation[], documentId: string) {
+  const page = citations.find((entry) => entry.documentId === documentId)?.pageFrom;
+  return page ? `page-${page}` : undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Suggestion generation
@@ -766,6 +772,7 @@ function ResultsPane({
                         <Link
                           to="/documents/$documentId"
                           params={{ documentId }}
+                          hash={citationPageHash(answerStream.citations, documentId)}
                           className="no-underline"
                           title={title}
                         >
@@ -1053,6 +1060,7 @@ function CitationPreviewPane({
                         <Link
                           to="/documents/$documentId"
                           params={{ documentId }}
+                          hash={citationPageHash(answerStream.citations, documentId)}
                           className="no-underline"
                           title={title}
                         >
@@ -1134,6 +1142,7 @@ function CitationPreviewPane({
             <Link
               to="/documents/$documentId"
               params={{ documentId: citation.documentId }}
+              hash={citation.pageFrom ? `page-${citation.pageFrom}` : undefined}
               className="rounded-lg border border-[color:var(--explorer-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
             >
               Open full
@@ -1166,6 +1175,7 @@ function CitationPreviewPane({
                 <Link
                   to="/documents/$documentId"
                   params={{ documentId: citation.documentId }}
+                  hash={citation.pageFrom ? `page-${citation.pageFrom}` : undefined}
                   className="text-[color:var(--ok-accent)] hover:underline"
                 >
                   Open the full document view

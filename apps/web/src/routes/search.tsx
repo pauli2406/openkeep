@@ -592,6 +592,9 @@ function ChatPage() {
                     navigate({
                       to: "/documents/$documentId",
                       params: { documentId: selectedCitation.documentId },
+                      hash: selectedCitation.pageFrom
+                        ? `page-${selectedCitation.pageFrom}`
+                        : undefined,
                     })
                   }
                 >

@@ -413,6 +413,10 @@ type TranslationKey =
   | "documentDetail.failedToFetchProviders"
   | "documentDetail.failedToUpdateDocument"
   | "documentDetail.generatedSummary"
+  | "documentDetail.summaryGenerating"
+  | "documentDetail.summaryRegenerate"
+  | "documentDetail.summaryFailed"
+  | "documentDetail.summaryStreamEnded"
   | "documentDetail.titleCandidate"
   | "documentDetail.provider"
   | "documentDetail.typeSpecificFields"
@@ -944,6 +948,10 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToFetchProviders": "Failed to fetch providers",
     "documentDetail.failedToUpdateDocument": "Failed to update document",
     "documentDetail.generatedSummary": "Generated Summary",
+    "documentDetail.summaryGenerating": "Generating…",
+    "documentDetail.summaryRegenerate": "Regenerate",
+    "documentDetail.summaryFailed": "The summary could not be generated.",
+    "documentDetail.summaryStreamEnded": "The archive ended the summary stream unexpectedly.",
     "documentDetail.titleCandidate": "Title candidate",
     "documentDetail.provider": "Provider",
     "documentDetail.typeSpecificFields": "Type-specific Fields",
@@ -1474,6 +1482,10 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToFetchProviders": "Anbieter konnten nicht geladen werden",
     "documentDetail.failedToUpdateDocument": "Dokument konnte nicht aktualisiert werden",
     "documentDetail.generatedSummary": "Generierte Zusammenfassung",
+    "documentDetail.summaryGenerating": "Wird erstellt…",
+    "documentDetail.summaryRegenerate": "Neu erstellen",
+    "documentDetail.summaryFailed": "Die Zusammenfassung konnte nicht erstellt werden.",
+    "documentDetail.summaryStreamEnded": "Das Archiv hat den Zusammenfassungs-Stream unerwartet beendet.",
     "documentDetail.titleCandidate": "Titelvorschlag",
     "documentDetail.provider": "Anbieter",
     "documentDetail.typeSpecificFields": "Typspezifische Felder",

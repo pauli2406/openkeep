@@ -169,6 +169,7 @@ describe("search smoke", () => {
       expect(router.state.location.pathname).toBe(
         "/documents/22222222-2222-2222-2222-222222222222",
       );
+      expect(router.state.location.hash).toBe("page-2");
     });
     // Exactly one answer stream, and no separate semantic retrieval request.
     expect(streamRequests).toBe(1);

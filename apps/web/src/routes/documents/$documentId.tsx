@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Correspondent as TaxonomyCorrespondent,
@@ -11,10 +11,9 @@ import type {
   ParseProvider,
   Tag as TaxonomyTag,
 } from "@openkeep/types";
-import { createSseParser } from "@openkeep/sdk";
-
 import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { DocumentQaSection } from "@/components/document-detail/qa-section";
+import { DocumentSummarySection } from "@/components/document-detail/summary-section";
 import { DetailHeader } from "@/components/document-detail/detail-header";
 import { FieldsRail } from "@/components/document-detail/fields-rail";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
@@ -530,6 +529,9 @@ const EMPTY_SELECT_VALUE = "__none__";
 
 function DocumentDetailPage() {
   const { documentId } = Route.useParams();
+  const location = useLocation();
+  const citedPageMatch = /^page-(\d+)$/.exec(location.hash);
+  const citedPage = citedPageMatch ? Number(citedPageMatch[1]) : undefined;
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -563,7 +565,7 @@ function DocumentDetailPage() {
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(100);
-  const [previewPage, setPreviewPage] = useState(1);
+  const [previewPage, setPreviewPage] = useState(citedPage ?? 1);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
   const [editForm, setEditForm] = useState({
     title: "",
@@ -710,6 +712,10 @@ function DocumentDetailPage() {
       URL.revokeObjectURL(objectUrl);
     };
   }, [previewQuery.data, documentQuery.data?.mimeType]);
+
+  useEffect(() => {
+    if (citedPage) setPreviewPage(citedPage);
+  }, [documentId, citedPage]);
 
   // --- Mutations ---
 
@@ -922,7 +928,7 @@ function DocumentDetailPage() {
     if (!previous) {
       seededFrom.current = serverForm;
       setEditForm(serverForm);
-      setPreviewPage(1);
+      setPreviewPage(citedPage ?? 1);
       return;
     }
     setEditForm((current) => {
@@ -943,13 +949,13 @@ function DocumentDetailPage() {
       return next;
     });
     seededFrom.current = serverForm;
-  }, [serverForm]);
+  }, [serverForm, citedPage]);
 
   // A different document is a fresh start, dirty or not.
   useEffect(() => {
     seededFrom.current = null;
-    setPreviewPage(1);
-  }, [documentId]);
+    setPreviewPage(citedPage ?? 1);
+  }, [documentId, citedPage]);
 
   function saveEdits() {
     const body: Record<string, unknown> = {};
@@ -1458,19 +1464,12 @@ function DocumentDetailPage() {
                           ) : null}
                         </div>
 
-                      <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">{t("documentDetail.generatedSummary")}</p>
-                          <p className="text-sm">{intelligence.summary?.value ?? doc.metadata.summary ?? "-"}</p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {intelligence.title?.value && <p>{t("documentDetail.titleCandidate")}: {intelligence.title.value}</p>}
-                            {intelligence.summary?.provider && (
-                              <p>
-                                {t("documentDetail.provider")}: {intelligence.summary.provider}
-                                {intelligence.summary.model ? ` / ${intelligence.summary.model}` : ""}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                        <DocumentSummarySection
+                          documentId={doc.id}
+                          initialSummary={intelligence.summary?.value ?? doc.metadata.summary}
+                          initialProvider={intelligence.summary?.provider}
+                          initialModel={intelligence.summary?.model}
+                        />
                       </div>
 
                       <div className="rounded-md border p-3 space-y-3">
@@ -1832,4 +1831,3 @@ function DocumentDetailPage() {
 // ---------------------------------------------------------------------------
 // AI Section component — Q&A with SSE streaming
 // ---------------------------------------------------------------------------
-
