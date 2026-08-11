@@ -100,6 +100,10 @@ Chromium local storage and network cache stay inside the profile-specific partit
 Temporary preview URLs additionally use component-owned leases, so replacement,
 unmount, route changes, and late download completions revoke or refuse the old URL.
 Destroying a profile renderer releases any remaining Chromium-owned blob resources.
+That automatically scopes conversations and recent searches without adding profile
+IDs to the web client's storage keys. The authenticated shared app is also keyed by
+profile UUID, so its in-memory state remounts immediately while main replaces the
+`BrowserWindow`.
 Future background imports, watch folders, and notifications must carry the stable
 profile UUID and be cancelled or routed by that identity rather than by label or
 URL. App-level Electron runtime settings remain global where applicable; server-side
@@ -152,6 +156,26 @@ that marker and `401` responses to the desktop host. Desktop then re-verifies th
 active profile in main and leaves the authenticated renderer for the unavailable or
 invalid-credential state. This makes an outage or expired token replace, rather than
 sit behind, cached archive content.
+
+Archive-wide answers, generated document summaries, and document-specific Q&A all
+use this same path. The handler returns the upstream `Response` directly; it does
+not read, clone, concatenate, or serialize the body. SSE chunks therefore reach the
+shared renderer as soon as the archive emits them, including when an SSE field,
+JSON value, or multi-byte UTF-8 character spans network chunks.
+
+Each forwarded request combines the renderer request signal with the active profile
+generation's signal. Closing the window aborts the renderer signal. Activating or
+removing a profile aborts the profile signal before the old renderer is destroyed.
+The shared stream consumers also assign a generation to each question, so starting
+a replacement question or unmounting the route prevents queued chunks from an older
+request changing the new view.
+
+The shared JSON/SSE consumer treats `401`/`403`, gateway/provider unavailability,
+server `error` events, malformed JSON events, a missing SSE body, and end-of-stream
+without a terminal event as explicit error states. Those messages never include the
+credential-bearing upstream request. Citation routes carry the canonical document
+UUID and cited page into the normal document detail route; the profile partition
+still determines which archive receives the document request.
 
 ## Security Invariants
 

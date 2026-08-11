@@ -102,6 +102,28 @@ Switching profiles creates a fresh shared-app instance in that profile's isolate
 window. Rows, filters, previews, selections, and query results from the previous
 archive therefore cannot remain visible in the destination archive.
 
+## Search and AI
+
+Desktop uses the same `Chat`, hybrid search, structured operational answers,
+citations, generated document summaries, and document Q&A as the web app. Answers
+and summaries appear while they are being generated; the app does not wait for the
+complete response before showing text.
+
+Starting a replacement question cancels the previous request. Closing the window or
+switching profiles also stops any active answer, summary, or document-Q&A stream from
+the archive you left. A late chunk cannot be added to the destination profile.
+
+Citation markers and source cards keep the source document ID and cited page. Opening
+one uses the active profile's connection and takes the document preview to that page.
+If credentials expire, the server or provider is unavailable, or a stream ends in an
+invalid state, desktop shows an error rather than saving a partial response as a
+completed answer.
+
+Conversations and recent searches live in the active profile's isolated desktop
+browser storage. They return when you reopen that profile, never appear in another
+profile, and are deleted with the local profile state when you remove it. Server-side
+document Q&A history remains data of the remote archive.
+
 ## Manage a Saved Profile
 
 Open the active archive control to manage profiles:
@@ -178,5 +200,6 @@ separate capability of the [mobile app](./mobile-app.md), not the desktop app.
 ## Related Documents
 
 - [Getting Started](./getting-started.md) for the shared archive UI
+- [Search and AI](./search-and-ai.md) for search, summaries, Q&A, and citations
 - [Settings and Admin](./settings-and-admin.md) for creating and revoking API tokens
 - [Desktop Application](../technical/desktop-application.md) for the security and network architecture

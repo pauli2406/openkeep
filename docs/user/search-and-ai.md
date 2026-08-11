@@ -96,6 +96,10 @@ Every question you ask joins the conversation open in the left rail. Use
 Conversations are stored in your browser, not on the server, so they stay on
 the machine you asked them from and are not part of an archive export.
 
+In the desktop app, every archive profile has a separate browser partition. Its
+conversations and recent searches persist when you return to that profile, but they
+never appear in a different profile and are removed with that profile's local state.
+
 ### Citations
 
 Click a citation marker in an answer to open the quoted passage beside it.
@@ -135,6 +139,10 @@ You can:
 - let it generate automatically
 - regenerate it manually
 - see provider and model information when available
+
+The web and desktop clients show summary text as it streams. Leaving the document,
+closing the desktop window, or switching desktop profiles cancels the prior stream
+so an incomplete result is not presented as finished.
 
 ## Ask Questions About a Single Document
 
