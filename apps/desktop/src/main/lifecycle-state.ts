@@ -1,6 +1,8 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
+import {
+  createAtomicJsonFile,
+  type AtomicJsonFileSystem,
+} from "./storage/atomic-json-file";
 
 export type DesktopCloseBehavior = "tray" | "quit";
 
@@ -17,12 +19,7 @@ export type DesktopLifecycleState = {
   profileRoutes: Record<string, string>;
 };
 
-export type LifecycleStateFileSystem = {
-  mkdir(directory: string): Promise<unknown>;
-  readFile(filePath: string): Promise<string>;
-  writeFile(filePath: string, contents: string): Promise<unknown>;
-  rename(from: string, to: string): Promise<unknown>;
-};
+export type LifecycleStateFileSystem = AtomicJsonFileSystem;
 
 const DEFAULT_STATE: DesktopLifecycleState = {
   closeBehavior: "tray",
@@ -89,37 +86,22 @@ function parseState(serialized: string): DesktopLifecycleState {
   }
 }
 
-function nodeFileSystem(): LifecycleStateFileSystem {
-  return {
-    mkdir: (directory) => fs.mkdir(directory, { recursive: true, mode: 0o700 }),
-    readFile: (filePath) => fs.readFile(filePath, "utf8"),
-    writeFile: (filePath, contents) => fs.writeFile(filePath, contents, {
-      encoding: "utf8",
-      mode: 0o600,
-    }),
-    rename: (from, to) => fs.rename(from, to),
-  };
-}
-
 export function createDesktopLifecycleStateStore({
   filePath,
-  fileSystem = nodeFileSystem(),
+  fileSystem,
   createTemporaryId = randomUUID,
 }: {
   filePath: string;
   fileSystem?: LifecycleStateFileSystem;
   createTemporaryId?: () => string;
 }) {
+  const file = createAtomicJsonFile({ filePath, fileSystem, createTemporaryId });
   let state = cloneState(DEFAULT_STATE);
   let loaded = false;
   let writes = Promise.resolve();
 
-  async function persist(next: DesktopLifecycleState) {
-    const temporaryPath = `${filePath}.${createTemporaryId()}.tmp`;
-    const serialized = JSON.stringify({ version: 1, ...next }, null, 2);
-    await fileSystem.mkdir(path.dirname(filePath));
-    await fileSystem.writeFile(temporaryPath, serialized);
-    await fileSystem.rename(temporaryPath, filePath);
+  function persist(next: DesktopLifecycleState) {
+    return file.write({ version: 1, ...next });
   }
 
   function update(mutate: (next: DesktopLifecycleState) => void) {
@@ -144,11 +126,10 @@ export function createDesktopLifecycleStateStore({
     async load() {
       if (loaded) return cloneState(state);
       try {
-        state = parseState(await fileSystem.readFile(filePath));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          state = cloneState(DEFAULT_STATE);
-        }
+        const serialized = await file.read();
+        if (serialized !== null) state = parseState(serialized);
+      } catch {
+        state = cloneState(DEFAULT_STATE);
       }
       loaded = true;
       return cloneState(state);

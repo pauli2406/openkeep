@@ -103,6 +103,13 @@ function bridge({
     save: {
       request: vi.fn(async () => ({ status: "cancelled" as const })),
     },
+    watchFolders: {
+      list: vi.fn(async () => ({ profileId: null, folders: [] })),
+      add: vi.fn(async () => ({ status: "cancelled" as const })),
+      setPaused: vi.fn(async () => ({ profileId: null, folders: [] })),
+      remove: vi.fn(async () => ({ profileId: null, folders: [] })),
+      onChanged: vi.fn(() => () => undefined),
+    },
     lifecycle: {
       getSettings: vi.fn(async () => ({ closeBehavior: "tray" as const, trayAvailable: true })),
       setCloseBehavior: vi.fn(),

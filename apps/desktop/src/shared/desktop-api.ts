@@ -15,6 +15,11 @@ export const DESKTOP_CHANNELS = {
   importsConsume: "desktop:imports:consume",
   importsChanged: "desktop:imports:changed",
   saveRequest: "desktop:save:request",
+  watchFoldersList: "desktop:watch-folders:list",
+  watchFoldersAdd: "desktop:watch-folders:add",
+  watchFoldersSetPaused: "desktop:watch-folders:set-paused",
+  watchFoldersRemove: "desktop:watch-folders:remove",
+  watchFoldersChanged: "desktop:watch-folders:changed",
   lifecycleGetSettings: "desktop:lifecycle:get-settings",
   lifecycleSetCloseBehavior: "desktop:lifecycle:set-close-behavior",
   runtimeGetInfo: "desktop:runtime:get-info",
@@ -148,6 +153,66 @@ export type DesktopImportAssignInput = {
   profileId: string;
 };
 
+/**
+ * A workstation-local watch folder, not the archive's server-side watch folder.
+ * `waiting` means the owning archive is not connected, so nothing is scanned.
+ */
+export type DesktopWatchFolderState =
+  | "watching"
+  | "paused"
+  | "waiting"
+  | "missing"
+  | "unreadable";
+
+export type DesktopWatchFolderOutcome =
+  | "imported"
+  | "duplicate"
+  | "retrying"
+  | "failed"
+  | "unsupported";
+
+export type DesktopWatchFolderEvent = {
+  id: string;
+  name: string;
+  outcome: DesktopWatchFolderOutcome;
+  message?: string;
+  at: number;
+};
+
+export type DesktopWatchFolderCounts = {
+  imported: number;
+  duplicate: number;
+  failed: number;
+};
+
+export type DesktopWatchFolder = {
+  id: string;
+  path: string;
+  label: string;
+  state: DesktopWatchFolderState;
+  message?: string;
+  counts: DesktopWatchFolderCounts;
+  history: DesktopWatchFolderEvent[];
+};
+
+export type DesktopWatchFoldersSnapshot = {
+  profileId: string | null;
+  folders: DesktopWatchFolder[];
+};
+
+export type DesktopWatchFolderIdInput = {
+  folderId: string;
+};
+
+export type DesktopWatchFolderPauseInput = DesktopWatchFolderIdInput & {
+  paused: boolean;
+};
+
+export type DesktopWatchFolderAddResult =
+  | { status: "added"; snapshot: DesktopWatchFoldersSnapshot }
+  | { status: "cancelled" }
+  | { status: "failed"; message: string };
+
 export type DesktopSaveRequest =
   | {
       kind: "document-original";
@@ -188,6 +253,17 @@ export type DesktopBridge = {
   };
   save: {
     request: (input: DesktopSaveRequest) => Promise<DesktopSaveResult>;
+  };
+  watchFolders: {
+    list: () => Promise<DesktopWatchFoldersSnapshot>;
+    add: () => Promise<DesktopWatchFolderAddResult>;
+    setPaused: (
+      input: DesktopWatchFolderPauseInput,
+    ) => Promise<DesktopWatchFoldersSnapshot>;
+    remove: (
+      input: DesktopWatchFolderIdInput,
+    ) => Promise<DesktopWatchFoldersSnapshot>;
+    onChanged: (listener: () => void) => () => void;
   };
   lifecycle: {
     getSettings: () => Promise<DesktopLifecycleSettings>;
@@ -243,6 +319,28 @@ export function createDesktopBridge(
     save: Object.freeze({
       request: (input: DesktopSaveRequest) =>
         invoke(DESKTOP_CHANNELS.saveRequest, input) as Promise<DesktopSaveResult>,
+    }),
+    watchFolders: Object.freeze({
+      list: () =>
+        invoke(
+          DESKTOP_CHANNELS.watchFoldersList,
+        ) as Promise<DesktopWatchFoldersSnapshot>,
+      add: () =>
+        invoke(
+          DESKTOP_CHANNELS.watchFoldersAdd,
+        ) as Promise<DesktopWatchFolderAddResult>,
+      setPaused: (input: DesktopWatchFolderPauseInput) =>
+        invoke(
+          DESKTOP_CHANNELS.watchFoldersSetPaused,
+          input,
+        ) as Promise<DesktopWatchFoldersSnapshot>,
+      remove: (input: DesktopWatchFolderIdInput) =>
+        invoke(
+          DESKTOP_CHANNELS.watchFoldersRemove,
+          input,
+        ) as Promise<DesktopWatchFoldersSnapshot>,
+      onChanged: (listener: () => void) =>
+        subscribe(DESKTOP_CHANNELS.watchFoldersChanged, listener),
     }),
     lifecycle: Object.freeze({
       getSettings: () =>

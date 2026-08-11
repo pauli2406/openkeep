@@ -28,6 +28,11 @@ describe("preload bridge contract", () => {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
+    await bridge.watchFolders.list();
+    await bridge.watchFolders.add();
+    await bridge.watchFolders.setPaused({ folderId: "folder-id", paused: true });
+    await bridge.watchFolders.remove({ folderId: "folder-id" });
+    const stopWatching = bridge.watchFolders.onChanged(() => undefined);
     await bridge.lifecycle.getSettings();
     await bridge.lifecycle.setCloseBehavior({ closeBehavior: "quit" });
     await bridge.runtime.getInfo();
@@ -61,28 +66,46 @@ describe("preload bridge contract", () => {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
+    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.watchFoldersList);
+    expect(invoke).toHaveBeenNthCalledWith(15, DESKTOP_CHANNELS.watchFoldersAdd);
     expect(invoke).toHaveBeenNthCalledWith(
-      14,
+      16,
+      DESKTOP_CHANNELS.watchFoldersSetPaused,
+      { folderId: "folder-id", paused: true },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      17,
+      DESKTOP_CHANNELS.watchFoldersRemove,
+      { folderId: "folder-id" },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      18,
       DESKTOP_CHANNELS.lifecycleGetSettings,
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      15,
+      19,
       DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
       { closeBehavior: "quit" },
     );
-    expect(invoke).toHaveBeenNthCalledWith(16, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(20, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(subscribe).toHaveBeenCalledWith(
       DESKTOP_CHANNELS.importsChanged,
       expect.any(Function),
     );
+    expect(subscribe).toHaveBeenCalledWith(
+      DESKTOP_CHANNELS.watchFoldersChanged,
+      expect.any(Function),
+    );
     stop();
-    expect(unsubscribe).toHaveBeenCalledOnce();
+    stopWatching();
+    expect(unsubscribe).toHaveBeenCalledTimes(2);
     expect(Object.isFrozen(bridge)).toBe(true);
     expect(Object.keys(bridge)).toEqual([
       "session",
       "profiles",
       "imports",
       "save",
+      "watchFolders",
       "lifecycle",
       "runtime",
     ]);

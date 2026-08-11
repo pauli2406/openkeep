@@ -76,6 +76,14 @@ function createBridge(
       request: async () => ({ status: "cancelled" }),
       ...overrides.save,
     },
+    watchFolders: {
+      list: async () => ({ profileId: connected.profile.id, folders: [] }),
+      add: async () => ({ status: "cancelled" }),
+      setPaused: async () => ({ profileId: connected.profile.id, folders: [] }),
+      remove: async () => ({ profileId: connected.profile.id, folders: [] }),
+      onChanged: () => () => undefined,
+      ...overrides.watchFolders,
+    },
     lifecycle: {
       getSettings: async () => ({ closeBehavior: "tray", trayAvailable: true }),
       setCloseBehavior: async ({ closeBehavior }) => ({
