@@ -107,6 +107,8 @@ function DesktopArchiveHost({
       <WebApp
         AuthProvider={DesktopAuthProvider}
         ShellAccessory={DesktopArchiveAccessory}
+        platform="darwin"
+        fileSaver={(request) => window.openkeepDesktop.save.request(request)}
       />
     </DesktopSessionContext.Provider>
   );
