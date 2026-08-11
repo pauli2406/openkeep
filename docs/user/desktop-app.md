@@ -5,9 +5,9 @@ description: Connect the OpenKeep desktop app securely to an existing archive.
 
 # Desktop App
 
-The desktop app uses the same archive and features as the web app. It connects
-to one existing OpenKeep server with an API token; it does not create or set up
-a new archive.
+The desktop app uses the same archives and features as the web app. It can save
+multiple named connections to existing OpenKeep servers and opens one archive
+at a time. It does not create or set up a new archive.
 
 ## Before You Connect
 
@@ -21,14 +21,15 @@ a client ID and a client secret. The desktop app requires both values and sends
 them with archive requests; browser-based Cloudflare login is not used for this
 connection.
 
-## Connect an Archive
+## Add an Archive
 
 On the connection screen:
 
-1. Enter the archive address, such as `https://archive.example.com`.
-2. Paste the OpenKeep API token.
-3. If required, expand `Cloudflare Access` and enter both service-token values.
-4. Select `Connect archive`.
+1. Give the connection a name that will identify it in the desktop app.
+2. Enter the archive address, such as `https://archive.example.com`.
+3. Paste the OpenKeep API token.
+4. If required, expand `Cloudflare Access` and enter both service-token values.
+5. Select `Connect archive`.
 
 The app normalizes the address, checks `/api/health`, and then uses
 `/api/auth/me` to verify the token. It saves the profile only after both checks
@@ -40,25 +41,85 @@ an extra prompt for loopback development addresses such as `localhost` and
 be read in transit and requires a second, explicit confirmation before it
 connects.
 
-## Stored Connection
+After the first connection, use the active archive control in the authenticated
+shell and select `Add another archive` to save another profile. Profile names
+and server addresses do not have to be unique. The app keeps each connection
+separate with an internal ID, so two profiles called `Home` or two profiles for
+the same server remain independent saved connections.
 
-The desktop app restores its single saved archive automatically when it starts.
-It verifies the server and token again before opening the shared archive UI.
+## Open and Switch Archives
+
+The active archive control is always available while the shared archive UI is
+open. It shows the current profile name. Open it and select another profile to
+switch archives without signing out or restarting the app.
+
+Switching replaces the authenticated archive window and cancels work that still
+belongs to the previous profile. The destination archive opens with its own
+browser state rather than inheriting searches, conversations, uploads, previews,
+or cached responses from the archive you left.
+
+At startup:
+
+- if exactly one profile is saved, the app reconnects it automatically
+- if several profiles are saved, the app restores the last active profile when
+  it is still valid
+- if no valid profile can be restored, the app opens the archive chooser so you
+  can select, reconnect, edit, or add a profile
+
+## Manage a Saved Profile
+
+Open the active archive control to manage profiles:
+
+- **Rename:** select `Edit`, change the profile name, and save. Renaming keeps
+  that profile's credentials and local state.
+- **Edit the connection:** select `Edit` to change the server address, API token,
+  or Cloudflare Access values. Changing the server address clears that profile's
+  old local browser state before the new address is used.
+- **Reconnect:** select the unavailable profile and use `Retry connection`. The
+  app keeps its encrypted credentials after a temporary network or server error,
+  so they do not need to be pasted again.
+- **Remove:** select `Remove`, review the named profile and address, then confirm
+  `Remove saved archive`. This deletes only the saved credentials and local
+  profile state. The remote OpenKeep server, its account, and every document in
+  the remote archive remain untouched.
+
+If an archive is reachable but rejects its saved OpenKeep or Cloudflare Access
+credentials, the app deletes only that failing profile's saved credentials and
+returns to the chooser. Other profiles and their credentials remain available.
+Create a replacement API token in the affected archive's web app, then add or
+edit that profile.
+
+## What Is Separate for Each Archive
+
+Each saved profile has a stable internal ID. OpenKeep uses it as the isolation
+boundary even when two profiles have the same name or server address.
+
+| Profile-specific | Global |
+| --- | --- |
+| OpenKeep and Cloudflare Access credentials | Desktop runtime settings that are not owned by an archive |
+| Chromium local storage and network cache | App-wide runtime behavior, where the desktop app exposes such a setting |
+| Query state, conversations, and recent searches | The installed desktop app and its version |
+| In-progress upload state and active response streams |  |
+| Temporary preview/object URLs |  |
+| Future watch-folder, notification, and other background work |  |
+
+Server-side account preferences naturally belong to the server and user behind
+the active profile. App-level runtime preferences remain global where applicable.
+Removing one profile never clears another profile's local state.
+
+## Connection Problems
 
 If the server is temporarily unreachable, choose `Retry connection` or
 `Edit connection`. Retry keeps the stored credentials encrypted; you do not
-have to paste them again. If the server responds and rejects the saved token or
-Cloudflare credentials, the app removes them and returns to the connection
-screen. Create a replacement API token in the web app if necessary.
-
-Selecting `Sign out` removes the saved profile and credentials and clears the
-authenticated desktop UI.
+have to paste them again. With multiple profiles, you can also return to the
+chooser and open another archive while the unavailable one remains saved.
 
 ## Credential Security
 
-The app encrypts the API token and optional Cloudflare secret with the operating
-system's credential facility. Raw credentials stay in the trusted desktop
-process and are not exposed to the shared web interface.
+The app encrypts every profile's API token and optional Cloudflare secret with
+the operating system's credential facility. Raw credentials stay in the trusted
+desktop process and are not exposed to the shared web interface. Each encrypted
+record is associated with the profile's stable internal ID.
 
 On Linux, an unlocked Secret Service/libsecret or KWallet keyring must be
 available. OpenKeep refuses to save credentials when Electron can provide only
@@ -67,7 +128,8 @@ restart the app and connect again.
 
 ## No Offline Archive
 
-The desktop app has no offline archive or document cache. It needs a live
+The desktop app has no offline archive or document cache. Its profile-specific
+Chromium cache is an isolation mechanism, not an offline copy. The app needs a live
 connection for browsing, search, previews, uploads, downloads, and changes. If
 you need read-only access to documents previously opened on a device, that is a
 separate capability of the [mobile app](./mobile-app.md), not the desktop app.

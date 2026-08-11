@@ -23,14 +23,37 @@ The application has three trust zones:
    window lifecycle, navigation policy, and IPC authorization.
 
 The renderer never loads JavaScript or HTML from an archive server. Requests under
-`openkeep://app/api/` enter the main-process protocol handler. The handler forwards
-all `/api` traffic to the active archive and attaches credentials in main, so the
-renderer sees ordinary same-origin API responses and streams without seeing the
-secrets.
+`openkeep://app/api/` enter the protocol handler for the active Electron session.
+The handler forwards all `/api` traffic to that session's selected archive and
+attaches credentials in main, so the renderer sees ordinary same-origin API
+responses and streams without seeing the secrets.
 
-## Connection and Session Lifecycle
+## Archive Profiles
 
-The desktop app supports one active archive profile. On a new connection, main:
+The desktop app stores multiple archive profiles but activates only one at a time.
+Every profile receives a stable UUID when it is created. The UUID—not the editable
+label or normalized server URL—is its identity, so duplicate labels and duplicate
+server URLs are allowed without profiles colliding.
+
+Each profile contains its label, server URL, HTTP confirmation choice, and a
+separate encrypted credential record. The last active UUID is app-level registry
+state. At startup, main applies these selection rules:
+
+1. With no profiles, open the connection shell.
+2. With one profile, verify and activate it automatically.
+3. With multiple profiles, verify and activate the last active profile when it is
+   still present and valid.
+4. If no candidate can be restored, open the chooser without discarding other
+   profiles.
+
+The active profile remains visible in the authenticated web shell through the
+desktop archive switcher. It provides add, activate, edit, rename, reconnect, and
+confirmed removal operations without broadening the web application's Electron
+capabilities.
+
+## Connection and Verification Lifecycle
+
+On a new or edited connection, main:
 
 1. normalizes and validates the HTTP or HTTPS server URL
 2. requires explicit confirmation for plaintext HTTP except on loopback hosts
@@ -45,28 +68,60 @@ secret must either both be present or both be absent. Health receives the
 Cloudflare pair when configured but not the OpenKeep Bearer token. The current-user
 request receives both.
 
-At startup, main decrypts and verifies the last active profile before mounting the
-shared authenticated app. A successful check restores it automatically. A transport
-failure retains the encrypted credentials and returns an unavailable state with
-retry and edit actions. Once a reachable archive rejects the credentials with
-`401` or `403`, main deletes the profile and returns to the connection flow. Sign-out
-also deletes the stored profile before clearing the in-memory session and renderer
-authentication state.
+At startup and reconnect, main decrypts and verifies only the selected profile
+before mounting the shared authenticated app. A transport failure retains that
+profile and its encrypted credentials and exposes retry, edit, and profile-selection
+actions. Once a reachable archive rejects credentials with `401` or `403`, main
+deletes only the failing profile's credentials and profile record. The chooser and
+all other profiles remain usable.
 
 The session is intentionally online-only. Desktop has no local document archive or
 offline fallback.
 
+## Profile Session Isolation
+
+The unconnected connection shell and archive chooser use the dedicated ephemeral
+`openkeep-shell` Electron partition. An authenticated profile uses its own persistent
+partition named `persist:openkeep-profile-UUID`. The stable UUID makes the partition
+independent of editable labels and URLs.
+
+Each profile partition receives its own custom-protocol registration and the same
+navigation, permission, CSP, and request-header security policy. A profile switch
+does not navigate the existing window in place. Main increments the active-session
+generation, aborts the outgoing generation's requests and streams, destroys its
+`BrowserWindow`, and creates a new window in the destination profile's partition.
+Callbacks and responses capture their generation and are ignored if a newer
+activation has begun. This prevents a late response or authorization failure from
+one archive from mutating the next archive's session.
+
+Destroying and recreating the renderer drops in-memory query caches, conversations,
+recent-search state, upload state, active streams, and temporary object URLs.
+Chromium local storage and network cache stay inside the profile-specific partition.
+Future background imports, watch folders, and notifications must carry the stable
+profile UUID and be cancelled or routed by that identity rather than by label or
+URL. App-level Electron runtime settings remain global where applicable; server-side
+user settings remain data of the selected archive.
+
+Removing a profile clears its partition storage and cache, closes its network
+connections, and deletes its encrypted credential record after user confirmation.
+Editing a profile's server URL performs the same partition cleanup before that
+stable UUID can address a different origin. Renaming a profile does not clear its
+partition. These operations never change or delete data in the remote archive and
+never clear another profile's partition.
+
 ## Credential Persistence
 
 `ProfileStorage` keeps a versioned `desktop-state.json` under Electron's per-user
-application-data directory. Profile metadata and the encrypted credential blob are
-separate fields. The JSON contains only the operating-system-encrypted, base64-encoded
-blob; API tokens and Cloudflare secrets are never written as plaintext.
+application-data directory. The registry maps stable profile UUIDs to metadata and
+separate encrypted credential blobs and records the last active UUID. The JSON
+contains only operating-system-encrypted, base64-encoded blobs; API tokens and
+Cloudflare secrets are never written as plaintext.
 
 Encryption and decryption use Electron `safeStorage` in main. Credential values are
 not returned by the preload bridge, logged, added to crash details or telemetry, or
 included in session-state objects sent to the renderer. The bridge exposes only
-narrow connection, retry, restore, sign-out, and runtime-information operations.
+narrow list, add, activate, edit, rename, reconnect, remove, restore, and
+runtime-information operations.
 
 On Linux, secure storage must use Secret Service/libsecret or KWallet. The
 `basic_text` backend and unknown backends are rejected, as is an unavailable or
@@ -75,7 +130,7 @@ instead of falling back to plaintext persistence.
 
 ## Authenticated API Proxy
 
-For an active session, the custom-protocol handler maps every renderer request below
+For an active profile session, the custom-protocol handler maps every renderer request below
 `openkeep://app/api` to the corresponding path and query on the configured archive.
 Before forwarding, it removes renderer-supplied `Authorization`, Cloudflare Access,
 cookie, origin, referer, host, and content-length headers. Main then adds the active
@@ -138,9 +193,10 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 ## Current Limitations
 
-Desktop currently supports one saved archive profile and requires a live server for
-all archive content. It has no offline document cache, native integration, signing,
-or release automation.
+Desktop connects to one active profile at a time and requires a live server for all
+archive content. Persistent Chromium partitions isolate profiles but are not offline
+archives. Desktop has no offline document cache, native integration, signing, or
+release automation.
 
 ## Related Documents
 
