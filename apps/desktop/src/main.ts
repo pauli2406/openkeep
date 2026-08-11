@@ -330,7 +330,7 @@ async function completeSmokeTest(window: BrowserWindow) {
 
     const passed =
       result.heading === "Connect your archive" &&
-      result.bridgeKeys.join(",") === "session,profiles,runtime" &&
+      result.bridgeKeys.join(",") === "session,profiles,imports,runtime" &&
       !result.hasProcess &&
       !result.hasRequire &&
       result.csp?.includes("default-src 'none'");
