@@ -1,5 +1,8 @@
 import { useEffect, useState, type ComponentType } from "react";
-import { App as WebApp } from "@openkeep/web/app";
+import {
+  App as WebApp,
+  type HostImportAdapter,
+} from "@openkeep/web/app";
 import { setApiFailureHandler } from "@openkeep/web/api";
 import type {
   DesktopProfilesSnapshot,
@@ -12,11 +15,14 @@ import {
   DesktopSessionContext,
 } from "./desktop-auth-provider";
 import { DesktopArchiveAccessory } from "./desktop-archive-accessory";
+import { createDesktopImportAdapter } from "./desktop-import-adapter";
+import { DesktopImportHost } from "./desktop-import-host";
 import { ProfileChooser } from "./profile-chooser";
 
 type SharedAppProps = {
   AuthProvider?: ComponentType<{ children: React.ReactNode }>;
   ShellAccessory?: ComponentType;
+  hostImports?: HostImportAdapter;
   platform?: string;
 };
 
@@ -32,6 +38,9 @@ export function DesktopApp({
     null,
   );
   const [runtime, setRuntime] = useState<DesktopRuntimeInfo | null>(null);
+  const [importPipeline] = useState(() =>
+    createDesktopImportAdapter(() => window.openkeepDesktop.imports.pick()),
+  );
 
   useEffect(() => {
     let active = true;
@@ -119,12 +128,18 @@ export function DesktopApp({
     <DesktopSessionContext.Provider
       value={{ state: sessionState, setState: setSessionState }}
     >
-      <SharedApp
-        key={sessionState.profile.id}
-        AuthProvider={DesktopAuthProvider}
-        ShellAccessory={DesktopArchiveAccessory}
-        platform={runtime.platform}
-      />
+      <DesktopImportHost
+        activeProfile={sessionState.profile}
+        pipeline={importPipeline}
+      >
+        <SharedApp
+          key={sessionState.profile.id}
+          AuthProvider={DesktopAuthProvider}
+          ShellAccessory={DesktopArchiveAccessory}
+          hostImports={importPipeline.adapter}
+          platform={runtime.platform}
+        />
+      </DesktopImportHost>
     </DesktopSessionContext.Provider>
   );
 }

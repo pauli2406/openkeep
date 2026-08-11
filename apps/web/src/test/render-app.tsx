@@ -10,6 +10,7 @@ import {
 } from "@/hooks/use-auth";
 import { syncTokensFromStorage } from "@/lib/api";
 import type { QueryClient } from "@tanstack/react-query";
+import { HostImportsProvider, type HostImportAdapter } from "@/lib/host-imports";
 
 const ACCESS_TOKEN_STORAGE_KEY = "openkeep.access-token";
 const REFRESH_TOKEN_STORAGE_KEY = "openkeep.refresh-token";
@@ -22,6 +23,7 @@ interface RenderAppOptions {
 
 interface RenderAuthenticatedAppOptions extends RenderAppOptions {
   authState?: Partial<AuthState>;
+  hostImports?: HostImportAdapter;
 }
 
 function applyStoredTokens(accessToken: string | null, refreshToken: string | null) {
@@ -90,6 +92,7 @@ export function renderAuthenticatedApp(
     accessToken = "access-token",
     refreshToken = "refresh-token",
     authState,
+    hostImports,
   } = options;
 
   applyStoredTokens(accessToken, refreshToken);
@@ -133,7 +136,9 @@ export function renderAuthenticatedApp(
     ...render(
       <QueryClientProvider client={appInstance.queryClient}>
         <AuthContext.Provider value={authenticatedState}>
-          <AppRouter {...appInstance} />
+          <HostImportsProvider adapter={hostImports}>
+            <AppRouter {...appInstance} />
+          </HostImportsProvider>
         </AuthContext.Provider>
       </QueryClientProvider>,
     ),

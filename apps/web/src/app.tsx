@@ -9,6 +9,17 @@ import {
   type ShellAccessory,
 } from "./lib/host-shell";
 import { I18nProvider } from "./lib/i18n";
+import {
+  HostImportsProvider,
+  type HostImportAdapter,
+} from "./lib/host-imports";
+
+export type {
+  HostImportAdapter,
+  HostImportDelivery,
+  HostImportFile,
+  HostImportRejection,
+} from "./lib/host-imports";
 
 export function createAppQueryClient() {
   return new QueryClient({
@@ -65,12 +76,14 @@ export function AppRouter({
 export interface AppProps {
   AuthProvider?: ComponentType<{ children: ReactNode }>;
   ShellAccessory?: ShellAccessory;
+  hostImports?: HostImportAdapter;
   platform?: HostPlatform;
 }
 
 export function App({
   AuthProvider = BrowserAuthProvider,
   ShellAccessory,
+  hostImports,
   platform,
 }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
@@ -78,9 +91,11 @@ export function App({
   return (
     <QueryClientProvider client={appInstance.queryClient}>
       <AuthProvider>
-        <ShellAccessoryProvider accessory={ShellAccessory} platform={platform}>
-          <AppRouter {...appInstance} />
-        </ShellAccessoryProvider>
+        <HostImportsProvider adapter={hostImports}>
+          <ShellAccessoryProvider accessory={ShellAccessory} platform={platform}>
+            <AppRouter {...appInstance} />
+          </ShellAccessoryProvider>
+        </HostImportsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

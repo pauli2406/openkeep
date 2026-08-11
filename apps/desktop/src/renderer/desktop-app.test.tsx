@@ -87,6 +87,13 @@ describe("desktop authenticated renderer", () => {
         })),
         remove: vi.fn(async () => chooseProfile),
       },
+      imports: {
+        pick: vi.fn(async () => ({ files: [], rejected: [] })),
+        pending: vi.fn(async () => ({ batches: [] })),
+        assign: vi.fn(),
+        consume: vi.fn(async () => ({ files: [], rejected: [] })),
+        onChanged: vi.fn(() => () => undefined),
+      },
       runtime: {
         getInfo: vi.fn(async () => ({
           platform: "darwin" as const,

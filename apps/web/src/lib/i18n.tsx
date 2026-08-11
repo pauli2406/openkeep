@@ -230,6 +230,8 @@ type TranslationKey =
   | "import.duplicate"
   | "import.failed"
   | "import.embeddingFailed"
+  | "import.unsupportedFormat"
+  | "import.oversized"
   | "import.review"
   | "import.retry"
   | "import.clearFinished"
@@ -765,6 +767,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.duplicate": "Duplicate",
     "import.failed": "Failed",
     "import.embeddingFailed": "Indexing for search failed",
+    "import.unsupportedFormat": "Unsupported file type. Use PDF, JPEG, PNG, TIFF, or HEIC.",
+    "import.oversized": "The file exceeds the desktop import limit of 64 MiB.",
     "import.review": "Review",
     "import.retry": "Retry",
     "import.clearFinished": "Clear finished",
@@ -1299,6 +1303,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.duplicate": "Duplikat",
     "import.failed": "Fehlgeschlagen",
     "import.embeddingFailed": "Indexierung für die Suche fehlgeschlagen",
+    "import.unsupportedFormat": "Nicht unterstützter Dateityp. Verwende PDF, JPEG, PNG, TIFF oder HEIC.",
+    "import.oversized": "Die Datei überschreitet das Desktop-Importlimit von 64 MiB.",
     "import.review": "Prüfung",
     "import.retry": "Erneut versuchen",
     "import.clearFinished": "Fertige entfernen",
