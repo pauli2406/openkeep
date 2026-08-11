@@ -118,7 +118,7 @@ components. Administration queries, mutation results, dialogs, pasted snapshots,
 taxonomy selections, and authorization errors therefore share the same profile
 isolation guarantee as document and search state. Main's active-profile signal
 aborts an outgoing administration request before a late response can be applied.
-Background imports, watch folders, and future notifications must carry the stable
+Background imports, watch folders, and notification routing all carry the stable
 profile UUID and be cancelled or routed by that identity rather than by label or
 URL. App-level Electron runtime settings remain global where applicable; server-side
 user settings remain data of the selected archive.
@@ -414,6 +414,13 @@ files, cold and warm launch ordering, exactly-once consumption, one- and multi-p
 routing, native picker delivery, drag/drop rejection, association metadata, shared
 queue progress, duplicate handling, retryable failures, and terminal failures.
 
+Notification tests cover the document-state classification, announce-once across
+polling and restart, resuming a document that was still processing at shutdown,
+per-outcome batching, profile scoping, deleted and never-settling documents, an
+unreachable archive, repeated reports, each preference independently, an unsupported
+system, the absence of sensitive content, and warm, cold, cross-profile, and untrusted
+clicks.
+
 Watch-folder tests cover the settle period against a growing copy and a clock-skewed
 share, temporary/hidden/unsupported/directory entries, import-once and its survival
 across a restart, renames and genuine changes, transient retry versus permanent
@@ -487,6 +494,57 @@ directory picker in main, so the only paths that enter are ones the user chose t
 Every mutation additionally requires that the calling window's profile is the
 connected archive. The tray shows watch state as counts only, never a path.
 
+## Import Outcome Notifications
+
+Notifications are driven by an outcome tracker in main rather than by the upload
+route. A document keeps processing after its upload returns, and the window can be
+hidden, pointed at another archive, or gone entirely by the time the archive settles
+it — each of which would drop a renderer-owned poll. Four modules:
+
+- `import-outcomes.ts` — the durable tracker. Both the pending set and the set of
+  already-announced document IDs are persisted in `desktop-import-outcomes.json`, and
+  the write happens before the announcement, so a crash between the two cannot produce
+  a duplicate. Poll passes are serialized with at most one queued behind the running
+  one, so a slow archive cannot build a backlog of timer ticks. A document that never
+  settles is dropped after 24 hours instead of being polled forever.
+- `document-status.ts` — classifies one `GET /api/documents/:id` answer using the
+  archive's own vocabulary: `status` for pending/processing/ready/failed,
+  `embeddingStatus` because a document can be ready while its embedding is still
+  queued or indexing, and `reviewStatus` to decide whether a ready document needs the
+  user. A 404 or 410 means the document was deleted and is forgotten without an
+  announcement; any other failure leaves it pending, so an unreachable archive costs
+  nothing.
+- `import-notifications.ts` — builds at most one notification per batch per outcome. A
+  notification carries a file name and a count only: never OCR or document text, an
+  archive address, a bearer token, or a Cloudflare secret. One document deep-links to
+  that document; a batch opens the review queue or the document list, because
+  deep-linking one arbitrary member of a batch is a guess.
+- `notification-routing.ts` — applies a click. The target archive already active means
+  reveal and navigate. No archive active yet — a cold-start click, or the chooser
+  being open — remembers the intent, because navigating an unauthenticated shell would
+  land on the connection screen. Another archive active asks first: switching destroys
+  the current window along with anything unfinished in it, so it must never happen
+  silently. A remembered intent is consumed by the window being created for that
+  profile, so the notification's route is that window's first URL rather than a second
+  navigation. Every target is re-checked against the trusted-route allowlist before it
+  is used.
+
+All three import sources feed the same tracker. Watch-folder uploads happen in main,
+so the uploader returns the created document's ID. Picker and Open-with uploads happen
+in the renderer, so `HostImportAdapter` gained an optional `reportCreated`, which the
+shared upload route calls after each successful create; a browser without a host is
+unaffected. Reporting the same document twice is harmless — already-pending and
+already-announced IDs are both ignored — which is what makes a retrying renderer safe.
+
+Preferences for the three kinds live beside the close behavior in the global lifecycle
+state file, and an unreadable or unknown value falls back to enabled, because silence
+is the surprising outcome. There is no permission prompt to drive: the operating system
+decides whether a notification appears, and focus, quiet hours, and do-not-disturb are
+its business. A Linux desktop without a notification service reports
+`Notification.isSupported()` false, and the presenter skips rather than retrying or
+prompting. Removing a profile or repointing it at another server drops its pending
+outcomes with the rest of its state.
+
 ## Contributor Commands
 
 From the repository root:
@@ -515,7 +573,8 @@ plugin are pinned to one version to avoid incompatible minor updates.
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
 archives. Desktop has no offline document cache, launch-at-login setting,
-notifications, signing, or release automation. Watch folders run only while the
+signing, or release automation. Notifications report jobs this installation started;
+they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.
 

@@ -241,6 +241,46 @@ The watch folder shown in General settings belongs to the remote archive server.
 is not a folder on the desktop computer, and it is separate from the desktop watch
 folders described above.
 
+## Notifications
+
+OpenKeep can tell you when background work finishes, so you do not have to keep the
+window open and watch it. There are three kinds, and each can be turned on or off
+separately in the desktop-behavior panel beside the archive switcher:
+
+- **Finished imports** — a document has been processed and filed.
+- **Documents needing review** — a document was filed but wants your confirmation.
+- **Failed imports** — a document could not be processed.
+
+All three are on by default and cover every import route equally: drag and drop, the
+file picker, `Open with OpenKeep`, and watch folders.
+
+Clicking a notification brings OpenKeep forward and opens the document it is about. A
+notification for several documents at once opens the review queue or the document
+list, since there is no single document to open. If the notification belongs to an
+archive you are not currently in, OpenKeep asks before switching, because switching
+archives closes the current archive window along with anything unfinished in it. If
+you click a notification while OpenKeep is still starting, it waits until that archive
+has connected and then opens the document.
+
+Each result is announced once. Closing the window, switching archives, quitting, or
+restarting mid-processing does not produce a repeat announcement, and a document that
+was still processing when you quit is picked up again the next time that archive is
+connected. A document deleted before it finished is never announced.
+
+Notifications contain a file name and a count. They never contain document text, an
+archive address, or any credential.
+
+Your operating system decides whether a notification is actually shown. OpenKeep does
+not ask for permission repeatedly and has no separate do-not-disturb setting:
+
+- **macOS** — allow or silence OpenKeep under `System Settings → Notifications`. Focus
+  modes and do-not-disturb apply as usual.
+- **Windows** — `Settings → System → Notifications`, then find OpenKeep in the list.
+  Focus assist applies as usual.
+- **Linux** — notifications need a notification service from your desktop
+  environment. Where none is available, the panel says so and import results stay
+  visible in the app instead.
+
 ## Watch Folders on This Computer
 
 A watch folder is a folder on your own computer that OpenKeep imports new documents
@@ -350,7 +390,7 @@ boundary even when two profiles have the same name or server address.
 | In-progress upload state, assigned Open-with batches, and active response streams |  |
 | Temporary preview/object URLs |  |
 | Watch folders and their import checkpoints |  |
-| Future notification and other background work |  |
+| Pending imports still waiting for their outcome | Notification preferences |
 
 Server-side account preferences naturally belong to the server and user behind
 the active profile. App-level runtime preferences remain global where applicable.
