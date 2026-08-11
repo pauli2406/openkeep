@@ -43,9 +43,10 @@ import {
 } from "./main/profile-partition";
 import {
   createDesktopImportService,
-  extractOpenWithPaths,
 } from "./main/import-service";
 import { createDesktopImportCoordinator } from "./main/import-coordinator";
+import { installDesktopLaunchLifecycle } from "./main/launch-lifecycle";
+import { registerPackagedFileAssociations } from "./main/file-associations";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -67,8 +68,6 @@ let mainWindow: BrowserWindow | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
 const profileRoutes = new Map<string, string>();
-const deferredOpenWithPaths: string[][] = [];
-let receiveOpenWithPaths: ((paths: string[]) => Promise<void>) | null = null;
 
 function focusMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -357,43 +356,30 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
-const ownsSingleInstance = app.requestSingleInstanceLock();
+const launchLifecycle = installDesktopLaunchLifecycle({
+  app,
+  defaultApp: Boolean(process.defaultApp),
+  focusWindow: focusMainWindow,
+});
 
-if (!ownsSingleInstance) {
-  app.quit();
-} else {
-  app.on("second-instance", (_event, argv, workingDirectory) => {
-    const paths = extractOpenWithPaths(
-      argv,
-      workingDirectory,
-      Boolean(process.defaultApp),
-    );
-    if (receiveOpenWithPaths) {
-      void receiveOpenWithPaths(paths);
-    } else if (paths.length > 0) {
-      deferredOpenWithPaths.push(paths);
-    }
-    focusMainWindow();
-  });
-
-  app.on("open-file", (event, filePath) => {
-    event.preventDefault();
-    if (receiveOpenWithPaths) {
-      void receiveOpenWithPaths([filePath]);
-    } else {
-      deferredOpenWithPaths.push([filePath]);
-    }
-  });
-
-  const coldStartPaths = extractOpenWithPaths(
-    process.argv,
-    process.cwd(),
-    Boolean(process.defaultApp),
-  );
-  if (coldStartPaths.length > 0) deferredOpenWithPaths.push(coldStartPaths);
+if (launchLifecycle) {
+  launchLifecycle.captureInitial(process.argv, process.cwd());
 
 void app.whenReady().then(async () => {
   app.setAppUserModelId("de.openkeep.desktop");
+  await registerPackagedFileAssociations({
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    execPath: process.execPath,
+    applicationsDirectory: path.join(
+      app.getPath("home"),
+      ".local",
+      "share",
+      "applications",
+    ),
+  }).catch(() => {
+    console.error("OpenKeep could not register desktop file associations.");
+  });
 
   const profileStorage = new ProfileStorage({
     filePath: path.join(app.getPath("userData"), "desktop-state.json"),
@@ -417,10 +403,6 @@ void app.whenReady().then(async () => {
       focusMainWindow();
     },
   });
-  receiveOpenWithPaths = async (paths) => {
-    if (paths.length === 0) return;
-    await importCoordinator.receivePaths(paths);
-  };
   const rendererRoot = path.join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME);
   const rendererDevServerUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL || undefined;
   const configuredPartitions = new Set<string>();
@@ -566,9 +548,9 @@ void app.whenReady().then(async () => {
 
   registerIpcHandlers(archiveSession, importCoordinator, transitionWindow);
   await createMainWindow(null);
-  for (const paths of deferredOpenWithPaths.splice(0)) {
-    await receiveOpenWithPaths(paths);
-  }
+  await launchLifecycle.connect(async (paths) => {
+    await importCoordinator.receivePaths(paths);
+  });
 
   app.on("activate", () => {
     if (isSmokeTest) {

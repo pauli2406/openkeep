@@ -2,6 +2,7 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { MACOS_DOCUMENT_TYPES } from "./src/main/file-associations";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -10,6 +11,9 @@ const config: ForgeConfig = {
     // Skipping the hoisted workspace node_modules tree keeps packaging bounded
     // to those trusted build artifacts.
     prune: false,
+    extendInfo: {
+      CFBundleDocumentTypes: MACOS_DOCUMENT_TYPES,
+    },
   },
   rebuildConfig: {},
   makers: [],
