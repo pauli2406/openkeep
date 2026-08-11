@@ -508,6 +508,22 @@ describe("settings smoke", () => {
     });
   });
 
+  it("delegates the settings archive export to a native host when available", async () => {
+    server.use(...settingsHandlers());
+    const fileSaver = vi.fn(async () => ({ status: "saved" as const }));
+    const { user } = renderAuthenticatedApp({
+      route: "/settings",
+      fileSaver,
+    });
+
+    expect(await screen.findByText("Archive Portability")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /export snapshot/i }));
+
+    await waitFor(() => {
+      expect(fileSaver).toHaveBeenCalledWith({ kind: "archive-export" });
+    });
+  });
+
   it("imports an archive snapshot and shows the result", async () => {
     const importCalls: unknown[] = [];
 

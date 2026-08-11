@@ -5,6 +5,7 @@ import { routeTree } from "./routeTree.gen";
 import { AuthProvider as BrowserAuthProvider, useAuth } from "./hooks/use-auth";
 import {
   ShellAccessoryProvider,
+  type HostFileSaver,
   type HostPlatform,
   type ShellAccessory,
 } from "./lib/host-shell";
@@ -20,6 +21,8 @@ export type {
   HostImportFile,
   HostImportRejection,
 } from "./lib/host-imports";
+
+export type { HostSaveRequest, HostSaveResult } from "./lib/host-shell";
 
 export function createAppQueryClient() {
   return new QueryClient({
@@ -78,6 +81,7 @@ export interface AppProps {
   ShellAccessory?: ShellAccessory;
   hostImports?: HostImportAdapter;
   platform?: HostPlatform;
+  fileSaver?: HostFileSaver;
 }
 
 export function App({
@@ -85,6 +89,7 @@ export function App({
   ShellAccessory,
   hostImports,
   platform,
+  fileSaver,
 }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
@@ -92,7 +97,11 @@ export function App({
     <QueryClientProvider client={appInstance.queryClient}>
       <AuthProvider>
         <HostImportsProvider adapter={hostImports}>
-          <ShellAccessoryProvider accessory={ShellAccessory} platform={platform}>
+          <ShellAccessoryProvider
+            accessory={ShellAccessory}
+            platform={platform}
+            fileSaver={fileSaver}
+          >
             <AppRouter {...appInstance} />
           </ShellAccessoryProvider>
         </HostImportsProvider>

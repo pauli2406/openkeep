@@ -2,6 +2,7 @@ import { useContext, useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { HostSaveRequest, HostSaveResult } from "@openkeep/web/app";
 import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
 import { DesktopApp } from "./desktop-app";
 import { DesktopSessionContext } from "./desktop-auth-provider";
@@ -47,7 +48,11 @@ const chooseProfile: DesktopSessionState = {
   reason: "choose-profile",
 };
 
-function StatefulSharedApp() {
+function StatefulSharedApp({
+  fileSaver,
+}: {
+  fileSaver?: (request: HostSaveRequest) => Promise<HostSaveResult>;
+}) {
   const session = useContext(DesktopSessionContext);
   const [draftCount, setDraftCount] = useState(0);
   if (!session) throw new Error("Missing desktop session");
@@ -61,6 +66,9 @@ function StatefulSharedApp() {
       </button>
       <button onClick={() => session.setState(profileTwo)}>
         Switch profile
+      </button>
+      <button onClick={() => void fileSaver?.({ kind: "archive-export" })}>
+        Save export
       </button>
     </div>
   );
@@ -112,6 +120,8 @@ describe("desktop authenticated renderer", () => {
     render(<DesktopApp SharedApp={StatefulSharedApp} />);
 
     expect(await screen.findByText("Profile Personal")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save export" }));
+    expect(bridge.save.request).toHaveBeenCalledWith({ kind: "archive-export" });
     await user.click(screen.getByRole("button", { name: "Edit draft" }));
     expect(screen.getByText("Draft 1")).toBeInTheDocument();
 

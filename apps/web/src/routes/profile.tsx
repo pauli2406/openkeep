@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Download, LogOut } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
 import { fetchDashboardInsights } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { useHostFileSaver } from "@/lib/host-shell";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -19,6 +21,8 @@ function ProfilePage() {
   const { language } = useI18n();
   const auth = useAuth();
   const navigate = useNavigate();
+  const hostFileSaver = useHostFileSaver();
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const copy =
     language === "de"
@@ -34,6 +38,7 @@ function ProfilePage() {
           exportArchive: "Archiv exportieren",
           exportNote:
             "Der Export schreibt Metadaten und das Audit-Log als Snapshot — genug, um das Archiv anderswo wieder aufzubauen.",
+          exportFailed: "Der Archivexport konnte nicht gespeichert werden.",
         }
       : {
           owner: "Owner",
@@ -47,6 +52,7 @@ function ProfilePage() {
           exportArchive: "Export archive",
           exportNote:
             "Export writes metadata and the audit log to a snapshot — enough to rebuild the archive elsewhere.",
+          exportFailed: "The archive export could not be saved.",
         };
 
   const insightsQuery = useQuery({
@@ -71,17 +77,34 @@ function ProfilePage() {
     stats != null ? Math.max(0, stats.totalDocuments - stats.pendingReview) : null;
 
   async function exportArchive() {
-    const { data, error } = await api.GET("/api/archive/export", {});
-    if (error || !data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "openkeep-archive-export.json";
-    link.click();
-    URL.revokeObjectURL(url);
+    setExportError(null);
+    if (hostFileSaver) {
+      try {
+        const result = await hostFileSaver({ kind: "archive-export" });
+        if (result.status === "failed") {
+          setExportError(result.message);
+        }
+      } catch {
+        setExportError(copy.exportFailed);
+      }
+      return;
+    }
+
+    try {
+      const { data, error } = await api.GET("/api/archive/export", {});
+      if (error || !data) throw new Error("export-failed");
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "openkeep-archive-export.json";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError(copy.exportFailed);
+    }
   }
 
   return (
@@ -92,12 +115,12 @@ function ProfilePage() {
           {initials}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <span className="truncate text-base font-semibold">
               {user?.displayName ?? "—"}
             </span>
             {user?.isOwner ? <Badge variant="soft">{copy.owner}</Badge> : null}
-          </p>
+          </div>
           <p className="ok-num truncate text-sm text-muted-foreground">{user?.email}</p>
         </div>
         <Button
@@ -174,6 +197,11 @@ function ProfilePage() {
             <p className="text-xs leading-relaxed text-muted-foreground">
               {copy.exportNote}
             </p>
+            {exportError ? (
+              <p className="text-xs text-destructive" role="alert">
+                {exportError}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>

@@ -2,6 +2,8 @@ import { useEffect, useState, type ComponentType } from "react";
 import {
   App as WebApp,
   type HostImportAdapter,
+  type HostSaveRequest,
+  type HostSaveResult,
 } from "@openkeep/web/app";
 import { setApiFailureHandler } from "@openkeep/web/api";
 import type {
@@ -24,7 +26,12 @@ type SharedAppProps = {
   ShellAccessory?: ComponentType;
   hostImports?: HostImportAdapter;
   platform?: string;
+  fileSaver?: (request: HostSaveRequest) => Promise<HostSaveResult>;
 };
+
+function saveWithDesktop(request: HostSaveRequest) {
+  return window.openkeepDesktop.save.request(request);
+}
 
 export function DesktopApp({
   SharedApp = WebApp,
@@ -138,6 +145,7 @@ export function DesktopApp({
           ShellAccessory={DesktopArchiveAccessory}
           hostImports={importPipeline.adapter}
           platform={runtime.platform}
+          fileSaver={saveWithDesktop}
         />
       </DesktopImportHost>
     </DesktopSessionContext.Provider>

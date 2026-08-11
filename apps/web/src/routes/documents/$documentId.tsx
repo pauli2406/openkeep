@@ -38,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n";
+import { useHostFileSaver } from "@/lib/host-shell";
 import {
   Dialog,
   DialogContent,
@@ -546,6 +547,7 @@ function DocumentDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const requestSignal = useArchiveRequestScope();
+  const hostFileSaver = useHostFileSaver();
   const copy = {
     loadDoc: t("documentDetail.loadDoc"),
     loadText: t("documentDetail.loadText"),
@@ -565,6 +567,7 @@ function DocumentDetailPage() {
     downloadFile: t("documentDetail.downloadFile"),
     downloadOriginal: t("documentDetail.downloadOriginal"),
     downloadSearchable: t("documentDetail.downloadSearchable"),
+    downloadFailed: t("documentDetail.downloadFailed"),
     loadPreviewFailed: t("documentDetail.loadPreviewFailed"),
     loadDocumentTextFailed: t("documentDetail.loadDocumentTextFailed"),
     noOcr: t("documentDetail.noOcr"),
@@ -572,6 +575,7 @@ function DocumentDetailPage() {
   };
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -1036,27 +1040,50 @@ function DocumentDetailPage() {
   }
 
   async function handleDownload(variant: "original" | "searchable") {
+    setDownloadError(null);
+    if (hostFileSaver) {
+      try {
+        const result = await hostFileSaver({
+          kind:
+            variant === "searchable"
+              ? "document-searchable"
+              : "document-original",
+          documentId,
+        });
+        if (result.status === "failed") {
+          setDownloadError(result.message);
+        }
+      } catch {
+        setDownloadError(copy.downloadFailed);
+      }
+      return;
+    }
+
     const url =
       variant === "searchable"
         ? `/api/documents/${documentId}/download/searchable`
         : `/api/documents/${documentId}/download`;
 
-    const res = await authFetch(url);
-    if (!res.ok) return;
+    try {
+      const res = await authFetch(url);
+      if (!res.ok) throw new Error("download-failed");
 
-    const blob = await res.blob();
-    const disposition = res.headers.get("Content-Disposition");
-    let filename = `document.${variant === "searchable" ? "pdf" : "bin"}`;
-    if (disposition) {
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      if (match) filename = match[1];
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `document.${variant === "searchable" ? "pdf" : "bin"}`;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const a = window.document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      setDownloadError(copy.downloadFailed);
     }
-
-    const a = window.document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
   }
 
   // --- Loading / Error states ---
@@ -1405,6 +1432,11 @@ function DocumentDetailPage() {
                       </Button>
                     )}
                   </div>
+                  {downloadError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {downloadError}
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
             </TabsContent>

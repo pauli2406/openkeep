@@ -500,6 +500,7 @@ type TranslationKey =
   | "documentDetail.failedToReprocessDocument"
   | "documentDetail.downloadOriginal"
   | "documentDetail.downloadSearchable"
+  | "documentDetail.downloadFailed"
   | "documentDetail.deleteDocument"
   | "documentDetail.cannotDeleteWhileProcessing"
   | "documentDetail.failedToDeleteDocument"
@@ -1037,6 +1038,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToReprocessDocument": "Failed to reprocess document.",
     "documentDetail.downloadOriginal": "Download Original",
     "documentDetail.downloadSearchable": "Download Searchable PDF",
+    "documentDetail.downloadFailed": "The document could not be downloaded.",
     "documentDetail.deleteDocument": "Delete Document",
     "documentDetail.cannotDeleteWhileProcessing": "Documents cannot be deleted while processing is in progress.",
     "documentDetail.failedToDeleteDocument": "Failed to delete document.",
@@ -1573,6 +1575,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToReprocessDocument": "Dokument konnte nicht neu verarbeitet werden.",
     "documentDetail.downloadOriginal": "Original herunterladen",
     "documentDetail.downloadSearchable": "Durchsuchbares PDF herunterladen",
+    "documentDetail.downloadFailed": "Das Dokument konnte nicht heruntergeladen werden.",
     "documentDetail.deleteDocument": "Dokument löschen",
     "documentDetail.cannotDeleteWhileProcessing": "Dokumente können nicht gelöscht werden, während die Verarbeitung läuft.",
     "documentDetail.failedToDeleteDocument": "Dokument konnte nicht gelöscht werden.",

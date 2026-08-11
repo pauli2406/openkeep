@@ -51,10 +51,12 @@ import {
   } from "lucide-react";
 import { format } from "date-fns";
 import { useI18n } from "@/lib/i18n";
+import { useHostFileSaver } from "@/lib/host-shell";
 import { QueueCard, WatchFolderFieldReview, formatWatchFolderAction, formatWatchFolderReason, watchFolderActionVariant } from "./shared";
 
 export function ArchiveOperationsSection() {
   const { t } = useI18n();
+  const hostFileSaver = useHostFileSaver();
   const [snapshotText, setSnapshotText] = useState("");
   const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
   const [watchDryRun, setWatchDryRun] = useState(true);
@@ -63,6 +65,18 @@ export function ArchiveOperationsSection() {
 
   const exportMutation = useMutation({
     mutationFn: async () => {
+      if (hostFileSaver) {
+        let result;
+        try {
+          result = await hostFileSaver({ kind: "archive-export" });
+        } catch {
+          throw new Error(t("settings.exportArchiveFailed"));
+        }
+        if (result.status === "failed") {
+          throw new Error(result.message);
+        }
+        return null;
+      }
       const { data, error } = await api.GET("/api/archive/export", {});
       if (error) {
         throw new Error(getApiErrorMessage(error, t("settings.failedToExportArchive")));
@@ -70,7 +84,9 @@ export function ArchiveOperationsSection() {
       return data as ArchiveSnapshot;
     },
     onSuccess: (data) => {
-      setSnapshotText(JSON.stringify(data, null, 2));
+      if (data) {
+        setSnapshotText(JSON.stringify(data, null, 2));
+      }
     },
   });
 
@@ -444,4 +460,3 @@ export function ArchiveOperationsSection() {
 }
 
 // --- Processing Activity & Queue Status ---
-
