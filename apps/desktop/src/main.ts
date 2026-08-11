@@ -34,6 +34,7 @@ import {
 } from "./main/security";
 import { createMainWindowOptions, getProfileWindowUrl } from "./main/window";
 import {
+  clearProfilePartitionData,
   createProfilePartition,
   DESKTOP_SHELL_PARTITION,
   shouldResetProfilePartition,
@@ -339,12 +340,10 @@ void app.whenReady().then(async () => {
 
   async function resetProfilePartition(profileId: string) {
     profileRoutes.delete(profileId);
-    const { targetSession } = await preparePartition(profileId);
-    await targetSession.closeAllConnections();
-    await Promise.all([
-      targetSession.clearStorageData(),
-      targetSession.clearCache(),
-    ]);
+    await clearProfilePartitionData(
+      profileId,
+      (partition) => session.fromPartition(partition),
+    );
   }
 
   async function createMainWindow(
