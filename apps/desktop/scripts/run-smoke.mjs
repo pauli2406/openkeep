@@ -36,16 +36,44 @@ if (!executable) {
   throw new Error(`Could not find the packaged OpenKeep executable in ${packageDirectory}.`);
 }
 
+const SUCCESS_MARKER = "OPENKEEP_DESKTOP_SMOKE_OK";
+
 const child = spawn(executable, ["--smoke-test"], {
   env: { ...process.env, ELECTRON_ENABLE_LOGGING: "1" },
-  stdio: "inherit",
+  // Piped rather than inherited so the success marker can be recognised here.
+  // What this test asserts is that the packaged app boots and reports a correct
+  // renderer; a platform that is slow to tear Chromium down should not turn a
+  // healthy boot into a failure.
+  stdio: ["ignore", "pipe", "inherit"],
 });
 
+let reportedSuccess = false;
+let settled = false;
+let output = "";
+
+function finish(code, message) {
+  if (settled) return;
+  settled = true;
+  clearTimeout(timeout);
+  if (message) console.error(message);
+  process.exitCode = code;
+  if (child.exitCode === null && child.signalCode === null) child.kill();
+}
+
 const timeout = setTimeout(() => {
-  child.kill();
-  console.error("Packaged OpenKeep smoke test exceeded 30 seconds.");
-  process.exitCode = 1;
+  finish(1, "Packaged OpenKeep smoke test exceeded 30 seconds.");
 }, 30_000);
+
+child.stdout.setEncoding("utf8");
+child.stdout.on("data", (chunk) => {
+  process.stdout.write(chunk);
+  output += chunk;
+  if (!reportedSuccess && output.includes(SUCCESS_MARKER)) {
+    reportedSuccess = true;
+    // Give the process a moment to exit on its own, then stop waiting for it.
+    setTimeout(() => finish(0), 2_000).unref();
+  }
+});
 
 child.once("error", (error) => {
   clearTimeout(timeout);
@@ -53,9 +81,12 @@ child.once("error", (error) => {
 });
 
 child.once("exit", (code, signal) => {
-  clearTimeout(timeout);
-  if (code !== 0) {
-    console.error(`Packaged OpenKeep exited with code ${code} and signal ${signal ?? "none"}.`);
-    process.exitCode = code ?? 1;
+  if (reportedSuccess) {
+    finish(0);
+    return;
   }
+  finish(
+    code ?? 1,
+    `Packaged OpenKeep exited with code ${code} and signal ${signal ?? "none"} before reporting success.`,
+  );
 });

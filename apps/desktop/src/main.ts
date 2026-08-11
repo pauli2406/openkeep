@@ -152,6 +152,10 @@ async function completeSmokeTest(window: BrowserWindow) {
 
     console.log("OPENKEEP_DESKTOP_SMOKE_OK");
     clearTimeout(timeout);
+    // Destroy the window before exiting. A live renderer can keep the packaged
+    // process alive past `app.exit` on some platforms, which reads to the smoke
+    // runner as a hung application rather than a healthy boot.
+    for (const open of BrowserWindow.getAllWindows()) open.destroy();
     app.exit(0);
   } catch (error) {
     clearTimeout(timeout);

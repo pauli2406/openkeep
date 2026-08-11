@@ -67,9 +67,19 @@ jobs:
       - name: Start packaged desktop application
         if: runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke
+      # The unpacked build ships `chrome-sandbox` without its setuid bit, and
+      # Electron aborts rather than run unsandboxed. Grant the ownership and mode
+      # the SUID sandbox requires instead of passing `--no-sandbox`, which would
+      # verify a weaker runtime than the one users get.
       - name: Start packaged desktop application (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run -a pnpm --filter @openkeep/desktop test:smoke
+        run: |
+          sandbox="$(find apps/desktop/out -name chrome-sandbox -maxdepth 2 | head -1)"
+          if [ -n "$sandbox" ]; then
+            sudo chown root:root "$sandbox"
+            sudo chmod 4755 "$sandbox"
+          fi
+          xvfb-run -a pnpm --filter @openkeep/desktop test:smoke
 
   # ---------------------------------------------------------------------------
   # Slower checks. Kept out of the three above so a Docker pull or a browser
