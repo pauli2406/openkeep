@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DESKTOP_SHELL_PARTITION } from "./profile-partition";
-import { createMainWindowOptions, getProfileWindowUrl } from "./window";
+import {
+  createMainWindowOptions,
+  getProfileWindowUrl,
+  resolveWindowBounds,
+} from "./window";
 
 describe("desktop window hardening", () => {
   it("keeps Electron capabilities out of the renderer", () => {
@@ -59,5 +63,24 @@ describe("desktop window hardening", () => {
     expect(getProfileWindowUrl(null, rememberedRoutes)).toBe(
       "openkeep://app/",
     );
+  });
+
+  it("restores exact bounds only while they remain valid on a connected display", () => {
+    const displays = [
+      { x: 0, y: 0, width: 1920, height: 1080 },
+      { x: 1920, y: 0, width: 1600, height: 1000 },
+    ];
+
+    expect(resolveWindowBounds(
+      { x: 2050, y: 80, width: 1200, height: 800 },
+      displays,
+    )).toEqual({ x: 2050, y: 80, width: 1200, height: 800 });
+  });
+
+  it("recovers an off-screen window onto the current primary display", () => {
+    expect(resolveWindowBounds(
+      { x: 2200, y: 80, width: 1200, height: 800 },
+      [{ x: 0, y: 0, width: 1440, height: 900 }],
+    )).toEqual({ x: 120, y: 50, width: 1200, height: 800 });
   });
 });

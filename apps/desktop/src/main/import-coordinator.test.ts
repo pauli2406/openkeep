@@ -82,4 +82,40 @@ describe("desktop import coordinator", () => {
       coordinator.assign({ batchId: "batch-one", profileId: "profile-two" }),
     ).resolves.toMatchObject({ profileId: "profile-two" });
   });
+
+  it("assigns tray-picker paths directly to the active profile", async () => {
+    const imports = {
+      enqueuePaths: vi.fn(async () => batch()),
+      listPending: vi.fn(() => []),
+      assign: vi.fn((_batchId: string, profileId: string) => ({
+        ...batch(),
+        source: "picker" as const,
+        profileId,
+      })),
+      consume: vi.fn(),
+      readPaths: vi.fn(),
+    };
+    const onChanged = vi.fn();
+    const coordinator = createDesktopImportCoordinator({
+      imports,
+      listProfiles: vi.fn(async () => ({
+        profiles: [
+          { id: "profile-one", label: "Home", serverUrl: "https://home.test" },
+          { id: "profile-two", label: "Work", serverUrl: "https://work.test" },
+        ],
+        activeProfileId: "profile-two",
+      })),
+      onChanged,
+    });
+
+    await expect(
+      coordinator.receivePickerPaths(["/incoming/invoice.pdf"], "profile-two"),
+    ).resolves.toMatchObject({ source: "picker", profileId: "profile-two" });
+    expect(imports.enqueuePaths).toHaveBeenCalledWith(
+      ["/incoming/invoice.pdf"],
+      "picker",
+    );
+    expect(imports.assign).toHaveBeenCalledWith("batch-one", "profile-two");
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
 });
