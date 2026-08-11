@@ -14,6 +14,7 @@ export const DESKTOP_CHANNELS = {
   importsAssign: "desktop:imports:assign",
   importsConsume: "desktop:imports:consume",
   importsChanged: "desktop:imports:changed",
+  saveRequest: "desktop:save:request",
   runtimeGetInfo: "desktop:runtime:get-info",
 } as const;
 
@@ -134,6 +135,24 @@ export type DesktopImportAssignInput = {
   profileId: string;
 };
 
+export type DesktopSaveRequest =
+  | {
+      kind: "document-original";
+      documentId: string;
+    }
+  | {
+      kind: "document-searchable";
+      documentId: string;
+    }
+  | {
+      kind: "archive-export";
+    };
+
+export type DesktopSaveResult =
+  | { status: "saved" }
+  | { status: "cancelled" }
+  | { status: "failed"; message: string };
+
 export type DesktopBridge = {
   session: {
     restore: () => Promise<DesktopSessionState>;
@@ -153,6 +172,9 @@ export type DesktopBridge = {
     assign: (input: DesktopImportAssignInput) => Promise<DesktopImportBatch>;
     consume: () => Promise<DesktopImportDelivery>;
     onChanged: (listener: () => void) => () => void;
+  };
+  save: {
+    request: (input: DesktopSaveRequest) => Promise<DesktopSaveResult>;
   };
   runtime: {
     getInfo: () => Promise<DesktopRuntimeInfo>;
@@ -198,6 +220,10 @@ export function createDesktopBridge(
         invoke(DESKTOP_CHANNELS.importsConsume) as Promise<DesktopImportDelivery>,
       onChanged: (listener: () => void) =>
         subscribe(DESKTOP_CHANNELS.importsChanged, listener),
+    }),
+    save: Object.freeze({
+      request: (input: DesktopSaveRequest) =>
+        invoke(DESKTOP_CHANNELS.saveRequest, input) as Promise<DesktopSaveResult>,
     }),
     runtime: Object.freeze({
       getInfo: () =>

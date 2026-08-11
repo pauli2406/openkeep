@@ -72,6 +72,10 @@ function createBridge(
       onChanged: () => () => undefined,
       ...overrides.imports,
     },
+    save: {
+      request: async () => ({ status: "cancelled" }),
+      ...overrides.save,
+    },
     runtime: {
       getInfo: async () => ({ platform: "darwin", version: "test" }),
       ...overrides.runtime,

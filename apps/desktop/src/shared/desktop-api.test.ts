@@ -24,6 +24,10 @@ describe("preload bridge contract", () => {
     await bridge.imports.assign({ batchId: "batch-id", profileId: "profile-id" });
     await bridge.imports.consume();
     const stop = bridge.imports.onChanged(() => undefined);
+    await bridge.save.request({
+      kind: "document-original",
+      documentId: "11111111-1111-4111-8111-111111111111",
+    });
     await bridge.runtime.getInfo();
 
     expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
@@ -51,7 +55,11 @@ describe("preload bridge contract", () => {
       profileId: "profile-id",
     });
     expect(invoke).toHaveBeenNthCalledWith(12, DESKTOP_CHANNELS.importsConsume);
-    expect(invoke).toHaveBeenNthCalledWith(13, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(13, DESKTOP_CHANNELS.saveRequest, {
+      kind: "document-original",
+      documentId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(subscribe).toHaveBeenCalledWith(
       DESKTOP_CHANNELS.importsChanged,
       expect.any(Function),
@@ -59,6 +67,12 @@ describe("preload bridge contract", () => {
     stop();
     expect(unsubscribe).toHaveBeenCalledOnce();
     expect(Object.isFrozen(bridge)).toBe(true);
-    expect(Object.keys(bridge)).toEqual(["session", "profiles", "imports", "runtime"]);
+    expect(Object.keys(bridge)).toEqual([
+      "session",
+      "profiles",
+      "imports",
+      "save",
+      "runtime",
+    ]);
   });
 });

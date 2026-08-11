@@ -45,6 +45,9 @@ function createBridge(
       consume: vi.fn(async () => ({ files: [], rejected: [] })),
       onChanged: vi.fn(() => () => undefined),
     },
+    save: {
+      request: vi.fn(async () => ({ status: "cancelled" as const })),
+    },
     runtime: {
       getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
     },

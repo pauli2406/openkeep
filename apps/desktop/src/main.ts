@@ -17,6 +17,7 @@ import type {
   DesktopImportAssignInput,
   DesktopProfileIdInput,
   DesktopProfileRenameInput,
+  DesktopSaveRequest,
   DesktopSessionState,
 } from "./shared/desktop-api";
 import { DESKTOP_CHANNELS } from "./shared/desktop-api";
@@ -41,12 +42,14 @@ import {
   DESKTOP_SHELL_PARTITION,
   shouldResetProfilePartition,
 } from "./main/profile-partition";
-import {
-  createDesktopImportService,
-} from "./main/import-service";
+import { createDesktopImportService } from "./main/import-service";
 import { createDesktopImportCoordinator } from "./main/import-coordinator";
 import { installDesktopLaunchLifecycle } from "./main/launch-lifecycle";
 import { registerPackagedFileAssociations } from "./main/file-associations";
+import {
+  createNativeSaveService,
+  type NativeSaveService,
+} from "./main/native-save";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -88,6 +91,7 @@ function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
 function registerIpcHandlers(
   archiveSession: ArchiveSessionService,
   imports: ReturnType<typeof createDesktopImportCoordinator>,
+  nativeSave: NativeSaveService,
   transitionWindow: (
     senderId: number,
     state: DesktopSessionState,
@@ -255,6 +259,14 @@ function registerIpcHandlers(
       ? { files: [], rejected: [] }
       : imports.pick(result.filePaths);
   });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.saveRequest,
+    async (event, input: DesktopSaveRequest) => {
+      assertIpcEvent(event);
+      return nativeSave.save(windowProfileIds.get(event.sender.id), input);
+    },
+  );
 }
 
 function configureSessionSecurity(targetSession: Electron.Session) {
@@ -330,7 +342,7 @@ async function completeSmokeTest(window: BrowserWindow) {
 
     const passed =
       result.heading === "Connect your archive" &&
-      result.bridgeKeys.join(",") === "session,profiles,imports,runtime" &&
+      result.bridgeKeys.join(",") === "session,profiles,imports,save,runtime" &&
       !result.hasProcess &&
       !result.hasRequire &&
       result.csp?.includes("default-src 'none'");
@@ -401,6 +413,34 @@ void app.whenReady().then(async () => {
         mainWindow.webContents.send(DESKTOP_CHANNELS.importsChanged);
       }
       focusMainWindow();
+    },
+  });
+  const nativeSave = createNativeSaveService({
+    archiveSession,
+    fetchRequest: (input, init) => net.fetch(input, init),
+    async showSaveDialog(options) {
+      const electronOptions: Electron.SaveDialogOptions = {
+        title: options.title,
+        defaultPath: path.join(app.getPath("downloads"), options.suggestedFilename),
+        buttonLabel: "Save",
+        showsTagField: false,
+        filters:
+          options.extensions.length > 0
+            ? [
+                {
+                  name: options.mimeType,
+                  extensions: options.extensions,
+                },
+              ]
+            : undefined,
+      };
+      const owner = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+      const selection = owner
+        ? await dialog.showSaveDialog(owner, electronOptions)
+        : await dialog.showSaveDialog(electronOptions);
+      return selection.canceled || !selection.filePath
+        ? { cancelled: true }
+        : { cancelled: false, filePath: selection.filePath };
     },
   });
   const rendererRoot = path.join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME);
@@ -546,7 +586,12 @@ void app.whenReady().then(async () => {
     }, 25);
   }
 
-  registerIpcHandlers(archiveSession, importCoordinator, transitionWindow);
+  registerIpcHandlers(
+    archiveSession,
+    importCoordinator,
+    nativeSave,
+    transitionWindow,
+  );
   await createMainWindow(null);
   await launchLifecycle.connect(async (paths) => {
     await importCoordinator.receivePaths(paths);
