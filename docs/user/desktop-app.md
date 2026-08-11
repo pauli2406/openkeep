@@ -58,6 +58,18 @@ belongs to the previous profile. The destination archive opens with its own
 browser state rather than inheriting searches, conversations, uploads, previews,
 or cached responses from the archive you left.
 
+The authenticated desktop window is the same archive experience as the web app:
+Today, Documents (list, timeline, and groups), correspondent dossiers, filters,
+selection and bulk actions, and the omnibar all use the shared implementation.
+Press `Cmd+K` on macOS or `Ctrl+K` on Windows and Linux to open the omnibar.
+The shortcut shown in the app follows the current operating system.
+
+Normal internal links, Back, Forward, reload, and document deep links stay in the
+hardened OpenKeep window. When you return to a profile during the same desktop
+session, the app restores that profile's last safe OpenKeep route, including its
+filters, without applying the route to another profile. HTTPS and email links open
+in the operating system's default app. Other external URL schemes are refused.
+
 At startup:
 
 - if exactly one profile is saved, the app reconnects it automatically
@@ -137,6 +149,11 @@ If the server is temporarily unreachable, choose `Retry connection` or
 `Edit connection`. Retry keeps the stored credentials encrypted; you do not
 have to paste them again. With multiple profiles, you can also return to the
 chooser and open another archive while the unavailable one remains saved.
+
+If the server becomes unreachable or rejects the token while the shared archive
+UI is already open, the desktop transport returns to this reconnect/chooser state
+instead of leaving stale rows or previews on screen. A retry verifies the saved
+profile again before the archive UI is remounted.
 
 ## Credential Security
 
