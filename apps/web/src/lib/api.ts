@@ -195,6 +195,22 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+/**
+ * Reads a server error without exposing request headers or credentials. This
+ * is used by the few auth flows that use raw fetch instead of the generated
+ * client, so native and browser hosts present the same authorization detail.
+ */
+export async function readApiErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    return getApiErrorMessage(await response.clone().json(), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
 // The API rotates refresh tokens and treats reuse as theft. Concurrent 401s
 // (e.g. parallel uploads with an expired access token) must therefore share ONE
 // refresh attempt — independent refreshes with the same token would revoke every

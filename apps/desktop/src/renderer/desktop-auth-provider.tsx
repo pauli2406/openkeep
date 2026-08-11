@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 import { AuthContext, type AuthState } from "@openkeep/web/auth";
-import { authFetch } from "@openkeep/web/api";
+import { authFetch, readApiErrorMessage } from "@openkeep/web/api";
 import { CurrentUserSchema } from "@openkeep/types";
 import type { DesktopSessionState } from "../shared/desktop-api";
 
@@ -46,7 +46,12 @@ export function DesktopAuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(preferences),
       });
       if (!response.ok) {
-        throw new Error("OpenKeep could not update the archive preferences.");
+        throw new Error(
+          await readApiErrorMessage(
+            response,
+            "OpenKeep could not update the archive preferences.",
+          ),
+        );
       }
       const user = CurrentUserSchema.safeParse(await response.json());
       if (!user.success) {

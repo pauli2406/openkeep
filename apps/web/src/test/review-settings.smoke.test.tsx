@@ -169,6 +169,15 @@ function settingsHandlers(overrides?: {
 }) {
   return [
     http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
+    http.get(apiUrl("/api/archive/watch-folder"), () =>
+      HttpResponse.json({
+        configured: true,
+        configuredPath: "/srv/openkeep/inbox",
+        lastScan: null,
+        lastImport: null,
+        history: [],
+      }),
+    ),
     http.get(apiUrl("/api/auth/tokens"), () => HttpResponse.json([])),
     http.get(apiUrl("/api/taxonomies/tags"), () =>
       HttpResponse.json(
@@ -276,6 +285,10 @@ describe("settings smoke", () => {
 
     expect(screen.getByText("Language Preferences")).toBeInTheDocument();
     expect(screen.getByText("Archive Portability")).toBeInTheDocument();
+    expect(await screen.findByText("Server Watch Folder")).toBeInTheDocument();
+    expect(screen.getByText("/srv/openkeep/inbox", { exact: false })).toBeInTheDocument();
+    expect(await screen.findByText("Processing Activity")).toBeInTheDocument();
+    expect(await screen.findByText("OCR Queue")).toBeInTheDocument();
     expect(screen.getByText("System Health")).toBeInTheDocument();
     expect(await screen.findByText("Readiness Checks")).toBeInTheDocument();
     expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();

@@ -3,6 +3,7 @@ import { useI18n } from "@/lib/i18n";
 import { LanguagePreferencesSection } from "@/components/settings/language-section";
 import { ArchiveOperationsSection } from "@/components/settings/archive-section";
 import { SystemHealthSection } from "@/components/settings/health-section";
+import { ProcessingActivitySection } from "@/components/settings/processing-section";
 
 export const Route = createFileRoute("/settings/")({
   component: GeneralSettingsPage,
@@ -17,6 +18,7 @@ function GeneralSettingsPage() {
       <h1 className="ok-page-title">{t("settingsNav.general")}</h1>
       <LanguagePreferencesSection />
       <ArchiveOperationsSection />
+      <ProcessingActivitySection />
       <SystemHealthSection />
     </div>
   );

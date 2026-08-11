@@ -145,6 +145,12 @@ type TranslationKey =
   | "settings.importArchiveFailed"
   | "settings.lastImportResult"
   | "settings.watchFolderScan"
+  | "settings.watchFolderServer"
+  | "settings.watchFolderServerDescription"
+  | "settings.watchFolderStatusFailed"
+  | "settings.lastScan"
+  | "settings.lastImport"
+  | "settings.neverScanned"
   | "settings.path"
   | "settings.imported"
   | "settings.duplicates"
@@ -170,6 +176,7 @@ type TranslationKey =
   | "settings.failedToFetchStatus"
   | "settings.processingActivity"
   | "settings.processingActivityDescription"
+  | "settings.loadingProcessingStatus"
   | "settings.failedToLoadProcessingStatus"
   | "settings.ocrQueue"
   | "settings.embedQueue"
@@ -683,6 +690,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.importArchiveFailed": "Failed to import archive.",
     "settings.lastImportResult": "Last Import Result",
     "settings.watchFolderScan": "Watch Folder Scan",
+    "settings.watchFolderServer": "Server Watch Folder",
+    "settings.watchFolderServerDescription": "This is the archive server's configured ingestion folder, not a folder on this desktop.",
+    "settings.watchFolderStatusFailed": "Failed to load the server watch-folder status.",
+    "settings.lastScan": "Last scan",
+    "settings.lastImport": "Last import",
+    "settings.neverScanned": "Never",
     "settings.path": "Path",
     "settings.imported": "Imported",
     "settings.duplicates": "Duplicates",
@@ -708,6 +721,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.failedToFetchStatus": "Failed to fetch status",
     "settings.processingActivity": "Processing Activity",
     "settings.processingActivityDescription": "Queue depths, document status breakdown, and recent jobs",
+    "settings.loadingProcessingStatus": "Loading processing status...",
     "settings.failedToLoadProcessingStatus": "Failed to load processing status.",
     "settings.ocrQueue": "OCR Queue",
     "settings.embedQueue": "Embed Queue",
@@ -1220,6 +1234,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.importArchiveFailed": "Archiv-Import fehlgeschlagen.",
     "settings.lastImportResult": "Letztes Importergebnis",
     "settings.watchFolderScan": "Watch-Folder-Scan",
+    "settings.watchFolderServer": "Server-Watch-Folder",
+    "settings.watchFolderServerDescription": "Dies ist der konfigurierte Importordner des Archivservers, nicht ein Ordner auf diesem Desktop.",
+    "settings.watchFolderStatusFailed": "Der Status des Server-Watch-Folders konnte nicht geladen werden.",
+    "settings.lastScan": "Letzter Scan",
+    "settings.lastImport": "Letzter Import",
+    "settings.neverScanned": "Nie",
     "settings.path": "Pfad",
     "settings.imported": "Importiert",
     "settings.duplicates": "Duplikate",
@@ -1245,6 +1265,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.failedToFetchStatus": "Status konnte nicht geladen werden",
     "settings.processingActivity": "Verarbeitungsaktivitat",
     "settings.processingActivityDescription": "Queue-Tiefen, Dokumentstatus-Aufschlüsselung und letzte Jobs",
+    "settings.loadingProcessingStatus": "Verarbeitungsstatus wird geladen...",
     "settings.failedToLoadProcessingStatus": "Verarbeitungsstatus konnte nicht geladen werden.",
     "settings.ocrQueue": "OCR-Queue",
     "settings.embedQueue": "Embedding-Queue",
