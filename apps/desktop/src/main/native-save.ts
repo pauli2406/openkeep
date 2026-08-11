@@ -6,7 +6,11 @@ import type {
   DesktopSaveResult,
 } from "../shared/desktop-api";
 import type { ArchiveSessionService } from "./archive-session";
-import { resolveArchiveApiUrl, type DesktopFetch } from "./connection";
+import {
+  createArchiveRequestHeaders,
+  resolveArchiveApiUrl,
+  type DesktopFetch,
+} from "./connection";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -230,21 +234,6 @@ async function writeResponseAtomically(
   }
 }
 
-function requestHeaders(credentials: {
-  apiToken: string;
-  cfAccessClientId?: string;
-  cfAccessClientSecret?: string;
-}) {
-  const headers = new Headers({
-    authorization: `Bearer ${credentials.apiToken}`,
-  });
-  if (credentials.cfAccessClientId && credentials.cfAccessClientSecret) {
-    headers.set("cf-access-client-id", credentials.cfAccessClientId);
-    headers.set("cf-access-client-secret", credentials.cfAccessClientSecret);
-  }
-  return headers;
-}
-
 export function createNativeSaveService(dependencies: NativeSaveDependencies) {
   return {
     async save(
@@ -273,7 +262,7 @@ export function createNativeSaveService(dependencies: NativeSaveDependencies) {
           resolveArchiveApiUrl(active.profile.serverUrl, descriptor.apiPath),
           {
             method: "GET",
-            headers: requestHeaders(active.credentials),
+            headers: createArchiveRequestHeaders(active.credentials),
             redirect: "manual",
             signal: active.signal,
           },

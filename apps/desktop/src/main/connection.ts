@@ -37,6 +37,26 @@ export function normalizeArchiveUrl(input: string): string {
   return parsed.toString().replace(/\/$/, "");
 }
 
+/**
+ * Headers for an authenticated main-process request to the active archive.
+ * Cloudflare Access service credentials travel with the bearer token because a
+ * protected archive rejects the request without both.
+ */
+export function createArchiveRequestHeaders(credentials: {
+  apiToken: string;
+  cfAccessClientId?: string;
+  cfAccessClientSecret?: string;
+}): Headers {
+  const headers = new Headers({
+    authorization: `Bearer ${credentials.apiToken}`,
+  });
+  if (credentials.cfAccessClientId && credentials.cfAccessClientSecret) {
+    headers.set("cf-access-client-id", credentials.cfAccessClientId);
+    headers.set("cf-access-client-secret", credentials.cfAccessClientSecret);
+  }
+  return headers;
+}
+
 export function resolveArchiveApiUrl(serverUrl: string, apiPath: string): string {
   const normalized = normalizeArchiveUrl(serverUrl);
   const path = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
