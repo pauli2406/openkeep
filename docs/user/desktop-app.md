@@ -130,8 +130,10 @@ area; double-clicking its icon reveals a hidden window. Supported Linux desktops
 their system tray. If Linux cannot provide a usable tray, close-to-tray is disabled
 and closing the window quits, so OpenKeep cannot become an invisible stranded
 process. Starting OpenKeep again, opening a supported file with OpenKeep, or a second
-launch always reveals and focuses the existing hidden window. Launch at login is not
-configured by this preference.
+launch always reveals and focuses the existing hidden window. If the window itself
+ever disappears while OpenKeep keeps running, `Show OpenKeep` opens a new one for the
+active archive rather than doing nothing. Launch at login is not configured by this
+preference.
 
 ## Import Documents
 

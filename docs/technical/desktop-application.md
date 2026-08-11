@@ -151,6 +151,16 @@ IPC channels. If tray creation fails—especially on a Linux desktop without a u
 status area—the effective behavior is quit even if the stored preference is `tray`;
 this ensures the process cannot be left running without any visible recovery path.
 
+Losing the last window is a separate case from closing it. Electron quits an
+unsubscribed application once every window is gone, which would end a legitimate
+tray session and could interrupt a profile switch while its replacement window is
+still being built. Main therefore subscribes to `window-all-closed`, suppresses it
+while a window creation is in flight, and otherwise hands the decision to the
+controller: a live tray keeps the process running and refreshes its menu, and no
+usable tray enters the quit path. Because a window can also be destroyed by a
+renderer crash, showing from the tray rebuilds the window for the active profile
+instead of acting on a destroyed handle, so the tray can never point at nothing.
+
 Explicit quit and quit-on-close share one idempotent cleanup path. It marks the
 controller as quitting so the next close is not hidden, aborts active archive fetches
 and SSE streams, closes connections in every configured profile partition, flushes
