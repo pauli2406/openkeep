@@ -76,6 +76,14 @@ function createBridge(
       request: async () => ({ status: "cancelled" }),
       ...overrides.save,
     },
+    lifecycle: {
+      getSettings: async () => ({ closeBehavior: "tray", trayAvailable: true }),
+      setCloseBehavior: async ({ closeBehavior }) => ({
+        closeBehavior,
+        trayAvailable: true,
+      }),
+      ...overrides.lifecycle,
+    },
     runtime: {
       getInfo: async () => ({ platform: "darwin", version: "test" }),
       ...overrides.runtime,

@@ -136,6 +136,13 @@ export function createDesktopTrayLifecycle({
     await refreshMenu();
   }
 
+  function settings() {
+    return {
+      closeBehavior: state.snapshot().closeBehavior,
+      trayAvailable: Boolean(tray),
+    } as const;
+  }
+
   async function refreshMenu() {
     if (!tray) return;
     const generation = ++menuGeneration;
@@ -269,6 +276,11 @@ export function createDesktopTrayLifecycle({
     refreshMenu,
     captureWindowBounds,
     requestQuit,
+    settings,
+    async setCloseBehavior(closeBehavior: DesktopCloseBehavior) {
+      await setKeepRunning(closeBehavior === "tray");
+      return settings();
+    },
 
     async idle() {
       await activity;

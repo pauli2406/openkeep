@@ -7,6 +7,7 @@ import type {
 import { ArchiveSwitcher } from "./archive-switcher";
 import { ConnectionScreen } from "./connection-screen";
 import { DesktopSessionContext } from "./desktop-auth-provider";
+import { DesktopLifecycleControl } from "./desktop-lifecycle-control";
 
 type ProfileEditor =
   | { mode: "add" }
@@ -117,6 +118,7 @@ export function DesktopArchiveAccessory() {
           onEdit={(profile) => setEditor({ mode: "edit", profile })}
           onRemove={(profile) => removeProfile(profile)}
         />
+        <DesktopLifecycleControl />
         {message ? (
           <span className="desktop-archive-accessory__error" role="alert">
             {message}

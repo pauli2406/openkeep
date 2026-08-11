@@ -624,6 +624,13 @@ export function createArchiveSessionService(
       deactivateInMemory();
       return disconnected("signed-out");
     },
+
+    dispose() {
+      verificationController?.abort();
+      verificationController = null;
+      verificationGeneration += 1;
+      deactivateInMemory();
+    },
   };
 }
 

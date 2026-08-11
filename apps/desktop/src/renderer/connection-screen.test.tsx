@@ -48,6 +48,10 @@ function createBridge(
     save: {
       request: vi.fn(async () => ({ status: "cancelled" as const })),
     },
+    lifecycle: {
+      getSettings: vi.fn(async () => ({ closeBehavior: "tray" as const, trayAvailable: true })),
+      setCloseBehavior: vi.fn(),
+    },
     runtime: {
       getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
     },

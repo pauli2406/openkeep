@@ -147,6 +147,17 @@ describe("desktop tray lifecycle", () => {
     expect(harness.state.setCloseBehavior).not.toHaveBeenCalled();
   });
 
+  it("exposes the same persisted preference seam to the renderer", async () => {
+    const harness = createHarness();
+    await harness.lifecycle.initialize();
+
+    await expect(harness.lifecycle.setCloseBehavior("quit")).resolves.toEqual({
+      closeBehavior: "quit",
+      trayAvailable: true,
+    });
+    expect(harness.state.setCloseBehavior).toHaveBeenCalledWith("quit");
+  });
+
   it("shows only archive labels, switches profiles, and starts an import", async () => {
     const harness = createHarness();
     const fake = createWindow({ visible: false });

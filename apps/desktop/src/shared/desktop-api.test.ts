@@ -28,6 +28,8 @@ describe("preload bridge contract", () => {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
+    await bridge.lifecycle.getSettings();
+    await bridge.lifecycle.setCloseBehavior({ closeBehavior: "quit" });
     await bridge.runtime.getInfo();
 
     expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
@@ -59,7 +61,16 @@ describe("preload bridge contract", () => {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
-    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(
+      14,
+      DESKTOP_CHANNELS.lifecycleGetSettings,
+    );
+    expect(invoke).toHaveBeenNthCalledWith(
+      15,
+      DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
+      { closeBehavior: "quit" },
+    );
+    expect(invoke).toHaveBeenNthCalledWith(16, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(subscribe).toHaveBeenCalledWith(
       DESKTOP_CHANNELS.importsChanged,
       expect.any(Function),
@@ -72,6 +83,7 @@ describe("preload bridge contract", () => {
       "profiles",
       "imports",
       "save",
+      "lifecycle",
       "runtime",
     ]);
   });

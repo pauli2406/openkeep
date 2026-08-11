@@ -15,6 +15,8 @@ export const DESKTOP_CHANNELS = {
   importsConsume: "desktop:imports:consume",
   importsChanged: "desktop:imports:changed",
   saveRequest: "desktop:save:request",
+  lifecycleGetSettings: "desktop:lifecycle:get-settings",
+  lifecycleSetCloseBehavior: "desktop:lifecycle:set-close-behavior",
   runtimeGetInfo: "desktop:runtime:get-info",
 } as const;
 
@@ -85,6 +87,17 @@ export type DesktopProfileRenameInput = DesktopProfileIdInput & {
 export type DesktopRuntimeInfo = {
   platform: NodeJS.Platform;
   version: string;
+};
+
+export type DesktopCloseBehavior = "tray" | "quit";
+
+export type DesktopLifecycleSettings = {
+  closeBehavior: DesktopCloseBehavior;
+  trayAvailable: boolean;
+};
+
+export type DesktopCloseBehaviorInput = {
+  closeBehavior: DesktopCloseBehavior;
 };
 
 export type DesktopImportSource = "picker" | "open-with";
@@ -176,6 +189,12 @@ export type DesktopBridge = {
   save: {
     request: (input: DesktopSaveRequest) => Promise<DesktopSaveResult>;
   };
+  lifecycle: {
+    getSettings: () => Promise<DesktopLifecycleSettings>;
+    setCloseBehavior: (
+      input: DesktopCloseBehaviorInput,
+    ) => Promise<DesktopLifecycleSettings>;
+  };
   runtime: {
     getInfo: () => Promise<DesktopRuntimeInfo>;
   };
@@ -224,6 +243,17 @@ export function createDesktopBridge(
     save: Object.freeze({
       request: (input: DesktopSaveRequest) =>
         invoke(DESKTOP_CHANNELS.saveRequest, input) as Promise<DesktopSaveResult>,
+    }),
+    lifecycle: Object.freeze({
+      getSettings: () =>
+        invoke(
+          DESKTOP_CHANNELS.lifecycleGetSettings,
+        ) as Promise<DesktopLifecycleSettings>,
+      setCloseBehavior: (input: DesktopCloseBehaviorInput) =>
+        invoke(
+          DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
+          input,
+        ) as Promise<DesktopLifecycleSettings>,
     }),
     runtime: Object.freeze({
       getInfo: () =>

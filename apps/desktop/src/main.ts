@@ -9,12 +9,14 @@ import {
   net,
   protocol,
   safeStorage,
+  screen,
   session,
   shell,
 } from "electron";
 import type { DesktopConnectInput } from "./shared/desktop-api";
 import type {
   DesktopImportAssignInput,
+  DesktopCloseBehaviorInput,
   DesktopProfileIdInput,
   DesktopProfileRenameInput,
   DesktopSaveRequest,
@@ -35,7 +37,11 @@ import {
   classifyNavigation,
   isTrustedRendererUrl,
 } from "./main/security";
-import { createMainWindowOptions, getProfileWindowUrl } from "./main/window";
+import {
+  createMainWindowOptions,
+  getProfileWindowUrl,
+  resolveWindowBounds,
+} from "./main/window";
 import {
   clearProfilePartitionData,
   createProfilePartition,
@@ -50,6 +56,12 @@ import {
   createNativeSaveService,
   type NativeSaveService,
 } from "./main/native-save";
+import { createDesktopLifecycleStateStore } from "./main/lifecycle-state";
+import {
+  createDesktopTrayLifecycle,
+  type DesktopTrayLifecycle,
+} from "./main/tray-lifecycle";
+import { createElectronTrayLifecycleHost } from "./main/electron-tray-host";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -68,15 +80,40 @@ app.enableSandbox();
 
 const isSmokeTest = process.argv.includes("--smoke-test");
 let mainWindow: BrowserWindow | null = null;
+let trayLifecycle: DesktopTrayLifecycle | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
 const profileRoutes = new Map<string, string>();
 
 function focusMainWindow() {
+  if (trayLifecycle) {
+    trayLifecycle.showWindow();
+    return;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+async function chooseImportPaths(parent?: BrowserWindow) {
+  const options = {
+    title: "Import documents into OpenKeep",
+    buttonLabel: "Import",
+    properties: ["openFile", "multiSelections"] as Array<
+      "openFile" | "multiSelections"
+    >,
+    filters: [
+      {
+        name: "OpenKeep documents",
+        extensions: ["pdf", "jpg", "jpeg", "png", "tif", "tiff", "heic"],
+      },
+    ],
+  };
+  const result = parent
+    ? await dialog.showOpenDialog(parent, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? [] : result.filePaths;
 }
 
 function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
@@ -97,6 +134,8 @@ function registerIpcHandlers(
     state: DesktopSessionState,
     options?: { resetProfileId?: string; clearProfileId?: string },
   ) => void,
+  onDesktopStateChanged: () => void,
+  lifecycle: DesktopTrayLifecycle,
 ) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
@@ -115,6 +154,7 @@ function registerIpcHandlers(
             ? restoredProfileId
             : undefined,
       });
+      onDesktopStateChanged();
       return state;
     },
   );
@@ -132,6 +172,7 @@ function registerIpcHandlers(
           ? state.profile.id
           : undefined;
       transitionWindow(event.sender.id, state, { resetProfileId });
+      onDesktopStateChanged();
       return state;
     },
   );
@@ -147,6 +188,7 @@ function registerIpcHandlers(
           ? profiles?.activeProfileId ?? undefined
           : undefined,
     });
+    onDesktopStateChanged();
     return state;
   });
 
@@ -160,6 +202,7 @@ function registerIpcHandlers(
           ? profileId
           : undefined,
     });
+    onDesktopStateChanged();
     return state;
   });
 
@@ -180,6 +223,7 @@ function registerIpcHandlers(
             ? input?.profileId
             : undefined,
       });
+      onDesktopStateChanged();
       return state;
     },
   );
@@ -188,7 +232,9 @@ function registerIpcHandlers(
     DESKTOP_CHANNELS.profilesRename,
     async (event, input: DesktopProfileRenameInput) => {
       assertIpcEvent(event);
-      return archiveSession.renameProfile(input);
+      const profiles = await archiveSession.renameProfile(input);
+      onDesktopStateChanged();
+      return profiles;
     },
   );
 
@@ -207,6 +253,7 @@ function registerIpcHandlers(
             ? input?.profileId
             : undefined,
       });
+      onDesktopStateChanged();
       return state;
     },
   );
@@ -218,6 +265,25 @@ function registerIpcHandlers(
       version: app.getVersion(),
     };
   });
+
+  ipcMain.handle(DESKTOP_CHANNELS.lifecycleGetSettings, async (event) => {
+    assertIpcEvent(event);
+    return lifecycle.settings();
+  });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
+    async (event, input: DesktopCloseBehaviorInput) => {
+      assertIpcEvent(event);
+      if (
+        !input ||
+        (input.closeBehavior !== "tray" && input.closeBehavior !== "quit")
+      ) {
+        throw new Error("Choose a valid desktop close behavior.");
+      }
+      return lifecycle.setCloseBehavior(input.closeBehavior);
+    },
+  );
 
   ipcMain.handle(DESKTOP_CHANNELS.importsPending, async (event) => {
     assertIpcEvent(event);
@@ -239,25 +305,10 @@ function registerIpcHandlers(
     const profileId = windowProfileIds.get(event.sender.id);
     if (!profileId) return { files: [], rejected: [] };
     const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
-    const options = {
-      title: "Import documents into OpenKeep",
-      buttonLabel: "Import",
-      properties: ["openFile", "multiSelections"] as Array<
-        "openFile" | "multiSelections"
-      >,
-      filters: [
-        {
-          name: "OpenKeep documents",
-          extensions: ["pdf", "jpg", "jpeg", "png", "tif", "tiff", "heic"],
-        },
-      ],
-    };
-    const result = parent
-      ? await dialog.showOpenDialog(parent, options)
-      : await dialog.showOpenDialog(options);
-    return result.canceled
+    const paths = await chooseImportPaths(parent);
+    return paths.length === 0
       ? { files: [], rejected: [] }
-      : imports.pick(result.filePaths);
+      : imports.pick(paths);
   });
 
   ipcMain.handle(
@@ -342,7 +393,8 @@ async function completeSmokeTest(window: BrowserWindow) {
 
     const passed =
       result.heading === "Connect your archive" &&
-      result.bridgeKeys.join(",") === "session,profiles,imports,save,runtime" &&
+      result.bridgeKeys.join(",") ===
+        "session,profiles,imports,save,lifecycle,runtime" &&
       !result.hasProcess &&
       !result.hasRequire &&
       result.csp?.includes("default-src 'none'");
@@ -392,6 +444,16 @@ void app.whenReady().then(async () => {
   }).catch(() => {
     console.error("OpenKeep could not register desktop file associations.");
   });
+
+  const lifecycleState = createDesktopLifecycleStateStore({
+    filePath: path.join(app.getPath("userData"), "desktop-lifecycle.json"),
+  });
+  const restoredLifecycleState = await lifecycleState.load();
+  for (const [profileId, route] of Object.entries(
+    restoredLifecycleState.profileRoutes,
+  )) {
+    if (isTrustedRendererUrl(route)) profileRoutes.set(profileId, route);
+  }
 
   const profileStorage = new ProfileStorage({
     filePath: path.join(app.getPath("userData"), "desktop-state.json"),
@@ -472,6 +534,7 @@ void app.whenReady().then(async () => {
 
   async function resetProfilePartition(profileId: string) {
     profileRoutes.delete(profileId);
+    await lifecycleState.forgetProfileRoute(profileId);
     await clearProfilePartitionData(
       profileId,
       (partition) => session.fromPartition(partition),
@@ -484,11 +547,13 @@ void app.whenReady().then(async () => {
   ) {
     const previousWindow = mainWindow;
     if (previousWindow && !previousWindow.isDestroyed()) {
+      await trayLifecycle?.captureWindowBounds(previousWindow);
       const previousId = previousWindow.webContents.id;
       const previousProfileId = windowProfileIds.get(previousId);
       const previousUrl = previousWindow.webContents.getURL();
       if (previousProfileId && isTrustedRendererUrl(previousUrl)) {
         profileRoutes.set(previousProfileId, previousUrl);
+        await lifecycleState.rememberProfileRoute(previousProfileId, previousUrl);
       }
       trustedWebContentsIds.delete(previousId);
       windowProfileIds.delete(previousId);
@@ -506,13 +571,31 @@ void app.whenReady().then(async () => {
     }
     const { partition } = await preparePartition(profileId);
     const preloadPath = path.join(__dirname, "preload.js");
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const displayWorkAreas = [
+      primaryDisplay.workArea,
+      ...screen.getAllDisplays()
+        .filter((display) => display.id !== primaryDisplay.id)
+        .map((display) => display.workArea),
+    ];
+    const restoredBounds = resolveWindowBounds(
+      lifecycleState.snapshot().windowBounds,
+      displayWorkAreas,
+    );
     const window = new BrowserWindow(
-      createMainWindowOptions(preloadPath, app.isPackaged, partition),
+      createMainWindowOptions(
+        preloadPath,
+        app.isPackaged,
+        partition,
+        restoredBounds,
+      ),
     );
     const webContentsId = window.webContents.id;
     trustedWebContentsIds.add(webContentsId);
     windowProfileIds.set(webContentsId, profileId);
     attachWindowSecurity(window);
+    mainWindow = window;
+    trayLifecycle?.attachWindow(window);
 
     if (isSmokeTest) {
       window.webContents.once("did-fail-load", (_event, code, description) => {
@@ -534,10 +617,12 @@ void app.whenReady().then(async () => {
       const currentUrl = window.webContents.getURL();
       if (profileId && isTrustedRendererUrl(currentUrl)) {
         profileRoutes.set(profileId, currentUrl);
+        void lifecycleState.rememberProfileRoute(profileId, currentUrl).catch(() => {
+          console.error("OpenKeep could not remember the active archive route.");
+        });
       }
     });
     void window.loadURL(getProfileWindowUrl(profileId, profileRoutes));
-    mainWindow = window;
   }
 
   function transitionWindow(
@@ -586,11 +671,57 @@ void app.whenReady().then(async () => {
     }, 25);
   }
 
+  trayLifecycle = createDesktopTrayLifecycle({
+    host: createElectronTrayLifecycleHost({
+      app,
+      dialog,
+      platform: process.platform,
+      getWindow: () => mainWindow,
+    }),
+    state: lifecycleState,
+    listProfiles: () => archiveSession.listProfiles(),
+    async activateProfile(profileId) {
+      const state = await archiveSession.activate(profileId);
+      if (state.status === "connected") {
+        await createMainWindow(state.profile.id);
+      } else if (
+        state.status === "disconnected" &&
+        state.reason === "invalid-credentials"
+      ) {
+        await createMainWindow(null, { clearProfileId: profileId });
+      } else {
+        focusMainWindow();
+      }
+    },
+    async startImport() {
+      const profileId = archiveSession.getActiveSession()?.profile.id;
+      if (!profileId) return;
+      const parent = mainWindow && !mainWindow.isDestroyed()
+        ? mainWindow
+        : undefined;
+      const paths = await chooseImportPaths(parent);
+      if (paths.length > 0) {
+        await importCoordinator.receivePickerPaths(paths, profileId);
+      }
+    },
+    async cleanup() {
+      archiveSession.dispose();
+      await Promise.all(
+        [...configuredPartitions].map((partition) =>
+          session.fromPartition(partition).closeAllConnections(),
+        ),
+      );
+      await lifecycleState.idle();
+    },
+  });
+  await trayLifecycle.initialize();
   registerIpcHandlers(
     archiveSession,
     importCoordinator,
     nativeSave,
     transitionWindow,
+    () => { void trayLifecycle?.refreshMenu(); },
+    trayLifecycle,
   );
   await createMainWindow(null);
   await launchLifecycle.connect(async (paths) => {
@@ -606,7 +737,7 @@ void app.whenReady().then(async () => {
         archiveSession.getActiveSession()?.profile.id ?? null,
       );
     } else {
-      mainWindow?.show();
+      trayLifecycle?.showWindow();
     }
   });
 }).catch((error: unknown) => {
@@ -614,9 +745,3 @@ void app.whenReady().then(async () => {
   app.exit(1);
 });
 }
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
