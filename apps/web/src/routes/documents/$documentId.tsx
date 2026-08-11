@@ -17,7 +17,17 @@ import { DocumentSummarySection } from "@/components/document-detail/summary-sec
 import { DetailHeader } from "@/components/document-detail/detail-header";
 import { FieldsRail } from "@/components/document-detail/fields-rail";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
+import {
+  evictDeletedArchiveDocument,
+  refreshArchiveDocumentState,
+  refreshArchiveTaxonomyState,
+} from "@/lib/archive-document-state";
+import {
+  asFetchSignal,
+  useArchiveRequestScope,
+} from "@/lib/archive-request-scope";
 import { processingRefetchInterval } from "@/lib/document-processing";
+import { createObjectUrlLease } from "@/lib/object-url";
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -535,6 +545,7 @@ function DocumentDetailPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const requestSignal = useArchiveRequestScope();
   const copy = {
     loadDoc: t("documentDetail.loadDoc"),
     loadText: t("documentDetail.loadText"),
@@ -586,9 +597,10 @@ function DocumentDetailPage() {
 
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadDoc);
       return data as unknown as Document;
@@ -598,9 +610,10 @@ function DocumentDetailPage() {
 
   const textQuery = useQuery({
     queryKey: ["document-text", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}/text", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadText);
       return data as unknown as { documentId: string; blocks: TextBlock[] };
@@ -611,9 +624,10 @@ function DocumentDetailPage() {
 
   const historyQuery = useQuery({
     queryKey: ["document-history", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}/history", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadHistory);
       return data as unknown as DocumentHistoryResponse;
@@ -624,8 +638,10 @@ function DocumentDetailPage() {
 
   const tagsQuery = useQuery({
     queryKey: ["taxonomies", "tags"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/tags", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/tags", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadTags")));
       }
@@ -635,8 +651,10 @@ function DocumentDetailPage() {
 
   const correspondentsQuery = useQuery({
     queryKey: ["taxonomies", "correspondents"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/correspondents", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadCorrespondents")));
       }
@@ -646,8 +664,10 @@ function DocumentDetailPage() {
 
   const documentTypesQuery = useQuery({
     queryKey: ["taxonomies", "document-types"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/document-types", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/document-types", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadDocumentTypes")));
       }
@@ -657,8 +677,10 @@ function DocumentDetailPage() {
 
   const previewQuery = useQuery({
     queryKey: ["document-preview", documentId],
-    queryFn: async () => {
-      const response = await authFetch(`/api/documents/${documentId}/download`);
+    queryFn: async ({ signal }) => {
+      const response = await authFetch(`/api/documents/${documentId}/download`, {
+        signal: asFetchSignal(signal),
+      });
       if (!response.ok) {
         throw new Error(t("documentDetail.failedToLoadDocumentPreview"));
       }
@@ -670,8 +692,10 @@ function DocumentDetailPage() {
 
   const providersQuery = useQuery({
     queryKey: ["health", "providers"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/health/providers");
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/health/providers", {
+        signal: asFetchSignal(signal),
+      });
       if (error) throw new Error(t("documentDetail.failedToFetchProviders"));
       return data as HealthProvidersResponse;
     },
@@ -693,23 +717,32 @@ function DocumentDetailPage() {
       return;
     }
 
-    const objectUrl = URL.createObjectURL(previewQuery.data);
-    setPreviewUrl(objectUrl);
+    const objectUrl = createObjectUrlLease();
+    let active = true;
+    const nextUrl = objectUrl.replace(previewQuery.data);
+    if (!nextUrl) return;
+    setPreviewUrl(nextUrl);
 
     // For text files, also read the blob content as a string
     if (
       documentQuery.data &&
       getPreviewCategory(documentQuery.data.mimeType) === "text"
     ) {
-      previewQuery.data.text().then((text) => {
-        setTextPreviewContent(text);
-      });
+      previewQuery.data
+        .text()
+        .then((text) => {
+          if (active) setTextPreviewContent(text);
+        })
+        .catch(() => {
+          if (active) setTextPreviewContent(null);
+        });
     } else {
       setTextPreviewContent(null);
     }
 
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      active = false;
+      objectUrl.dispose();
     };
   }, [previewQuery.data, documentQuery.data?.mimeType]);
 
@@ -719,40 +752,24 @@ function DocumentDetailPage() {
 
   // --- Mutations ---
 
-  const confirmMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST("/api/documents/{id}/review/resolve", {
-        params: { path: { id: documentId } },
-        body: {},
-      });
-      if (error) throw new Error(getApiErrorMessage(error, t("documentDetail.failedToSaveChanges")));
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
-    },
-  });
-
   const updateMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
       const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: body as any,
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) throw new Error(t("documentDetail.failedToUpdateDocument"));
       return data as unknown as Document;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-    },
+    onSuccess: () => refreshArchiveTaxonomyState(queryClient, documentId),
   });
 
   const createTagMutation = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await api.POST("/api/taxonomies/tags", {
         body: { name },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateTag")));
@@ -772,6 +789,7 @@ function DocumentDetailPage() {
     mutationFn: async (name: string) => {
       const { data, error } = await api.POST("/api/taxonomies/correspondents", {
         body: { name },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateCorrespondent")));
@@ -799,15 +817,14 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/review/resolve", {
         params: { path: { id: documentId } },
         body: {},
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToResolveReview")));
       }
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const requeueMutation = useMutation({
@@ -815,15 +832,14 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/review/requeue", {
         params: { path: { id: documentId } },
         body: { force: true },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToRequeue")));
       }
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const reprocessMutation = useMutation({
@@ -831,15 +847,16 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/reprocess", {
         params: { path: { id: documentId } },
         body: parseProvider ? { parseProvider } : {},
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToReprocessDocument")));
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setReprocessDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      await refreshArchiveDocumentState(queryClient, documentId);
     },
   });
 
@@ -849,22 +866,21 @@ function DocumentDetailPage() {
       const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: { clearLockedFields: fields },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToClearOverride")));
       }
       return data as unknown as Document;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const deleteDocumentMutation = useMutation({
     mutationFn: async () => {
       const response = await authFetch(`/api/documents/${documentId}`, {
         method: "DELETE",
+        signal: asFetchSignal(requestSignal()),
       });
       if (!response.ok) {
         let message = t("documentDetail.failedToDeleteDocument");
@@ -879,10 +895,7 @@ function DocumentDetailPage() {
     },
     onSuccess: async () => {
       setDeleteDialogOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.removeQueries({ queryKey: ["document", documentId] });
-      queryClient.removeQueries({ queryKey: ["document-history", documentId] });
-      queryClient.removeQueries({ queryKey: ["document-text", documentId] });
+      await evictDeletedArchiveDocument(queryClient, documentId);
       navigate({ to: "/documents" });
     },
   });
@@ -1172,14 +1185,35 @@ function DocumentDetailPage() {
         ? t("documentDetail.lockedFieldsSticky")
         : null;
 
+  const errorText = (error: unknown) =>
+    error instanceof Error ? error.message : null;
+  const reviewActionError =
+    errorText(resolveReviewMutation.error) ?? errorText(requeueMutation.error);
+  const railActionError =
+    errorText(createTagMutation.error) ??
+    errorText(createCorrespondentMutation.error) ??
+    errorText(clearOverrideMutation.error) ??
+    errorText(reprocessMutation.error);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DetailHeader
         doc={doc}
         onDownload={handleDownload}
-        onConfirm={() => confirmMutation.mutate()}
-        confirmPending={confirmMutation.isPending}
+        onResolveReview={() => resolveReviewMutation.mutate()}
+        onRequeueReview={() => requeueMutation.mutate()}
+        reviewPending={
+          resolveReviewMutation.isPending || requeueMutation.isPending
+        }
       />
+      {reviewActionError ? (
+        <div
+          className="border-b border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-4 py-2 text-xs text-[var(--ok-red)]"
+          role="alert"
+        >
+          {reviewActionError}
+        </div>
+      ) : null}
       <DocumentProcessingIndicator document={doc} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -1700,6 +1734,7 @@ function DocumentDetailPage() {
           onReset={seedForm}
           saving={updateMutation.isPending}
           saveError={updateMutation.isError ? t("documentDetail.failedToSaveChanges") : null}
+          actionError={railActionError}
           lockNote={lockNote}
           onReprocess={() => {
             const available =
@@ -1730,6 +1765,12 @@ function DocumentDetailPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
+                {reprocessMutation.isError ? (
+                  <p className="text-sm text-[var(--ok-red)]" role="alert">
+                    {errorText(reprocessMutation.error) ??
+                      t("documentDetail.failedToReprocessDocument")}
+                  </p>
+                ) : null}
                 <Label htmlFor="parse-provider-select">{t("documentDetail.ocrProvider")}</Label>
                 <Select
                   value={selectedParseProvider}
@@ -1798,6 +1839,12 @@ function DocumentDetailPage() {
               <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
                 <span className="font-medium">{doc.title}</span>
               </div>
+              {deleteDocumentMutation.isError ? (
+                <p className="text-sm text-[var(--ok-red)]" role="alert">
+                  {errorText(deleteDocumentMutation.error) ??
+                    t("documentDetail.failedToDeleteDocument")}
+                </p>
+              ) : null}
               <DialogFooter>
                 <Button
                   variant="outline"

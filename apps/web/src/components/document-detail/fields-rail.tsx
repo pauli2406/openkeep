@@ -83,6 +83,7 @@ type FieldsRailProps = {
   onReset: () => void;
   saving: boolean;
   saveError: string | null;
+  actionError: string | null;
   lockNote: string | null;
   onReprocess: () => void;
   reprocessPending: boolean;
@@ -223,6 +224,7 @@ export function FieldsRail({
   onReset,
   saving,
   saveError,
+  actionError,
   lockNote,
   onReprocess,
   reprocessPending,
@@ -780,26 +782,33 @@ export function FieldsRail({
         </section>
 
         {/* Danger / maintenance actions */}
-        <section className="flex items-center gap-1.5 px-3.5 py-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onReprocess}
-            disabled={reprocessPending || processing}
-          >
-            {reprocessPending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-            {t("documentDetail.reprocess")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-[var(--ok-red)]"
-            onClick={onDelete}
-            disabled={deletePending || processing}
-          >
-            {deletePending ? <Loader2 className="animate-spin" /> : <Trash2 />}
-            {t("documents.bulkDelete")}
-          </Button>
+        <section className="px-3.5 py-3">
+          {actionError ? (
+            <p className="mb-2 text-xs text-[var(--ok-red)]" role="alert">
+              {actionError}
+            </p>
+          ) : null}
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReprocess}
+              disabled={reprocessPending || processing}
+            >
+              {reprocessPending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+              {t("documentDetail.reprocess")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-[var(--ok-red)]"
+              onClick={onDelete}
+              disabled={deletePending || processing}
+            >
+              {deletePending ? <Loader2 className="animate-spin" /> : <Trash2 />}
+              {t("documents.bulkDelete")}
+            </Button>
+          </div>
         </section>
       </div>
 
