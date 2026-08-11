@@ -57,6 +57,7 @@ export function createDesktopTrayLifecycle({
   listProfiles,
   activateProfile,
   startImport,
+  ensureWindow,
   cleanup,
 }: {
   host: TrayLifecycleHost;
@@ -64,6 +65,7 @@ export function createDesktopTrayLifecycle({
   listProfiles: () => Promise<DesktopProfilesSnapshot>;
   activateProfile: (profileId: string) => Promise<void>;
   startImport: () => Promise<void>;
+  ensureWindow: () => Promise<void>;
   cleanup: () => Promise<void>;
 }) {
   let tray: TrayHandle | null = null;
@@ -91,7 +93,13 @@ export function createDesktopTrayLifecycle({
 
   function showWindow() {
     const window = usableWindow();
-    if (!window) return;
+    if (!window) {
+      // The window can be gone for good — a crash, or a profile switch that
+      // never finished. Rebuild it rather than leaving the tray pointing at
+      // nothing; a new window shows and re-attaches itself.
+      if (!quitting) enqueue(ensureWindow);
+      return;
+    }
     if (window.isMinimized()) window.restore();
     window.show();
     host.focusApplication();
@@ -269,6 +277,20 @@ export function createDesktopTrayLifecycle({
         if (currentWindow === window) currentWindow = null;
       });
       void refreshMenu();
+    },
+
+    /**
+     * Electron quits an unsubscribed app once the last window closes. Decide
+     * here instead: the tray may legitimately outlive every window, but
+     * without one there is nothing left to reveal the app from, so quit.
+     */
+    handleAllWindowsClosed() {
+      if (quitting || usableWindow()) return;
+      if (effectiveCloseBehavior() === "tray") {
+        void refreshMenu();
+        return;
+      }
+      void requestQuit();
     },
 
     showWindow,

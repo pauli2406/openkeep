@@ -541,9 +541,26 @@ void app.whenReady().then(async () => {
     );
   }
 
+  let windowCreationsInFlight = 0;
+
   async function createMainWindow(
     profileId: string | null,
     options: { resetProfileId?: string; clearProfileId?: string } = {},
+  ) {
+    // Replacing a window destroys the old one before the new one exists, so
+    // the app owns no windows for a moment. Hold off the lifecycle's
+    // all-windows-closed policy until the replacement is up.
+    windowCreationsInFlight += 1;
+    try {
+      await replaceMainWindow(profileId, options);
+    } finally {
+      windowCreationsInFlight -= 1;
+    }
+  }
+
+  async function replaceMainWindow(
+    profileId: string | null,
+    options: { resetProfileId?: string; clearProfileId?: string },
   ) {
     const previousWindow = mainWindow;
     if (previousWindow && !previousWindow.isDestroyed()) {
@@ -704,6 +721,11 @@ void app.whenReady().then(async () => {
         await importCoordinator.receivePickerPaths(paths, profileId);
       }
     },
+    async ensureWindow() {
+      await createMainWindow(
+        archiveSession.getActiveSession()?.profile.id ?? null,
+      );
+    },
     async cleanup() {
       archiveSession.dispose();
       await Promise.all(
@@ -729,16 +751,17 @@ void app.whenReady().then(async () => {
   });
 
   app.on("activate", () => {
-    if (isSmokeTest) {
+    if (isSmokeTest) return;
+    trayLifecycle?.showWindow();
+  });
+
+  app.on("window-all-closed", () => {
+    if (windowCreationsInFlight > 0) return;
+    if (!trayLifecycle) {
+      app.quit();
       return;
     }
-    if (BrowserWindow.getAllWindows().length === 0) {
-      void createMainWindow(
-        archiveSession.getActiveSession()?.profile.id ?? null,
-      );
-    } else {
-      trayLifecycle?.showWindow();
-    }
+    trayLifecycle.handleAllWindowsClosed();
   });
 }).catch((error: unknown) => {
   console.error("OpenKeep desktop failed to start.", error);

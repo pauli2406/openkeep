@@ -11,8 +11,9 @@ type Handler = (...args: unknown[]) => void;
 function createWindow({ visible = true } = {}) {
   const handlers = new Map<string, Handler>();
   let isVisible = visible;
+  let destroyed = false;
   const window: LifecycleWindow = {
-    isDestroyed: vi.fn(() => false),
+    isDestroyed: vi.fn(() => destroyed),
     isVisible: vi.fn(() => isVisible),
     isMinimized: vi.fn(() => false),
     restore: vi.fn(),
@@ -22,7 +23,12 @@ function createWindow({ visible = true } = {}) {
     getBounds: vi.fn(() => ({ x: 20, y: 30, width: 1280, height: 820 })),
     on: vi.fn((event, handler) => { handlers.set(event, handler); }),
   };
-  return { window, handlers };
+  function destroy() {
+    destroyed = true;
+    isVisible = false;
+    handlers.get("closed")?.();
+  }
+  return { window, handlers, destroy };
 }
 
 function createHarness(options: {
@@ -57,6 +63,7 @@ function createHarness(options: {
   const cleanup = vi.fn(async () => undefined);
   const activateProfile = vi.fn(async () => undefined);
   const startImport = vi.fn(async () => undefined);
+  const ensureWindow = vi.fn(async () => undefined);
   const lifecycle = createDesktopTrayLifecycle({
     host,
     state,
@@ -69,6 +76,7 @@ function createHarness(options: {
     })),
     activateProfile,
     startImport,
+    ensureWindow,
     cleanup,
   });
   return {
@@ -76,6 +84,7 @@ function createHarness(options: {
     host,
     state,
     cleanup,
+    ensureWindow,
     tray,
     menus,
     trayHandlers,
@@ -202,6 +211,49 @@ describe("desktop tray lifecycle", () => {
 
     expect(fake.window.show).toHaveBeenCalledOnce();
     expect(fake.window.focus).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the tray usable after the window is destroyed by rebuilding it", async () => {
+    const harness = createHarness();
+    const fake = createWindow();
+    await harness.lifecycle.initialize();
+    harness.lifecycle.attachWindow(fake.window);
+
+    fake.destroy();
+    harness.lifecycle.handleAllWindowsClosed();
+    await harness.lifecycle.idle();
+
+    expect(harness.host.quitApplication).not.toHaveBeenCalled();
+    await findItem(harness.menus.at(-1)!, "Show OpenKeep").click?.();
+    await harness.lifecycle.idle();
+    expect(harness.ensureWindow).toHaveBeenCalledOnce();
+  });
+
+  it("quits rather than stranding an invisible app when no tray can reveal it", async () => {
+    const harness = createHarness({ platform: "linux", trayAvailable: false });
+    const fake = createWindow();
+    await harness.lifecycle.initialize();
+    harness.lifecycle.attachWindow(fake.window);
+
+    fake.destroy();
+    harness.lifecycle.handleAllWindowsClosed();
+    await harness.lifecycle.idle();
+
+    expect(harness.cleanup).toHaveBeenCalledOnce();
+    expect(harness.host.quitApplication).toHaveBeenCalledOnce();
+  });
+
+  it("ignores all-windows-closed while a quit is already running", async () => {
+    const harness = createHarness();
+    await harness.lifecycle.initialize();
+
+    await harness.lifecycle.requestQuit();
+    harness.lifecycle.handleAllWindowsClosed();
+    await harness.lifecycle.idle();
+
+    expect(harness.cleanup).toHaveBeenCalledOnce();
+    expect(harness.host.quitApplication).toHaveBeenCalledOnce();
+    expect(harness.ensureWindow).not.toHaveBeenCalled();
   });
 
   it("runs cleanup exactly once for explicit and operating-system quit", async () => {
