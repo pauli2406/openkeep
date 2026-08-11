@@ -58,6 +58,20 @@ function createBridge(
       remove: async () => ({ status: "disconnected", reason: "no-profile" }),
       ...overrides.profiles,
     },
+    imports: {
+      pick: async () => ({ files: [], rejected: [] }),
+      pending: async () => ({ batches: [] }),
+      assign: async (input) => ({
+        id: input.batchId,
+        source: "open-with",
+        profileId: input.profileId,
+        files: [],
+        rejected: [],
+      }),
+      consume: async () => ({ files: [], rejected: [] }),
+      onChanged: () => () => undefined,
+      ...overrides.imports,
+    },
     runtime: {
       getInfo: async () => ({ platform: "darwin", version: "test" }),
       ...overrides.runtime,

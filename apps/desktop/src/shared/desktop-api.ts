@@ -9,6 +9,11 @@ export const DESKTOP_CHANNELS = {
   profilesActivate: "desktop:profiles:activate",
   profilesRename: "desktop:profiles:rename",
   profilesRemove: "desktop:profiles:remove",
+  importsPick: "desktop:imports:pick",
+  importsPending: "desktop:imports:pending",
+  importsAssign: "desktop:imports:assign",
+  importsConsume: "desktop:imports:consume",
+  importsChanged: "desktop:imports:changed",
   runtimeGetInfo: "desktop:runtime:get-info",
 } as const;
 
@@ -81,6 +86,54 @@ export type DesktopRuntimeInfo = {
   version: string;
 };
 
+export type DesktopImportSource = "picker" | "open-with";
+
+export type DesktopImportRejectionCode =
+  | "unsupported-format"
+  | "invalid-format"
+  | "oversized"
+  | "inaccessible";
+
+export type DesktopImportFileSummary = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+};
+
+export type DesktopImportFile = DesktopImportFileSummary & {
+  bytes: Uint8Array;
+};
+
+export type DesktopImportRejection = {
+  id: string;
+  name: string;
+  code: DesktopImportRejectionCode;
+  message: string;
+};
+
+export type DesktopImportBatch = {
+  id: string;
+  source: DesktopImportSource;
+  profileId: string | null;
+  files: DesktopImportFileSummary[];
+  rejected: DesktopImportRejection[];
+};
+
+export type DesktopImportDelivery = {
+  files: DesktopImportFile[];
+  rejected: DesktopImportRejection[];
+};
+
+export type DesktopImportsSnapshot = {
+  batches: DesktopImportBatch[];
+};
+
+export type DesktopImportAssignInput = {
+  batchId: string;
+  profileId: string;
+};
+
 export type DesktopBridge = {
   session: {
     restore: () => Promise<DesktopSessionState>;
@@ -94,14 +147,25 @@ export type DesktopBridge = {
     rename: (input: DesktopProfileRenameInput) => Promise<DesktopProfilesSnapshot>;
     remove: (input: DesktopProfileIdInput) => Promise<DesktopSessionState>;
   };
+  imports: {
+    pick: () => Promise<DesktopImportDelivery>;
+    pending: () => Promise<DesktopImportsSnapshot>;
+    assign: (input: DesktopImportAssignInput) => Promise<DesktopImportBatch>;
+    consume: () => Promise<DesktopImportDelivery>;
+    onChanged: (listener: () => void) => () => void;
+  };
   runtime: {
     getInfo: () => Promise<DesktopRuntimeInfo>;
   };
 };
 
 type Invoke = (channel: string, payload?: unknown) => Promise<unknown>;
+type Subscribe = (channel: string, listener: () => void) => () => void;
 
-export function createDesktopBridge(invoke: Invoke): DesktopBridge {
+export function createDesktopBridge(
+  invoke: Invoke,
+  subscribe: Subscribe = () => () => undefined,
+): DesktopBridge {
   return Object.freeze({
     session: Object.freeze({
       restore: () =>
@@ -122,6 +186,18 @@ export function createDesktopBridge(invoke: Invoke): DesktopBridge {
         invoke(DESKTOP_CHANNELS.profilesRename, input) as Promise<DesktopProfilesSnapshot>,
       remove: (input: DesktopProfileIdInput) =>
         invoke(DESKTOP_CHANNELS.profilesRemove, input) as Promise<DesktopSessionState>,
+    }),
+    imports: Object.freeze({
+      pick: () =>
+        invoke(DESKTOP_CHANNELS.importsPick) as Promise<DesktopImportDelivery>,
+      pending: () =>
+        invoke(DESKTOP_CHANNELS.importsPending) as Promise<DesktopImportsSnapshot>,
+      assign: (input: DesktopImportAssignInput) =>
+        invoke(DESKTOP_CHANNELS.importsAssign, input) as Promise<DesktopImportBatch>,
+      consume: () =>
+        invoke(DESKTOP_CHANNELS.importsConsume) as Promise<DesktopImportDelivery>,
+      onChanged: (listener: () => void) =>
+        subscribe(DESKTOP_CHANNELS.importsChanged, listener),
     }),
     runtime: Object.freeze({
       getInfo: () =>

@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   net,
   protocol,
@@ -13,6 +14,7 @@ import {
 } from "electron";
 import type { DesktopConnectInput } from "./shared/desktop-api";
 import type {
+  DesktopImportAssignInput,
   DesktopProfileIdInput,
   DesktopProfileRenameInput,
   DesktopSessionState,
@@ -39,6 +41,11 @@ import {
   DESKTOP_SHELL_PARTITION,
   shouldResetProfilePartition,
 } from "./main/profile-partition";
+import {
+  createDesktopImportService,
+  extractOpenWithPaths,
+} from "./main/import-service";
+import { createDesktopImportCoordinator } from "./main/import-coordinator";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -60,6 +67,15 @@ let mainWindow: BrowserWindow | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
 const profileRoutes = new Map<string, string>();
+const deferredOpenWithPaths: string[][] = [];
+let receiveOpenWithPaths: ((paths: string[]) => Promise<void>) | null = null;
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
 
 function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
   const senderFrame = event.senderFrame;
@@ -72,6 +88,7 @@ function assertIpcEvent(event: Electron.IpcMainInvokeEvent) {
 
 function registerIpcHandlers(
   archiveSession: ArchiveSessionService,
+  imports: ReturnType<typeof createDesktopImportCoordinator>,
   transitionWindow: (
     senderId: number,
     state: DesktopSessionState,
@@ -198,6 +215,47 @@ function registerIpcHandlers(
       version: app.getVersion(),
     };
   });
+
+  ipcMain.handle(DESKTOP_CHANNELS.importsPending, async (event) => {
+    assertIpcEvent(event);
+    return imports.pending(windowProfileIds.get(event.sender.id) ?? null);
+  });
+
+  ipcMain.handle(DESKTOP_CHANNELS.importsAssign, async (event, input: DesktopImportAssignInput) => {
+    assertIpcEvent(event);
+    return imports.assign(input);
+  });
+
+  ipcMain.handle(DESKTOP_CHANNELS.importsConsume, async (event) => {
+    assertIpcEvent(event);
+    return imports.consume(windowProfileIds.get(event.sender.id) ?? null);
+  });
+
+  ipcMain.handle(DESKTOP_CHANNELS.importsPick, async (event) => {
+    assertIpcEvent(event);
+    const profileId = windowProfileIds.get(event.sender.id);
+    if (!profileId) return { files: [], rejected: [] };
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const options = {
+      title: "Import documents into OpenKeep",
+      buttonLabel: "Import",
+      properties: ["openFile", "multiSelections"] as Array<
+        "openFile" | "multiSelections"
+      >,
+      filters: [
+        {
+          name: "OpenKeep documents",
+          extensions: ["pdf", "jpg", "jpeg", "png", "tif", "tiff", "heic"],
+        },
+      ],
+    };
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled
+      ? { files: [], rejected: [] }
+      : imports.pick(result.filePaths);
+  });
 }
 
 function configureSessionSecurity(targetSession: Electron.Session) {
@@ -299,6 +357,41 @@ app.on("web-contents-created", (_event, contents) => {
   contents.on("will-attach-webview", (event) => event.preventDefault());
 });
 
+const ownsSingleInstance = app.requestSingleInstanceLock();
+
+if (!ownsSingleInstance) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv, workingDirectory) => {
+    const paths = extractOpenWithPaths(
+      argv,
+      workingDirectory,
+      Boolean(process.defaultApp),
+    );
+    if (receiveOpenWithPaths) {
+      void receiveOpenWithPaths(paths);
+    } else if (paths.length > 0) {
+      deferredOpenWithPaths.push(paths);
+    }
+    focusMainWindow();
+  });
+
+  app.on("open-file", (event, filePath) => {
+    event.preventDefault();
+    if (receiveOpenWithPaths) {
+      void receiveOpenWithPaths([filePath]);
+    } else {
+      deferredOpenWithPaths.push([filePath]);
+    }
+  });
+
+  const coldStartPaths = extractOpenWithPaths(
+    process.argv,
+    process.cwd(),
+    Boolean(process.defaultApp),
+  );
+  if (coldStartPaths.length > 0) deferredOpenWithPaths.push(coldStartPaths);
+
 void app.whenReady().then(async () => {
   app.setAppUserModelId("de.openkeep.desktop");
 
@@ -311,6 +404,23 @@ void app.whenReady().then(async () => {
     createArchiveProfileRepository(profileStorage),
     randomUUID,
   );
+  const importService = createDesktopImportService({
+    createId: randomUUID,
+  });
+  const importCoordinator = createDesktopImportCoordinator({
+    imports: importService,
+    listProfiles: () => archiveSession.listProfiles(),
+    onChanged: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(DESKTOP_CHANNELS.importsChanged);
+      }
+      focusMainWindow();
+    },
+  });
+  receiveOpenWithPaths = async (paths) => {
+    if (paths.length === 0) return;
+    await importCoordinator.receivePaths(paths);
+  };
   const rendererRoot = path.join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME);
   const rendererDevServerUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL || undefined;
   const configuredPartitions = new Set<string>();
@@ -454,8 +564,11 @@ void app.whenReady().then(async () => {
     }, 25);
   }
 
-  registerIpcHandlers(archiveSession, transitionWindow);
+  registerIpcHandlers(archiveSession, importCoordinator, transitionWindow);
   await createMainWindow(null);
+  for (const paths of deferredOpenWithPaths.splice(0)) {
+    await receiveOpenWithPaths(paths);
+  }
 
   app.on("activate", () => {
     if (isSmokeTest) {
@@ -473,6 +586,7 @@ void app.whenReady().then(async () => {
   console.error("OpenKeep desktop failed to start.", error);
   app.exit(1);
 });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

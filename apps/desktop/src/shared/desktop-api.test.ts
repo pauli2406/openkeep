@@ -4,7 +4,9 @@ import { createDesktopBridge, DESKTOP_CHANNELS } from "./desktop-api";
 describe("preload bridge contract", () => {
   it("exposes named operations over fixed channels", async () => {
     const invoke = vi.fn(async () => ({ ok: true }));
-    const bridge = createDesktopBridge(invoke);
+    const unsubscribe = vi.fn();
+    const subscribe = vi.fn(() => unsubscribe);
+    const bridge = createDesktopBridge(invoke, subscribe);
 
     await bridge.session.restore();
     await bridge.session.connect({
@@ -17,6 +19,11 @@ describe("preload bridge contract", () => {
     await bridge.profiles.activate({ profileId: "profile-id" });
     await bridge.profiles.rename({ profileId: "profile-id", label: "Home" });
     await bridge.profiles.remove({ profileId: "profile-id" });
+    await bridge.imports.pick();
+    await bridge.imports.pending();
+    await bridge.imports.assign({ batchId: "batch-id", profileId: "profile-id" });
+    await bridge.imports.consume();
+    const stop = bridge.imports.onChanged(() => undefined);
     await bridge.runtime.getInfo();
 
     expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
@@ -37,8 +44,21 @@ describe("preload bridge contract", () => {
     expect(invoke).toHaveBeenNthCalledWith(8, DESKTOP_CHANNELS.profilesRemove, {
       profileId: "profile-id",
     });
-    expect(invoke).toHaveBeenNthCalledWith(9, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(9, DESKTOP_CHANNELS.importsPick);
+    expect(invoke).toHaveBeenNthCalledWith(10, DESKTOP_CHANNELS.importsPending);
+    expect(invoke).toHaveBeenNthCalledWith(11, DESKTOP_CHANNELS.importsAssign, {
+      batchId: "batch-id",
+      profileId: "profile-id",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(12, DESKTOP_CHANNELS.importsConsume);
+    expect(invoke).toHaveBeenNthCalledWith(13, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(subscribe).toHaveBeenCalledWith(
+      DESKTOP_CHANNELS.importsChanged,
+      expect.any(Function),
+    );
+    stop();
+    expect(unsubscribe).toHaveBeenCalledOnce();
     expect(Object.isFrozen(bridge)).toBe(true);
-    expect(Object.keys(bridge)).toEqual(["session", "profiles", "runtime"]);
+    expect(Object.keys(bridge)).toEqual(["session", "profiles", "imports", "runtime"]);
   });
 });

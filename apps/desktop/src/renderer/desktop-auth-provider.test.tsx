@@ -60,6 +60,13 @@ describe("desktop auth provider", () => {
         })),
         remove: vi.fn(async () => signedOut),
       },
+      imports: {
+        pick: vi.fn(async () => ({ files: [], rejected: [] })),
+        pending: vi.fn(async () => ({ batches: [] })),
+        assign: vi.fn(),
+        consume: vi.fn(async () => ({ files: [], rejected: [] })),
+        onChanged: vi.fn(() => () => undefined),
+      },
       runtime: {
         getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
       },
