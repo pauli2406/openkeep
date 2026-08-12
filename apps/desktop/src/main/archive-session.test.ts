@@ -477,4 +477,21 @@ describe("desktop archive session", () => {
     expect(repository.remove).toHaveBeenCalledWith(storedSession.profile.id);
     expect(active.getActiveSession()).toBeNull();
   });
+
+  it("aborts active archive work without deleting the profile during process cleanup", async () => {
+    const repository = createRepository(storedSession);
+    const service = createArchiveSessionService(
+      vi.fn().mockResolvedValueOnce(jsonResponse(health)).mockResolvedValueOnce(jsonResponse(user)),
+      repository,
+      () => "unused",
+    );
+    await service.restore();
+    const signal = service.getActiveSession()!.signal;
+
+    service.dispose();
+
+    expect(signal.aborted).toBe(true);
+    expect(service.getActiveSession()).toBeNull();
+    expect(repository.remove).not.toHaveBeenCalled();
+  });
 });

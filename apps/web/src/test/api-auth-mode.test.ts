@@ -8,13 +8,53 @@ import {
   clearTokens,
   configureApiAuthMode,
   hasTokens,
+  setApiFailureHandler,
   setTokens,
   syncTokensFromStorage,
 } from "@/lib/api";
 
 describe("API auth mode", () => {
   afterEach(() => {
+    setApiFailureHandler(null);
     configureApiAuthMode("browser");
+  });
+
+  it("reports host-owned authentication and transport failures once observed", async () => {
+    const onFailure = vi.fn();
+    setApiFailureHandler(onFailure);
+    configureApiAuthMode("main-owned");
+    server.use(
+      http.get(apiUrl("/api/protected"), () =>
+        new HttpResponse(null, { status: 401 }),
+      ),
+      http.get(apiUrl("/api/health"), () =>
+        new HttpResponse(null, {
+          status: 502,
+          headers: { "x-openkeep-desktop-error": "archive-unavailable" },
+        }),
+      ),
+    );
+
+    await authFetch("/api/protected");
+    await api.GET("/api/health");
+
+    expect(onFailure).toHaveBeenNthCalledWith(1, "unauthorized");
+    expect(onFailure).toHaveBeenNthCalledWith(2, "unavailable");
+  });
+
+  it("does not treat an archive's own gateway response as a desktop transport failure", async () => {
+    const onFailure = vi.fn();
+    setApiFailureHandler(onFailure);
+    configureApiAuthMode("main-owned");
+    server.use(
+      http.get(apiUrl("/api/health"), () =>
+        new HttpResponse(null, { status: 502 }),
+      ),
+    );
+
+    await api.GET("/api/health");
+
+    expect(onFailure).not.toHaveBeenCalled();
   });
 
   it("keeps browser token storage and refresh behavior as the default", async () => {

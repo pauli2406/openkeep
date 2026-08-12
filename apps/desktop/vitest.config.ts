@@ -13,5 +13,8 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // Shared-app parity tests exercise real router/query retries and Radix
+    // interactions, matching the web smoke-suite budget under CI contention.
+    testTimeout: 20_000,
   },
 });

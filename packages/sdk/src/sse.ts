@@ -15,13 +15,28 @@ export const createSseParser = (
 ): SseParser => {
   let buffer = "";
   let currentEvent = "";
+  let dataLines: string[] = [];
 
-  const processLine = (line: string) => {
-    if (line.startsWith("event: ")) {
-      currentEvent = line.slice(7).trim();
-    } else if (line.startsWith("data: ")) {
-      onEvent(currentEvent, line.slice(6));
+  const dispatch = () => {
+    if (dataLines.length === 0) {
       currentEvent = "";
+      return;
+    }
+    onEvent(currentEvent, dataLines.join("\n"));
+    currentEvent = "";
+    dataLines = [];
+  };
+
+  const processLine = (rawLine: string) => {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    if (line.length === 0) {
+      dispatch();
+    } else if (line.startsWith(":")) {
+      return;
+    } else if (line === "event" || line.startsWith("event:")) {
+      currentEvent = line.slice(6).replace(/^ /, "").trim();
+    } else if (line === "data" || line.startsWith("data:")) {
+      dataLines.push(line.slice(5).replace(/^ /, ""));
     }
   };
 
@@ -35,11 +50,12 @@ export const createSseParser = (
       }
     },
     flush() {
-      if (buffer.trim().length > 0) {
+      if (buffer.length > 0) {
         for (const line of buffer.split("\n")) {
           processLine(line);
         }
       }
+      dispatch();
       buffer = "";
     },
   };

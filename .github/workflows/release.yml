@@ -22,6 +22,11 @@ on:
         description: "Release version, e.g. v1.2.0"
         required: true
         type: string
+      desktop:
+        description: "Build and attach desktop artifacts after tagging"
+        required: false
+        default: true
+        type: boolean
       ref:
         description: "Commit SHA, branch or tag to release"
         required: false
@@ -240,3 +245,16 @@ jobs:
             echo
             echo "**Rollback:** set \`IMAGE_TAG\` to a previous version in the Dokploy environment and redeploy."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Desktop artifacts join the same release: built on native runners from the
+  # verified tag and uploaded only when every platform succeeded.
+  desktop:
+    needs: release
+    if: inputs.desktop
+    uses: ./.github/workflows/release-desktop.yml
+    permissions:
+      contents: write
+      checks: read
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit

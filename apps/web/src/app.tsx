@@ -5,9 +5,29 @@ import { routeTree } from "./routeTree.gen";
 import { AuthProvider as BrowserAuthProvider, useAuth } from "./hooks/use-auth";
 import {
   ShellAccessoryProvider,
+  type HostFileSaver,
+  type HostPlatform,
+  type HostSessionMode,
   type ShellAccessory,
 } from "./lib/host-shell";
 import { I18nProvider } from "./lib/i18n";
+import {
+  HostImportsProvider,
+  type HostImportAdapter,
+} from "./lib/host-imports";
+
+export type {
+  HostImportAdapter,
+  HostImportDelivery,
+  HostImportFile,
+  HostImportRejection,
+} from "./lib/host-imports";
+
+export type {
+  HostSaveRequest,
+  HostSaveResult,
+  HostSessionMode,
+} from "./lib/host-shell";
 
 export function createAppQueryClient() {
   return new QueryClient({
@@ -64,20 +84,35 @@ export function AppRouter({
 export interface AppProps {
   AuthProvider?: ComponentType<{ children: ReactNode }>;
   ShellAccessory?: ShellAccessory;
+  hostImports?: HostImportAdapter;
+  platform?: HostPlatform;
+  fileSaver?: HostFileSaver;
+  sessionMode?: HostSessionMode;
 }
 
 export function App({
   AuthProvider = BrowserAuthProvider,
   ShellAccessory,
+  hostImports,
+  platform,
+  fileSaver,
+  sessionMode,
 }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
   return (
     <QueryClientProvider client={appInstance.queryClient}>
       <AuthProvider>
-        <ShellAccessoryProvider accessory={ShellAccessory}>
-          <AppRouter {...appInstance} />
-        </ShellAccessoryProvider>
+        <HostImportsProvider adapter={hostImports}>
+          <ShellAccessoryProvider
+            accessory={ShellAccessory}
+            platform={platform}
+            fileSaver={fileSaver}
+            sessionMode={sessionMode}
+          >
+            <AppRouter {...appInstance} />
+          </ShellAccessoryProvider>
+        </HostImportsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

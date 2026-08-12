@@ -1,11 +1,16 @@
 import { createContext, useCallback, useContext, type ReactNode } from "react";
 import { AuthContext, type AuthState } from "@openkeep/web/auth";
-import { authFetch } from "@openkeep/web/api";
+import { authFetch, readApiErrorMessage } from "@openkeep/web/api";
 import { CurrentUserSchema } from "@openkeep/types";
 import type { DesktopSessionState } from "../shared/desktop-api";
 
 type DesktopSessionContextValue = {
-  state: Extract<DesktopSessionState, { status: "connected" }>;
+  /**
+   * Connected and offline sessions share this shape: both carry a profile and
+   * a verified user, so the shared app renders identically. Offline, the
+   * user comes from the encrypted cache and `/api/auth/me` is served from it.
+   */
+  state: Extract<DesktopSessionState, { status: "connected" | "offline" }>;
   setState: (state: DesktopSessionState) => void;
 };
 
@@ -24,8 +29,8 @@ export function DesktopAuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     const response = await authFetch("/api/auth/me");
     if (response.status === 401) {
-      const disconnected = await window.openkeepDesktop.session.signOut();
-      session.setState(disconnected);
+      // The shared failure seam asks main to re-verify the profile. Main alone
+      // decides whether its encrypted credentials need to be removed.
       throw new Error("The desktop archive session is no longer valid.");
     }
     if (!response.ok) {
@@ -46,7 +51,12 @@ export function DesktopAuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(preferences),
       });
       if (!response.ok) {
-        throw new Error("OpenKeep could not update the archive preferences.");
+        throw new Error(
+          await readApiErrorMessage(
+            response,
+            "OpenKeep could not update the archive preferences.",
+          ),
+        );
       }
       const user = CurrentUserSchema.safeParse(await response.json());
       if (!user.success) {

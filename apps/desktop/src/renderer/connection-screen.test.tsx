@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
+import { createDesktopBridgeStub } from "../test/desktop-bridge-stub";
 import { ConnectionScreen } from "./connection-screen";
 
 const currentUser = {
@@ -22,26 +23,15 @@ function createBridge(
   connectResult: DesktopSessionState,
   retryResult: DesktopSessionState = connectResult,
 ): DesktopBridge {
-  return {
+  return createDesktopBridgeStub({
     session: {
-      restore: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "no-profile" })),
       connect: vi.fn(async () => connectResult),
       retry: vi.fn(async () => retryResult),
-      signOut: vi.fn(async (): Promise<DesktopSessionState> => ({ status: "disconnected", reason: "signed-out" })),
     },
     profiles: {
-      list: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
       activate: vi.fn(async () => connectResult),
-      rename: vi.fn(async () => ({ profiles: [], activeProfileId: null })),
-      remove: vi.fn(async (): Promise<DesktopSessionState> => ({
-        status: "disconnected",
-        reason: "no-profile",
-      })),
     },
-    runtime: {
-      getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
-    },
-  };
+  });
 }
 
 describe("desktop connection screen", () => {

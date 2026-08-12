@@ -2,9 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { File as FileIcon, Loader2, Upload as UploadIcon } from "lucide-react";
+import {
+  IMPORT_MAX_BYTES,
+  importExtensions,
+  importMimeTypes,
+} from "@openkeep/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api, authFetch } from "@/lib/api";
+import {
+  useHostImports,
+  type HostImportDelivery,
+} from "@/lib/host-imports";
+import { useOfflineReadOnly } from "@/lib/host-shell";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -12,15 +22,9 @@ export const Route = createFileRoute("/upload")({
   component: ImportPage,
 });
 
-const ACCEPTED_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/tiff",
-  "image/heic",
-];
-
-const ACCEPTED_EXTENSIONS = ".pdf,.jpg,.jpeg,.png,.tiff,.tif,.heic";
+const ACCEPTED_EXTENSIONS = importExtensions.join(",");
+const ACCEPTED_EXTENSION_SET = new Set<string>(importExtensions);
+const ACCEPTED_TYPE_SET = new Set<string>(importMimeTypes);
 
 /** Upload → OCR → Extract → Embed, plus the terminal states. */
 type Stage = "upload" | "ocr" | "extract" | "embed" | "done" | "duplicate" | "failed";
@@ -122,6 +126,8 @@ function ImportPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const hostImports = useHostImports();
+  const offlineReadOnly = useOfflineReadOnly();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -190,6 +196,9 @@ function ImportPage() {
           id: string;
           duplicateOf: { id: string; title: string } | null;
         };
+        // Tell a desktop host about the document so it can report the outcome
+        // even after this route is gone.
+        hostImports?.reportCreated?.([{ documentId: created.id, name: item.file.name }]);
         if (created.duplicateOf) {
           // Same bytes are already filed. The document was still created —
           // that is deliberate server-side — but say so rather than letting it
@@ -209,7 +218,7 @@ function ImportPage() {
         });
       }
     },
-    [patch],
+    [patch, hostImports],
   );
 
   /**
@@ -242,13 +251,11 @@ function ImportPage() {
     [patch, uploadOne, t],
   );
 
-  const addFiles = useCallback(
-    (files: FileList | File[]) => {
-      const accepted = Array.from(files).filter(
-        (file) =>
-          ACCEPTED_TYPES.includes(file.type) ||
-          file.name.toLowerCase().endsWith(".heic"),
-      );
+  const enqueueFiles = useCallback(
+    (
+      accepted: File[],
+      rejected: Array<{ id: string; name: string; message: string }> = [],
+    ) => {
       const items: QueuedFile[] = accepted.map((file) => ({
         id: crypto.randomUUID(),
         file,
@@ -258,8 +265,18 @@ function ImportPage() {
         needsReview: false,
         pageCount: null,
       }));
-      if (items.length === 0) return;
-      setQueue((current) => [...current, ...items]);
+      const rejectedItems: QueuedFile[] = rejected.map((entry) => ({
+        id: entry.id,
+        file: new File([], entry.name),
+        stage: "failed",
+        documentId: null,
+        typeName: null,
+        needsReview: false,
+        pageCount: null,
+        errorMessage: entry.message,
+      }));
+      if (items.length === 0 && rejectedItems.length === 0) return;
+      setQueue((current) => [...current, ...items, ...rejectedItems]);
       // Bounded concurrency: three uploads in flight.
       const work = [...items];
       const generation = generationRef.current;
@@ -276,6 +293,58 @@ function ImportPage() {
     },
     [uploadOne, queryClient],
   );
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const accepted: File[] = [];
+      const rejected: Array<{ id: string; name: string; message: string }> = [];
+      for (const file of Array.from(files)) {
+        const extension = `.${file.name.toLowerCase().split(".").at(-1) ?? ""}`;
+        if (!ACCEPTED_TYPE_SET.has(file.type) && !ACCEPTED_EXTENSION_SET.has(extension)) {
+          rejected.push({
+            id: crypto.randomUUID(),
+            name: file.name,
+            message: t("import.unsupportedFormat"),
+          });
+        } else if (file.size > IMPORT_MAX_BYTES) {
+          rejected.push({
+            id: crypto.randomUUID(),
+            name: file.name,
+            message: t("import.oversized"),
+          });
+        } else {
+          accepted.push(file);
+        }
+      }
+      enqueueFiles(accepted, rejected);
+    },
+    [enqueueFiles, t],
+  );
+
+  const addHostDelivery = useCallback(
+    (delivery: HostImportDelivery) => {
+      const files = delivery.files.map((entry) => {
+        const bytes =
+          entry.bytes instanceof Uint8Array
+            ? entry.bytes
+            : new Uint8Array(entry.bytes);
+        const ownedBytes = Uint8Array.from(bytes);
+        return new File([ownedBytes.buffer], entry.name, {
+          type: entry.mimeType,
+          lastModified: Date.now(),
+        });
+      });
+      enqueueFiles(files, delivery.rejected);
+    },
+    [enqueueFiles],
+  );
+
+  useEffect(() => {
+    if (!hostImports) return;
+    const takePending = () => addHostDelivery(hostImports.takePending());
+    takePending();
+    return hostImports.subscribe(takePending);
+  }, [addHostDelivery, hostImports]);
 
   // Poll in-flight documents so each row progresses independently.
   useEffect(() => {
@@ -351,10 +420,27 @@ function ImportPage() {
       <h1 className="ok-page-title">{t("import.title")}</h1>
       <p className="mt-0.5 text-sm text-muted-foreground">{t("import.subtitle")}</p>
 
-      {/* Drop zone */}
+      {/* Drop zone — replaced by a notice while the archive is an offline copy */}
+      {offlineReadOnly ? (
+        <div
+          role="status"
+          className="mt-4 flex h-40 w-full flex-col items-center justify-center gap-1.5 rounded-[var(--r-lg)] border border-dashed border-[var(--ok-border-strong)] bg-[var(--ok-bar)]"
+        >
+          <UploadIcon className="h-5 w-5 text-muted-foreground" />
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            {t("offline.uploadDisabled")}
+          </p>
+        </div>
+      ) : (
       <button
         type="button"
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          if (hostImports) {
+            void hostImports.pickFiles().then(addHostDelivery);
+          } else {
+            fileInputRef.current?.click();
+          }
+        }}
         onDragOver={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -407,6 +493,7 @@ function ImportPage() {
           </p>
         ) : null}
       </button>
+      )}
       <input
         ref={fileInputRef}
         type="file"

@@ -76,7 +76,11 @@ describe("openkeep protocol handler", () => {
       fetchRequest,
     });
     expect((await disconnected(new Request("openkeep://app/api/health"))).status).toBe(503);
-    expect((await disconnected(new Request("openkeep://app/api/documents"))).status).toBe(503);
+    const response = await disconnected(new Request("openkeep://app/api/documents"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-openkeep-desktop-error")).toBe(
+      "archive-unavailable",
+    );
     expect(fetchRequest).not.toHaveBeenCalled();
   });
 
@@ -118,6 +122,45 @@ describe("openkeep protocol handler", () => {
     const response = handler(new Request("openkeep://app/api/search/answer/stream"));
     activeController.abort();
     await expect(response).resolves.toMatchObject({ status: 502 });
+  });
+
+  it("aborts a pending document mutation before another profile can become active", async () => {
+    const activeController = new AbortController();
+    let forwardedSignal: AbortSignal | undefined;
+    const fetchRequest = vi.fn(
+      (_input: string | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          forwardedSignal = init?.signal ?? undefined;
+          forwardedSignal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: {
+        getActiveSession: () => ({ ...activeSession, signal: activeController.signal }),
+      },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = handler(
+      new Request("openkeep://app/api/documents/document-1", {
+        method: "DELETE",
+      }),
+    );
+    activeController.abort();
+
+    expect(forwardedSignal?.aborted).toBe(true);
+    await expect(response).resolves.toMatchObject({ status: 502 });
+    expect(fetchRequest).toHaveBeenCalledWith(
+      "https://archive.example.com/base/api/documents/document-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
   });
 
   it("forwards authenticated API traffic without renderer-supplied credentials", async () => {
@@ -246,6 +289,130 @@ describe("openkeep protocol handler", () => {
     expect(await response.text()).toContain("event: token");
   });
 
+  it.each([
+    "/api/search/answer/stream",
+    "/api/documents/42/summarize/stream",
+    "/api/documents/42/ask/stream",
+  ])("forwards every shared answer stream through the active profile: %s", async (route) => {
+    const fetchRequest = vi.fn(
+      async (_input: string | Request, _init?: RequestInit) =>
+        new Response("event: done\ndata: {}\n\n", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest,
+    });
+
+    const response = await handler(
+      new Request(`openkeep://app${route}`, { method: "POST", body: "{}" }),
+    );
+    expect(response.headers.get("content-type")).toContain("text/event-stream");
+    expect(fetchRequest.mock.calls[0]?.[0]).toBe(
+      `https://archive.example.com/base${route}`,
+    );
+  });
+
+  it("delivers upstream chunks incrementally without waiting for stream completion", async () => {
+    let upstream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        upstream = controller;
+      },
+    });
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: { getActiveSession: () => activeSession },
+      fileExists,
+      fetchRequest: vi.fn(async () =>
+        new Response(body, {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      ),
+    });
+
+    const response = await handler(
+      new Request("openkeep://app/api/search/answer/stream"),
+    );
+    const reader = response.body!.getReader();
+    const encoder = new TextEncoder();
+    upstream!.enqueue(encoder.encode("event: answer-token\nda"));
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(
+      "event: answer-token\nda",
+    );
+    upstream!.enqueue(encoder.encode('ta: {"text":"now"}\n\n'));
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe(
+      'ta: {"text":"now"}\n\n',
+    );
+    upstream!.close();
+    expect((await reader.read()).done).toBe(true);
+  });
+
+  it("terminates an established stream when its active profile is switched", async () => {
+    let forwardedSignal: AbortSignal | undefined;
+    let upstream: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const profileController = new AbortController();
+    const fetchRequest = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      forwardedSignal = init?.signal ?? undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          upstream = controller;
+          forwardedSignal?.addEventListener(
+            "abort",
+            () => controller.error(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        },
+      });
+      return new Response(body, {
+        headers: { "content-type": "text/event-stream" },
+      });
+    });
+    const handler = createAppProtocolHandler({
+      rendererRoot,
+      profileId: activeSession.profile.id,
+      archiveSession: {
+        getActiveSession: () => ({ ...activeSession, signal: profileController.signal }),
+      },
+      fileExists,
+      fetchRequest,
+    });
+    const response = await handler(
+      new Request("openkeep://app/api/search/answer/stream"),
+    );
+    const reader = response.body!.getReader();
+    upstream!.enqueue(new TextEncoder().encode("event: answer-token\n"));
+    await reader.read();
+
+    profileController.abort();
+    expect(forwardedSignal?.aborted).toBe(true);
+    await expect(reader.read()).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it.each([401, 403, 429, 503])(
+    "preserves upstream stream error status %i for the shared client",
+    async (status) => {
+      const upstream = new Response("untrusted upstream details", { status });
+      const handler = createAppProtocolHandler({
+        rendererRoot,
+        profileId: activeSession.profile.id,
+        archiveSession: { getActiveSession: () => activeSession },
+        fileExists,
+        fetchRequest: vi.fn(async () => upstream),
+      });
+      const response = await handler(
+        new Request("openkeep://app/api/search/answer/stream"),
+      );
+      expect(response).toBe(upstream);
+      expect(response.status).toBe(status);
+    },
+  );
+
   it("returns a sanitized gateway error without leaking fetch details", async () => {
     const handler = createAppProtocolHandler({
       rendererRoot,
@@ -259,6 +426,9 @@ describe("openkeep protocol handler", () => {
 
     const response = await handler(new Request("openkeep://app/api/documents"));
     expect(response.status).toBe(502);
+    expect(response.headers.get("x-openkeep-desktop-error")).toBe(
+      "archive-unavailable",
+    );
     expect(await response.text()).not.toContain("secret token");
   });
 });

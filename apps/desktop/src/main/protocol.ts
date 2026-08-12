@@ -11,6 +11,25 @@ type ProtocolHandlerOptions = {
   archiveSession: Pick<ArchiveSessionService, "getActiveSession">;
   fetchRequest: DesktopFetch;
   fileExists: (filePath: string) => boolean;
+  /**
+   * Observes each successful proxied API response before it reaches the
+   * renderer, and may replace it with an identical response whose body has
+   * been teed — the offline cache's read-through seam. It must never throw.
+   */
+  observeApiResponse?: (
+    method: string,
+    pathname: string,
+    response: Response,
+  ) => Response;
+  /**
+   * When set and returning a handler, `/api` requests are answered from the
+   * offline cache instead of the network — the read-only offline session.
+   * Checked per request so one window can move between live and offline
+   * without re-registering the protocol.
+   */
+  getOfflineApiHandler?: () =>
+    | ((request: Request, url: URL) => Promise<Response>)
+    | null;
 };
 
 type AssetResolution =
@@ -33,10 +52,23 @@ const PRODUCTION_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-function textResponse(status: number, message: string) {
+function textResponse(
+  status: number,
+  message: string,
+  headers?: HeadersInit,
+) {
   return new Response(message, {
     status,
-    headers: { "content-type": "text/plain; charset=utf-8" },
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      ...Object.fromEntries(new Headers(headers)),
+    },
+  });
+}
+
+function unavailableResponse(status: 502 | 503, message: string) {
+  return textResponse(status, message, {
+    "x-openkeep-desktop-error": "archive-unavailable",
   });
 }
 
@@ -147,9 +179,13 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
     }
 
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+      const offlineHandler = options.getOfflineApiHandler?.();
+      if (offlineHandler) {
+        return offlineHandler(request, url);
+      }
       const active = options.archiveSession.getActiveSession();
       if (!active || !options.profileId || active.profile.id !== options.profileId) {
-        return textResponse(503, "Connect to an OpenKeep archive first.");
+        return unavailableResponse(503, "Connect to an OpenKeep archive first.");
       }
 
       const headers = createForwardHeaders(request.headers);
@@ -168,7 +204,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
       );
       const supportsBody = request.method !== "GET" && request.method !== "HEAD";
       try {
-        return await options.fetchRequest(target, {
+        const response = await options.fetchRequest(target, {
           method: request.method,
           headers,
           body: supportsBody ? request.body : undefined,
@@ -178,8 +214,14 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
           // upload body; Electron ignores the field when it is unnecessary.
           duplex: supportsBody ? "half" : undefined,
         } as RequestInit & { duplex?: "half" });
+        return options.observeApiResponse
+          ? options.observeApiResponse(request.method, url.pathname, response)
+          : response;
       } catch {
-        return textResponse(502, "The active OpenKeep archive could not be reached.");
+        return unavailableResponse(
+          502,
+          "The active OpenKeep archive could not be reached.",
+        );
       }
     }
 

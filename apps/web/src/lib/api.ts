@@ -5,6 +5,9 @@ const ACCESS_TOKEN_STORAGE_KEY = "openkeep.access-token";
 const REFRESH_TOKEN_STORAGE_KEY = "openkeep.refresh-token";
 
 export type ApiAuthMode = "browser" | "main-owned";
+export type ApiFailure = "unauthorized" | "unavailable";
+
+const DESKTOP_ERROR_HEADER = "x-openkeep-desktop-error";
 
 function getBaseUrl() {
   if (typeof window === "undefined") {
@@ -56,6 +59,7 @@ let refreshToken: string | null = null;
 let tokensInitialized = false;
 let onAuthFailure: (() => void) | null = null;
 let apiAuthMode: ApiAuthMode = "browser";
+let apiFailureHandler: ((failure: ApiFailure) => void) | null = null;
 const retryableRequests = new WeakMap<Request, Request>();
 
 /**
@@ -74,6 +78,28 @@ export function configureApiAuthMode(mode: ApiAuthMode) {
   accessToken = null;
   refreshToken = null;
   tokensInitialized = mode === "main-owned";
+}
+
+/**
+ * Lets a native host leave the shared shell when its authenticated transport
+ * is no longer usable. Browser auth remains unchanged and owns its refresh
+ * flow independently.
+ */
+export function setApiFailureHandler(
+  handler: ((failure: ApiFailure) => void) | null,
+) {
+  apiFailureHandler = handler;
+}
+
+function reportMainOwnedFailure(response: Response) {
+  if (apiAuthMode !== "main-owned") return;
+  if (response.status === 401) {
+    apiFailureHandler?.("unauthorized");
+  } else if (
+    response.headers.get(DESKTOP_ERROR_HEADER) === "archive-unavailable"
+  ) {
+    apiFailureHandler?.("unavailable");
+  }
 }
 
 function ensureTokensInitialized() {
@@ -169,6 +195,22 @@ export function getApiErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+/**
+ * Reads a server error without exposing request headers or credentials. This
+ * is used by the few auth flows that use raw fetch instead of the generated
+ * client, so native and browser hosts present the same authorization detail.
+ */
+export async function readApiErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  try {
+    return getApiErrorMessage(await response.clone().json(), fallback);
+  } catch {
+    return fallback;
+  }
+}
+
 // The API rotates refresh tokens and treats reuse as theft. Concurrent 401s
 // (e.g. parallel uploads with an expired access token) must therefore share ONE
 // refresh attempt — independent refreshes with the same token would revoke every
@@ -220,7 +262,9 @@ async function doRefreshAccessToken(): Promise<boolean> {
 
 export async function authFetch(input: string, init?: RequestInit): Promise<Response> {
   if (apiAuthMode === "main-owned") {
-    return fetchWithCurrentGlobal(toApiUrl(input), init);
+    const response = await fetchWithCurrentGlobal(toApiUrl(input), init);
+    reportMainOwnedFailure(response);
+    return response;
   }
 
   ensureTokensInitialized();
@@ -272,6 +316,7 @@ client.use({
   },
   async onResponse({ response, request }) {
     if (apiAuthMode === "main-owned") {
+      reportMainOwnedFailure(response);
       return response;
     }
 

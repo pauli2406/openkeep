@@ -11,6 +11,12 @@ export interface ProfilePartitionProfile {
   label?: string;
 }
 
+export interface ClearableProfileSession {
+  closeAllConnections(): Promise<void>;
+  clearStorageData(): Promise<void>;
+  clearCache(): Promise<void>;
+}
+
 function normalizeProfileId(profileId: string): string {
   if (!UUID_PATTERN.test(profileId)) {
     throw new Error("Profile ID must be a valid UUID.");
@@ -21,6 +27,18 @@ function normalizeProfileId(profileId: string): string {
 
 export function createProfilePartition(profileId: string): string {
   return `persist:openkeep-profile-${normalizeProfileId(profileId)}`;
+}
+
+export async function clearProfilePartitionData(
+  profileId: string,
+  resolveSession: (partition: string) => ClearableProfileSession,
+): Promise<void> {
+  const targetSession = resolveSession(createProfilePartition(profileId));
+  await targetSession.closeAllConnections();
+  await Promise.all([
+    targetSession.clearStorageData(),
+    targetSession.clearCache(),
+  ]);
 }
 
 export function shouldResetProfilePartition(

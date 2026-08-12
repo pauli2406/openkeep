@@ -9,7 +9,12 @@ import {
   type AuthState,
 } from "@/hooks/use-auth";
 import { syncTokensFromStorage } from "@/lib/api";
+import {
+  ShellAccessoryProvider,
+  type HostFileSaver,
+} from "@/lib/host-shell";
 import type { QueryClient } from "@tanstack/react-query";
+import { HostImportsProvider, type HostImportAdapter } from "@/lib/host-imports";
 
 const ACCESS_TOKEN_STORAGE_KEY = "openkeep.access-token";
 const REFRESH_TOKEN_STORAGE_KEY = "openkeep.refresh-token";
@@ -22,6 +27,8 @@ interface RenderAppOptions {
 
 interface RenderAuthenticatedAppOptions extends RenderAppOptions {
   authState?: Partial<AuthState>;
+  hostImports?: HostImportAdapter;
+  fileSaver?: HostFileSaver;
 }
 
 function applyStoredTokens(accessToken: string | null, refreshToken: string | null) {
@@ -88,8 +95,10 @@ export function renderAuthenticatedApp(
   const {
     route = "/",
     accessToken = "access-token",
-    refreshToken = "refresh-token",
-    authState,
+      refreshToken = "refresh-token",
+      authState,
+      hostImports,
+      fileSaver,
   } = options;
 
   applyStoredTokens(accessToken, refreshToken);
@@ -131,9 +140,13 @@ export function renderAuthenticatedApp(
     // where a control navigated read this instead.
     router: appInstance.router,
     ...render(
-      <QueryClientProvider client={appInstance.queryClient}>
-        <AuthContext.Provider value={authenticatedState}>
-          <AppRouter {...appInstance} />
+        <QueryClientProvider client={appInstance.queryClient}>
+          <AuthContext.Provider value={authenticatedState}>
+            <HostImportsProvider adapter={hostImports}>
+              <ShellAccessoryProvider fileSaver={fileSaver}>
+                <AppRouter {...appInstance} />
+              </ShellAccessoryProvider>
+            </HostImportsProvider>
         </AuthContext.Provider>
       </QueryClientProvider>,
     ),

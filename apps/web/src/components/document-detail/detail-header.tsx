@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Check, Download, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Download, FileText, Loader2, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -15,8 +15,9 @@ type HeaderDocument = {
 type DetailHeaderProps = {
   doc: HeaderDocument;
   onDownload: (variant: "original" | "searchable") => void;
-  onConfirm: () => void;
-  confirmPending: boolean;
+  onResolveReview: () => void;
+  onRequeueReview: () => void;
+  reviewPending: boolean;
 };
 
 /**
@@ -26,8 +27,9 @@ type DetailHeaderProps = {
 export function DetailHeader({
   doc,
   onDownload,
-  onConfirm,
-  confirmPending,
+  onResolveReview,
+  onRequeueReview,
+  reviewPending,
 }: DetailHeaderProps) {
   const { t } = useI18n();
 
@@ -64,11 +66,21 @@ export function DetailHeader({
           </Button>
         ) : null}
         {doc.reviewStatus === "pending" ? (
-          <Button size="sm" onClick={onConfirm} disabled={confirmPending}>
-            {confirmPending ? <Loader2 className="animate-spin" /> : <Check />}
-            {t("documentDetail.confirm")}
+          <Button size="sm" onClick={onResolveReview} disabled={reviewPending}>
+            {reviewPending ? <Loader2 className="animate-spin" /> : <Check />}
+            {t("documentDetail.resolveReview")}
           </Button>
-        ) : null}
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRequeueReview}
+            disabled={reviewPending}
+          >
+            {reviewPending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+            {t("documentDetail.requeue")}
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -27,6 +27,103 @@ function mockImportBasics() {
 }
 
 describe("upload smoke", () => {
+  it("uses the host picker and feeds native files into the shared queue", async () => {
+    const originalFetch = globalThis.fetch;
+    const uploaded: string[] = [];
+    mockImportBasics();
+    server.use(
+      http.post(apiUrl("/api/documents"), () =>
+        HttpResponse.json(
+          { id: "11111111-1111-1111-1111-111111111111", duplicateOf: null },
+          { status: 201 },
+        ),
+      ),
+    );
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      if (typeof input === "string" && input.endsWith("/api/documents")) {
+        const file = init?.body instanceof FormData ? init.body.get("file") : null;
+        if (file && typeof file !== "string") uploaded.push(file.name);
+      }
+      return originalFetch(input, init);
+    });
+    const pickFiles = vi.fn(async () => ({
+      files: [
+        {
+          id: "native-one",
+          name: "native-invoice.pdf",
+          mimeType: "application/pdf",
+          size: 6,
+          bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]),
+        },
+      ],
+      rejected: [],
+    }));
+
+    const { user } = renderAuthenticatedApp({
+      route: "/upload",
+      hostImports: {
+        pickFiles,
+        takePending: () => ({ files: [], rejected: [] }),
+        subscribe: () => () => undefined,
+      },
+    });
+
+    await user.click(await screen.findByRole("button", { name: /drop files here/i }));
+    await waitFor(() => expect(uploaded).toEqual(["native-invoice.pdf"]));
+    expect(pickFiles).toHaveBeenCalledOnce();
+    expect(screen.getByText("native-invoice.pdf")).toBeInTheDocument();
+  });
+
+  it("shows host rejections and consumes warm open-with deliveries exactly once", async () => {
+    mockImportBasics();
+    let listener: (() => void) | undefined;
+    let pending = {
+      files: [] as Array<{
+        id: string;
+        name: string;
+        mimeType: string;
+        size: number;
+        bytes: Uint8Array;
+      }>,
+      rejected: [] as Array<{ id: string; name: string; message: string }>,
+    };
+    const takePending = vi.fn(() => {
+      const delivery = pending;
+      pending = { files: [], rejected: [] };
+      return delivery;
+    });
+    renderAuthenticatedApp({
+      route: "/upload",
+      hostImports: {
+        pickFiles: async () => ({ files: [], rejected: [] }),
+        takePending,
+        subscribe: (next) => {
+          listener = next;
+          return () => {
+            listener = undefined;
+          };
+        },
+      },
+    });
+    await screen.findByRole("heading", { name: /import documents/i });
+
+    pending = {
+      files: [],
+      rejected: [
+        {
+          id: "rejected-one",
+          name: "script.exe",
+          message: "Unsupported file type.",
+        },
+      ],
+    };
+    listener?.();
+
+    expect(await screen.findByText("script.exe")).toBeInTheDocument();
+    expect(screen.getByText("Unsupported file type.")).toBeInTheDocument();
+    expect(takePending).toHaveBeenCalledTimes(2);
+  });
+
   it("queues files, sends multipart uploads with auth, and shows a processing row", async () => {
     const originalFetch = globalThis.fetch;
     const fetchCalls: Array<{

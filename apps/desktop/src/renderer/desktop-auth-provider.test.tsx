@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { useAuth } from "@openkeep/web/auth";
 import type { DesktopBridge, DesktopSessionState } from "../shared/desktop-api";
+import { createDesktopBridgeStub } from "../test/desktop-bridge-stub";
 import {
   DesktopAuthProvider,
   DesktopSessionContext,
@@ -41,7 +42,7 @@ describe("desktop auth provider", () => {
       status: "disconnected",
       reason: "signed-out",
     };
-    const bridge: DesktopBridge = {
+    const bridge: DesktopBridge = createDesktopBridgeStub({
       session: {
         restore: vi.fn(async () => connected),
         connect: vi.fn(async () => connected),
@@ -60,10 +61,7 @@ describe("desktop auth provider", () => {
         })),
         remove: vi.fn(async () => signedOut),
       },
-      runtime: {
-        getInfo: vi.fn(async () => ({ platform: "darwin" as const, version: "0.1.0" })),
-      },
-    };
+    });
     Object.defineProperty(window, "openkeepDesktop", {
       configurable: true,
       value: bridge,

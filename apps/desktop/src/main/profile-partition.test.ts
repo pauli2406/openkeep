@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DESKTOP_SHELL_PARTITION,
+  clearProfilePartitionData,
   createProfilePartition,
   shouldResetProfilePartition,
 } from "./profile-partition";
@@ -20,6 +21,24 @@ describe("desktop profile partitions", () => {
     expect(createProfilePartition(PROFILE_ID.toUpperCase())).toBe(
       `persist:openkeep-profile-${PROFILE_ID}`,
     );
+  });
+
+  it("clears conversations, recent searches, cache, and active streams with removed profile storage", async () => {
+    const targetSession = {
+      closeAllConnections: vi.fn(async () => undefined),
+      clearStorageData: vi.fn(async () => undefined),
+      clearCache: vi.fn(async () => undefined),
+    };
+    const resolveSession = vi.fn(() => targetSession);
+
+    await clearProfilePartitionData(PROFILE_ID, resolveSession);
+
+    expect(resolveSession).toHaveBeenCalledWith(
+      `persist:openkeep-profile-${PROFILE_ID}`,
+    );
+    expect(targetSession.closeAllConnections).toHaveBeenCalledOnce();
+    expect(targetSession.clearStorageData).toHaveBeenCalledOnce();
+    expect(targetSession.clearCache).toHaveBeenCalledOnce();
   });
 
   it.each([

@@ -33,6 +33,9 @@ holds the logo mark, the primary tabs, a search field that opens the omnibar
 (also reachable with Cmd/Ctrl+K), the Import action, the theme toggle, the
 settings gear and the account menu. The tab row scrolls horizontally on narrow
 viewports; the search field collapses to its icon below the `md` breakpoint.
+Native hosts may provide their platform through the shared host-shell context, so
+shortcut labels remain `Cmd` on macOS and `Ctrl` on Windows/Linux while the same
+omnibar keyboard handler continues to accept either modifier.
 
 Primary navigation surfaces:
 
@@ -67,6 +70,10 @@ before first paint — reading `localStorage["openkeep.theme"]`, falling back to
 `prefers-color-scheme` — so a dark user never sees a light flash. `useTheme`
 (`src/hooks/use-theme.ts`) keeps React in sync, persists an explicit choice, and
 follows the OS until one is made.
+
+Public Sans and IBM Plex Mono are local, OFL-licensed assets shared from the mobile
+workspace and bundled by Vite. The web UI therefore keeps identical text metrics
+inside Electron's self-only CSP and in network-restricted web deployments.
 
 Two things need care when adding UI:
 

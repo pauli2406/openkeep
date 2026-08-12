@@ -14,6 +14,9 @@ type TranslationKey =
   | "root.nav.import"
   | "root.nav.profile"
   | "root.search.placeholder"
+  | "root.offlineReadOnly"
+  | "offline.uploadDisabled"
+  | "offline.askDisabled"
   | "root.theme.toggle"
   | "root.nav.dashboard"
   | "root.nav.documents"
@@ -145,6 +148,12 @@ type TranslationKey =
   | "settings.importArchiveFailed"
   | "settings.lastImportResult"
   | "settings.watchFolderScan"
+  | "settings.watchFolderServer"
+  | "settings.watchFolderServerDescription"
+  | "settings.watchFolderStatusFailed"
+  | "settings.lastScan"
+  | "settings.lastImport"
+  | "settings.neverScanned"
   | "settings.path"
   | "settings.imported"
   | "settings.duplicates"
@@ -170,6 +179,7 @@ type TranslationKey =
   | "settings.failedToFetchStatus"
   | "settings.processingActivity"
   | "settings.processingActivityDescription"
+  | "settings.loadingProcessingStatus"
   | "settings.failedToLoadProcessingStatus"
   | "settings.ocrQueue"
   | "settings.embedQueue"
@@ -230,6 +240,8 @@ type TranslationKey =
   | "import.duplicate"
   | "import.failed"
   | "import.embeddingFailed"
+  | "import.unsupportedFormat"
+  | "import.oversized"
   | "import.review"
   | "import.retry"
   | "import.clearFinished"
@@ -413,6 +425,10 @@ type TranslationKey =
   | "documentDetail.failedToFetchProviders"
   | "documentDetail.failedToUpdateDocument"
   | "documentDetail.generatedSummary"
+  | "documentDetail.summaryGenerating"
+  | "documentDetail.summaryRegenerate"
+  | "documentDetail.summaryFailed"
+  | "documentDetail.summaryStreamEnded"
   | "documentDetail.titleCandidate"
   | "documentDetail.provider"
   | "documentDetail.typeSpecificFields"
@@ -494,6 +510,7 @@ type TranslationKey =
   | "documentDetail.failedToReprocessDocument"
   | "documentDetail.downloadOriginal"
   | "documentDetail.downloadSearchable"
+  | "documentDetail.downloadFailed"
   | "documentDetail.deleteDocument"
   | "documentDetail.cannotDeleteWhileProcessing"
   | "documentDetail.failedToDeleteDocument"
@@ -545,6 +562,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.import": "Import",
     "root.nav.profile": "Profile",
     "root.search.placeholder": "Ask the archive",
+    "root.offlineReadOnly":
+      "Offline copy — read only. Changes, imports, and AI answers are unavailable until the archive is reachable again.",
+    "offline.uploadDisabled":
+      "Importing needs a live archive connection. This archive is open read-only from its offline copy.",
+    "offline.askDisabled": "AI answers need a live archive connection.",
     "root.theme.toggle": "Toggle theme",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Documents",
@@ -676,6 +698,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.importArchiveFailed": "Failed to import archive.",
     "settings.lastImportResult": "Last Import Result",
     "settings.watchFolderScan": "Watch Folder Scan",
+    "settings.watchFolderServer": "Server Watch Folder",
+    "settings.watchFolderServerDescription": "This is the archive server's configured ingestion folder, not a folder on this desktop.",
+    "settings.watchFolderStatusFailed": "Failed to load the server watch-folder status.",
+    "settings.lastScan": "Last scan",
+    "settings.lastImport": "Last import",
+    "settings.neverScanned": "Never",
     "settings.path": "Path",
     "settings.imported": "Imported",
     "settings.duplicates": "Duplicates",
@@ -701,6 +729,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.failedToFetchStatus": "Failed to fetch status",
     "settings.processingActivity": "Processing Activity",
     "settings.processingActivityDescription": "Queue depths, document status breakdown, and recent jobs",
+    "settings.loadingProcessingStatus": "Loading processing status...",
     "settings.failedToLoadProcessingStatus": "Failed to load processing status.",
     "settings.ocrQueue": "OCR Queue",
     "settings.embedQueue": "Embed Queue",
@@ -761,6 +790,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.duplicate": "Duplicate",
     "import.failed": "Failed",
     "import.embeddingFailed": "Indexing for search failed",
+    "import.unsupportedFormat": "Unsupported file type. Use PDF, JPEG, PNG, TIFF, or HEIC.",
+    "import.oversized": "The file exceeds the desktop import limit of 64 MiB.",
     "import.review": "Review",
     "import.retry": "Retry",
     "import.clearFinished": "Clear finished",
@@ -944,6 +975,10 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToFetchProviders": "Failed to fetch providers",
     "documentDetail.failedToUpdateDocument": "Failed to update document",
     "documentDetail.generatedSummary": "Generated Summary",
+    "documentDetail.summaryGenerating": "Generating…",
+    "documentDetail.summaryRegenerate": "Regenerate",
+    "documentDetail.summaryFailed": "The summary could not be generated.",
+    "documentDetail.summaryStreamEnded": "The archive ended the summary stream unexpectedly.",
     "documentDetail.titleCandidate": "Title candidate",
     "documentDetail.provider": "Provider",
     "documentDetail.typeSpecificFields": "Type-specific Fields",
@@ -1025,6 +1060,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToReprocessDocument": "Failed to reprocess document.",
     "documentDetail.downloadOriginal": "Download Original",
     "documentDetail.downloadSearchable": "Download Searchable PDF",
+    "documentDetail.downloadFailed": "The document could not be downloaded.",
     "documentDetail.deleteDocument": "Delete Document",
     "documentDetail.cannotDeleteWhileProcessing": "Documents cannot be deleted while processing is in progress.",
     "documentDetail.failedToDeleteDocument": "Failed to delete document.",
@@ -1075,6 +1111,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.import": "Import",
     "root.nav.profile": "Profil",
     "root.search.placeholder": "Das Archiv fragen",
+    "root.offlineReadOnly":
+      "Offline-Kopie — nur Lesen. Änderungen, Importe und KI-Antworten sind erst wieder möglich, wenn das Archiv erreichbar ist.",
+    "offline.uploadDisabled":
+      "Der Import benötigt eine aktive Archivverbindung. Dieses Archiv ist schreibgeschützt aus der Offline-Kopie geöffnet.",
+    "offline.askDisabled": "KI-Antworten benötigen eine aktive Archivverbindung.",
     "root.theme.toggle": "Design wechseln",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Dokumente",
@@ -1206,6 +1247,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.importArchiveFailed": "Archiv-Import fehlgeschlagen.",
     "settings.lastImportResult": "Letztes Importergebnis",
     "settings.watchFolderScan": "Watch-Folder-Scan",
+    "settings.watchFolderServer": "Server-Watch-Folder",
+    "settings.watchFolderServerDescription": "Dies ist der konfigurierte Importordner des Archivservers, nicht ein Ordner auf diesem Desktop.",
+    "settings.watchFolderStatusFailed": "Der Status des Server-Watch-Folders konnte nicht geladen werden.",
+    "settings.lastScan": "Letzter Scan",
+    "settings.lastImport": "Letzter Import",
+    "settings.neverScanned": "Nie",
     "settings.path": "Pfad",
     "settings.imported": "Importiert",
     "settings.duplicates": "Duplikate",
@@ -1231,6 +1278,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.failedToFetchStatus": "Status konnte nicht geladen werden",
     "settings.processingActivity": "Verarbeitungsaktivitat",
     "settings.processingActivityDescription": "Queue-Tiefen, Dokumentstatus-Aufschlüsselung und letzte Jobs",
+    "settings.loadingProcessingStatus": "Verarbeitungsstatus wird geladen...",
     "settings.failedToLoadProcessingStatus": "Verarbeitungsstatus konnte nicht geladen werden.",
     "settings.ocrQueue": "OCR-Queue",
     "settings.embedQueue": "Embedding-Queue",
@@ -1291,6 +1339,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "import.duplicate": "Duplikat",
     "import.failed": "Fehlgeschlagen",
     "import.embeddingFailed": "Indexierung für die Suche fehlgeschlagen",
+    "import.unsupportedFormat": "Nicht unterstützter Dateityp. Verwende PDF, JPEG, PNG, TIFF oder HEIC.",
+    "import.oversized": "Die Datei überschreitet das Desktop-Importlimit von 64 MiB.",
     "import.review": "Prüfung",
     "import.retry": "Erneut versuchen",
     "import.clearFinished": "Fertige entfernen",
@@ -1474,6 +1524,10 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToFetchProviders": "Anbieter konnten nicht geladen werden",
     "documentDetail.failedToUpdateDocument": "Dokument konnte nicht aktualisiert werden",
     "documentDetail.generatedSummary": "Generierte Zusammenfassung",
+    "documentDetail.summaryGenerating": "Wird erstellt…",
+    "documentDetail.summaryRegenerate": "Neu erstellen",
+    "documentDetail.summaryFailed": "Die Zusammenfassung konnte nicht erstellt werden.",
+    "documentDetail.summaryStreamEnded": "Das Archiv hat den Zusammenfassungs-Stream unerwartet beendet.",
     "documentDetail.titleCandidate": "Titelvorschlag",
     "documentDetail.provider": "Anbieter",
     "documentDetail.typeSpecificFields": "Typspezifische Felder",
@@ -1555,6 +1609,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.failedToReprocessDocument": "Dokument konnte nicht neu verarbeitet werden.",
     "documentDetail.downloadOriginal": "Original herunterladen",
     "documentDetail.downloadSearchable": "Durchsuchbares PDF herunterladen",
+    "documentDetail.downloadFailed": "Das Dokument konnte nicht heruntergeladen werden.",
     "documentDetail.deleteDocument": "Dokument löschen",
     "documentDetail.cannotDeleteWhileProcessing": "Dokumente können nicht gelöscht werden, während die Verarbeitung läuft.",
     "documentDetail.failedToDeleteDocument": "Dokument konnte nicht gelöscht werden.",

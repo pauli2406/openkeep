@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { AlertTriangle, Loader2, Quote, Send, Trash2 } from "lucide-react";
-import { createSseParser } from "@openkeep/sdk";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { authFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { consumeJsonSseResponse, isAbortError } from "@/lib/sse-stream";
 
 type QaStreamState = {
   status: "idle" | "loading" | "streaming" | "done" | "error";
@@ -35,6 +35,7 @@ export function DocumentQaSection({
     errorMessage: null,
   });
   const qaAbortRef = useRef<AbortController | null>(null);
+  const qaGenerationRef = useRef(0);
   const [question, setQuestion] = useState("");
 
   // ─── Q&A history ───
@@ -44,24 +45,29 @@ export function DocumentQaSection({
 
   // ─── Load persisted Q&A history on mount ───
   useEffect(() => {
+    let active = true;
     (async () => {
       try {
         const res = await authFetch(`/api/documents/${documentId}/qa-history`);
-        if (res.ok) {
+        if (res.ok && active) {
           const entries = await res.json();
-          setQaHistory(
-            entries.map((e: { question: string; answer: string; citations: QaStreamState["citations"] }) => ({
-              question: e.question,
-              answer: e.answer,
-              citations: e.citations,
-            })),
-          );
+          if (active) {
+            setQaHistory(
+              entries.map((e: { question: string; answer: string; citations: QaStreamState["citations"] }) => ({
+                question: e.question,
+                answer: e.answer,
+                citations: e.citations,
+              })),
+            );
+          }
         }
       } catch {
         // Non-critical — history simply starts empty
       }
     })();
     return () => {
+      active = false;
+      qaGenerationRef.current += 1;
       qaAbortRef.current?.abort();
     };
   }, [documentId]);
@@ -72,6 +78,11 @@ export function DocumentQaSection({
       qaAbortRef.current?.abort();
       const controller = new AbortController();
       qaAbortRef.current = controller;
+      const generation = qaGenerationRef.current + 1;
+      qaGenerationRef.current = generation;
+      const update = (updater: (state: QaStreamState) => QaStreamState) => {
+        if (generation === qaGenerationRef.current) setQa(updater);
+      };
 
       setQa({
         status: "loading",
@@ -90,34 +101,30 @@ export function DocumentQaSection({
             signal: controller.signal,
           },
         );
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-        const parser = createSseParser((currentEvent, data) => {
-          {
-            {
-              try {
-                const parsed = JSON.parse(data);
-
-                if (currentEvent === "citations") {
-                  setQa((s) => ({
+        let terminalEvent = false;
+        await consumeJsonSseResponse(response, (currentEvent, parsed) => {
+          if (generation !== qaGenerationRef.current) return "stop";
+          if (currentEvent === "citations") {
+            update((s) => ({
                     ...s,
                     status: "streaming",
-                    citations: parsed.citations ?? [],
-                  }));
-                } else if (currentEvent === "answer-token") {
-                  setQa((s) => ({
+                    citations: Array.isArray(parsed.citations)
+                      ? (parsed.citations as QaStreamState["citations"])
+                      : [],
+            }));
+          } else if (currentEvent === "answer-token") {
+            update((s) => ({
                     ...s,
                     status: "streaming",
-                    answerText: s.answerText + (parsed.text ?? ""),
-                  }));
-                } else if (currentEvent === "done") {
-                  setQa((s) => {
-                    const finalAnswer = parsed.answer ?? s.answerText;
-                    const finalCitations = parsed.citations ?? s.citations;
+                    answerText: s.answerText + (typeof parsed.text === "string" ? parsed.text : ""),
+            }));
+          } else if (currentEvent === "done") {
+            terminalEvent = true;
+            update((s) => {
+                    const finalAnswer = typeof parsed.answer === "string" ? parsed.answer : s.answerText;
+                    const finalCitations = Array.isArray(parsed.citations)
+                      ? (parsed.citations as QaStreamState["citations"])
+                      : s.citations;
                     // Add to local history. The server persists the entry at
                     // stream end and reports historyEntryId; when that is absent
                     // (older API, or a failed server-side write) fall back to the
@@ -132,7 +139,7 @@ export function DocumentQaSection({
                         },
                       ]);
 
-                      if (!parsed.historyEntryId) {
+                      if (typeof parsed.historyEntryId !== "string") {
                         authFetch(`/api/documents/${documentId}/qa-history`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -151,30 +158,31 @@ export function DocumentQaSection({
                       citations: [],
                       errorMessage: null,
                     };
-                  });
-                } else if (currentEvent === "error") {
-                  setQa((s) => ({
-                    ...s,
-                    status: "error",
-                    errorMessage: parsed.message,
-                  }));
-                }
-              } catch {
-                // skip malformed
-              }
-            }
+            });
+            return "stop";
+          } else if (currentEvent === "error") {
+            terminalEvent = true;
+            update((s) => ({
+              ...s,
+              status: "error",
+              errorMessage: typeof parsed.message === "string"
+                ? parsed.message
+                : t("documentDetail.failedToAnswer"),
+            }));
+            return "stop";
           }
         });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          parser.push(decoder.decode(value, { stream: true }));
+        if (!terminalEvent && generation === qaGenerationRef.current) {
+          update((s) => ({
+            ...s,
+            status: "error",
+            errorMessage: "The archive ended the answer stream unexpectedly.",
+          }));
         }
-        parser.flush();
       } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setQa((s) => ({
+        if (isAbortError(err, controller.signal) || generation !== qaGenerationRef.current) return;
+        update((s) => ({
           ...s,
           status: "error",
           errorMessage: err instanceof Error ? err.message : t("documentDetail.failedToAnswer"),

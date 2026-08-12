@@ -16,7 +16,7 @@ import type {
   Tag,
   WatchFolderScanResponse,
 } from "@openkeep/types";
-import { authFetch } from "@/lib/api";
+import { authFetch, readApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,19 +60,14 @@ async function postAuthJson(path: string, body: unknown): Promise<Record<string,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const text = await res.text();
-  const json = (text ? JSON.parse(text) : {}) as Record<string, unknown>;
   if (!res.ok) {
-    const message = json.message;
-    const msg =
-      typeof message === "string"
-        ? message
-        : Array.isArray(message)
-          ? (message as string[]).join(", ")
-          : "Request failed";
-    throw new Error(msg);
+    throw new Error(await readApiErrorMessage(res, "Request failed"));
   }
-  return json;
+  try {
+    return (await res.json()) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 export function TwoFactorSection() {
@@ -350,4 +345,3 @@ export function TwoFactorSection() {
     </Card>
   );
 }
-
