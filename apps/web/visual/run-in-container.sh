@@ -20,8 +20,19 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-VERSION="$(node -p "require('$WEB_DIR/node_modules/@playwright/test/package.json').version")"
+# Resolved through Node from this package rather than from a fixed
+# node_modules path: the repository uses pnpm's hoisted linker for Electron
+# Forge, which installs dependencies in the root node_modules instead.
+VERSION="$(cd "$WEB_DIR" && node -p "require('@playwright/test/package.json').version")"
 IMAGE="mcr.microsoft.com/playwright:v${VERSION}-noble"
+
+# The container workdir is this package, but the hoisted linker installs the
+# playwright binary in the root node_modules rather than the package's own.
+if [ -x "$WEB_DIR/node_modules/.bin/playwright" ]; then
+  PLAYWRIGHT_BIN="./node_modules/.bin/playwright"
+else
+  PLAYWRIGHT_BIN="../../node_modules/.bin/playwright"
+fi
 
 if [ ! -f "$WEB_DIR/dist/index.html" ]; then
   # Through Turbo, not `pnpm --filter`: the web build needs @openkeep/types and
@@ -38,4 +49,4 @@ exec docker run --rm \
   -e HOME=/tmp \
   -e CI=1 \
   "$IMAGE" \
-  ./node_modules/.bin/playwright test "$@"
+  "$PLAYWRIGHT_BIN" test "$@"

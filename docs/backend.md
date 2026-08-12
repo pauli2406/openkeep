@@ -264,4 +264,4 @@ flowchart TD
 
 - Retrieval evaluation is present in test coverage but not yet exposed as a dedicated operator-facing benchmark command.
 - Email ingestion, workflow automation, and richer custom fields are still future phases.
-- Desktop-specific clients are still a future phase. The backend already serves both the current web app and the React Native mobile client.
+- The Electron desktop client, web app, and React Native mobile client share the backend contracts; desktop-specific native features are layered onto the Electron runtime boundary.

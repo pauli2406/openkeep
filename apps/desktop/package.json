@@ -1,12 +1,43 @@
 {
   "name": "@openkeep/desktop",
+  "productName": "OpenKeep",
   "version": "0.1.0",
+  "description": "OpenKeep desktop client",
+  "author": "OpenKeep contributors",
   "private": true,
+  "main": ".vite/build/main.js",
   "scripts": {
-    "build": "node -e \"const fs=require('node:fs');fs.mkdirSync('dist',{recursive:true});fs.writeFileSync('dist/.keep','desktop placeholder\\n');console.log('Desktop app not implemented yet');\"",
-    "dev": "echo \"Desktop app not implemented yet\"",
-    "lint": "echo \"Desktop app not implemented yet\"",
-    "test": "echo \"Desktop app not implemented yet\"",
-    "typecheck": "echo \"Desktop app not implemented yet\""
+    "build": "electron-forge package",
+    "dev": "electron-forge start",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "package": "electron-forge package",
+    "test": "vitest run",
+    "test:smoke": "node ./scripts/run-smoke.mjs",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "7.11.2",
+    "@electron-forge/plugin-fuses": "7.11.2",
+    "@electron-forge/plugin-vite": "7.11.2",
+    "@electron-forge/shared-types": "7.11.2",
+    "@electron/fuses": "1.8.0",
+    "@openkeep/types": "workspace:*",
+    "@openkeep/web": "workspace:*",
+    "@tailwindcss/vite": "^4.1.11",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "@vitejs/plugin-react": "^4.5.2",
+    "electron": "43.3.0",
+    "jsdom": "^26.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
   }
 }

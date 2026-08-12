@@ -20,8 +20,19 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-VERSION="$(node -p "require('$MOBILE_DIR/node_modules/@playwright/test/package.json').version")"
+# Resolved through Node from this package rather than from a fixed
+# node_modules path: the repository uses pnpm's hoisted linker for Electron
+# Forge, which installs dependencies in the root node_modules instead.
+VERSION="$(cd "$MOBILE_DIR" && node -p "require('@playwright/test/package.json').version")"
 IMAGE="mcr.microsoft.com/playwright:v${VERSION}-noble"
+
+# The container workdir is this package, but the hoisted linker installs the
+# playwright binary in the root node_modules rather than the package's own.
+if [ -x "$MOBILE_DIR/node_modules/.bin/playwright" ]; then
+  PLAYWRIGHT_BIN="./node_modules/.bin/playwright"
+else
+  PLAYWRIGHT_BIN="../../node_modules/.bin/playwright"
+fi
 
 # Always rebuild. A stale bundle would screenshot the previous commit's code and
 # pass, which is the one failure mode a visual suite must not have. Set
@@ -40,4 +51,4 @@ exec docker run --rm \
   -e HOME=/tmp \
   -e CI=1 \
   "$IMAGE" \
-  ./node_modules/.bin/playwright test "$@"
+  "$PLAYWRIGHT_BIN" test "$@"

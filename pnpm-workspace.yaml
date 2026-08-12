@@ -10,6 +10,7 @@ onlyBuiltDependencies:
   - "core-js-pure"
   - "cpu-features"
   - "esbuild"
+  - "electron"
   - "msw"
   - "protobufjs"
   - "ssh2"

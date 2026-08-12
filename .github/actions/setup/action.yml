@@ -20,7 +20,7 @@ runs:
     - name: Install Node
       uses: actions/setup-node@v4
       with:
-        # `engines.node` is `>=22`; pin a single minor so a Node release cannot
+        # `engines.node` is `>=22.12`; pin the supported major so a Node release cannot
         # change CI's behaviour without a commit saying so.
         node-version: "22.x"
         cache: pnpm

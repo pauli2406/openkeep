@@ -41,7 +41,7 @@ The canonical markdown source remains in the root `docs/` directory. `apps/docs`
 - `apps/worker`: background processing worker for OCR and metadata extraction jobs.
 - `apps/web`: TanStack Router web client for search, review, document detail, admin settings, and archive operations.
 - `apps/mobile`: React Native mobile client.
-- `apps/desktop`: reserved placeholder for the future Electron client.
+- `apps/desktop`: Electron Forge desktop client that reuses the web application.
 - `packages/config`: shared environment parsing and provider configuration.
 - `packages/db`: Drizzle schema and migrations.
 - `packages/types`: shared Zod schemas and public API types.

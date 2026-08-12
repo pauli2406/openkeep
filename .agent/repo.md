@@ -1,13 +1,13 @@
 # Repo Overview
 
 - Monorepo managed with `pnpm` and `turbo`.
-- Full-stack project: API, worker, web app, and mobile app are implemented; desktop remains a placeholder.
+- Full-stack project: API, worker, web app, mobile app, and an Electron desktop foundation are implemented.
 - Main apps:
   - `apps/api`: NestJS + Fastify API
   - `apps/worker`: background processing runtime
   - `apps/web`: TanStack Router web client
   - `apps/mobile`: Expo/React Native client with offline archive support
-  - `apps/desktop`: future Electron client
+  - `apps/desktop`: Electron Forge client reusing the web application behind a secure runtime boundary
 - Shared packages:
   - `packages/config`: environment parsing
   - `packages/db`: Drizzle schema and migrations
