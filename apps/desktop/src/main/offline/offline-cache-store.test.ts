@@ -336,6 +336,67 @@ describe("offline cache store", () => {
     ]);
   });
 
+  it("clears one archive's copy completely and stays usable", async () => {
+    const memory = memoryFileSystem();
+    const { store } = await createOpenStore({ fileSystem: memory.fileSystem });
+    await store.upsertDocument(document());
+    await store.attachText(DOC_ID, { blocks: [{ text: "vertraulich" }] });
+    await store.setUser({ id: "user-1" });
+    await store.cacheFileStream(DOC_ID, "searchable", webStream("%PDF-1.4"));
+    await store.idle();
+
+    await store.clear();
+
+    // Nothing of the archive's documents remains on disk: no records, no
+    // file bytes, no identity. What may remain is content-free bookkeeping —
+    // a fresh random key and an empty index (profile removal deletes the
+    // whole directory separately).
+    expect(
+      [...memory.files.keys()].filter(
+        (name) =>
+          name.includes("profile-home/records/") ||
+          name.includes("profile-home/files/") ||
+          name.endsWith("profile-home/user"),
+      ),
+    ).toEqual([]);
+    expect(store.summary()).toEqual({
+      documentCount: 0,
+      fileStorageBytes: 0,
+      lastCachedAt: null,
+    });
+    await expect(store.getUser()).resolves.toBeNull();
+
+    // The store keeps working: the next open mints a fresh key and caching resumes.
+    await store.upsertDocument(document());
+    expect(store.summary().documentCount).toBe(1);
+  });
+
+  it("clearing one profile leaves the other untouched", async () => {
+    const memory = memoryFileSystem();
+    const home = await createOpenStore({
+      fileSystem: memory.fileSystem,
+      root: "/cache/profile-home",
+    });
+    const work = await createOpenStore({
+      fileSystem: memory.fileSystem,
+      root: "/cache/profile-work",
+    });
+    await home.store.upsertDocument(document());
+    await work.store.upsertDocument(
+      document({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+    );
+    await home.store.idle();
+    await work.store.idle();
+
+    await home.store.clear();
+
+    expect(home.store.summary().documentCount).toBe(0);
+    expect(work.store.summary().documentCount).toBe(1);
+    expect(
+      [...memory.files.keys()].filter((name) => name.includes("profile-work/records")),
+    ).toHaveLength(1);
+  });
+
   it("stays disabled without a secure operating-system store", async () => {
     const memory = memoryFileSystem();
     const store = createOfflineCacheStore({

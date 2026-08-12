@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -202,6 +203,7 @@ function registerIpcHandlers(
     input: DesktopNotificationPreferenceInput,
   ) => Promise<void>,
   offlineCacheFor: (profileId: string) => Promise<OfflineCacheStore | null>,
+  forgetOfflineCache: (profileId: string) => Promise<void>,
 ) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
@@ -222,12 +224,17 @@ function registerIpcHandlers(
           ? profiles.profiles[0]!.id
           : profiles?.activeProfileId ?? undefined;
       const state = await archiveSession.restore();
+      const rejectedProfileId =
+        state.status === "disconnected" && state.reason === "invalid-credentials"
+          ? restoredProfileId
+          : undefined;
+      if (rejectedProfileId) {
+        // Rejected credentials remove the profile; its cached documents must
+        // never remain readable after the credentials that fetched them.
+        await forgetOfflineCache(rejectedProfileId);
+      }
       transitionWindow(event.sender.id, state, {
-        clearProfileId:
-          state.status === "disconnected" &&
-          state.reason === "invalid-credentials"
-            ? restoredProfileId
-            : undefined,
+        clearProfileId: rejectedProfileId,
       });
       onDesktopStateChanged();
       return state;
@@ -251,6 +258,7 @@ function registerIpcHandlers(
         // its local watch folders and import checkpoints no longer apply.
         await watchFolders.forgetProfile(resetProfileId);
         await outcomes.forgetProfile(resetProfileId);
+        await forgetOfflineCache(resetProfileId);
       }
       transitionWindow(event.sender.id, state, { resetProfileId });
       onDesktopStateChanged();
@@ -262,12 +270,15 @@ function registerIpcHandlers(
     assertIpcEvent(event);
     const profiles = await archiveSession.listProfiles().catch(() => null);
     const state = await archiveSession.retry();
+    const rejectedProfileId =
+      state.status === "disconnected" && state.reason === "invalid-credentials"
+        ? profiles?.activeProfileId ?? undefined
+        : undefined;
+    if (rejectedProfileId) {
+      await forgetOfflineCache(rejectedProfileId);
+    }
     transitionWindow(event.sender.id, state, {
-      clearProfileId:
-        state.status === "disconnected" &&
-        state.reason === "invalid-credentials"
-          ? profiles?.activeProfileId ?? undefined
-          : undefined,
+      clearProfileId: rejectedProfileId,
     });
     onDesktopStateChanged();
     return state;
@@ -287,12 +298,15 @@ function registerIpcHandlers(
     return state;
   });
 
-  ipcMain.handle(DESKTOP_CHANNELS.sessionOfflineAvailability, async (event) => {
-    assertIpcEvent(event);
+  async function ipcOfflineAvailability() {
     const profiles = await archiveSession.listProfiles().catch(() => null);
     const availability: Record<
       string,
-      { documentCount: number; lastCachedAt: number | null }
+      {
+        documentCount: number;
+        fileStorageBytes: number;
+        lastCachedAt: number | null;
+      }
     > = {};
     for (const profile of profiles?.profiles ?? []) {
       const store = await offlineCacheFor(profile.id);
@@ -304,12 +318,44 @@ function registerIpcHandlers(
       if (summary.documentCount > 0 && user) {
         availability[profile.id] = {
           documentCount: summary.documentCount,
+          fileStorageBytes: summary.fileStorageBytes,
           lastCachedAt: summary.lastCachedAt,
         };
       }
     }
     return { profiles: availability };
+  }
+
+  ipcMain.handle(DESKTOP_CHANNELS.sessionOfflineAvailability, async (event) => {
+    assertIpcEvent(event);
+    return ipcOfflineAvailability();
   });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.sessionClearOfflineCopy,
+    async (event, input: DesktopProfileIdInput) => {
+      assertIpcEvent(event);
+      if (!input || typeof input.profileId !== "string") {
+        throw new Error("Choose an archive profile.");
+      }
+      const store = await offlineCacheFor(input.profileId);
+      if (store) {
+        await store.clear();
+      }
+      // Clearing the copy under an open offline session leaves nothing to
+      // read; end the session and return to the chooser.
+      if (offlineSession?.profileId === input.profileId) {
+        offlineSession = null;
+        transitionWindow(event.sender.id, {
+          status: "disconnected",
+          reason: "choose-profile",
+        });
+      }
+      onDesktopStateChanged();
+      const availability = (await ipcOfflineAvailability()) ?? { profiles: {} };
+      return availability;
+    },
+  );
 
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionOpenOffline,
@@ -358,12 +404,15 @@ function registerIpcHandlers(
     async (event, input: DesktopProfileIdInput) => {
       assertIpcEvent(event);
       const state = await archiveSession.activate(input?.profileId);
+      const rejectedProfileId =
+        state.status === "disconnected" && state.reason === "invalid-credentials"
+          ? input?.profileId
+          : undefined;
+      if (rejectedProfileId) {
+        await forgetOfflineCache(rejectedProfileId);
+      }
       transitionWindow(event.sender.id, state, {
-        clearProfileId:
-          state.status === "disconnected" &&
-          state.reason === "invalid-credentials"
-            ? input?.profileId
-            : undefined,
+        clearProfileId: rejectedProfileId,
       });
       onDesktopStateChanged();
       return state;
@@ -392,6 +441,7 @@ function registerIpcHandlers(
       if (profileExisted && state.status !== "error" && input?.profileId) {
         await watchFolders.forgetProfile(input.profileId);
         await outcomes.forgetProfile(input.profileId);
+        await forgetOfflineCache(input.profileId);
       }
       transitionWindow(event.sender.id, state, {
         clearProfileId:
@@ -876,6 +926,28 @@ void app.whenReady().then(async () => {
    * Until it is open (or when it is disabled) responses pass through
    * untouched; once open, the same observer instance tees into it.
    */
+  /**
+   * Deletes a profile's entire offline cache directory. Called when the
+   * profile itself dies — removal, a repoint to a different server, or
+   * credentials the archive rejected. Sign-out must NOT come here: the
+   * profile still exists and its copy is waiting for the next sign-in.
+   */
+  async function forgetOfflineCache(profileId: string) {
+    const opening = offlineCaches.get(profileId);
+    offlineCaches.delete(profileId);
+    offlineApiHandlers.delete(profileId);
+    if (opening) {
+      const store = await opening;
+      await store?.idle().catch(() => undefined);
+    }
+    await rm(path.join(app.getPath("userData"), "offline-cache", profileId), {
+      recursive: true,
+      force: true,
+    }).catch(() => {
+      console.error("OpenKeep could not delete an offline cache directory.");
+    });
+  }
+
   function createProfileReadThrough(profileId: string) {
     let readThrough: ReturnType<typeof createOfflineReadThrough> | null = null;
     void offlineCacheFor(profileId).then((store) => {
@@ -1173,8 +1245,10 @@ void app.whenReady().then(async () => {
     },
     onCredentialsRejected: (profileId) => {
       // The activation already removed the rejected profile; the offline
-      // session ends with it and the chooser takes over.
+      // session ends with it, its cache dies with the credentials, and the
+      // chooser takes over.
       offlineSession = null;
+      void forgetOfflineCache(profileId).catch(() => undefined);
       void createMainWindow(null, { clearProfileId: profileId }).catch(() => {
         console.error("OpenKeep could not leave the removed offline archive.");
       });
@@ -1207,6 +1281,7 @@ void app.whenReady().then(async () => {
       await lifecycleState.setNotificationPreference(kind, enabled);
     },
     offlineCacheFor,
+    forgetOfflineCache,
   );
   watchFolders.start();
   outcomes.start();

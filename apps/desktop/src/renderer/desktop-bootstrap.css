@@ -606,6 +606,60 @@
 }
 
 .desktop-lifecycle-control__panel label small,
+.desktop-lifecycle-control__offline {
+  display: grid;
+  gap: 8px;
+  margin: 0 16px 16px;
+  padding: 11px;
+  border: 1px solid var(--ok-border);
+  border-radius: var(--r-md);
+  background: var(--ok-app);
+}
+
+.desktop-lifecycle-control__offline > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-lifecycle-control__offline strong {
+  font-size: 11.5px;
+}
+
+.desktop-lifecycle-control__offline small {
+  color: var(--ok-dim);
+  font-size: 10.5px;
+}
+
+.desktop-lifecycle-control__offline button {
+  justify-self: start;
+  padding: 5px 9px;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--ok-panel);
+  color: var(--ok-muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.desktop-lifecycle-control__offline button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.desktop-lifecycle-control__offline-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.desktop-lifecycle-control__offline-confirm span {
+  flex-basis: 100%;
+  color: var(--ok-red);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
 .desktop-lifecycle-control__notice,
 .desktop-lifecycle-control__error {
   color: var(--ok-dim);

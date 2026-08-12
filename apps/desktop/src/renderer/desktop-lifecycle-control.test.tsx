@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DesktopLifecycleControl } from "./desktop-lifecycle-control";
@@ -34,7 +34,19 @@ function createBridge(
       preferences: { ...notificationSettings.preferences, [kind]: enabled },
     })),
   };
-  return { lifecycle, notifications };
+  const session = {
+    offlineAvailability: vi.fn(async () => ({
+      profiles: {
+        "profile-1": {
+          documentCount: 4,
+          fileStorageBytes: 3 * 1024 * 1024,
+          lastCachedAt: Date.parse("2026-08-11T10:00:00.000Z"),
+        },
+      },
+    })),
+    clearOfflineCopy: vi.fn(async () => ({ profiles: {} })),
+  };
+  return { lifecycle, notifications, session };
 }
 
 describe("desktop lifecycle control", () => {
@@ -103,5 +115,40 @@ describe("desktop lifecycle control", () => {
     expect(
       await screen.findByText(/no notification service available/i),
     ).toBeVisible();
+  });
+
+  it("inspects the active archive's offline copy and deletes it after confirming", async () => {
+    const user = userEvent.setup();
+    const bridge = createBridge();
+    render(<DesktopLifecycleControl bridge={bridge} profileId="profile-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Desktop behavior" }));
+    expect(await screen.findByText(/4 documents/)).toBeVisible();
+    expect(screen.getByText(/3\.0 MB/)).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /Delete offline copy/ }));
+    // Confirmation explains locality before anything is deleted.
+    expect(
+      await screen.findByText(/The archive itself is not changed/),
+    ).toBeVisible();
+    expect(bridge.session.clearOfflineCopy).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Delete copy" }));
+    expect(bridge.session.clearOfflineCopy).toHaveBeenCalledWith({
+      profileId: "profile-1",
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/4 documents/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows nothing to inspect for an archive without an offline copy", async () => {
+    const user = userEvent.setup();
+    const bridge = createBridge();
+    render(<DesktopLifecycleControl bridge={bridge} profileId="profile-2" />);
+
+    await user.click(screen.getByRole("button", { name: "Desktop behavior" }));
+    await screen.findByText(/When the window closes/i);
+    expect(screen.queryByText(/Delete offline copy/)).not.toBeInTheDocument();
   });
 });

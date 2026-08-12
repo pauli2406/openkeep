@@ -595,6 +595,19 @@ it through the host shell as `useOfflineReadOnly()` — the one shared predicate
 read-only banner and disables the mutating surfaces: the import drop zone is
 replaced by an explanation, ask composers are off, and the document rail's
 editing, reprocess, and delete controls sit inside one disabled fieldset.
+Inspection and clearing complete the copy's lifecycle. The availability query
+reports counts, size on disk, and the true last-written time (`MAX(cached_at)`)
+per profile — never a path or title — and drives both the chooser's offer and
+the desktop-behavior panel's offline-copy block, whose delete action clears one
+archive's records, files, index, identity, and wrapped key after an inline
+confirmation. Clearing under an open offline session ends the session. The
+cache's lifetime is bound to its profile: removal, a repoint to a different
+server, and archive-rejected credentials all delete the whole per-profile cache
+directory (including via the reconnect loop's rejection path), while sign-out
+keeps it — the profile still exists and its copy waits for the next sign-in.
+Every deletion is local by construction; nothing in the cache layer can reach
+an archive.
+
 Reconnection is a main-process loop, not a user chore. While a profile is
 offline it is re-verified every thirty seconds through the ordinary activation,
 so outcomes keep their meanings: the first success ends the offline session and
@@ -691,9 +704,8 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. The offline copy holds only opened documents. Cache inspection and clearing,
-disk limits, eviction, and corruption recovery arrive with the remaining #172
-stories. There is no launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
+archives. The offline copy holds only opened documents. Disk limits, eviction, and
+deeper corruption recovery arrive with the last #172 story. There is no launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
 they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.

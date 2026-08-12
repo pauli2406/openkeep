@@ -32,6 +32,7 @@ export function createDesktopBridgeStub(
       })),
       openOffline: vi.fn(async () => DISCONNECTED),
       offlineAvailability: vi.fn(async () => ({ profiles: {} })),
+      clearOfflineCopy: vi.fn(async () => ({ profiles: {} })),
       ...overrides.session,
     },
     profiles: {

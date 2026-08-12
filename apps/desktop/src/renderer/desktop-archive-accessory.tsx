@@ -120,7 +120,7 @@ export function DesktopArchiveAccessory() {
           onRemove={(profile) => removeProfile(profile)}
         />
         <DesktopWatchFolders />
-        <DesktopLifecycleControl />
+        <DesktopLifecycleControl profileId={session.state.profile.id} />
         {message ? (
           <span className="desktop-archive-accessory__error" role="alert">
             {message}

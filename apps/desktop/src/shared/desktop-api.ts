@@ -7,6 +7,7 @@ export const DESKTOP_CHANNELS = {
   sessionSignOut: "desktop:session:sign-out",
   sessionOpenOffline: "desktop:session:open-offline",
   sessionOfflineAvailability: "desktop:session:offline-availability",
+  sessionClearOfflineCopy: "desktop:session:clear-offline-copy",
   profilesList: "desktop:profiles:list",
   profilesActivate: "desktop:profiles:activate",
   profilesRename: "desktop:profiles:rename",
@@ -91,7 +92,14 @@ export type DesktopSessionState =
  * identity. Counts only — never paths or document titles.
  */
 export type DesktopOfflineAvailability = {
-  profiles: Record<string, { documentCount: number; lastCachedAt: number | null }>;
+  profiles: Record<
+    string,
+    {
+      documentCount: number;
+      fileStorageBytes: number;
+      lastCachedAt: number | null;
+    }
+  >;
 };
 
 export type DesktopProfilesSnapshot = {
@@ -285,6 +293,9 @@ export type DesktopBridge = {
     signOut: () => Promise<DesktopSessionState>;
     openOffline: (input: DesktopProfileIdInput) => Promise<DesktopSessionState>;
     offlineAvailability: () => Promise<DesktopOfflineAvailability>;
+    clearOfflineCopy: (
+      input: DesktopProfileIdInput,
+    ) => Promise<DesktopOfflineAvailability>;
   };
   profiles: {
     list: () => Promise<DesktopProfilesSnapshot>;
@@ -356,6 +367,11 @@ export function createDesktopBridge(
       offlineAvailability: () =>
         invoke(
           DESKTOP_CHANNELS.sessionOfflineAvailability,
+        ) as Promise<DesktopOfflineAvailability>,
+      clearOfflineCopy: (input: DesktopProfileIdInput) =>
+        invoke(
+          DESKTOP_CHANNELS.sessionClearOfflineCopy,
+          input,
         ) as Promise<DesktopOfflineAvailability>,
     }),
     profiles: Object.freeze({

@@ -276,13 +276,12 @@ export function createOfflineCacheStore({
     }
   }
 
-  return {
-    /**
-     * Opens the per-profile store. Throws `SecureStorageUnavailableError`
-     * when the operating-system store cannot protect the data key — the
-     * caller leaves the cache disabled rather than writing plaintext.
-     */
-    async open() {
+  /**
+   * Opens the per-profile store. Throws `SecureStorageUnavailableError` when
+   * the operating-system store cannot protect the data key — the caller
+   * leaves the cache disabled rather than writing plaintext.
+   */
+  async function openStore() {
       await fileSystem.mkdir(recordsDir);
       await fileSystem.mkdir(filesDir);
       key = await loadOrCreateCacheKey(credentialCipher, {
@@ -317,7 +316,10 @@ export function createOfflineCacheStore({
       }
       await rebuildIndexFromRecords();
       await persistIndex().catch(() => undefined);
-    },
+  }
+
+  return {
+    open: openStore,
 
     /** Called on each online document open; refreshes metadata last-open-wins. */
     async upsertDocument(document: unknown) {
@@ -505,6 +507,37 @@ export function createOfflineCacheStore({
           ? rows.reduce((latest, row) => Math.max(latest, row.cachedAt), 0)
           : null,
       };
+    },
+
+    /**
+     * Deletes everything this archive's copy holds — records, files, index,
+     * cached identity, and the wrapped data key (a fresh key is minted on the
+     * next write). Local only by construction: nothing here can reach an
+     * archive. Other profiles' caches are untouched because each store owns
+     * exactly one profile directory.
+     */
+    async clear() {
+      requireOpen();
+      await Promise.allSettled([...fileWritesInFlight.values()]);
+      await writes;
+      for (const directory of [recordsDir, filesDir]) {
+        let names: string[] = [];
+        try {
+          names = await fileSystem.readdir(directory);
+        } catch {
+          continue;
+        }
+        for (const name of names) {
+          await fileSystem.unlink(path.join(directory, name)).catch(() => undefined);
+        }
+      }
+      for (const filePath of [indexPath, userPath, keyPath]) {
+        await fileSystem.unlink(filePath).catch(() => undefined);
+      }
+      columns = new Map();
+      // The key file is gone; reopen mints a fresh key before the next write.
+      key = null;
+      await openStore();
     },
 
     async idle() {

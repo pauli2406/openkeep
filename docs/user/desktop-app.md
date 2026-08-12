@@ -457,6 +457,22 @@ while connected yet. If the offline copy cannot be protected by the operating
 system's credential store, it stays disabled entirely rather than being
 written unprotected.
 
+The desktop-behavior control shows the active archive's offline copy: how many
+documents it holds, its size on disk, and when a document was last saved into
+it. `Delete offline copy` removes it from this computer after a confirmation —
+the archive itself is never changed, and other archives' copies are untouched.
+Deleting the copy while it is open ends the offline session and returns to the
+archive chooser.
+
+The copy's lifetime follows its profile. Removing a profile, pointing it at a
+different server, or having its credentials rejected by the archive deletes
+its offline copy along with the profile — cached documents never remain
+readable after the credentials that fetched them are gone. Signing out keeps
+the copy: the profile still exists, and the copy is waiting for the next
+sign-in. Documents never leave the managed copy — previews and downloads you
+explicitly save are the only files written elsewhere, and only where you
+choose.
+
 ## Related Documents
 
 - [Getting Started](./getting-started.md) for the shared archive UI

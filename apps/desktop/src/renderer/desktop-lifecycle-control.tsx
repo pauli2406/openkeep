@@ -5,7 +5,21 @@ import type {
   DesktopLifecycleSettings,
   DesktopNotificationKind,
   DesktopNotificationSettings,
+  DesktopOfflineAvailability,
 } from "../shared/desktop-api";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB"];
+  let value = bytes;
+  let unit = "B";
+  for (const next of units) {
+    if (value < 1024) break;
+    value /= 1024;
+    unit = next;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${unit}`;
+}
 
 const NOTIFICATION_LABELS: Array<{
   kind: DesktopNotificationKind;
@@ -40,8 +54,16 @@ function TrayGlyph() {
 
 export function DesktopLifecycleControl({
   bridge = window.openkeepDesktop,
+  profileId,
 }: {
-  bridge?: Pick<DesktopBridge, "lifecycle" | "notifications">;
+  bridge?: Pick<DesktopBridge, "lifecycle" | "notifications"> & {
+    session?: Pick<
+      DesktopBridge["session"],
+      "offlineAvailability" | "clearOfflineCopy"
+    >;
+  };
+  /** The active archive, whose offline copy the panel inspects. */
+  profileId?: string;
 }) {
   const panelId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,6 +71,10 @@ export function DesktopLifecycleControl({
   const [settings, setSettings] = useState<DesktopLifecycleSettings | null>(null);
   const [notifications, setNotifications] =
     useState<DesktopNotificationSettings | null>(null);
+  const [offlineCopy, setOfflineCopy] = useState<
+    DesktopOfflineAvailability["profiles"][string] | null
+  >(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -71,6 +97,22 @@ export function DesktopLifecycleControl({
     });
     return () => { active = false; };
   }, [bridge]);
+
+  useEffect(() => {
+    if (!open || !profileId || !bridge.session) return;
+    let active = true;
+    void bridge.session
+      .offlineAvailability()
+      .then((availability) => {
+        if (active) setOfflineCopy(availability.profiles[profileId] ?? null);
+      })
+      .catch(() => {
+        // No availability just means nothing to inspect.
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, profileId, bridge]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +150,21 @@ export function DesktopLifecycleControl({
       setNotifications(await bridge.notifications.setPreference({ kind, enabled }));
     } catch {
       setMessage("That notification setting could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearOfflineCopy() {
+    if (!profileId || !bridge.session) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const availability = await bridge.session.clearOfflineCopy({ profileId });
+      setOfflineCopy(availability.profiles[profileId] ?? null);
+      setConfirmingClear(false);
+    } catch {
+      setMessage("The offline copy could not be deleted.");
     } finally {
       setBusy(false);
     }
@@ -185,6 +242,36 @@ export function DesktopLifecycleControl({
               </label>
             ))}
           </fieldset>
+          {profileId && offlineCopy ? (
+            <div className="desktop-lifecycle-control__offline">
+              <div>
+                <strong>Offline copy</strong>
+                <small>
+                  {offlineCopy.documentCount} document
+                  {offlineCopy.documentCount === 1 ? "" : "s"} ·{" "}
+                  {formatBytes(offlineCopy.fileStorageBytes)} · last saved{" "}
+                  {offlineCopy.lastCachedAt
+                    ? new Date(offlineCopy.lastCachedAt).toLocaleString()
+                    : "never"}
+                </small>
+              </div>
+              {confirmingClear ? (
+                <div className="desktop-lifecycle-control__offline-confirm">
+                  <span>Delete the offline copy from this computer? The archive itself is not changed.</span>
+                  <button type="button" disabled={busy} onClick={() => void clearOfflineCopy()}>
+                    Delete copy
+                  </button>
+                  <button type="button" onClick={() => setConfirmingClear(false)}>
+                    Keep
+                  </button>
+                </div>
+              ) : (
+                <button type="button" disabled={busy} onClick={() => setConfirmingClear(true)}>
+                  Delete offline copy…
+                </button>
+              )}
+            </div>
+          ) : null}
           {notifications && !notifications.supported ? (
             <p className="desktop-lifecycle-control__notice">
               This system has no notification service available, so OpenKeep cannot
