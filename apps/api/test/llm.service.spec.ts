@@ -440,6 +440,265 @@ describe("LlmService", () => {
     expect(body.generationConfig.responseSchema).toBeUndefined();
   });
 
+  it("accumulates streamed tool-call fragments and returns them on the terminal chunk", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        [
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_abc","function":{"name":"search_documents","arguments":"{\\"year\\""}}]}}]}\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":":2025}"}}]}}]}\n',
+          "data: [DONE]\n",
+        ].join(""),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const chunks: any[] = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "How many docs from 2025?" }],
+      tools: [
+        {
+          name: "search_documents",
+          description: "Search the archive",
+          parameters: { type: "object", properties: { year: { type: "integer" } } },
+        },
+      ],
+      toolChoice: "required",
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      {
+        text: "",
+        done: true,
+        toolCalls: [{ id: "call_abc", name: "search_documents", arguments: { year: 2025 } }],
+        provider: "mistral",
+        model: "mistral-small-latest",
+      },
+    ]);
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.tools).toEqual([
+      {
+        type: "function",
+        function: {
+          name: "search_documents",
+          description: "Search the archive",
+          parameters: { type: "object", properties: { year: { type: "integer" } } },
+        },
+      },
+    ]);
+    // Mistral predates OpenAI's "required" and expects "any".
+    expect(body.tool_choice).toBe("any");
+  });
+
+  it("parses Gemini functionCall parts into tool calls with synthetic ids", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        'data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"semantic_search","args":{"query":"rent"}}}]}}]}\n',
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+      }),
+    );
+
+    const chunks: any[] = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "What does my lease say about rent?" }],
+      tools: [
+        {
+          name: "semantic_search",
+          description: "Semantic search",
+          parameters: { type: "object", properties: { query: { type: "string" } } },
+        },
+      ],
+      toolChoice: "required",
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      {
+        text: "",
+        done: true,
+        toolCalls: [{ id: "call_1", name: "semantic_search", arguments: { query: "rent" } }],
+        provider: "gemini",
+        model: "gemini-2.0-flash",
+      },
+    ]);
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.tools).toEqual([
+      {
+        functionDeclarations: [
+          {
+            name: "semantic_search",
+            description: "Semantic search",
+            parameters: { type: "object", properties: { query: { type: "string" } } },
+          },
+        ],
+      },
+    ]);
+    expect(body.toolConfig).toEqual({ functionCallingConfig: { mode: "ANY" } });
+  });
+
+  it("serializes assistant tool calls and tool results in the OpenAI dialect", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: "12 documents" } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    await service.complete({
+      messages: [
+        { role: "user", content: "How many invoices?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_abc", name: "search_documents", arguments: { type: "Invoice" } }],
+        },
+        {
+          role: "tool",
+          toolCallId: "call_abc",
+          name: "search_documents",
+          content: '{"totalCount":12}',
+        },
+      ],
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.messages).toEqual([
+      { role: "user", content: "How many invoices?" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [
+          {
+            id: "call_abc",
+            type: "function",
+            function: { name: "search_documents", arguments: '{"type":"Invoice"}' },
+          },
+        ],
+      },
+      {
+        role: "tool",
+        tool_call_id: "call_abc",
+        name: "search_documents",
+        content: '{"totalCount":12}',
+      },
+    ]);
+  });
+
+  it("serializes tool turns as functionCall/functionResponse parts for Gemini", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ candidates: [{ content: { parts: [{ text: "12 documents" }] } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        GEMINI_API_KEY: "gemini-key",
+        GEMINI_MODEL: "gemini-2.0-flash",
+      }),
+    );
+
+    await service.complete({
+      messages: [
+        { role: "user", content: "How many invoices?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_1", name: "search_documents", arguments: { type: "Invoice" } }],
+        },
+        {
+          role: "tool",
+          toolCallId: "call_1",
+          name: "search_documents",
+          content: '{"totalCount":12}',
+        },
+      ],
+    });
+
+    const body = JSON.parse((fetchSpy.mock.calls[0]?.[1] as RequestInit).body as string);
+    expect(body.contents).toEqual([
+      { role: "user", parts: [{ text: "How many invoices?" }] },
+      {
+        role: "model",
+        parts: [{ functionCall: { name: "search_documents", args: { type: "Invoice" } } }],
+      },
+      {
+        role: "user",
+        parts: [
+          { functionResponse: { name: "search_documents", response: { totalCount: 12 } } },
+        ],
+      },
+    ]);
+  });
+
+  it("streams interleaved text before tool calls without dropping either", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(
+        [
+          'data: {"choices":[{"delta":{"content":"Let me check."}}]}\n',
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"search_documents","arguments":"{}"}}]}}]}\n',
+          "data: [DONE]\n",
+        ].join(""),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      ),
+    );
+
+    const service = new LlmService(
+      createConfigService({
+        MISTRAL_API_KEY: "mistral-key",
+        MISTRAL_MODEL: "mistral-small-latest",
+        MISTRAL_API_BASE_URL: "https://api.mistral.ai",
+      }),
+    );
+
+    const chunks: any[] = [];
+    for await (const chunk of service.streamWithFallback({
+      messages: [{ role: "user", content: "How many invoices?" }],
+      tools: [
+        { name: "search_documents", description: "Search", parameters: { type: "object" } },
+      ],
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks[0]).toEqual({ text: "Let me check.", done: false });
+    expect(chunks[1]).toEqual({
+      text: "",
+      done: true,
+      toolCalls: [{ id: "call_1", name: "search_documents", arguments: {} }],
+      provider: "mistral",
+      model: "mistral-small-latest",
+    });
+  });
+
   it("retries a non-streaming completion once on 429 before giving up", async () => {
     const fetchSpy = vi.spyOn(global, "fetch")
       .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))

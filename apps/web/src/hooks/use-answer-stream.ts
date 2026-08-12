@@ -20,7 +20,7 @@ type AnswerStructuredData =
       windowEnd: string | null;
     }
   | {
-      kind: "pending_review_documents" | "expiring_contracts";
+      kind: "pending_review_documents" | "expiring_contracts" | "document_table";
       title: string;
       description: string | null;
       items: Document[];
@@ -28,6 +28,8 @@ type AnswerStructuredData =
       windowStart?: string | null;
       windowEnd?: string | null;
     };
+
+export type AnswerHistoryTurn = { role: "user" | "assistant"; content: string };
 import { createSseParser, linkifyAnswerCitations } from "@openkeep/sdk";
 
 import { authFetch } from "@/lib/api";
@@ -70,6 +72,8 @@ export type StreamState = {
   citations: AnswerCitation[];
   searchResults: SemanticSearchResult[];
   structuredData: AnswerStructuredData | null;
+  /** Label of the tool the agent is currently running, for a progress line. */
+  toolStatus: string | null;
   errorMessage: string | null;
 };
 
@@ -83,12 +87,13 @@ export function useAnswerStream() {
     citations: [],
     searchResults: [],
     structuredData: null,
+    toolStatus: null,
     errorMessage: null,
   });
 
   const abortRef = useRef<AbortController | null>(null);
 
-  const startStream = useCallback(async (query: string) => {
+  const startStream = useCallback(async (query: string, history?: AnswerHistoryTurn[]) => {
     // Abort any previous stream
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -103,6 +108,7 @@ export function useAnswerStream() {
       citations: [],
       searchResults: [],
       structuredData: null,
+      toolStatus: null,
       errorMessage: null,
     });
 
@@ -112,6 +118,9 @@ export function useAnswerStream() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
+          // Last turns of the visible thread; lets the agent resolve follow-ups
+          // ("and what about the second one?"). Capped server-side at 12.
+          ...(history && history.length > 0 ? { history: history.slice(-6) } : {}),
           maxDocuments: 5,
           maxCitations: 6,
           maxChunkMatches: 6,
@@ -143,6 +152,12 @@ export function useAnswerStream() {
               status: "streaming",
               answerText: s.answerText + (parsed.text ?? ""),
             }));
+          } else if (event === "tool-status") {
+            setState((s) => ({
+              ...s,
+              status: "streaming",
+              toolStatus: parsed.status === "started" ? (parsed.label ?? null) : null,
+            }));
           } else if (event === "done") {
             setState((s) => ({
               ...s,
@@ -153,6 +168,7 @@ export function useAnswerStream() {
               citations: parsed.citations ?? s.citations,
               answerText: parsed.fullAnswer ?? s.answerText,
               structuredData: parsed.structuredData ?? s.structuredData,
+              toolStatus: null,
             }));
           } else if (event === "error") {
             setState((s) => ({
@@ -206,6 +222,7 @@ export function useAnswerStream() {
       citations: [],
       searchResults: [],
       structuredData: null,
+      toolStatus: null,
       errorMessage: null,
     });
   }, []);

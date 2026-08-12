@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { AnswerCitation, AnswerQueryResponse, SemanticSearchResult } from "@openkeep/types";
 
+import { buildCitationQuote } from "./citation-usage.util";
 import type { AnswerProvider } from "./provider.types";
 
 @Injectable()
@@ -33,7 +34,6 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
       };
     }
 
-    const best = citations[0]!;
     const selected = this.selectBestCitation(citations, input.question);
     const supporting = citations.slice(1, 3).map((citation) => this.describeCitation(citation));
 
@@ -44,7 +44,9 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
         supporting.length > 0
           ? `Answer selected from the highest-scoring grounded chunk, with corroborating evidence in ${supporting.join(", ")}.`
           : "Answer selected from the highest-scoring grounded chunk after filtering weak and duplicate evidence.",
-      citations,
+      // The extractive answer IS the selected quote — that citation is the one
+      // in use; the rest is corroborating material clients may collapse.
+      citations: citations.map((citation) => ({ ...citation, used: citation === selected })),
     };
   }
 
@@ -97,7 +99,9 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
         continue;
       }
 
-      citations.push(citation);
+      // Number as we keep: linkifyAnswerCitations resolves [n] via this index,
+      // which extractive payloads previously lacked entirely.
+      citations.push({ ...citation, index: citations.length + 1 });
       if (citations.length >= maxCitations) {
         return citations;
       }
@@ -107,7 +111,7 @@ export class ExtractiveAnswerProvider implements AnswerProvider {
   }
 
   private normalizeQuote(text: string): string {
-    return text.replace(/\s+/g, " ").trim().slice(0, 280);
+    return buildCitationQuote(text);
   }
 
   private selectBestCitation(citations: AnswerCitation[], question: string): AnswerCitation {
