@@ -7,6 +7,13 @@ import {
 
 export type ShellAccessory = ComponentType;
 export type HostPlatform = "darwin" | "win32" | "linux" | string;
+/**
+ * Whether the host transport is live or serving a read-only offline copy.
+ * This is THE offline predicate: every mutating or AI surface gates on
+ * `useOfflineReadOnly()` instead of deriving its own signal. (The mobile app
+ * copy-pastes an equivalent check across nine screens; the web app gets one.)
+ */
+export type HostSessionMode = "online" | "offline";
 export type HostSaveRequest =
   | { kind: "document-original"; documentId: string }
   | { kind: "document-searchable"; documentId: string }
@@ -21,22 +28,26 @@ type HostShellContextValue = {
   accessory: ShellAccessory | null;
   platform?: HostPlatform;
   fileSaver: HostFileSaver | null;
+  sessionMode: HostSessionMode;
 };
 
 const HostShellContext = createContext<HostShellContextValue>({
   accessory: null,
   fileSaver: null,
+  sessionMode: "online",
 });
 
 export function ShellAccessoryProvider({
   accessory,
   platform,
   fileSaver,
+  sessionMode,
   children,
 }: {
   accessory?: ShellAccessory;
   platform?: HostPlatform;
   fileSaver?: HostFileSaver;
+  sessionMode?: HostSessionMode;
   children: ReactNode;
 }) {
   return (
@@ -45,11 +56,21 @@ export function ShellAccessoryProvider({
         accessory: accessory ?? null,
         platform,
         fileSaver: fileSaver ?? null,
+        sessionMode: sessionMode ?? "online",
       }}
     >
       {children}
     </HostShellContext.Provider>
   );
+}
+
+export function useHostSessionMode(): HostSessionMode {
+  return useContext(HostShellContext).sessionMode;
+}
+
+/** True while the host serves a read-only offline copy of the archive. */
+export function useOfflineReadOnly(): boolean {
+  return useContext(HostShellContext).sessionMode === "offline";
 }
 
 export function useShellAccessory() {

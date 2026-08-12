@@ -7,6 +7,7 @@ import {
   ShellAccessoryProvider,
   type HostFileSaver,
   type HostPlatform,
+  type HostSessionMode,
   type ShellAccessory,
 } from "./lib/host-shell";
 import { I18nProvider } from "./lib/i18n";
@@ -22,7 +23,11 @@ export type {
   HostImportRejection,
 } from "./lib/host-imports";
 
-export type { HostSaveRequest, HostSaveResult } from "./lib/host-shell";
+export type {
+  HostSaveRequest,
+  HostSaveResult,
+  HostSessionMode,
+} from "./lib/host-shell";
 
 export function createAppQueryClient() {
   return new QueryClient({
@@ -82,6 +87,7 @@ export interface AppProps {
   hostImports?: HostImportAdapter;
   platform?: HostPlatform;
   fileSaver?: HostFileSaver;
+  sessionMode?: HostSessionMode;
 }
 
 export function App({
@@ -90,6 +96,7 @@ export function App({
   hostImports,
   platform,
   fileSaver,
+  sessionMode,
 }: AppProps = {}) {
   const [appInstance] = useState(() => createAppInstance());
 
@@ -101,6 +108,7 @@ export function App({
             accessory={ShellAccessory}
             platform={platform}
             fileSaver={fileSaver}
+            sessionMode={sessionMode}
           >
             <AppRouter {...appInstance} />
           </ShellAccessoryProvider>

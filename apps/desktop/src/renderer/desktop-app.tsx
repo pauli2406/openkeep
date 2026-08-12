@@ -27,6 +27,7 @@ type SharedAppProps = {
   hostImports?: HostImportAdapter;
   platform?: string;
   fileSaver?: (request: HostSaveRequest) => Promise<HostSaveResult>;
+  sessionMode?: "online" | "offline";
 };
 
 function saveWithDesktop(request: HostSaveRequest) {
@@ -112,7 +113,7 @@ export function DesktopApp({
     );
   }
 
-  if (sessionState.status !== "connected") {
+  if (sessionState.status !== "connected" && sessionState.status !== "offline") {
     if (profiles.profiles.length > 0) {
       return (
         <ProfileChooser
@@ -140,12 +141,13 @@ export function DesktopApp({
         pipeline={importPipeline}
       >
         <SharedApp
-          key={sessionState.profile.id}
+          key={`${sessionState.profile.id}:${sessionState.status}`}
           AuthProvider={DesktopAuthProvider}
           ShellAccessory={DesktopArchiveAccessory}
           hostImports={importPipeline.adapter}
           platform={runtime.platform}
           fileSaver={saveWithDesktop}
+          sessionMode={sessionState.status === "offline" ? "offline" : "online"}
         />
       </DesktopImportHost>
     </DesktopSessionContext.Provider>

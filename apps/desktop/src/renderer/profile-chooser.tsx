@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
+  DesktopOfflineAvailability,
   DesktopProfileSummary,
   DesktopProfilesSnapshot,
   DesktopSessionState,
@@ -26,11 +27,43 @@ export function ProfileChooser({
 }: ProfileChooserProps) {
   const [busyProfileId, setBusyProfileId] = useState<string>();
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [offline, setOffline] = useState<DesktopOfflineAvailability["profiles"]>({});
   const [message, setMessage] = useState(
     initialState.status === "unavailable" || initialState.status === "error"
       ? initialState.message
       : "Choose an encrypted archive profile or add another connection.",
   );
+
+  useEffect(() => {
+    let active = true;
+    void window.openkeepDesktop.session
+      .offlineAvailability()
+      .then((availability) => {
+        if (active) setOffline(availability.profiles);
+      })
+      .catch(() => {
+        // No availability just means no offline offer.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function openOffline(profileId: string) {
+    setBusyProfileId(profileId);
+    setMessage("Opening the offline copy…");
+    try {
+      await window.openkeepDesktop.session.openOffline({ profileId });
+      // Main replaces this shell with the profile's read-only offline window.
+    } catch (error) {
+      setBusyProfileId(undefined);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The offline copy could not be opened.",
+      );
+    }
+  }
 
   async function refreshProfiles() {
     const next = await window.openkeepDesktop.profiles.list();
@@ -139,6 +172,23 @@ export function ProfileChooser({
             >
               Add archive
             </button>
+          </div>
+        ) : null}
+        {offline[selectedProfileId] ? (
+          <div className="desktop-connect-offline">
+            <button
+              type="button"
+              className="desktop-secondary-button"
+              disabled={Boolean(busyProfileId)}
+              onClick={() => void openOffline(selectedProfileId)}
+            >
+              Open offline copy
+            </button>
+            <span>
+              {offline[selectedProfileId]!.documentCount} document
+              {offline[selectedProfileId]!.documentCount === 1 ? "" : "s"} saved on
+              this computer — read only
+            </span>
           </div>
         ) : null}
         <footer>

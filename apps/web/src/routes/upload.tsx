@@ -14,6 +14,7 @@ import {
   useHostImports,
   type HostImportDelivery,
 } from "@/lib/host-imports";
+import { useOfflineReadOnly } from "@/lib/host-shell";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -126,6 +127,7 @@ function ImportPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hostImports = useHostImports();
+  const offlineReadOnly = useOfflineReadOnly();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -418,7 +420,18 @@ function ImportPage() {
       <h1 className="ok-page-title">{t("import.title")}</h1>
       <p className="mt-0.5 text-sm text-muted-foreground">{t("import.subtitle")}</p>
 
-      {/* Drop zone */}
+      {/* Drop zone — replaced by a notice while the archive is an offline copy */}
+      {offlineReadOnly ? (
+        <div
+          role="status"
+          className="mt-4 flex h-40 w-full flex-col items-center justify-center gap-1.5 rounded-[var(--r-lg)] border border-dashed border-[var(--ok-border-strong)] bg-[var(--ok-bar)]"
+        >
+          <UploadIcon className="h-5 w-5 text-muted-foreground" />
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            {t("offline.uploadDisabled")}
+          </p>
+        </div>
+      ) : (
       <button
         type="button"
         onClick={() => {
@@ -480,6 +493,7 @@ function ImportPage() {
           </p>
         ) : null}
       </button>
+      )}
       <input
         ref={fileInputRef}
         type="file"

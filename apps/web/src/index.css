@@ -212,6 +212,23 @@
      The four roles the design uses by name. Everything else is a
      plain `text-xs/sm/base` off the scale above. */
 
+  .ok-offline-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: color-mix(in srgb, var(--ok-amber) 14%, var(--ok-bar));
+    border-bottom: 1px solid color-mix(in srgb, var(--ok-amber) 45%, var(--ok-border));
+    color: var(--ok-ink);
+    font-size: 12px;
+  }
+
+  .ok-offline-banner > span:first-child {
+    color: var(--ok-amber);
+    font-size: 9px;
+  }
+
   .ok-page-title {
     font-size: 16px;
     font-weight: 600;

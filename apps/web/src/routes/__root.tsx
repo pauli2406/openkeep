@@ -21,7 +21,11 @@ import { useAuth, type RouterContext } from "@/hooks/use-auth";
 import { Omnibar, openOmnibar } from "@/components/omnibar/omnibar";
 import { fetchDashboardInsights } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
-import { usePrimaryModifierLabel, useShellAccessory } from "@/lib/host-shell";
+import {
+  useOfflineReadOnly,
+  usePrimaryModifierLabel,
+  useShellAccessory,
+} from "@/lib/host-shell";
 import { useTheme } from "@/hooks/use-theme";
 
 /** Top-bar tab. `count` is rendered as a mono badge when present. */
@@ -69,6 +73,7 @@ function RootComponent() {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const ShellAccessory = useShellAccessory();
+  const offlineReadOnly = useOfflineReadOnly();
   const primaryModifier = usePrimaryModifierLabel();
   const omnibarShortcut =
     primaryModifier === "⌘" ? "⌘K" : `${primaryModifier}+K`;
@@ -218,6 +223,14 @@ function RootComponent() {
           </div>
         </header>
 
+        {offlineReadOnly ? (
+          <div className="ok-offline-banner" role="status">
+            <span aria-hidden="true">●</span>
+            <span>
+              {t("root.offlineReadOnly")}
+            </span>
+          </div>
+        ) : null}
         <main className="flex-1 overflow-auto">
           <Outlet />
         </main>

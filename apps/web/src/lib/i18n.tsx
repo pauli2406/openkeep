@@ -14,6 +14,9 @@ type TranslationKey =
   | "root.nav.import"
   | "root.nav.profile"
   | "root.search.placeholder"
+  | "root.offlineReadOnly"
+  | "offline.uploadDisabled"
+  | "offline.askDisabled"
   | "root.theme.toggle"
   | "root.nav.dashboard"
   | "root.nav.documents"
@@ -559,6 +562,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.import": "Import",
     "root.nav.profile": "Profile",
     "root.search.placeholder": "Ask the archive",
+    "root.offlineReadOnly":
+      "Offline copy — read only. Changes, imports, and AI answers are unavailable until the archive is reachable again.",
+    "offline.uploadDisabled":
+      "Importing needs a live archive connection. This archive is open read-only from its offline copy.",
+    "offline.askDisabled": "AI answers need a live archive connection.",
     "root.theme.toggle": "Toggle theme",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Documents",
@@ -1103,6 +1111,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.import": "Import",
     "root.nav.profile": "Profil",
     "root.search.placeholder": "Das Archiv fragen",
+    "root.offlineReadOnly":
+      "Offline-Kopie — nur Lesen. Änderungen, Importe und KI-Antworten sind erst wieder möglich, wenn das Archiv erreichbar ist.",
+    "offline.uploadDisabled":
+      "Der Import benötigt eine aktive Archivverbindung. Dieses Archiv ist schreibgeschützt aus der Offline-Kopie geöffnet.",
+    "offline.askDisabled": "KI-Antworten benötigen eine aktive Archivverbindung.",
     "root.theme.toggle": "Design wechseln",
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Dokumente",

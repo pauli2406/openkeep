@@ -38,6 +38,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n";
+import { useOfflineReadOnly } from "@/lib/host-shell";
 import { useHostFileSaver } from "@/lib/host-shell";
 import {
   Dialog,
@@ -544,6 +545,7 @@ function DocumentDetailPage() {
   const citedPageMatch = /^page-(\d+)$/.exec(location.hash);
   const citedPage = citedPageMatch ? Number(citedPageMatch[1]) : undefined;
   const { t } = useI18n();
+  const offlineReadOnly = useOfflineReadOnly();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const requestSignal = useArchiveRequestScope();
@@ -1743,12 +1745,20 @@ function DocumentDetailPage() {
 
 
             <TabsContent value="qa">
-              <DocumentQaSection documentId={doc.id} />
+              {offlineReadOnly ? (
+                <p className="p-4 text-sm text-muted-foreground" role="status">
+                  {t("offline.askDisabled")}
+                </p>
+              ) : (
+                <DocumentQaSection documentId={doc.id} />
+              )}
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Right rail: fields, review, processing */}
+        {/* Right rail: fields, review, processing. One fieldset gates every
+            mutating control in it while the archive is an offline copy. */}
+        <fieldset disabled={offlineReadOnly} className="contents">
         <FieldsRail
           doc={doc}
           form={editForm}
@@ -1785,6 +1795,7 @@ function DocumentDetailPage() {
           deletePending={deleteDocumentMutation.isPending}
           processing={doc.status === "processing"}
         />
+        </fieldset>
       </div>
 
           {/* Reprocess provider picker dialog */}

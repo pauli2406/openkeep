@@ -5,7 +5,12 @@ import { CurrentUserSchema } from "@openkeep/types";
 import type { DesktopSessionState } from "../shared/desktop-api";
 
 type DesktopSessionContextValue = {
-  state: Extract<DesktopSessionState, { status: "connected" }>;
+  /**
+   * Connected and offline sessions share this shape: both carry a profile and
+   * a verified user, so the shared app renders identically. Offline, the
+   * user comes from the encrypted cache and `/api/auth/me` is served from it.
+   */
+  state: Extract<DesktopSessionState, { status: "connected" | "offline" }>;
   setState: (state: DesktopSessionState) => void;
 };
 
