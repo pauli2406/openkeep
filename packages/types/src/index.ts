@@ -36,6 +36,38 @@ export const reviewReasons = [
 ] as const;
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
+// --- Offline document cache ---
+//
+// Shared vocabulary for client-side offline caches. The mobile app keeps a
+// hand-copied equivalent (it deliberately has no workspace dependencies); the
+// desktop cache reads these directly so both clients describe the same thing.
+
+/**
+ * What an offline cache can say about itself. `lastCachedAt` is the newest
+ * per-document write time — when content actually entered the cache — kept
+ * deliberately separate from any UI refresh counter, which mobile conflated.
+ */
+export type OfflineCacheSummary = {
+  documentCount: number;
+  fileStorageBytes: number;
+  lastCachedAt: number | null;
+};
+
+/**
+ * Parses a date-only value (`YYYY-MM-DD`) as a LOCAL date. Date-only strings
+ * fed to `new Date()` are interpreted as UTC midnight, which shifts them a
+ * day for every user west of Greenwich — offline due/overdue math must never
+ * inherit that.
+ */
+export function parseDateOnlyLocal(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 // --- Accepted import formats ---
 //
 // One table for every client-side import surface: the web drop zone, desktop

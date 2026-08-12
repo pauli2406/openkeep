@@ -86,6 +86,12 @@ import {
   createDesktopNotificationRouter,
   type DesktopNotificationRouter,
 } from "./main/notification-routing";
+import {
+  createOfflineCacheStore,
+  type OfflineCacheStore,
+} from "./main/offline/offline-cache-store";
+import { createOfflineReadThrough } from "./main/offline/read-through";
+import { SecureStorageUnavailableError } from "./main/storage";
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -741,6 +747,61 @@ void app.whenReady().then(async () => {
   const rendererDevServerUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL || undefined;
   const configuredPartitions = new Set<string>();
 
+  /**
+   * One offline cache per profile, opened lazily with its partition. A cache
+   * that cannot open — most likely no secure keyring — stays disabled for the
+   * session: online behavior is identical either way, so this only ever logs.
+   */
+  const offlineCaches = new Map<string, Promise<OfflineCacheStore | null>>();
+
+  function offlineCacheFor(profileId: string): Promise<OfflineCacheStore | null> {
+    let opening = offlineCaches.get(profileId);
+    if (!opening) {
+      opening = (async () => {
+        const store = createOfflineCacheStore({
+          rootDirectory: path.join(
+            app.getPath("userData"),
+            "offline-cache",
+            profileId,
+          ),
+          credentialCipher: createSafeStorageCipher(safeStorage),
+        });
+        await store.open();
+        return store;
+      })().catch((error: unknown) => {
+        if (error instanceof SecureStorageUnavailableError) {
+          console.error(
+            "The offline cache stays disabled: no secure operating-system store.",
+          );
+        } else {
+          console.error("The offline cache could not be opened.", error);
+        }
+        return null;
+      });
+      offlineCaches.set(profileId, opening);
+    }
+    return opening;
+  }
+
+  /**
+   * The protocol observer is synchronous, but the cache opens asynchronously.
+   * Until it is open (or when it is disabled) responses pass through
+   * untouched; once open, the same observer instance tees into it.
+   */
+  function createProfileReadThrough(profileId: string) {
+    let readThrough: ReturnType<typeof createOfflineReadThrough> | null = null;
+    void offlineCacheFor(profileId).then((store) => {
+      if (store) {
+        readThrough = createOfflineReadThrough({
+          store,
+          reportError: (message, error) => console.error(message, error),
+        });
+      }
+    });
+    return (method: string, pathname: string, response: Response): Response =>
+      readThrough ? readThrough.observe(method, pathname, response) : response;
+  }
+
   async function preparePartition(profileId: string | null) {
     const partition = profileId
       ? createProfilePartition(profileId)
@@ -757,6 +818,9 @@ void app.whenReady().then(async () => {
           archiveSession,
           fetchRequest: (input, init) => targetSession.fetch(input, init),
           fileExists: existsSync,
+          ...(profileId
+            ? { observeApiResponse: createProfileReadThrough(profileId) }
+            : {}),
         }),
       );
       configuredPartitions.add(partition);
@@ -981,6 +1045,10 @@ void app.whenReady().then(async () => {
       }
       await watchFolders.stop();
       await outcomes.stop();
+      for (const opening of offlineCaches.values()) {
+        const store = await opening;
+        await store?.idle().catch(() => undefined);
+      }
       archiveSession.dispose();
       await Promise.all(
         [...configuredPartitions].map((partition) =>

@@ -11,6 +11,16 @@ type ProtocolHandlerOptions = {
   archiveSession: Pick<ArchiveSessionService, "getActiveSession">;
   fetchRequest: DesktopFetch;
   fileExists: (filePath: string) => boolean;
+  /**
+   * Observes each successful proxied API response before it reaches the
+   * renderer, and may replace it with an identical response whose body has
+   * been teed — the offline cache's read-through seam. It must never throw.
+   */
+  observeApiResponse?: (
+    method: string,
+    pathname: string,
+    response: Response,
+  ) => Response;
 };
 
 type AssetResolution =
@@ -181,7 +191,7 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
       );
       const supportsBody = request.method !== "GET" && request.method !== "HEAD";
       try {
-        return await options.fetchRequest(target, {
+        const response = await options.fetchRequest(target, {
           method: request.method,
           headers,
           body: supportsBody ? request.body : undefined,
@@ -191,6 +201,9 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
           // upload body; Electron ignores the field when it is unnecessary.
           duplex: supportsBody ? "half" : undefined,
         } as RequestInit & { duplex?: "half" });
+        return options.observeApiResponse
+          ? options.observeApiResponse(request.method, url.pathname, response)
+          : response;
       } catch {
         return unavailableResponse(
           502,
