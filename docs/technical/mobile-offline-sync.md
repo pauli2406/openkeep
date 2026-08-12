@@ -33,6 +33,8 @@ openkeep-cache/
 
 The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size.
 
+Neither half of the cache reaches the device directly. `offline-metadata-store.ts` takes the SQLite handle it queries through, and `offline-file-cache.ts` takes a small filesystem interface — so the store's real SQL runs against Node's own SQLite in tests, and the download flow runs against an in-memory filesystem, with no simulator and no Expo runtime. Production wires the same code to `expo-sqlite` and `expo-file-system` in one place per module.
+
 `CacheSummary` exposes exactly three values — `documentCount`, `fileStorageBytes` and `updatedAt` — and the `Settings` -> `Offline` screen shows those three and nothing else. `updatedAt` is the revision the cached queries are keyed by, moved only when the counts change, so it is presented as when the cache was last checked rather than when a document was last written.
 
 ## Offline Read Paths

@@ -240,11 +240,22 @@ going wrong:
 | `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
 | `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
 | `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |
+| `offline-store` | the offline mirror's real SQL: what a cached document reads back as, the status/review/correspondent filters, the search-text match, cache accounting, and the derived dashboard and facets |
+| `offline-file-cache` | which endpoint a document's bytes come from, the write-to-temporary-then-move flow, byte accounting, and two viewers collapsing into one download |
 
 Native modules with no JavaScript fallback are mocked in `jest.setup.js` — SQLite,
 the OS document scanner, the PDF view, the file viewer, secure storage. Screens
 mock `../auth` and `../offline-archive` at the module boundary; the screen's own
 logic is never mocked.
+
+The two offline suites are the exception to that mock, and deliberately so: the
+offline store and file cache take their database handle and filesystem as
+arguments, so those tests run the real query and download code. The database is
+Node's own SQLite (`node:sqlite`, which needs `--experimental-sqlite` on Node 22
+— hence the flag in the `test` script), so a wrong filter or ordering fails here
+exactly as it would on a device. The filesystem has no Node equivalent and is
+stood in for; what those tests prove is the cache's flow, not the platform's file
+API.
 
 Two constraints worth knowing before adding a suite:
 
