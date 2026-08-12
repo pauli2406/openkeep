@@ -560,6 +560,8 @@ export function ReviewScreen() {
 
       {document ? (
         <Swipeable
+          containerStyle={styles.swipeFill}
+          childrenContainerStyle={styles.swipeFill}
           overshootRight={false}
           onSwipeableOpen={(direction) => {
             if (direction === "right") {
@@ -763,6 +765,16 @@ const useStyles = createThemedStyles((c) => ({
   progressFill: {
     height: 2,
     backgroundColor: c.accentFill,
+  },
+  /**
+   * `Swipeable` puts two plain, flex-less views between the screen and `body`.
+   * Yoga resolves `body`'s `flex: 1` against their auto height — zero — so on
+   * a device the whole card collapses and the screen sits blank under a live
+   * queue counter. The web renderer falls back to the content size for the
+   * same basis, which is why browser screenshots never showed it (#174).
+   */
+  swipeFill: {
+    flex: 1,
   },
   body: {
     flex: 1,
