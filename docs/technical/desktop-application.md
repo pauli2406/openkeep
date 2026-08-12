@@ -75,8 +75,9 @@ actions. Once a reachable archive rejects credentials with `401` or `403`, main
 deletes only the failing profile's credentials and profile record. The chooser and
 all other profiles remain usable.
 
-The session is intentionally online-only. Desktop has no local document archive or
-offline fallback.
+The session is online-only for now: a per-profile offline cache stores what the
+user opens (see Offline Document Cache), but no offline session reads from it yet,
+so an unavailable server still means no archive access.
 
 Desktop does not use the web login, refresh-token, or initial-owner setup routes.
 After verification, `DesktopAuthProvider` presents the already authenticated owner
@@ -494,6 +495,68 @@ directory picker in main, so the only paths that enter are ones the user chose t
 Every mutation additionally requires that the calling window's profile is the
 connected archive. The tray shows watch state as counts only, never a path.
 
+## Offline Document Cache (foundation)
+
+Desktop keeps a read-only offline copy of documents the user has opened, as the
+first stage of the offline archive (#172). This section records which mobile cache
+semantics it reuses and where it deliberately departs; the offline *session* that
+reads from this cache is a separate story and does not exist yet.
+
+**Reused mobile semantics.** The cache is populated lazily and only ever by reading:
+opening a document online stores its metadata, its preview or searchable file, its
+OCR text, and its history. There is no prefetch, no background mirror, and no
+mutation queue — the cache is last-opened state, refreshed whole (last-open-wins) on
+the next online open. A searchable PDF is preferred over the original and an
+original never replaces a cached searchable copy. Files are written to a temporary
+name and renamed, and concurrent writes for one document collapse into the first.
+A caching failure never breaks online viewing.
+
+**The trigger is the protocol proxy, not the renderer.** Mobile calls its cache from
+the document screen; desktop already routes every renderer API request through the
+main-process proxy, so a new `observeApiResponse` seam on the protocol handler tees
+each successful `GET /api/documents/:id`, `/text`, `/history`, and
+`/download[/searchable]` response into the cache as it streams to the renderer. The
+renderer needs no knowledge of the cache, the observed bytes are exactly what the
+user read, and nothing is fetched twice. List, search, facet, and mutation traffic
+is never cached. Until a profile's cache has opened — or when it stays disabled —
+the observer passes responses through untouched.
+
+**Deliberate departures from the mobile model**, each answering a documented flaw:
+
+- *Scoped per archive profile.* Mobile keeps one unscoped cache database for
+  whichever server and account are connected. The desktop cache lives under
+  `offline-cache/<profile UUID>/` in `userData`, so two profiles — even for the same
+  server — can never see each other's records.
+- *Encrypted at rest.* Mobile stores cached documents in plaintext. Desktop seals
+  records, file bytes, and the index with AES-256-GCM under a random per-profile
+  data key; only that key, wrapped by Electron `safeStorage`, touches the
+  operating-system store. On a machine with only an insecure keyring the cache
+  stays disabled — the same refuse-don't-degrade rule credential storage follows.
+  Directories are 0700 and files 0600.
+- *Versioned from the first release.* Records and the index carry
+  `OFFLINE_CACHE_VERSION`; mobile's `CREATE TABLE IF NOT EXISTS`-only store has no
+  migration path, which is exactly what blocks its own issue/due-date retrofit
+  (#152).
+- *Dates are queryable columns, parsed as local dates.* `issue_date` and `due_date`
+  live in the column index, and date-only strings go through
+  `parseDateOnlyLocal` (shared from `@openkeep/types`) so offline due/overdue and
+  year math can never inherit the UTC-midnight shift (#151). Mobile stores dates
+  only inside opaque JSON and had to remove its due and year filters offline.
+- *True freshness.* Every row records `cached_at`, and the summary exposes
+  `MAX(cached_at)` — when content actually entered the cache — separate from any UI
+  refresh counter, which mobile conflates (#153).
+- *Streamed writes.* File bytes are encrypted chunk by chunk on their way to disk;
+  mobile buffers whole documents through base64 in JS memory.
+- *Damage is contained.* An unreadable index is rebuilt from the records; an
+  unreadable record is skipped. One bad row cannot poison every offline read, which
+  is the failure mode of mobile's shared `rows.map(JSON.parse)` path.
+
+The store exposes `summary()` (document count, file bytes,
+`lastCachedAt`) and a column listing for the coming offline surfaces; the sealed
+records hold everything else. Store, cipher, and read-through are covered by tests
+including cross-profile isolation, restart recovery, damaged-index rebuild,
+damaged-record skip, plaintext-leak checks, and the disabled-without-keyring path.
+
 ## Import Outcome Notifications
 
 Notifications are driven by an outcome tracker in main rather than by the upload
@@ -572,7 +635,9 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. Desktop has no offline document cache, launch-at-login setting,
+archives. Desktop has no offline session yet: the offline cache stores what the user opened,
+but an unavailable server still requires the mobile app for offline reading until
+the session stories of #172 land. There is no launch-at-login setting,
 signing, or release automation. Notifications report jobs this installation started;
 they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
