@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { DashboardDeadlineItem, Document } from "@openkeep/types";
 import { SearchOrchestratorService } from "../src/search/search-orchestrator.service";
 
+// These specs exercise the regex-router fallback path, so the chat agent
+// reports itself unavailable (no LLM configured).
+const disabledChatAgent = { isAvailable: () => false };
+
 function makeDocument(overrides: Partial<Document> = {}): Document {
   return {
     id: "11111111-1111-1111-1111-111111111111",
@@ -98,6 +102,7 @@ describe("SearchOrchestratorService", () => {
       databaseService as never,
       documentsService as never,
       explorerService as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -141,6 +146,7 @@ describe("SearchOrchestratorService", () => {
         listExpiringDocuments: vi.fn(),
       } as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -180,6 +186,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -223,6 +230,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -254,6 +262,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("de") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -283,6 +292,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       explorerService as never,
+      disabledChatAgent as never,
     );
 
     for (const query of [
@@ -321,6 +331,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -358,6 +369,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -392,6 +404,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("de") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -430,6 +443,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(
@@ -467,6 +481,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const shortQuery = await service.answerQuery(
@@ -504,6 +519,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       explorerService as never,
+      disabledChatAgent as never,
     );
 
     // 14 tokens, empty structured result — but no content-question signal, so the
@@ -540,6 +556,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     await expect(
@@ -573,6 +590,7 @@ describe("SearchOrchestratorService", () => {
       makeLanguageDb("en") as never,
       documentsService as never,
       { listDeadlineItems: vi.fn() } as never,
+      disabledChatAgent as never,
     );
 
     const response = await service.answerQuery(

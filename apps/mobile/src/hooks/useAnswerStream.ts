@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { AnswerCitation, AnswerQueryResponse } from "../lib";
+import type { AnswerCitation, AnswerHistoryTurn, AnswerQueryResponse } from "../lib";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +20,8 @@ export type StreamState = {
     score: number;
   }>;
   structuredData: AnswerQueryResponse["structuredData"];
+  /** Label of the tool the agent is currently running, for a progress line. */
+  toolStatus: string | null;
   errorMessage: string | null;
 };
 
@@ -32,6 +34,7 @@ const INITIAL_STATE: StreamState = {
   citations: [],
   searchResults: [],
   structuredData: null,
+  toolStatus: null,
   errorMessage: null,
 };
 
@@ -50,23 +53,13 @@ export function useAnswerStream(
   const abortRef = useRef<AbortController | null>(null);
 
   const startStream = useCallback(
-    async (query: string) => {
+    async (query: string, history?: AnswerHistoryTurn[]) => {
       // Abort any previous stream
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
-      setState({
-        status: "searching",
-        answerStatus: null,
-        lowConfidence: false,
-        route: null,
-        answerText: "",
-        citations: [],
-        searchResults: [],
-        structuredData: null,
-        errorMessage: null,
-      });
+      setState({ ...INITIAL_STATE, status: "searching" });
 
       try {
         const response = await streamFetch("/api/search/answer/stream", {
@@ -74,6 +67,8 @@ export function useAnswerStream(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query,
+            // Last turns of the visible thread so follow-ups resolve server-side.
+            ...(history && history.length > 0 ? { history: history.slice(-6) } : {}),
             maxDocuments: 5,
             maxCitations: 6,
             maxChunkMatches: 6,
@@ -118,6 +113,12 @@ export function useAnswerStream(
                     status: "streaming",
                     answerText: s.answerText + (parsed.text ?? ""),
                   }));
+                } else if (currentEvent === "tool-status") {
+                  setState((s) => ({
+                    ...s,
+                    status: "streaming",
+                    toolStatus: parsed.status === "started" ? (parsed.label ?? null) : null,
+                  }));
                 } else if (currentEvent === "done") {
                   setState((s) => ({
                     ...s,
@@ -128,6 +129,7 @@ export function useAnswerStream(
                     citations: parsed.citations ?? s.citations,
                     answerText: parsed.fullAnswer ?? s.answerText,
                     structuredData: parsed.structuredData ?? s.structuredData,
+                    toolStatus: null,
                   }));
                 } else if (currentEvent === "error") {
                   setState((s) => ({

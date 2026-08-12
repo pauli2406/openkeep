@@ -63,6 +63,17 @@ function persistConversations(conversations: Conversation[]) {
   }
 }
 
+/** One source pill per document instead of one per retrieved chunk. */
+function groupCitationsByDocument(citations: AnswerCitation[]): AnswerCitation[][] {
+  const groups = new Map<string, AnswerCitation[]>();
+  for (const citation of citations) {
+    const group = groups.get(citation.documentId) ?? [];
+    group.push(citation);
+    groups.set(citation.documentId, group);
+  }
+  return [...groups.values()];
+}
+
 function relativeAge(at: number, language: string): string {
   const days = Math.round((Date.now() - at) / 86_400_000);
   if (days < 1) return language === "de" ? "jetzt" : "now";
@@ -115,6 +126,7 @@ function ChatPage() {
           date: "Datum",
           document: "Dokument",
           page: "S.",
+          furtherMatches: (n: number) => `Weitere Treffer (${n})`,
         }
       : {
           newConversation: "New conversation",
@@ -137,6 +149,7 @@ function ChatPage() {
           date: "Date",
           document: "Document",
           page: "p.",
+          furtherMatches: (n: number) => `Further matches (${n})`,
         };
 
   const providersQuery = useQuery({
@@ -159,9 +172,17 @@ function ChatPage() {
       setDraft("");
       pendingTarget.current = activeId;
       setPendingQuestion(trimmed);
-      void stream.startStream(trimmed);
+      // Replay the visible thread so follow-up questions resolve server-side;
+      // the hook caps how many turns are sent.
+      const history = (active?.turns ?? [])
+        .flatMap((turn) => [
+          { role: "user" as const, content: turn.question },
+          { role: "assistant" as const, content: turn.answer },
+        ])
+        .filter((turn) => turn.content.trim().length > 0);
+      void stream.startStream(trimmed, history);
     },
-    [activeId, addSearch, pendingQuestion, stream],
+    [active, activeId, addSearch, pendingQuestion, stream],
   );
 
   // Deep link (?q= from the omnibar). The omnibar can be opened again while
@@ -237,7 +258,13 @@ function ChatPage() {
       return next;
     });
 
-    if (stream.citations.length > 0) setSelectedCitation(stream.citations[0]);
+    if (stream.citations.length > 0) {
+      // Prefer the first citation the answer actually used for the preview pane.
+      setSelectedCitation(
+        stream.citations.find((citation) => citation.used !== false) ??
+          stream.citations[0],
+      );
+    }
     pendingTarget.current = null;
     setPendingQuestion(null);
     stream.reset();
@@ -426,37 +453,83 @@ function ChatPage() {
                     </div>
                   ) : null}
 
-                  {turn.citations.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {turn.citations.map((citation, citationIndex) => (
-                        <button
-                          key={citationIndex}
-                          type="button"
-                          onClick={() => setSelectedCitation(citation)}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-secondary",
-                            selectedCitation === citation &&
-                              "border-[var(--ok-accent)] bg-accent",
-                            hoveredDocId === citation.documentId &&
-                              "border-[var(--ok-amber)] bg-[var(--ok-amber-soft)]",
-                          )}
-                        >
-                          <span className="ok-num flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                            {citation.index ?? citationIndex + 1}
-                          </span>
-                          <span className="max-w-[180px] truncate">
-                            {citation.documentTitle}
-                          </span>
-                          {citation.pageFrom ? (
-                            <span className="ok-num text-[10.5px] text-muted-foreground">
-                              {copy.page}
-                              {citation.pageFrom}
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                  {turn.citations.length > 0
+                    ? (() => {
+                        // Legacy payloads have no `used` flag — treat them as used.
+                        const usedCitations = turn.citations.filter(
+                          (citation) => citation.used !== false,
+                        );
+                        const unusedCitations = turn.citations.filter(
+                          (citation) => citation.used === false,
+                        );
+                        const renderGroups = (groups: AnswerCitation[][]) =>
+                          groups.map((group) => {
+                            const first = group[0]!;
+                            const pages = [
+                              ...new Set(
+                                group
+                                  .map((citation) => citation.pageFrom)
+                                  .filter((page): page is number => page != null),
+                              ),
+                            ];
+                            return (
+                              <button
+                                key={`${first.documentId}-${first.index ?? 0}`}
+                                type="button"
+                                onClick={() => setSelectedCitation(first)}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-secondary",
+                                  selectedCitation != null &&
+                                    group.includes(selectedCitation) &&
+                                    "border-[var(--ok-accent)] bg-accent",
+                                  hoveredDocId === first.documentId &&
+                                    "border-[var(--ok-amber)] bg-[var(--ok-amber-soft)]",
+                                )}
+                              >
+                                <span className="flex items-center gap-0.5">
+                                  {group.map((citation, badgeIndex) => (
+                                    <span
+                                      key={citation.index ?? badgeIndex}
+                                      className="ok-num flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground"
+                                    >
+                                      {citation.index ?? badgeIndex + 1}
+                                    </span>
+                                  ))}
+                                </span>
+                                <span className="max-w-[180px] truncate">
+                                  {first.documentTitle}
+                                </span>
+                                {pages.length > 0 ? (
+                                  <span className="ok-num text-[10.5px] text-muted-foreground">
+                                    {copy.page}
+                                    {pages.join(",")}
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          });
+
+                        return (
+                          <div className="flex flex-col gap-1.5">
+                            {usedCitations.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {renderGroups(groupCitationsByDocument(usedCitations))}
+                              </div>
+                            ) : null}
+                            {unusedCitations.length > 0 ? (
+                              <details>
+                                <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
+                                  {copy.furtherMatches(unusedCitations.length)}
+                                </summary>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  {renderGroups(groupCitationsByDocument(unusedCitations))}
+                                </div>
+                              </details>
+                            ) : null}
+                          </div>
+                        );
+                      })()
+                    : null}
                 </div>
               ))}
 
@@ -470,6 +543,12 @@ function ChatPage() {
                     <p className="ok-num flex items-center gap-2 text-xs text-muted-foreground">
                       {copy.searched(stream.searchResults.length)}
                       <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ok-green)]" />
+                    </p>
+                  ) : null}
+                  {stream.toolStatus ? (
+                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {stream.toolStatus}
                     </p>
                   ) : null}
                   {stream.answerText ? (

@@ -13,6 +13,7 @@ import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
 import { DocumentsService } from "../documents/documents.service";
 import { ExplorerService } from "../explorer/explorer.service";
+import { ChatAgentService } from "./chat-agent.service";
 
 type StructuredQueryRoute =
   | {
@@ -43,12 +44,20 @@ export class SearchOrchestratorService {
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(DocumentsService) private readonly documentsService: DocumentsService,
     @Inject(ExplorerService) private readonly explorerService: ExplorerService,
+    @Inject(ChatAgentService) private readonly chatAgentService: ChatAgentService,
   ) {}
 
   async answerQuery(
     request: AnswerQueryRequest,
     principal: AuthenticatedPrincipal,
   ): Promise<AnswerQueryResponse> {
+    // With an LLM configured, the tool-calling agent covers both structured
+    // (filter/count) and content questions. The regex router below survives
+    // only as the no-LLM degradation path.
+    if (this.chatAgentService.isAvailable()) {
+      return this.chatAgentService.answer(request, principal);
+    }
+
     const route = this.routeStructuredQuery(request.query);
     if (!route) {
       return this.documentsService.answerQuery(request, principal);
@@ -82,6 +91,11 @@ export class SearchOrchestratorService {
     principal: AuthenticatedPrincipal,
     signal?: AbortSignal,
   ): AsyncGenerator<string> {
+    if (this.chatAgentService.isAvailable()) {
+      yield* this.chatAgentService.streamSse(request, principal, signal);
+      return;
+    }
+
     const route = this.routeStructuredQuery(request.query);
     if (!route) {
       for await (const chunk of this.documentsService.streamAnswer(request, principal, signal)) {
