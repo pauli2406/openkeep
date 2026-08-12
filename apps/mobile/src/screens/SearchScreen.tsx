@@ -46,9 +46,16 @@ type Turn = {
 };
 
 function citationsInOrder(citations: AnswerCitation[]) {
+  // Prefer what the answer actually cited (legacy payloads have no `used` flag
+  // and count as used); only when nothing was cited fall back to all hits.
+  const used = citations.filter((citation) => citation.used !== false);
+  const relevant = used.length > 0 ? used : citations;
+
   const seen = new Map<string, AnswerCitation>();
-  for (const citation of citations) {
-    const key = `${citation.index ?? 0}:${citation.documentId}`;
+  for (const citation of relevant) {
+    // Keyed by passage, not by index — the old `${index}:${documentId}` key was
+    // unique per citation and never deduplicated anything.
+    const key = `${citation.documentId}:${citation.chunkIndex}`;
     if (!seen.has(key)) {
       seen.set(key, citation);
     }
@@ -83,7 +90,9 @@ function StructuredTable({
   return (
     <View style={styles.table}>
       <View style={styles.tableHeader}>
-        <Text style={styles.tableHeaderLabel}>{t("chat.openItems")}</Text>
+        <Text style={styles.tableHeaderLabel}>
+          {data.kind === "document_table" ? data.title : t("chat.openItems")}
+        </Text>
         <Text style={styles.tableHeaderTotal}>{total}</Text>
       </View>
       {data.kind === "deadline_items"
@@ -168,6 +177,13 @@ function TurnView({
           </View>
           <View style={styles.skeletonLong} />
           <View style={styles.skeletonShort} />
+        </View>
+      ) : null}
+
+      {state?.toolStatus ? (
+        <View style={styles.searchingRow}>
+          <Text style={styles.searchingText}>{state.toolStatus}</Text>
+          <PulsingDot style={styles.searchingDot} />
         </View>
       ) : null}
 
@@ -334,6 +350,7 @@ export function SearchScreen() {
         citations: answerStream.citations,
         searchResults: answerStream.searchResults,
         structuredData: answerStream.structuredData,
+        toolStatus: null,
         errorMessage: answerStream.errorMessage,
       };
       return [...current.slice(0, -1), { ...last, answer: snapshot }];
@@ -352,17 +369,24 @@ export function SearchScreen() {
         return;
       }
       turnCounter.current += 1;
+      // Replay the visible thread so follow-up questions resolve server-side.
+      const history = turns
+        .filter((turn) => turn.answer?.answerText)
+        .flatMap((turn) => [
+          { role: "user" as const, content: turn.question },
+          { role: "assistant" as const, content: turn.answer!.answerText },
+        ]);
       setTurns((current) => [
         ...current,
         { id: `turn-${turnCounter.current}`, question: trimmed, answer: null },
       ]);
       setDraft("");
       void addSearch(trimmed);
-      answerStream.startStream(trimmed);
+      answerStream.startStream(trimmed, history);
       inputRef.current?.blur();
       requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
     },
-    [addSearch, answerStream, shouldUseCache, status],
+    [addSearch, answerStream, shouldUseCache, status, turns],
   );
 
   const newThread = useCallback(() => {
@@ -383,6 +407,7 @@ export function SearchScreen() {
           citations: answerStream.citations,
           searchResults: answerStream.searchResults,
           structuredData: answerStream.structuredData,
+          toolStatus: answerStream.toolStatus,
           errorMessage: answerStream.errorMessage,
         };
 

@@ -63,6 +63,7 @@ import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
 import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
+import { annotateCitationUsage, buildCitationQuote } from "../processing/citation-usage.util";
 import { padEmbedding, serializeHalfVector } from "../processing/embedding.util";
 import { LlmAnswerProvider } from "../processing/llm-answer.provider";
 import { LlmService } from "../processing/llm.service";
@@ -1655,7 +1656,14 @@ export class DocumentsService {
       return;
     }
 
-    let contextChunks: Array<{ text: string; heading: string | null; pageFrom: number | null; pageTo: number | null; score: number }> = [];
+    let contextChunks: Array<{
+      chunkIndex: number;
+      text: string;
+      heading: string | null;
+      pageFrom: number | null;
+      pageTo: number | null;
+      score: number;
+    }> = [];
 
     // Full-text mode: most archive items are short letters/invoices. When the whole
     // document fits the context budget, skip vector retrieval and give the model ALL
@@ -1702,6 +1710,7 @@ export class DocumentsService {
         [documentId, principal.userId],
       );
       return rows.rows.map((row) => ({
+        chunkIndex: row.chunk_index,
         text: row.text,
         heading: row.heading,
         pageFrom: row.page_from,
@@ -1768,6 +1777,7 @@ export class DocumentsService {
         );
 
         contextChunks = result.rows.map((row) => ({
+          chunkIndex: row.chunk_index,
           text: row.text,
           heading: row.heading,
           pageFrom: row.page_from,
@@ -1820,7 +1830,7 @@ export class DocumentsService {
             `You are answering a question about the document "${document.title}".`,
             "Base your answer ONLY on the provided excerpts.",
             "If the excerpts don't contain enough information, say so clearly.",
-            "Cite specific pages when referencing information (e.g., 'On page 3...').",
+            "Cite the excerpts you use inline with their bracketed number, e.g. [2]. Mention pages when helpful (e.g., 'On page 3 [2]...').",
             ...(fullTextMode
               ? ["Note: the excerpts cover the COMPLETE document text in order."]
               : []),
@@ -1848,23 +1858,19 @@ export class DocumentsService {
       signal,
     });
 
-    // Send citations first. Full-text and positional chunks carry no relevance
-    // signal (the model cites pages inline instead); only vector-retrieved chunks
-    // surface as scored citations.
-    const citations = positionalFallback || fullTextMode
-      ? []
-      : contextChunks
-          .filter((c) => c.score >= CITATION_MIN_SCORE)
-          .slice(0, 4)
-          .map((chunk, i) => ({
-            chunkIndex: i,
-            pageFrom: chunk.pageFrom,
-            pageTo: chunk.pageTo,
-            quote: chunk.text.replace(/\s+/g, " ").trim().slice(0, 280),
-            score: chunk.score,
-          }));
-
-    yield `event: citations\ndata: ${JSON.stringify({ citations })}\n\n`;
+    // Every prompted excerpt is a citation candidate, numbered exactly like its
+    // [Excerpt n] label, so any [n] the model emits resolves to a real entry.
+    // Which candidates actually reach the client is decided AFTER the stream,
+    // from the markers in the answer — full-text mode previously returned zero
+    // citations because its chunks carry no retrieval score.
+    const citationCandidates = contextChunks.map((chunk, i) => ({
+      chunkIndex: chunk.chunkIndex,
+      pageFrom: chunk.pageFrom,
+      pageTo: chunk.pageTo,
+      index: i + 1,
+      quote: buildCitationQuote(chunk.text),
+      score: chunk.score,
+    }));
 
     let fullAnswer = "";
     let streamError: string | undefined;
@@ -1886,6 +1892,19 @@ export class DocumentsService {
       yield `event: error\ndata: ${JSON.stringify({ message: streamError })}\n\n`;
       return;
     }
+
+    const annotated = annotateCitationUsage(citationCandidates, fullAnswer);
+    let citations = annotated.filter((citation) => citation.used);
+    if (citations.length === 0 && !positionalFallback && !fullTextMode) {
+      // The model cited nothing — fall back to the top scored retrieval hits so
+      // vector-mode answers keep their evidence trail. Full-text/positional
+      // chunks carry no relevance signal and would only add noise here.
+      citations = annotated
+        .filter((citation) => citation.score >= CITATION_MIN_SCORE)
+        .slice(0, 4);
+    }
+
+    yield `event: citations\ndata: ${JSON.stringify({ citations })}\n\n`;
 
     // Persist server-side with the server-accumulated answer. The previous
     // client-side write was lost when the tab closed mid-stream and let clients
@@ -2161,6 +2180,40 @@ export class DocumentsService {
     if (filters?.dateTo) {
       const placeholder = push(filters.dateTo);
       clauses.push(`coalesce(d.issue_date, d.created_at::date) <= ${placeholder}::date`);
+    }
+
+    this.assertValidDateFilter(filters?.dueDateFrom, "dueDateFrom");
+    this.assertValidDateFilter(filters?.dueDateTo, "dueDateTo");
+    this.assertValidDateFilter(filters?.expiryDateFrom, "expiryDateFrom");
+    this.assertValidDateFilter(filters?.expiryDateTo, "expiryDateTo");
+
+    if (filters?.dueDateFrom) {
+      const placeholder = push(filters.dueDateFrom);
+      clauses.push(`d.due_date >= ${placeholder}::date`);
+    }
+
+    if (filters?.dueDateTo) {
+      const placeholder = push(filters.dueDateTo);
+      clauses.push(`d.due_date <= ${placeholder}::date`);
+    }
+
+    if (filters?.expiryDateFrom) {
+      const placeholder = push(filters.expiryDateFrom);
+      clauses.push(`d.expiry_date >= ${placeholder}::date`);
+    }
+
+    if (filters?.expiryDateTo) {
+      const placeholder = push(filters.expiryDateTo);
+      clauses.push(`d.expiry_date <= ${placeholder}::date`);
+    }
+
+    if (filters?.openTasksOnly) {
+      clauses.push(`d.due_date IS NOT NULL AND d.task_completed_at IS NULL`);
+    }
+
+    if (filters?.reviewStatus) {
+      const placeholder = push(filters.reviewStatus);
+      clauses.push(`d.review_status = ${placeholder}::review_status`);
     }
 
     const correspondentIds = filters?.correspondentIds?.length

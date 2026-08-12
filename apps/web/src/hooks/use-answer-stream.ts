@@ -20,7 +20,7 @@ type AnswerStructuredData =
       windowEnd: string | null;
     }
   | {
-      kind: "pending_review_documents" | "expiring_contracts";
+      kind: "pending_review_documents" | "expiring_contracts" | "document_table";
       title: string;
       description: string | null;
       items: Document[];
@@ -28,6 +28,8 @@ type AnswerStructuredData =
       windowStart?: string | null;
       windowEnd?: string | null;
     };
+
+export type AnswerHistoryTurn = { role: "user" | "assistant"; content: string };
 import { linkifyAnswerCitations } from "@openkeep/sdk";
 
 import { authFetch } from "@/lib/api";
@@ -71,6 +73,8 @@ export type StreamState = {
   citations: AnswerCitation[];
   searchResults: SemanticSearchResult[];
   structuredData: AnswerStructuredData | null;
+  /** Label of the tool the agent is currently running, for a progress line. */
+  toolStatus: string | null;
   errorMessage: string | null;
 };
 
@@ -84,6 +88,7 @@ export function useAnswerStream() {
     citations: [],
     searchResults: [],
     structuredData: null,
+    toolStatus: null,
     errorMessage: null,
   });
 
@@ -98,7 +103,7 @@ export function useAnswerStream() {
     [],
   );
 
-  const startStream = useCallback(async (query: string) => {
+  const startStream = useCallback(async (query: string, history?: AnswerHistoryTurn[]) => {
     // Abort any previous stream
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -118,6 +123,7 @@ export function useAnswerStream() {
       citations: [],
       searchResults: [],
       structuredData: null,
+      toolStatus: null,
       errorMessage: null,
     });
 
@@ -127,6 +133,9 @@ export function useAnswerStream() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query,
+          // Last turns of the visible thread; lets the agent resolve follow-ups
+          // ("and what about the second one?"). Capped server-side at 12.
+          ...(history && history.length > 0 ? { history: history.slice(-6) } : {}),
           maxDocuments: 5,
           maxCitations: 6,
           maxChunkMatches: 6,
@@ -150,6 +159,15 @@ export function useAnswerStream() {
               ...s,
               status: "streaming",
               answerText: s.answerText + (typeof parsed.text === "string" ? parsed.text : ""),
+          }));
+        } else if (event === "tool-status") {
+          update((s) => ({
+              ...s,
+              status: "streaming",
+              toolStatus:
+                parsed.status === "started" && typeof parsed.label === "string"
+                  ? parsed.label
+                  : null,
           }));
         } else if (event === "done") {
           terminalEvent = true;
@@ -176,6 +194,7 @@ export function useAnswerStream() {
                 parsed.structuredData && typeof parsed.structuredData === "object"
                   ? (parsed.structuredData as AnswerStructuredData)
                   : s.structuredData,
+              toolStatus: null,
           }));
           return "stop";
         } else if (event === "error") {
@@ -227,6 +246,7 @@ export function useAnswerStream() {
       citations: [],
       searchResults: [],
       structuredData: null,
+      toolStatus: null,
       errorMessage: null,
     });
   }, []);

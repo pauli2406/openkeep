@@ -666,6 +666,13 @@ export const SearchDocumentsFiltersSchema = z.object({
   year: z.number().int().min(1970).max(2100).optional(),
   dateFrom: DateOnlySchema.optional(),
   dateTo: DateOnlySchema.optional(),
+  dueDateFrom: DateOnlySchema.optional(),
+  dueDateTo: DateOnlySchema.optional(),
+  expiryDateFrom: DateOnlySchema.optional(),
+  expiryDateTo: DateOnlySchema.optional(),
+  /** Restrict to documents with a due date whose task is not marked done. */
+  openTasksOnly: z.boolean().optional(),
+  reviewStatus: ReviewStatusSchema.optional(),
   correspondentId: z.string().uuid().optional(),
   correspondentIds: z.array(z.string().uuid()).optional(),
   documentTypeId: z.string().uuid().optional(),
@@ -1212,11 +1219,21 @@ export const AnswerCitationSchema = z.object({
   // 1-based excerpt number matching the [n] markers the model cites inline.
   // Clients resolve [n] to this citation exactly instead of fuzzy title matching.
   index: z.number().int().positive().optional(),
+  // Whether the answer actually cited this excerpt ([n] appears in the text).
+  // Absent on legacy payloads — treat as used for backwards compatibility.
+  used: z.boolean().optional(),
+});
+
+export const AnswerHistoryTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(8000),
 });
 
 export const AnswerQueryRequestSchema = z.object({
   query: z.string().trim().min(1),
   filters: SearchDocumentsFiltersSchema.optional(),
+  /** Prior conversation turns (oldest first), capped so a runaway client cannot blow the prompt. */
+  history: z.array(AnswerHistoryTurnSchema).max(12).optional(),
   maxDocuments: z.number().int().min(1).max(10).default(5),
   maxCitations: z.number().int().min(1).max(12).default(6),
   maxChunkMatches: z.number().int().min(1).max(10).default(6),
@@ -1237,7 +1254,9 @@ export const AnswerStructuredDataSchema = z.object({
 });
 
 export const AnswerStructuredDocumentListSchema = z.object({
-  kind: z.enum(["pending_review_documents", "expiring_contracts"]),
+  // "document_table" is the generic variant the chat agent emits for arbitrary
+  // metadata queries; the two named kinds predate it (regex-router routes).
+  kind: z.enum(["pending_review_documents", "expiring_contracts", "document_table"]),
   title: z.string().min(1),
   description: z.string().nullable(),
   items: z.array(DocumentSchema),
@@ -1288,6 +1307,9 @@ export const DocumentAskCitationSchema = z.object({
   chunkIndex: z.number().int().nonnegative(),
   pageFrom: z.number().int().positive().nullable(),
   pageTo: z.number().int().positive().nullable(),
+  // 1-based excerpt number matching the [n] markers; absent on legacy history rows.
+  index: z.number().int().positive().optional(),
+  used: z.boolean().optional(),
   quote: z.string().min(1),
   score: z.number().nonnegative(),
 });
@@ -1664,6 +1686,8 @@ export type AnswerStructuredData = z.infer<typeof AnswerStructuredDataSchema>;
 export type AnswerStructuredDocumentList = z.infer<typeof AnswerStructuredDocumentListSchema>;
 export type AnswerStructuredPayload = z.infer<typeof AnswerStructuredPayloadSchema>;
 export type AnswerQueryRequest = z.infer<typeof AnswerQueryRequestSchema>;
+export type AnswerHistoryTurn = z.infer<typeof AnswerHistoryTurnSchema>;
+export type SearchDocumentsFilters = z.infer<typeof SearchDocumentsFiltersSchema>;
 export type AnswerQueryResponse = z.infer<typeof AnswerQueryResponseSchema>;
 export type DocumentAskRequest = z.infer<typeof DocumentAskRequestSchema>;
 export type DocumentAskCitation = z.infer<typeof DocumentAskCitationSchema>;

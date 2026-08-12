@@ -415,6 +415,8 @@ export type AnswerCitation = {
   pageTo: number | null;
   /** 1-based excerpt number matching the [n] markers the model cites inline. */
   index?: number;
+  /** Whether the answer actually cited this excerpt; absent on legacy payloads. */
+  used?: boolean;
 };
 
 export type AnswerQueryResponse = {
@@ -452,7 +454,7 @@ export type AnswerQueryResponse = {
         windowEnd: string | null;
       }
     | {
-        kind: "pending_review_documents" | "expiring_contracts";
+        kind: "pending_review_documents" | "expiring_contracts" | "document_table";
         title: string;
         description: string | null;
         items: ArchiveDocument[];
@@ -462,6 +464,8 @@ export type AnswerQueryResponse = {
       }
     | null;
 };
+
+export type AnswerHistoryTurn = { role: "user" | "assistant"; content: string };
 
 export type FacetsResponse = {
   correspondents: Array<{ id: string; name: string; slug: string; count: number }>;

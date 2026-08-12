@@ -4,8 +4,31 @@ import { AppConfigService } from "../common/config/app-config.service";
 import { fetchWithTimeout, isAbortError } from "./http.util";
 
 export interface LlmMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Assistant turns that requested tool calls carry them here (content may be ""). */
+  toolCalls?: LlmToolCall[];
+  /** Tool result turns: id of the assistant tool call this responds to. */
+  toolCallId?: string;
+  /** Tool result turns: tool name (Gemini's functionResponse requires it). */
+  name?: string;
+}
+
+export interface LlmToolDefinition {
+  name: string;
+  description: string;
+  /**
+   * JSON Schema for the arguments. Gemini's dialect rejects type unions and
+   * some keywords ($ref, oneOf) — tool authors must keep schemas to plain
+   * objects/arrays/scalars so one definition serves all three providers.
+   */
+  parameters: Record<string, unknown>;
+}
+
+export interface LlmToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
 }
 
 export interface LlmCompletionOptions {
@@ -19,6 +42,13 @@ export interface LlmCompletionOptions {
    * (no type unions), so it falls back to plain JSON mode there.
    */
   jsonSchema?: { name: string; schema: Record<string, unknown> };
+  /**
+   * Tools the model may call. Tool calls are only surfaced on the streaming
+   * path (terminal chunk's `toolCalls`); non-streaming completions accept
+   * tool-bearing histories but return text only.
+   */
+  tools?: LlmToolDefinition[];
+  toolChoice?: "auto" | "none" | "required";
   /** Caller abort signal (e.g. SSE client disconnect); composed with the timeout. */
   signal?: AbortSignal;
 }
@@ -27,6 +57,8 @@ export interface LlmStreamChunk {
   text: string;
   done: boolean;
   error?: string;
+  /** Set on the terminal chunk when the model requested tool calls this round. */
+  toolCalls?: LlmToolCall[];
   /** Set on the terminal chunk by streamWithFallback: the provider that actually streamed. */
   provider?: LlmProviderId;
   model?: string;
@@ -263,6 +295,13 @@ export class LlmService {
     return (this.configService.get("LLM_STREAM_TIMEOUT_SECONDS") ?? 120) * 1000;
   }
 
+  /** Terminal stream chunk, carrying any tool calls the model requested this round. */
+  private terminalChunk(toolCalls: ToolCallAccumulator): LlmStreamChunk {
+    return toolCalls.hasCalls()
+      ? { text: "", done: true, toolCalls: toolCalls.toToolCalls() }
+      : { text: "", done: true };
+  }
+
   private completionTimeoutMs(): number {
     return (this.configService.get("LLM_TIMEOUT_SECONDS") ?? 45) * 1000;
   }
@@ -385,11 +424,16 @@ export class LlmService {
     const body: Record<string, unknown> = {
       model: config.model,
       temperature: options.temperature ?? 0.2,
-      messages: options.messages,
+      messages: toChatCompletionMessages(options.messages),
     };
 
     if (options.maxTokens) {
       body.max_completion_tokens = options.maxTokens;
+    }
+
+    if (options.tools && options.tools.length > 0) {
+      body.tools = buildChatCompletionTools(options.tools);
+      body.tool_choice = options.toolChoice ?? "auto";
     }
 
     if (options.jsonSchema) {
@@ -454,11 +498,16 @@ export class LlmService {
     const body: Record<string, unknown> = {
       model: config.model,
       temperature: options.temperature ?? 0.2,
-      messages: options.messages,
+      messages: toChatCompletionMessages(options.messages),
     };
 
     if (options.maxTokens) {
       body.max_tokens = options.maxTokens;
+    }
+
+    if (options.tools && options.tools.length > 0) {
+      body.tools = buildChatCompletionTools(options.tools);
+      body.tool_choice = toMistralToolChoice(options.toolChoice ?? "auto");
     }
 
     if (options.jsonSchema) {
@@ -512,12 +561,17 @@ export class LlmService {
     const body: Record<string, unknown> = {
       model: config.model,
       temperature: options.temperature ?? 0.2,
-      messages: options.messages,
+      messages: toChatCompletionMessages(options.messages),
       stream: true,
     };
 
     if (options.maxTokens) {
       body.max_completion_tokens = options.maxTokens;
+    }
+
+    if (options.tools && options.tools.length > 0) {
+      body.tools = buildChatCompletionTools(options.tools);
+      body.tool_choice = options.toolChoice ?? "auto";
     }
 
     const response = await fetchWithTimeout(
@@ -550,6 +604,7 @@ export class LlmService {
     }
 
     const decoder = new TextDecoder();
+    const toolCalls = new ToolCallAccumulator();
     let buffer = "";
 
     try {
@@ -571,15 +626,29 @@ export class LlmService {
 
           const data = trimmed.slice(6);
           if (data === "[DONE]") {
-            yield { text: "", done: true };
+            yield this.terminalChunk(toolCalls);
             return;
           }
 
           try {
             const parsed = JSON.parse(data) as {
-              choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+              choices?: Array<{
+                delta?: {
+                  content?: string;
+                  tool_calls?: Array<{
+                    index?: number;
+                    id?: string;
+                    function?: { name?: string; arguments?: string };
+                  }>;
+                };
+                finish_reason?: string | null;
+              }>;
             };
-            const content = parsed.choices?.[0]?.delta?.content;
+            const delta = parsed.choices?.[0]?.delta;
+            for (const fragment of delta?.tool_calls ?? []) {
+              toolCalls.addFragment(fragment);
+            }
+            const content = delta?.content;
             if (typeof content === "string" && content.length > 0) {
               yield { text: content, done: false };
             }
@@ -592,7 +661,7 @@ export class LlmService {
       reader.releaseLock();
     }
 
-    yield { text: "", done: true };
+    yield this.terminalChunk(toolCalls);
   }
 
   // ---------------------------------------------------------------------------
@@ -606,12 +675,17 @@ export class LlmService {
     const body: Record<string, unknown> = {
       model: config.model,
       temperature: options.temperature ?? 0.2,
-      messages: options.messages,
+      messages: toChatCompletionMessages(options.messages),
       stream: true,
     };
 
     if (options.maxTokens) {
       body.max_tokens = options.maxTokens;
+    }
+
+    if (options.tools && options.tools.length > 0) {
+      body.tools = buildChatCompletionTools(options.tools);
+      body.tool_choice = toMistralToolChoice(options.toolChoice ?? "auto");
     }
 
     const response = await fetchWithTimeout(
@@ -644,6 +718,7 @@ export class LlmService {
     }
 
     const decoder = new TextDecoder();
+    const toolCalls = new ToolCallAccumulator();
     let buffer = "";
 
     try {
@@ -665,15 +740,28 @@ export class LlmService {
 
           const data = trimmed.slice(6);
           if (data === "[DONE]") {
-            yield { text: "", done: true };
+            yield this.terminalChunk(toolCalls);
             return;
           }
 
           try {
             const parsed = JSON.parse(data) as {
-              choices?: Array<{ delta?: { content?: string } }>;
+              choices?: Array<{
+                delta?: {
+                  content?: string;
+                  tool_calls?: Array<{
+                    index?: number;
+                    id?: string;
+                    function?: { name?: string; arguments?: string };
+                  }>;
+                };
+              }>;
             };
-            const content = parsed.choices?.[0]?.delta?.content;
+            const delta = parsed.choices?.[0]?.delta;
+            for (const fragment of delta?.tool_calls ?? []) {
+              toolCalls.addFragment(fragment);
+            }
+            const content = delta?.content;
             if (typeof content === "string" && content.length > 0) {
               yield { text: content, done: false };
             }
@@ -686,7 +774,7 @@ export class LlmService {
       reader.releaseLock();
     }
 
-    yield { text: "", done: true };
+    yield this.terminalChunk(toolCalls);
   }
 
   // ---------------------------------------------------------------------------
@@ -722,6 +810,8 @@ export class LlmService {
     if (systemInstruction) {
       body.systemInstruction = systemInstruction;
     }
+
+    this.applyGeminiTools(body, options);
 
     const response = await this.postJsonWithRetry(
       `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`,
@@ -779,6 +869,8 @@ export class LlmService {
       body.systemInstruction = systemInstruction;
     }
 
+    this.applyGeminiTools(body, options);
+
     const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:streamGenerateContent?alt=sse&key=${config.apiKey}`,
       {
@@ -803,6 +895,7 @@ export class LlmService {
     }
 
     const decoder = new TextDecoder();
+    const toolCalls = new ToolCallAccumulator();
     let buffer = "";
 
     try {
@@ -827,13 +920,22 @@ export class LlmService {
           try {
             const parsed = JSON.parse(data) as {
               candidates?: Array<{
-                content?: { parts?: Array<{ text?: string }> };
+                content?: {
+                  parts?: Array<{
+                    text?: string;
+                    functionCall?: { name?: string; args?: Record<string, unknown> };
+                  }>;
+                };
               }>;
             };
-            const text =
-              parsed.candidates?.[0]?.content?.parts
-                ?.map((part) => part.text ?? "")
-                .join("") ?? "";
+            const parts = parsed.candidates?.[0]?.content?.parts ?? [];
+            for (const part of parts) {
+              // Gemini emits whole functionCall parts, never argument fragments.
+              if (part.functionCall?.name) {
+                toolCalls.addComplete(part.functionCall.name, part.functionCall.args ?? {});
+              }
+            }
+            const text = parts.map((part) => part.text ?? "").join("");
             if (text.length > 0) {
               yield { text, done: false };
             }
@@ -846,7 +948,7 @@ export class LlmService {
       reader.releaseLock();
     }
 
-    yield { text: "", done: true };
+    yield this.terminalChunk(toolCalls);
   }
 
   // ---------------------------------------------------------------------------
@@ -855,7 +957,7 @@ export class LlmService {
 
   private toGeminiFormat(messages: LlmMessage[]): {
     systemInstruction: { parts: Array<{ text: string }> } | null;
-    contents: Array<{ role: string; parts: Array<{ text: string }> }>;
+    contents: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
   } {
     const systemMessages = messages.filter((m) => m.role === "system");
     const conversationMessages = messages.filter((m) => m.role !== "system");
@@ -867,12 +969,64 @@ export class LlmService {
           }
         : null;
 
-    const contents = conversationMessages.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
+    const contents = conversationMessages.map((m) => {
+      if (m.role === "tool") {
+        // Gemini has no tool role: results travel as functionResponse parts in a
+        // user turn, keyed by function name (it has no tool-call ids either).
+        return {
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                name: m.name ?? "",
+                response: toGeminiFunctionResponse(m.content),
+              },
+            },
+          ],
+        };
+      }
+
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        const parts: Array<Record<string, unknown>> = [];
+        if (m.content.length > 0) {
+          parts.push({ text: m.content });
+        }
+        for (const call of m.toolCalls) {
+          parts.push({ functionCall: { name: call.name, args: call.arguments } });
+        }
+        return { role: "model", parts };
+      }
+
+      return {
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }] as Array<Record<string, unknown>>,
+      };
+    });
 
     return { systemInstruction, contents };
+  }
+
+  private applyGeminiTools(body: Record<string, unknown>, options: LlmCompletionOptions): void {
+    if (!options.tools || options.tools.length === 0) {
+      return;
+    }
+
+    body.tools = [
+      {
+        functionDeclarations: options.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        })),
+      },
+    ];
+
+    const choice = options.toolChoice ?? "auto";
+    body.toolConfig = {
+      functionCallingConfig: {
+        mode: choice === "none" ? "NONE" : choice === "required" ? "ANY" : "AUTO",
+      },
+    };
   }
 
   private extractChatCompletionText(
@@ -893,3 +1047,142 @@ export class LlmService {
 }
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ---------------------------------------------------------------------------
+// Tool-calling wire formats (OpenAI dialect is shared by Mistral)
+// ---------------------------------------------------------------------------
+
+/**
+ * Serializes LlmMessages into the OpenAI/Mistral chat-completions shape,
+ * expanding assistant tool-call turns and tool result turns. Plain
+ * system/user/assistant text messages pass through unchanged.
+ */
+function toChatCompletionMessages(messages: LlmMessage[]): Array<Record<string, unknown>> {
+  return messages.map((message) => {
+    if (message.role === "tool") {
+      return {
+        role: "tool",
+        tool_call_id: message.toolCallId ?? "",
+        name: message.name ?? "",
+        content: message.content,
+      };
+    }
+
+    if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
+      return {
+        role: "assistant",
+        content: message.content.length > 0 ? message.content : null,
+        tool_calls: message.toolCalls.map((call) => ({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        })),
+      };
+    }
+
+    return { role: message.role, content: message.content };
+  });
+}
+
+function buildChatCompletionTools(tools: LlmToolDefinition[]): Array<Record<string, unknown>> {
+  return tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  }));
+}
+
+/**
+ * Mistral predates OpenAI's "required" and uses "any" for the same semantics;
+ * both accept "auto"/"none" verbatim.
+ */
+function toMistralToolChoice(choice: "auto" | "none" | "required"): string {
+  return choice === "required" ? "any" : choice;
+}
+
+/**
+ * Accumulates streamed tool-call fragments. OpenAI/Mistral stream
+ * `delta.tool_calls[i]` with id/name on the first fragment and the JSON
+ * `arguments` string spread across fragments; Gemini emits whole
+ * `functionCall` parts instead (added via addComplete with synthetic ids).
+ */
+class ToolCallAccumulator {
+  private readonly entries = new Map<number, { id: string; name: string; argumentsJson: string }>();
+
+  addFragment(fragment: {
+    index?: number;
+    id?: string;
+    function?: { name?: string; arguments?: string };
+  }): void {
+    const index = fragment.index ?? this.entries.size;
+    const entry = this.entries.get(index) ?? { id: "", name: "", argumentsJson: "" };
+    if (fragment.id) {
+      entry.id = fragment.id;
+    }
+    if (fragment.function?.name) {
+      entry.name = fragment.function.name;
+    }
+    if (typeof fragment.function?.arguments === "string") {
+      entry.argumentsJson += fragment.function.arguments;
+    }
+    this.entries.set(index, entry);
+  }
+
+  addComplete(name: string, args: Record<string, unknown>): void {
+    const index = this.entries.size;
+    this.entries.set(index, {
+      id: `call_${index + 1}`,
+      name,
+      argumentsJson: JSON.stringify(args ?? {}),
+    });
+  }
+
+  hasCalls(): boolean {
+    return this.entries.size > 0;
+  }
+
+  /** Fragments with unparseable argument JSON degrade to {} instead of throwing mid-stream. */
+  toToolCalls(): LlmToolCall[] {
+    return [...this.entries.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .filter(([, entry]) => entry.name.length > 0)
+      .map(([index, entry]) => ({
+        id: entry.id || `call_${index + 1}`,
+        name: entry.name,
+        arguments: parseJsonObject(entry.argumentsJson),
+      }));
+  }
+}
+
+/**
+ * Gemini's functionResponse.response must be a JSON object; array/scalar/plain-text
+ * tool results are wrapped instead of silently degrading to {}.
+ */
+function toGeminiFunctionResponse(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return { result: parsed };
+  } catch {
+    return { result: raw };
+  }
+}
+
+function parseJsonObject(raw: string): Record<string, unknown> {
+  if (!raw || raw.trim().length === 0) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}

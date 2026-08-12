@@ -15,6 +15,9 @@ type QaStreamState = {
     chunkIndex: number;
     pageFrom: number | null;
     pageTo: number | null;
+    // 1-based excerpt number matching the [n] markers; absent on legacy entries.
+    index?: number;
+    used?: boolean;
     quote: string;
     score: number;
   }>;
@@ -254,6 +257,11 @@ export function DocumentQaSection({
                           className="rounded-md border border-[var(--explorer-border)] bg-card px-3 py-2"
                         >
                           <p className="line-clamp-2 text-xs text-muted-foreground">
+                            {cit.index != null ? (
+                              <span className="mr-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                                {cit.index}
+                              </span>
+                            ) : null}
                             {cit.quote}
                           </p>
                           {(cit.pageFrom || cit.pageTo) && (

@@ -815,7 +815,13 @@ function ResultsPane({
                 Sources
               </h3>
               <div className="grid grid-cols-2 gap-2.5">
-                {answerStream.citations.map((cit, i) => (
+                {(answerStream.citations.some((cit) => cit.used !== false)
+                  ? // Show what the answer actually cited; the full retrieval
+                    // set only appears when no marker survived (legacy payloads
+                    // have no `used` flag and count as used).
+                    answerStream.citations.filter((cit) => cit.used !== false)
+                  : answerStream.citations
+                ).map((cit, i) => (
                   <button
                     key={`${cit.documentId}-${cit.chunkIndex}`}
                     type="button"
@@ -831,7 +837,7 @@ function ResultsPane({
                     className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/35 hover:shadow-sm"
                   >
                     <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[color:var(--ok-amber-soft)] text-[10px] font-bold text-[color:var(--ok-amber)]">
-                      {i + 1}
+                      {cit.index ?? i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[color:var(--explorer-ink)] group-hover/card:underline">

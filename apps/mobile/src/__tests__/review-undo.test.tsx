@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { ReactNode } from "react";
 import { I18nProvider } from "../i18n";
@@ -115,29 +116,29 @@ function resolveCalls() {
   return mockAuthFetch.mock.calls.filter(([path]) => String(path).includes("/review/"));
 }
 
+beforeEach(() => {
+  mockAuthFetch.mockReset();
+  mockAuthFetch.mockImplementation(async (path: string) => {
+    if (path.includes("/api/documents/review")) {
+      return ok(QUEUE);
+    }
+    if (path.includes("/text")) {
+      return ok({ documentId: "doc-1", blocks: [] });
+    }
+    return ok({});
+  });
+});
+
+// Unmount inside the test's own lifetime: leaving the screen sends the held
+// confirm, and that request has to settle before the environment goes away.
+afterEach(async () => {
+  await cleanup();
+  await waitFor(() => expect(true).toBe(true));
+  client?.clear();
+  client = null;
+});
+
 describe("confirming a review", () => {
-  beforeEach(() => {
-    mockAuthFetch.mockReset();
-    mockAuthFetch.mockImplementation(async (path: string) => {
-      if (path.includes("/api/documents/review")) {
-        return ok(QUEUE);
-      }
-      if (path.includes("/text")) {
-        return ok({ documentId: "doc-1", blocks: [] });
-      }
-      return ok({});
-    });
-  });
-
-  // Unmount inside the test's own lifetime: leaving the screen sends the held
-  // confirm, and that request has to settle before the environment goes away.
-  afterEach(async () => {
-    await cleanup();
-    await waitFor(() => expect(true).toBe(true));
-    client?.clear();
-    client = null;
-  });
-
   it("offers an undo and sends nothing yet", async () => {
     const view = await renderReview();
 
@@ -188,5 +189,32 @@ describe("confirming a review", () => {
     fireEvent.press(view.getByText("Confirm"));
 
     await waitFor(() => expect(view.getByText("Undo")).toBeTruthy());
+  });
+});
+
+describe("the document card", () => {
+  /**
+   * Regression for #174. `Swipeable` inserts two plain, flex-less views
+   * between the screen and the flex-filled card, and on native Yoga resolves
+   * the card's `flex: 1` against their auto height — zero. The result was a
+   * blank screen under a live queue counter. The test renderer computes no
+   * layout, so the closest observable fact is that both wrappers are told to
+   * fill the screen.
+   */
+  it("keeps both swipe wrappers flex-filled so the card cannot collapse", async () => {
+    const view = await renderReview();
+
+    // Climb from inside the card to Swipeable's overflow-hidden container,
+    // remembering the wrapper directly beneath it — the transform carrier.
+    let wrapper = view.getByText("Confirm");
+    let container = wrapper.parent;
+    while (container && StyleSheet.flatten(container.props.style)?.overflow !== "hidden") {
+      wrapper = container;
+      container = container.parent;
+    }
+
+    expect(container).not.toBeNull();
+    expect(StyleSheet.flatten(container?.props.style)).toMatchObject({ flex: 1 });
+    expect(StyleSheet.flatten(wrapper.props.style)).toMatchObject({ flex: 1 });
   });
 });
