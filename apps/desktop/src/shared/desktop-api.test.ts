@@ -15,6 +15,8 @@ describe("preload bridge contract", () => {
     });
     await bridge.session.retry();
     await bridge.session.signOut();
+    await bridge.session.openOffline({ profileId: "profile-id" });
+    await bridge.session.offlineAvailability();
     await bridge.profiles.list();
     await bridge.profiles.activate({ profileId: "profile-id" });
     await bridge.profiles.rename({ profileId: "profile-id", label: "Home" });
@@ -49,64 +51,71 @@ describe("preload bridge contract", () => {
     });
     expect(invoke).toHaveBeenNthCalledWith(3, DESKTOP_CHANNELS.sessionRetry);
     expect(invoke).toHaveBeenNthCalledWith(4, DESKTOP_CHANNELS.sessionSignOut);
-    expect(invoke).toHaveBeenNthCalledWith(5, DESKTOP_CHANNELS.profilesList);
-    expect(invoke).toHaveBeenNthCalledWith(6, DESKTOP_CHANNELS.profilesActivate, {
+    expect(invoke).toHaveBeenNthCalledWith(5, DESKTOP_CHANNELS.sessionOpenOffline, {
       profileId: "profile-id",
     });
-    expect(invoke).toHaveBeenNthCalledWith(7, DESKTOP_CHANNELS.profilesRename, {
+    expect(invoke).toHaveBeenNthCalledWith(
+      6,
+      DESKTOP_CHANNELS.sessionOfflineAvailability,
+    );
+    expect(invoke).toHaveBeenNthCalledWith(7, DESKTOP_CHANNELS.profilesList);
+    expect(invoke).toHaveBeenNthCalledWith(8, DESKTOP_CHANNELS.profilesActivate, {
+      profileId: "profile-id",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(9, DESKTOP_CHANNELS.profilesRename, {
       profileId: "profile-id",
       label: "Home",
     });
-    expect(invoke).toHaveBeenNthCalledWith(8, DESKTOP_CHANNELS.profilesRemove, {
+    expect(invoke).toHaveBeenNthCalledWith(10, DESKTOP_CHANNELS.profilesRemove, {
       profileId: "profile-id",
     });
-    expect(invoke).toHaveBeenNthCalledWith(9, DESKTOP_CHANNELS.importsPick);
-    expect(invoke).toHaveBeenNthCalledWith(10, DESKTOP_CHANNELS.importsPending);
-    expect(invoke).toHaveBeenNthCalledWith(11, DESKTOP_CHANNELS.importsAssign, {
+    expect(invoke).toHaveBeenNthCalledWith(11, DESKTOP_CHANNELS.importsPick);
+    expect(invoke).toHaveBeenNthCalledWith(12, DESKTOP_CHANNELS.importsPending);
+    expect(invoke).toHaveBeenNthCalledWith(13, DESKTOP_CHANNELS.importsAssign, {
       batchId: "batch-id",
       profileId: "profile-id",
     });
-    expect(invoke).toHaveBeenNthCalledWith(12, DESKTOP_CHANNELS.importsConsume);
+    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.importsConsume);
     expect(invoke).toHaveBeenNthCalledWith(
-      13,
+      15,
       DESKTOP_CHANNELS.importsReportCreated,
       { documents: [{ documentId: "document-id", name: "invoice.pdf" }] },
     );
-    expect(invoke).toHaveBeenNthCalledWith(14, DESKTOP_CHANNELS.saveRequest, {
+    expect(invoke).toHaveBeenNthCalledWith(16, DESKTOP_CHANNELS.saveRequest, {
       kind: "document-original",
       documentId: "11111111-1111-4111-8111-111111111111",
     });
-    expect(invoke).toHaveBeenNthCalledWith(15, DESKTOP_CHANNELS.watchFoldersList);
-    expect(invoke).toHaveBeenNthCalledWith(16, DESKTOP_CHANNELS.watchFoldersAdd);
+    expect(invoke).toHaveBeenNthCalledWith(17, DESKTOP_CHANNELS.watchFoldersList);
+    expect(invoke).toHaveBeenNthCalledWith(18, DESKTOP_CHANNELS.watchFoldersAdd);
     expect(invoke).toHaveBeenNthCalledWith(
-      17,
+      19,
       DESKTOP_CHANNELS.watchFoldersSetPaused,
       { folderId: "folder-id", paused: true },
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      18,
+      20,
       DESKTOP_CHANNELS.watchFoldersRemove,
       { folderId: "folder-id" },
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      19,
+      21,
       DESKTOP_CHANNELS.notificationsGetSettings,
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      20,
+      22,
       DESKTOP_CHANNELS.notificationsSetPreference,
       { kind: "review", enabled: false },
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      21,
+      23,
       DESKTOP_CHANNELS.lifecycleGetSettings,
     );
     expect(invoke).toHaveBeenNthCalledWith(
-      22,
+      24,
       DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
       { closeBehavior: "quit" },
     );
-    expect(invoke).toHaveBeenNthCalledWith(23, DESKTOP_CHANNELS.runtimeGetInfo);
+    expect(invoke).toHaveBeenNthCalledWith(25, DESKTOP_CHANNELS.runtimeGetInfo);
     expect(subscribe).toHaveBeenCalledWith(
       DESKTOP_CHANNELS.importsChanged,
       expect.any(Function),

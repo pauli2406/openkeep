@@ -5,6 +5,8 @@ export const DESKTOP_CHANNELS = {
   sessionConnect: "desktop:session:connect",
   sessionRetry: "desktop:session:retry",
   sessionSignOut: "desktop:session:sign-out",
+  sessionOpenOffline: "desktop:session:open-offline",
+  sessionOfflineAvailability: "desktop:session:offline-availability",
   profilesList: "desktop:profiles:list",
   profilesActivate: "desktop:profiles:activate",
   profilesRename: "desktop:profiles:rename",
@@ -61,6 +63,11 @@ export type DesktopSessionState =
       user: CurrentUser;
     }
   | {
+      status: "offline";
+      profile: DesktopProfileSummary;
+      user: CurrentUser;
+    }
+  | {
       status: "unavailable";
       profile: DesktopProfileSummary;
       message: string;
@@ -78,6 +85,14 @@ export type DesktopSessionState =
       message: string;
       serverUrl?: string;
     };
+
+/**
+ * Which profiles have a usable offline copy: cached documents plus a cached
+ * identity. Counts only — never paths or document titles.
+ */
+export type DesktopOfflineAvailability = {
+  profiles: Record<string, { documentCount: number; lastCachedAt: number | null }>;
+};
 
 export type DesktopProfilesSnapshot = {
   profiles: DesktopProfileSummary[];
@@ -268,6 +283,8 @@ export type DesktopBridge = {
     connect: (input: DesktopConnectInput) => Promise<DesktopSessionState>;
     retry: () => Promise<DesktopSessionState>;
     signOut: () => Promise<DesktopSessionState>;
+    openOffline: (input: DesktopProfileIdInput) => Promise<DesktopSessionState>;
+    offlineAvailability: () => Promise<DesktopOfflineAvailability>;
   };
   profiles: {
     list: () => Promise<DesktopProfilesSnapshot>;
@@ -331,6 +348,15 @@ export function createDesktopBridge(
         invoke(DESKTOP_CHANNELS.sessionRetry) as Promise<DesktopSessionState>,
       signOut: () =>
         invoke(DESKTOP_CHANNELS.sessionSignOut) as Promise<DesktopSessionState>,
+      openOffline: (input: DesktopProfileIdInput) =>
+        invoke(
+          DESKTOP_CHANNELS.sessionOpenOffline,
+          input,
+        ) as Promise<DesktopSessionState>,
+      offlineAvailability: () =>
+        invoke(
+          DESKTOP_CHANNELS.sessionOfflineAvailability,
+        ) as Promise<DesktopOfflineAvailability>,
     }),
     profiles: Object.freeze({
       list: () =>

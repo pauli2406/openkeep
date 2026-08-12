@@ -27,6 +27,7 @@ import type {
   DesktopNotificationPreferenceInput,
 } from "./shared/desktop-api";
 import { DESKTOP_CHANNELS } from "./shared/desktop-api";
+import { CurrentUserSchema } from "@openkeep/types";
 import { createArchiveSessionService, type ArchiveSessionService } from "./main/archive-session";
 import { createAppProtocolHandler } from "./main/protocol";
 import {
@@ -91,6 +92,7 @@ import {
   type OfflineCacheStore,
 } from "./main/offline/offline-cache-store";
 import { createOfflineReadThrough } from "./main/offline/read-through";
+import { createOfflineApiHandler } from "./main/offline/offline-api";
 import { SecureStorageUnavailableError } from "./main/storage";
 
 protocol.registerSchemesAsPrivileged([
@@ -112,6 +114,15 @@ const isSmokeTest = process.argv.includes("--smoke-test");
 let mainWindow: BrowserWindow | null = null;
 let trayLifecycle: DesktopTrayLifecycle | null = null;
 let notificationRouter: DesktopNotificationRouter | null = null;
+/**
+ * The profile currently open as a read-only offline session, if any. Owned by
+ * main so the protocol proxy, window transitions, and the reconnect loop all
+ * agree on it. At most one session — online or offline — is active at a time.
+ */
+let offlineSession: {
+  profileId: string;
+  state: Extract<DesktopSessionState, { status: "offline" }>;
+} | null = null;
 const trustedWebContentsIds = new Set<number>();
 const windowProfileIds = new Map<number, string | null>();
 const profileRoutes = new Map<string, string>();
@@ -189,11 +200,21 @@ function registerIpcHandlers(
   setNotificationPreference: (
     input: DesktopNotificationPreferenceInput,
   ) => Promise<void>,
+  offlineCacheFor: (profileId: string) => Promise<OfflineCacheStore | null>,
 ) {
   ipcMain.handle(
     DESKTOP_CHANNELS.sessionRestore,
     async (event) => {
       assertIpcEvent(event);
+      // A window created for an offline session restores into it directly:
+      // asking the archive would either fail (it is unreachable) or silently
+      // leave offline mode without the user asking to.
+      if (
+        offlineSession &&
+        windowProfileIds.get(event.sender.id) === offlineSession.profileId
+      ) {
+        return offlineSession.state;
+      }
       const profiles = await archiveSession.listProfiles().catch(() => null);
       const restoredProfileId =
         profiles?.profiles.length === 1
@@ -264,6 +285,67 @@ function registerIpcHandlers(
     onDesktopStateChanged();
     return state;
   });
+
+  ipcMain.handle(DESKTOP_CHANNELS.sessionOfflineAvailability, async (event) => {
+    assertIpcEvent(event);
+    const profiles = await archiveSession.listProfiles().catch(() => null);
+    const availability: Record<
+      string,
+      { documentCount: number; lastCachedAt: number | null }
+    > = {};
+    for (const profile of profiles?.profiles ?? []) {
+      const store = await offlineCacheFor(profile.id);
+      if (!store) continue;
+      const summary = store.summary();
+      const user = await store.getUser();
+      // A copy without an identity cannot become a session, so it is not
+      // offered as available.
+      if (summary.documentCount > 0 && user) {
+        availability[profile.id] = {
+          documentCount: summary.documentCount,
+          lastCachedAt: summary.lastCachedAt,
+        };
+      }
+    }
+    return { profiles: availability };
+  });
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.sessionOpenOffline,
+    async (event, input: DesktopProfileIdInput) => {
+      assertIpcEvent(event);
+      if (!input || typeof input.profileId !== "string") {
+        throw new Error("Choose an archive profile to open offline.");
+      }
+      const profiles = await archiveSession.listProfiles().catch(() => null);
+      const profile = profiles?.profiles.find(
+        (candidate) => candidate.id === input.profileId,
+      );
+      if (!profile) {
+        throw new Error("That archive profile no longer exists.");
+      }
+      const store = await offlineCacheFor(profile.id);
+      const summary = store?.summary();
+      const cachedUser = store ? await store.getUser() : null;
+      const user = CurrentUserSchema.safeParse(cachedUser);
+      if (!store || !summary || summary.documentCount === 0 || !user.success) {
+        throw new Error("This archive has no usable offline copy on this computer.");
+      }
+
+      // Entering offline leaves any live session without touching stored
+      // credentials — this is not a sign-out.
+      archiveSession.suspend();
+      const state: Extract<DesktopSessionState, { status: "offline" }> = {
+        status: "offline",
+        profile,
+        user: user.data,
+      };
+      offlineSession = { profileId: profile.id, state };
+      transitionWindow(event.sender.id, state);
+      onDesktopStateChanged();
+      return state;
+    },
+  );
 
   ipcMain.handle(DESKTOP_CHANNELS.profilesList, async (event) => {
     assertIpcEvent(event);
@@ -753,6 +835,10 @@ void app.whenReady().then(async () => {
    * session: online behavior is identical either way, so this only ever logs.
    */
   const offlineCaches = new Map<string, Promise<OfflineCacheStore | null>>();
+  const offlineApiHandlers = new Map<
+    string,
+    (request: Request, url: URL) => Promise<Response>
+  >();
 
   function offlineCacheFor(profileId: string): Promise<OfflineCacheStore | null> {
     let opening = offlineCaches.get(profileId);
@@ -767,6 +853,7 @@ void app.whenReady().then(async () => {
           credentialCipher: createSafeStorageCipher(safeStorage),
         });
         await store.open();
+        offlineApiHandlers.set(profileId, createOfflineApiHandler({ store }));
         return store;
       })().catch((error: unknown) => {
         if (error instanceof SecureStorageUnavailableError) {
@@ -819,7 +906,13 @@ void app.whenReady().then(async () => {
           fetchRequest: (input, init) => targetSession.fetch(input, init),
           fileExists: existsSync,
           ...(profileId
-            ? { observeApiResponse: createProfileReadThrough(profileId) }
+            ? {
+                observeApiResponse: createProfileReadThrough(profileId),
+                getOfflineApiHandler: () =>
+                  offlineSession?.profileId === profileId
+                    ? offlineApiHandlers.get(profileId) ?? null
+                    : null,
+              }
             : {}),
         }),
       );
@@ -946,8 +1039,16 @@ void app.whenReady().then(async () => {
     state: DesktopSessionState,
     options: { resetProfileId?: string; clearProfileId?: string } = {},
   ) {
+    // An explicit online session or a sign-out ends any offline session; an
+    // unavailable or error state leaves it alone so the offer can persist.
+    if (
+      state.status === "connected" ||
+      (state.status === "disconnected" && state.reason === "signed-out")
+    ) {
+      offlineSession = null;
+    }
     const targetProfileId =
-      state.status === "connected"
+      state.status === "connected" || state.status === "offline"
         ? state.profile.id
         : state.status === "disconnected" &&
             ["signed-out", "no-profile", "choose-profile"].includes(
@@ -1081,6 +1182,7 @@ void app.whenReady().then(async () => {
     async ({ kind, enabled }) => {
       await lifecycleState.setNotificationPreference(kind, enabled);
     },
+    offlineCacheFor,
   );
   watchFolders.start();
   outcomes.start();

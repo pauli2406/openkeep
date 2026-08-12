@@ -30,6 +30,8 @@ export function createDesktopBridgeStub(
         status: "disconnected",
         reason: "signed-out",
       })),
+      openOffline: vi.fn(async () => DISCONNECTED),
+      offlineAvailability: vi.fn(async () => ({ profiles: {} })),
       ...overrides.session,
     },
     profiles: {
