@@ -7,6 +7,7 @@ import type {
   DesktopNotificationKind,
   DesktopNotificationSettings,
   DesktopOfflineAvailability,
+  DesktopUpdatesState,
 } from "../shared/desktop-api";
 
 function formatBytes(bytes: number): string {
@@ -58,6 +59,7 @@ export function DesktopLifecycleControl({
   profileId,
 }: {
   bridge?: Pick<DesktopBridge, "lifecycle" | "notifications"> & {
+    updates?: DesktopBridge["updates"];
     session?: Pick<
       DesktopBridge["session"],
       "offlineAvailability" | "clearOfflineCopy" | "setOfflineCopyLimit"
@@ -76,6 +78,7 @@ export function DesktopLifecycleControl({
     DesktopOfflineAvailability["profiles"][string] | null
   >(null);
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [updates, setUpdates] = useState<DesktopUpdatesState | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -153,6 +156,56 @@ export function DesktopLifecycleControl({
       setMessage("That notification setting could not be changed.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!bridge.updates) return;
+    let active = true;
+    const refresh = () =>
+      bridge.updates!
+        .state()
+        .then((next) => {
+          if (active) setUpdates(next);
+        })
+        .catch(() => undefined);
+    void refresh();
+    const unsubscribe = bridge.updates.onChanged(() => void refresh());
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [bridge]);
+
+  async function checkForUpdates() {
+    if (!bridge.updates) return;
+    try {
+      setUpdates(await bridge.updates.check());
+    } catch {
+      setMessage("The update check could not be started.");
+    }
+  }
+
+  function describeUpdates(state: DesktopUpdatesState): string {
+    switch (state.status) {
+      case "checking":
+        return "Checking for updates…";
+      case "downloading":
+        return "Downloading the update…";
+      case "ready":
+        return state.version
+          ? `Update ${state.version} is ready to install.`
+          : "An update is ready to install.";
+      case "upToDate":
+        return "OpenKeep is up to date.";
+      case "available-manual":
+        return `Version ${state.version} is available.`;
+      case "unsupported":
+        return state.reason;
+      case "error":
+        return state.message;
+      default:
+        return "Updates have not been checked yet.";
     }
   }
 
@@ -260,6 +313,36 @@ export function DesktopLifecycleControl({
               </label>
             ))}
           </fieldset>
+          {updates ? (
+            <div className="desktop-lifecycle-control__updates">
+              <div>
+                <strong>Updates</strong>
+                <small role="status">{describeUpdates(updates)}</small>
+              </div>
+              {updates.status === "ready" ? (
+                <button
+                  type="button"
+                  onClick={() => void bridge.updates?.install()}
+                >
+                  Restart and install
+                </button>
+              ) : updates.status === "available-manual" ? (
+                <a href={updates.url} target="_blank" rel="noreferrer">
+                  Open the release page
+                </a>
+              ) : updates.status !== "unsupported" ? (
+                <button
+                  type="button"
+                  disabled={
+                    updates.status === "checking" || updates.status === "downloading"
+                  }
+                  onClick={() => void checkForUpdates()}
+                >
+                  Check for updates
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {profileId && offlineCopy ? (
             <div className="desktop-lifecycle-control__offline">
               <div>

@@ -29,6 +29,10 @@ export const DESKTOP_CHANNELS = {
   notificationsSetPreference: "desktop:notifications:set-preference",
   lifecycleGetSettings: "desktop:lifecycle:get-settings",
   lifecycleSetCloseBehavior: "desktop:lifecycle:set-close-behavior",
+  updatesGetState: "desktop:updates:get-state",
+  updatesCheck: "desktop:updates:check",
+  updatesInstall: "desktop:updates:install",
+  updatesChanged: "desktop:updates:changed",
   runtimeGetInfo: "desktop:runtime:get-info",
 } as const;
 
@@ -132,6 +136,17 @@ export type DesktopProfileIdInput = {
 export type DesktopProfileRenameInput = DesktopProfileIdInput & {
   label: string;
 };
+
+/** Mirrors the main-process update service's state machine. */
+export type DesktopUpdatesState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "downloading" }
+  | { status: "ready"; version: string | null }
+  | { status: "upToDate" }
+  | { status: "available-manual"; version: string; url: string }
+  | { status: "unsupported"; reason: string }
+  | { status: "error"; message: string };
 
 export type DesktopRuntimeInfo = {
   platform: NodeJS.Platform;
@@ -358,6 +373,12 @@ export type DesktopBridge = {
       input: DesktopCloseBehaviorInput,
     ) => Promise<DesktopLifecycleSettings>;
   };
+  updates: {
+    state: () => Promise<DesktopUpdatesState>;
+    check: () => Promise<DesktopUpdatesState>;
+    install: () => Promise<void>;
+    onChanged: (listener: () => void) => () => void;
+  };
   runtime: {
     getInfo: () => Promise<DesktopRuntimeInfo>;
   };
@@ -471,6 +492,15 @@ export function createDesktopBridge(
           DESKTOP_CHANNELS.lifecycleSetCloseBehavior,
           input,
         ) as Promise<DesktopLifecycleSettings>,
+    }),
+    updates: Object.freeze({
+      state: () =>
+        invoke(DESKTOP_CHANNELS.updatesGetState) as Promise<DesktopUpdatesState>,
+      check: () =>
+        invoke(DESKTOP_CHANNELS.updatesCheck) as Promise<DesktopUpdatesState>,
+      install: () => invoke(DESKTOP_CHANNELS.updatesInstall) as Promise<void>,
+      onChanged: (listener: () => void) =>
+        subscribe(DESKTOP_CHANNELS.updatesChanged, listener),
     }),
     runtime: Object.freeze({
       getInfo: () =>

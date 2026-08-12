@@ -9,6 +9,7 @@ function createBridge(
     trayAvailable?: boolean;
     closeBehavior?: "tray" | "quit";
     notifications?: DesktopNotificationSettings;
+    updatesState?: import("../shared/desktop-api").DesktopUpdatesState;
   } = {},
 ) {
   const trayAvailable = options.trayAvailable ?? true;
@@ -49,7 +50,13 @@ function createBridge(
     clearOfflineCopy: vi.fn(async () => ({ profiles: {} })),
     setOfflineCopyLimit: vi.fn(async () => ({ profiles: {} })),
   };
-  return { lifecycle, notifications, session };
+  const updates = {
+    state: vi.fn(async () => options.updatesState ?? { status: "idle" as const }),
+    check: vi.fn(async () => ({ status: "checking" as const })),
+    install: vi.fn(async () => undefined),
+    onChanged: vi.fn(() => () => undefined),
+  };
+  return { lifecycle, notifications, session, updates };
 }
 
 describe("desktop lifecycle control", () => {
@@ -153,5 +160,40 @@ describe("desktop lifecycle control", () => {
     await user.click(screen.getByRole("button", { name: "Desktop behavior" }));
     await screen.findByText(/When the window closes/i);
     expect(screen.queryByText(/Delete offline copy/)).not.toBeInTheDocument();
+  });
+
+  it("checks for updates on demand and installs a ready update only on request", async () => {
+    const user = userEvent.setup();
+    const bridge = createBridge({
+      updatesState: { status: "ready", version: "v1.3.0" },
+    });
+    render(<DesktopLifecycleControl bridge={bridge} />);
+
+    await user.click(screen.getByRole("button", { name: "Desktop behavior" }));
+    expect(await screen.findByText(/v1\.3\.0 is ready to install/)).toBeVisible();
+    expect(bridge.updates.install).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: /Restart and install/ }));
+    expect(bridge.updates.install).toHaveBeenCalledOnce();
+  });
+
+  it("links Linux users to the release page instead of faking an auto-update", async () => {
+    const user = userEvent.setup();
+    const bridge = createBridge({
+      updatesState: {
+        status: "available-manual",
+        version: "v1.3.0",
+        url: "https://github.com/pauli2406/openkeep/releases/tag/v1.3.0",
+      },
+    });
+    render(<DesktopLifecycleControl bridge={bridge} />);
+
+    await user.click(screen.getByRole("button", { name: "Desktop behavior" }));
+    const link = await screen.findByRole("link", { name: /Open the release page/ });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/pauli2406/openkeep/releases/tag/v1.3.0",
+    );
+    expect(screen.queryByRole("button", { name: /Restart and install/ })).toBeNull();
   });
 });

@@ -86,6 +86,13 @@ export function createDesktopBridgeStub(
       })),
       ...overrides.lifecycle,
     },
+    updates: {
+      state: vi.fn(async () => ({ status: "idle" as const })),
+      check: vi.fn(async () => ({ status: "upToDate" as const })),
+      install: vi.fn(async () => undefined),
+      onChanged: vi.fn(() => () => undefined),
+      ...overrides.updates,
+    },
     runtime: {
       getInfo: vi.fn(async () => ({
         platform: "darwin" as NodeJS.Platform,

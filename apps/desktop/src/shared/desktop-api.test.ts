@@ -44,6 +44,10 @@ describe("preload bridge contract", () => {
     await bridge.lifecycle.getSettings();
     await bridge.lifecycle.setCloseBehavior({ closeBehavior: "quit" });
     await bridge.runtime.getInfo();
+    await bridge.updates.state();
+    await bridge.updates.check();
+    await bridge.updates.install();
+    const stopUpdates = bridge.updates.onChanged(() => undefined);
 
     expect(invoke).toHaveBeenNthCalledWith(1, DESKTOP_CHANNELS.sessionRestore);
     expect(invoke).toHaveBeenNthCalledWith(2, DESKTOP_CHANNELS.sessionConnect, {
@@ -130,9 +134,17 @@ describe("preload bridge contract", () => {
       DESKTOP_CHANNELS.watchFoldersChanged,
       expect.any(Function),
     );
+    expect(invoke).toHaveBeenCalledWith(DESKTOP_CHANNELS.updatesGetState);
+    expect(invoke).toHaveBeenCalledWith(DESKTOP_CHANNELS.updatesCheck);
+    expect(invoke).toHaveBeenCalledWith(DESKTOP_CHANNELS.updatesInstall);
+    expect(subscribe).toHaveBeenCalledWith(
+      DESKTOP_CHANNELS.updatesChanged,
+      expect.any(Function),
+    );
     stop();
     stopWatching();
-    expect(unsubscribe).toHaveBeenCalledTimes(2);
+    stopUpdates();
+    expect(unsubscribe).toHaveBeenCalledTimes(3);
     expect(Object.isFrozen(bridge)).toBe(true);
     expect(Object.keys(bridge)).toEqual([
       "session",
@@ -142,6 +154,7 @@ describe("preload bridge contract", () => {
       "watchFolders",
       "notifications",
       "lifecycle",
+      "updates",
       "runtime",
     ]);
   });

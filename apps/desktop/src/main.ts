@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   app,
+  autoUpdater,
   BrowserWindow,
   dialog,
   ipcMain,
@@ -97,6 +98,10 @@ import {
 import { createOfflineReadThrough } from "./main/offline/read-through";
 import { createOfflineApiHandler } from "./main/offline/offline-api";
 import { createOfflineReconnect } from "./main/offline/offline-reconnect";
+import {
+  createDesktopUpdateService,
+  type DesktopUpdateService,
+} from "./main/updates/update-service";
 import { SecureStorageUnavailableError } from "./main/storage";
 
 protocol.registerSchemesAsPrivileged([
@@ -720,7 +725,7 @@ async function completeSmokeTest(window: BrowserWindow) {
     const passed =
       result.heading === "Connect your archive" &&
       result.bridgeKeys.join(",") ===
-        "session,profiles,imports,save,watchFolders,notifications,lifecycle,runtime" &&
+        "session,profiles,imports,save,watchFolders,notifications,lifecycle,updates,runtime" &&
       !result.hasProcess &&
       !result.hasRequire &&
       result.csp?.includes("default-src 'none'");
@@ -1252,6 +1257,7 @@ void app.whenReady().then(async () => {
         }
       }
       offlineReconnect.stop();
+      updateService.stop();
       await watchFolders.stop();
       await outcomes.stop();
       for (const opening of offlineCaches.values()) {
@@ -1290,6 +1296,54 @@ void app.whenReady().then(async () => {
     reportError: (message, error) => console.error(message, error),
   });
   offlineReconnect.start();
+
+  const updateService: DesktopUpdateService = createDesktopUpdateService({
+    repository: "pauli2406/openkeep",
+    platform: process.platform,
+    arch: process.arch,
+    currentVersion: app.getVersion(),
+    isPackaged: app.isPackaged,
+    autoUpdater:
+      process.platform === "darwin" || process.platform === "win32"
+        ? autoUpdater
+        : null,
+    fetchRequest: (input, init) => net.fetch(input, init),
+    timer: (() => {
+      let handle: ReturnType<typeof setTimeout> | null = null;
+      return {
+        start(run: () => void, delayMs: number) {
+          handle = setTimeout(run, delayMs);
+          handle.unref?.();
+        },
+        stop() {
+          if (handle) clearTimeout(handle);
+          handle = null;
+        },
+      };
+    })(),
+    onChanged: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(DESKTOP_CHANNELS.updatesChanged);
+      }
+    },
+  });
+  if (!isSmokeTest) {
+    updateService.start();
+  }
+
+  ipcMain.handle(DESKTOP_CHANNELS.updatesGetState, async (event) => {
+    assertIpcEvent(event);
+    return updateService.state();
+  });
+  ipcMain.handle(DESKTOP_CHANNELS.updatesCheck, async (event) => {
+    assertIpcEvent(event);
+    await updateService.check();
+    return updateService.state();
+  });
+  ipcMain.handle(DESKTOP_CHANNELS.updatesInstall, async (event) => {
+    assertIpcEvent(event);
+    updateService.install();
+  });
 
   await trayLifecycle.initialize();
   registerIpcHandlers(
