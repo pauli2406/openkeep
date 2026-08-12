@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, Logger } from "@nestjs/common";
 import { users } from "@openkeep/db";
 import type {
   AnswerQueryRequest,
@@ -13,7 +13,7 @@ import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
 import { DocumentsService } from "../documents/documents.service";
 import { ExplorerService } from "../explorer/explorer.service";
-import { ChatAgentService } from "./chat-agent.service";
+import { ChatAgentService, ChatAgentUnavailableError } from "./chat-agent.service";
 
 type StructuredQueryRoute =
   | {
@@ -40,6 +40,8 @@ type StructuredQueryRoute =
 
 @Injectable()
 export class SearchOrchestratorService {
+  private readonly logger = new Logger(SearchOrchestratorService.name);
+
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
     @Inject(DocumentsService) private readonly documentsService: DocumentsService,
@@ -52,10 +54,19 @@ export class SearchOrchestratorService {
     principal: AuthenticatedPrincipal,
   ): Promise<AnswerQueryResponse> {
     // With an LLM configured, the tool-calling agent covers both structured
-    // (filter/count) and content questions. The regex router below survives
-    // only as the no-LLM degradation path.
+    // (filter/count) and content questions. The classic path below survives as
+    // the degradation route: no LLM configured, or none reachable.
     if (this.chatAgentService.isAvailable()) {
-      return this.chatAgentService.answer(request, principal);
+      try {
+        return await this.chatAgentService.answer(request, principal);
+      } catch (error) {
+        if (!(error instanceof ChatAgentUnavailableError)) {
+          throw error;
+        }
+        this.logger.warn(
+          `Chat agent unavailable (${error.message}) — answering via the classic route`,
+        );
+      }
     }
 
     const route = this.routeStructuredQuery(request.query);
@@ -92,8 +103,23 @@ export class SearchOrchestratorService {
     signal?: AbortSignal,
   ): AsyncGenerator<string> {
     if (this.chatAgentService.isAvailable()) {
-      yield* this.chatAgentService.streamSse(request, principal, signal);
-      return;
+      let yieldedAgentEvent = false;
+      try {
+        for await (const frame of this.chatAgentService.streamSse(request, principal, signal)) {
+          yieldedAgentEvent = true;
+          yield frame;
+        }
+        return;
+      } catch (error) {
+        // Once agent events are on the wire, appending a classic answer would
+        // overwrite the partial response client-side — propagate instead.
+        if (yieldedAgentEvent || !(error instanceof ChatAgentUnavailableError)) {
+          throw error;
+        }
+        this.logger.warn(
+          `Chat agent unavailable (${error.message}) — streaming via the classic route`,
+        );
+      }
     }
 
     const route = this.routeStructuredQuery(request.query);

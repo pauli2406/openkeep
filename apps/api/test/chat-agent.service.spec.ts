@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ChatAgentService } from "../src/search/chat-agent.service";
+import { ChatAgentService, ChatAgentUnavailableError } from "../src/search/chat-agent.service";
 import type { LlmStreamChunk } from "../src/processing/llm.service";
 
 function makeLanguageDb(language: "en" | "de") {
@@ -268,14 +268,44 @@ describe("ChatAgentService", () => {
     expect(events.at(-1)!.data.fullAnswer).toBe("Final answer.");
   });
 
-  it("surfaces stream errors as SSE error events", async () => {
+  it("throws ChatAgentUnavailableError when the LLM fails before any output", async () => {
     const { service } = makeService([
-      [{ text: "", done: true, error: "All configured LLM providers failed before streaming" }],
+      [{ text: "", done: true, error: "OpenAI request failed (HTTP 401)" }],
+    ]);
+
+    // Nothing reached the client, so the caller can still fall back to the
+    // classic route instead of surfacing an error.
+    await expect(collect(service)).rejects.toBeInstanceOf(ChatAgentUnavailableError);
+  });
+
+  it("reports a mid-answer failure as an SSE error event instead of throwing", async () => {
+    const { service } = makeService([
+      [
+        { text: "Partial answer", done: false },
+        { text: "", done: true, error: "connection reset" },
+      ],
     ]);
 
     const events = parseEvents(await collect(service));
-    expect(events).toHaveLength(1);
-    expect(events[0]!.event).toBe("error");
-    expect(events[0]!.data.message).toContain("failed");
+    expect(events.map((e) => e.event)).toEqual(["answer-token", "error"]);
+    expect(events[1]!.data.message).toContain("connection reset");
+  });
+
+  it("reports a failure after a tool round as an event: the tool status is already out", async () => {
+    const { service } = makeService([
+      [
+        {
+          text: "",
+          done: true,
+          toolCalls: [{ id: "call_1", name: "search_documents", arguments: {} }],
+          provider: "openai",
+          model: "gpt-4.1-mini",
+        },
+      ],
+      [{ text: "", done: true, error: "provider exploded" }],
+    ]);
+
+    const events = parseEvents(await collect(service));
+    expect(events.at(-1)!.event).toBe("error");
   });
 });

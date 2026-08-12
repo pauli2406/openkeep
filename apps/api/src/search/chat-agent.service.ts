@@ -35,6 +35,14 @@ const MAX_TOOL_CALLS = 8;
 /** Rows carried into the client-side document table. */
 const MAX_TABLE_ROWS = 25;
 
+/**
+ * Raised when the agent fails before anything reached the client — no tokens,
+ * no tool status. The caller can still answer via the classic route (structured
+ * router / plain RAG), which degrades gracefully when no LLM is reachable.
+ * Once output is on the wire the error is reported as an event instead.
+ */
+export class ChatAgentUnavailableError extends Error {}
+
 export type ChatAgentEvent =
   | { type: "search-results"; results: SemanticSearchResult[] }
   | {
@@ -182,6 +190,9 @@ export class ChatAgentService {
     let usedTools = false;
     let totalToolCalls = 0;
     let providerOrder: LlmProviderId[] | undefined;
+    // Whether anything has reached the client yet; decides between failing over
+    // to the classic route and reporting the error on the wire.
+    let emittedOutput = false;
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
       const forceAnswer = round === MAX_TOOL_ROUNDS - 1 || totalToolCalls >= MAX_TOOL_CALLS;
@@ -215,6 +226,7 @@ export class ChatAgentService {
         if (chunk.text.length > 0) {
           roundText += chunk.text;
           fullAnswer += chunk.text;
+          emittedOutput = true;
           yield { type: "token", text: chunk.text };
         }
       }
@@ -224,6 +236,9 @@ export class ChatAgentService {
       }
 
       if (streamError) {
+        if (!emittedOutput) {
+          throw new ChatAgentUnavailableError(streamError);
+        }
         yield { type: "error", message: streamError };
         return;
       }
@@ -238,6 +253,7 @@ export class ChatAgentService {
       for (const call of toolCalls) {
         totalToolCalls += 1;
         const label = this.chatTools.describeCall(call, language);
+        emittedOutput = true;
         yield { type: "tool-status", tool: call.name, label, status: "started" };
 
         const execution = await this.chatTools.execute(call, principal);

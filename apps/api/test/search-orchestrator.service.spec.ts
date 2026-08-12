@@ -3,10 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DashboardDeadlineItem, Document } from "@openkeep/types";
 import { SearchOrchestratorService } from "../src/search/search-orchestrator.service";
+import { ChatAgentUnavailableError } from "../src/search/chat-agent.service";
 
 // These specs exercise the regex-router fallback path, so the chat agent
 // reports itself unavailable (no LLM configured).
 const disabledChatAgent = { isAvailable: () => false };
+
+/** An agent that is configured but cannot reach any provider. */
+const unreachableChatAgent = {
+  isAvailable: () => true,
+  answer: vi.fn(async () => {
+    throw new ChatAgentUnavailableError("OpenAI request failed (HTTP 401)");
+  }),
+  streamSse: async function* () {
+    throw new ChatAgentUnavailableError("OpenAI request failed (HTTP 401)");
+    // eslint-disable-next-line no-unreachable
+    yield "";
+  },
+};
 
 function makeDocument(overrides: Partial<Document> = {}): Document {
   return {
@@ -605,5 +619,113 @@ describe("SearchOrchestratorService", () => {
 
     expect(documentsService.listExpiringDocuments).toHaveBeenCalledOnce();
     expect(response.structuredData?.kind).toBe("expiring_contracts");
+  });
+});
+
+describe("SearchOrchestratorService chat-agent degradation", () => {
+  it("answers via the structured route when the agent cannot reach any provider", async () => {
+    const deadlineItems: DashboardDeadlineItem[] = [
+      {
+        documentId: "11111111-1111-1111-1111-111111111111",
+        title: "Electricity invoice April 2026",
+        referenceNumber: "INV-APR-2026",
+        dueDate: "2026-04-18",
+        amount: 89,
+        currency: "EUR",
+        correspondentName: "Hamburg Energie",
+        documentTypeName: "Invoice",
+        taskLabel: "Pay",
+        daysUntilDue: 17,
+        isOverdue: false,
+        taskCompletedAt: null,
+      },
+    ];
+    const explorerService = {
+      listDeadlineItems: vi.fn().mockResolvedValue(deadlineItems),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("de") as never,
+      {
+        answerQuery: vi.fn(),
+        streamAnswer: vi.fn(),
+        listReviewDocuments: vi.fn(),
+        listExpiringDocuments: vi.fn(),
+      } as never,
+      explorerService as never,
+      unreachableChatAgent as never,
+    );
+
+    const response = await service.answerQuery(
+      {
+        query: "Welche Rechnungen habe ich noch diesen Monat zu bezahlen?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    );
+
+    // A dead chat provider must not turn an answerable operational question
+    // into an error — the structured route still knows the answer.
+    expect(response.route).toBe("structured");
+    expect(response.structuredData?.kind).toBe("deadline_items");
+  });
+
+  it("streams via the classic route when the agent fails before emitting anything", async () => {
+    const documentsService = {
+      answerQuery: vi.fn(),
+      streamAnswer: vi.fn(async function* () {
+        yield "event: done\ndata: {}\n\n";
+      }),
+      listReviewDocuments: vi.fn(),
+      listExpiringDocuments: vi.fn(),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      documentsService as never,
+      { listDeadlineItems: vi.fn() } as never,
+      unreachableChatAgent as never,
+    );
+
+    const frames: string[] = [];
+    for await (const frame of service.streamAnswer(
+      {
+        query: "What does the contract say about the cancellation clause?",
+        maxDocuments: 5,
+        maxCitations: 6,
+        maxChunkMatches: 6,
+      },
+      { userId: "user-1" } as never,
+    )) {
+      frames.push(frame);
+    }
+
+    expect(documentsService.streamAnswer).toHaveBeenCalledOnce();
+    expect(frames).toEqual(["event: done\ndata: {}\n\n"]);
+  });
+
+  it("propagates non-availability errors from the agent instead of masking them", async () => {
+    const failingAgent = {
+      isAvailable: () => true,
+      answer: vi.fn(async () => {
+        throw new Error("database connection lost");
+      }),
+    };
+
+    const service = new SearchOrchestratorService(
+      makeLanguageDb("en") as never,
+      { answerQuery: vi.fn() } as never,
+      { listDeadlineItems: vi.fn() } as never,
+      failingAgent as never,
+    );
+
+    await expect(
+      service.answerQuery(
+        { query: "anything", maxDocuments: 5, maxCitations: 6, maxChunkMatches: 6 },
+        { userId: "user-1" } as never,
+      ),
+    ).rejects.toThrow("database connection lost");
   });
 });
