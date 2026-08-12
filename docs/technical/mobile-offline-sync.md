@@ -31,7 +31,7 @@ openkeep-cache/
     └── <document-id>.<ext>
 ```
 
-The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size.
+The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size, plus the issue, due and expiry dates as queryable columns — so the offline list filters by year and by date range, sorts by issue or due date, and pages in SQL rather than slicing the first page in JavaScript. A document with no due date sorts where the archive puts it, which takes an explicit `NULLS LAST`: SQLite orders nulls first ascending where Postgres orders them last. The date a document is filed under is its issue date, or the local day it was created where it has none, matching the year and month the derived surfaces report.
 
 Date-only values (`YYYY-MM-DD`) are days, not instants, and the offline
 derivations read them as local days through `parseArchiveDate` — the helper the
