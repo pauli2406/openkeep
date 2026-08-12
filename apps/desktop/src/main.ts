@@ -93,6 +93,7 @@ import {
 } from "./main/offline/offline-cache-store";
 import { createOfflineReadThrough } from "./main/offline/read-through";
 import { createOfflineApiHandler } from "./main/offline/offline-api";
+import { createOfflineReconnect } from "./main/offline/offline-reconnect";
 import { SecureStorageUnavailableError } from "./main/storage";
 
 protocol.registerSchemesAsPrivileged([
@@ -1144,6 +1145,7 @@ void app.whenReady().then(async () => {
             });
         }
       }
+      offlineReconnect.stop();
       await watchFolders.stop();
       await outcomes.stop();
       for (const opening of offlineCaches.values()) {
@@ -1159,6 +1161,28 @@ void app.whenReady().then(async () => {
       await lifecycleState.idle();
     },
   });
+  const offlineReconnect = createOfflineReconnect({
+    timer: createIntervalWatchFolderTimer(),
+    offlineProfileId: () => offlineSession?.profileId ?? null,
+    activateProfile: (profileId) => archiveSession.activate(profileId),
+    onReconnected: (profileId) => {
+      offlineSession = null;
+      void createMainWindow(profileId).catch(() => {
+        console.error("OpenKeep could not reopen the reconnected archive.");
+      });
+    },
+    onCredentialsRejected: (profileId) => {
+      // The activation already removed the rejected profile; the offline
+      // session ends with it and the chooser takes over.
+      offlineSession = null;
+      void createMainWindow(null, { clearProfileId: profileId }).catch(() => {
+        console.error("OpenKeep could not leave the removed offline archive.");
+      });
+    },
+    reportError: (message, error) => console.error(message, error),
+  });
+  offlineReconnect.start();
+
   await trayLifecycle.initialize();
   registerIpcHandlers(
     archiveSession,
