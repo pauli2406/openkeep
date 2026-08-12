@@ -571,13 +571,21 @@ not a sign-out.
 Serving happens at the protocol proxy, mirroring how the cache is populated.
 While a profile is offline, its partition's `/api` traffic routes to an offline
 API handler that answers the read endpoints in the archive's own response
-shapes: the cached user for `/api/auth/me`, the documents list built from the
-column index, document detail, OCR text, history, and decrypted file bytes. A
-cached document therefore renders identically offline and online, and the
-shared web application needs no cached-read forks. Everything else — every
-mutation, AI request, and list the cache cannot honestly answer — receives a
-read-only refusal at the transport, carrying its own header rather than
-`archive-unavailable` so the renderer's failure handler is not sent
+shapes: the cached user for `/api/auth/me`; the documents list with query,
+correspondent, type, tag, status, review, year, and date-range filters plus
+date sorting; the review queue as pending cached documents; facets, the
+timeline, Today's dashboard, and correspondent dossiers derived from the
+column index; keyword search over cached titles, taxonomy names, and OCR text
+(the one read-only POST, with matching blocks quoted and every result openable
+offline by construction); document detail, OCR text, history, and decrypted
+file bytes. A cached document therefore renders identically offline and
+online, and the shared web application needs no cached-read forks. All date
+arithmetic uses local dates, which is what lets the due and year filters work
+offline — the filters mobile had to remove (#152) — without the UTC-midnight
+shift (#151). Correspondent AI summaries report `unavailable` rather than
+faking an empty result. Everything else — every mutation and AI request —
+receives a read-only refusal at the transport, carrying its own header rather
+than `archive-unavailable` so the renderer's failure handler is not sent
 re-verifying on every request. Read-only is enforced in main; the renderer's
 gating is presentation.
 
@@ -587,9 +595,6 @@ it through the host shell as `useOfflineReadOnly()` — the one shared predicate
 read-only banner and disables the mutating surfaces: the import drop zone is
 replaced by an explanation, ask composers are off, and the document rail's
 editing, reprocess, and delete controls sit inside one disabled fieldset.
-Surfaces the cache cannot serve yet (dashboard, facets, review queue) show
-their ordinary error states until the offline-surfaces story lands.
-
 Reconnection is a main-process loop, not a user chore. While a profile is
 offline it is re-verified every thirty seconds through the ordinary activation,
 so outcomes keep their meanings: the first success ends the offline session and
@@ -600,10 +605,13 @@ already ended is discarded. Mobile has no working equivalent; its offline mode
 persists until relaunch.
 
 Offline-session tests cover the offline API's shapes, filters, paging,
-not-cached answers, and read-only refusals; the reconnect outcomes including
-the stale-verification guard; and, at parity level, the banner, the disabled
-import and ask surfaces, and that the read-only refusal never triggers the
-failure-handler retry loop.
+not-cached answers, and read-only refusals; the derived dashboard, facets,
+timeline, dossier, and text-search surfaces including local-date due/overdue
+and year math and the empty cache; the reconnect outcomes including the
+stale-verification guard; and, at parity level, the banner, the disabled
+import and ask surfaces, the failure-handler guarantee, and a derivation↔UI
+contract that routes msw through the real offline handler so the shared Today
+and explorer render what an offline session actually serves.
 
 ## Import Outcome Notifications## Import Outcome Notifications
 
@@ -683,10 +691,9 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. The offline copy holds only opened documents, and its session serves reading:
-offline Today, facets, search-derived surfaces, cache inspection, and cache
-lifecycle management arrive with the remaining #172 stories. There is no
-launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
+archives. The offline copy holds only opened documents. Cache inspection and clearing,
+disk limits, eviction, and corruption recovery arrive with the remaining #172
+stories. There is no launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
 they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.

@@ -28,6 +28,7 @@ function column(overrides: Partial<OfflineCacheColumns> = {}): OfflineCacheColum
     documentTypeName: "Invoice",
     documentTypeSlug: null,
     mimeType: "application/pdf",
+    tags: [],
     cachedAt: 1_000,
     lastViewedAt: 1_000,
     hasDocument: true,
@@ -194,9 +195,8 @@ describe("offline API handler", () => {
       ["PATCH", `/api/documents/${DOC_ID}`],
       ["DELETE", `/api/documents/${DOC_ID}`],
       ["POST", "/api/search/ask"],
-      ["GET", "/api/documents/facets"],
-      ["GET", "/api/dashboard/insights"],
       ["GET", "/api/taxonomies/tags"],
+      ["POST", `/api/documents/${DOC_ID}/reprocess`],
     ] as const) {
       const response = await handle(handler, path, method);
       expect(response.status, `${method} ${path}`).toBe(503);

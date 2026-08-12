@@ -50,6 +50,8 @@ export type OfflineCacheColumns = {
   documentTypeName: string | null;
   documentTypeSlug: string | null;
   mimeType: string | null;
+  /** Tag identity triples, for offline facets and tag search. */
+  tags: Array<{ id: string; name: string; slug: string }>;
   cachedAt: number;
   lastViewedAt: number;
   hasDocument: boolean;
@@ -97,6 +99,20 @@ function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+function tagList(value: unknown): Array<{ id: string; name: string; slug: string }> {
+  if (!Array.isArray(value)) return [];
+  const tags: Array<{ id: string; name: string; slug: string }> = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const id = stringOrNull(entry.id);
+    const name = stringOrNull(entry.name);
+    if (id && name) {
+      tags.push({ id, name, slug: stringOrNull(entry.slug) ?? id });
+    }
+  }
+  return tags;
+}
+
 function taxonomy(value: unknown): {
   id: string | null;
   name: string | null;
@@ -142,6 +158,7 @@ export function extractCacheColumns(
     documentTypeName: documentType.name,
     documentTypeSlug: documentType.slug,
     mimeType: stringOrNull(document.mimeType),
+    tags: tagList(document.tags),
   };
 }
 
@@ -287,7 +304,10 @@ export function createOfflineCacheStore({
             Array.isArray(parsed.rows)
           ) {
             columns = new Map(
-              (parsed.rows as OfflineCacheColumns[]).map((row) => [row.id, row]),
+              (parsed.rows as OfflineCacheColumns[]).map((row) => [
+                row.id,
+                { ...row, tags: row.tags ?? [] },
+              ]),
             );
             return;
           }

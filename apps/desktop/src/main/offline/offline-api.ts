@@ -1,4 +1,13 @@
 import type { OfflineCacheColumns, OfflineCacheStore } from "./offline-cache-store";
+import {
+  deriveCorrespondentInsights,
+  deriveDashboard,
+  deriveFacets,
+  deriveTimeline,
+  rowYear,
+  searchCachedDocuments,
+  visibleRows,
+} from "./offline-surfaces";
 
 /**
  * Serves the shared web application from the offline cache.
@@ -49,44 +58,126 @@ function notCached(): Response {
 }
 
 /** Case-insensitive contains over the columns a query can honestly match. */
-function matchesQuery(row: OfflineCacheColumns, query: string): boolean {
-  const needle = query.toLowerCase();
-  return [row.title, row.correspondentName, row.documentTypeName]
+function matchesQuery(row: OfflineCacheColumns, needle: string): boolean {
+  return [
+    row.title,
+    row.correspondentName,
+    row.documentTypeName,
+    ...row.tags.map((tag) => tag.name),
+  ]
     .filter((value): value is string => value !== null)
     .some((value) => value.toLowerCase().includes(needle));
 }
 
-function compareByCreatedAt(a: OfflineCacheColumns, b: OfflineCacheColumns) {
-  return (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
-}
-
 export function createOfflineApiHandler({
   store,
+  now = () => new Date(),
 }: {
   store: Pick<
     OfflineCacheStore,
     "listColumns" | "loadRecord" | "readFile" | "getUser"
   >;
+  now?: () => Date;
 }) {
-  async function listDocuments(url: URL): Promise<Response> {
-    const query = url.searchParams.get("query")?.trim() ?? "";
+  /**
+   * Whether the query matches the row's OCR text — checked only when the
+   * cheap column match failed, so a search costs one record read per
+   * still-unmatched cached document.
+   */
+  async function matchesText(row: OfflineCacheColumns, needle: string) {
+    const record = await store.loadRecord(row.id);
+    const text = record?.text;
+    if (!text || typeof text !== "object" || Array.isArray(text)) return false;
+    const blocks = (text as { blocks?: unknown }).blocks;
+    if (!Array.isArray(blocks)) return false;
+    return blocks.some(
+      (block) =>
+        typeof (block as { text?: unknown })?.text === "string" &&
+        ((block as { text: string }).text.toLowerCase().includes(needle)),
+    );
+  }
+
+  function csv(url: URL, key: string): string[] {
+    return url.searchParams
+      .getAll(key)
+      .flatMap((value) => value.split(","))
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  async function listDocuments(url: URL, reviewOnly = false): Promise<Response> {
+    const query = url.searchParams.get("query")?.trim().toLowerCase() ?? "";
     const correspondentSlug = url.searchParams.get("correspondentSlug");
+    const correspondentIds = csv(url, "correspondentIds");
+    const documentTypeIds = csv(url, "documentTypeIds");
+    const statuses = csv(url, "statuses");
+    const tags = csv(url, "tags");
     const reviewStatus = url.searchParams.get("reviewStatus");
+    const year = Number(url.searchParams.get("year")) || null;
+    const dateFrom = url.searchParams.get("dateFrom");
+    const dateTo = url.searchParams.get("dateTo");
+    const sort = url.searchParams.get("sort") ?? "createdAt";
+    const direction = url.searchParams.get("direction") === "asc" ? 1 : -1;
     const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
     const pageSize = Math.min(
       100,
       Math.max(1, Number(url.searchParams.get("pageSize")) || 20),
     );
 
-    const rows = store
-      .listColumns()
-      .filter((row) => row.hasDocument)
-      .filter((row) => (query ? matchesQuery(row, query) : true))
+    let rows = visibleRows(store.listColumns())
+      .filter((row) => (reviewOnly ? row.reviewStatus === "pending" : true))
       .filter((row) =>
         correspondentSlug ? row.correspondentSlug === correspondentSlug : true,
       )
+      .filter((row) =>
+        correspondentIds.length
+          ? row.correspondentId !== null && correspondentIds.includes(row.correspondentId)
+          : true,
+      )
+      .filter((row) =>
+        documentTypeIds.length
+          ? row.documentTypeId !== null && documentTypeIds.includes(row.documentTypeId)
+          : true,
+      )
+      .filter((row) =>
+        statuses.length ? row.status !== null && statuses.includes(row.status) : true,
+      )
+      .filter((row) =>
+        tags.length ? row.tags.some((tag) => tags.includes(tag.id)) : true,
+      )
       .filter((row) => (reviewStatus ? row.reviewStatus === reviewStatus : true))
-      .sort(compareByCreatedAt);
+      .filter((row) => (year ? rowYear(row) === year : true))
+      .filter((row) => {
+        if (!dateFrom && !dateTo) return true;
+        const date = row.issueDate ?? row.createdAt;
+        if (!date) return false;
+        const day = date.slice(0, 10);
+        return (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+      });
+
+    if (query) {
+      const matched: OfflineCacheColumns[] = [];
+      for (const row of rows) {
+        if (matchesQuery(row, query) || (await matchesText(row, query))) {
+          matched.push(row);
+        }
+      }
+      rows = matched;
+    }
+
+    const sortValue = (row: OfflineCacheColumns): string => {
+      switch (sort) {
+        case "issueDate":
+          return row.issueDate ?? "";
+        case "dueDate":
+          return row.dueDate ?? "";
+        case "title":
+          return row.title.toLowerCase();
+        default:
+          return row.createdAt ?? "";
+      }
+    };
+    rows.sort((a, b) => direction * sortValue(a).localeCompare(sortValue(b)));
 
     const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
     const items: unknown[] = [];
@@ -104,6 +195,25 @@ export function createOfflineApiHandler({
   }
 
   return async (request: Request, url: URL): Promise<Response> => {
+    // Semantic search is a POST that only reads; everything else non-GET is a
+    // mutation and refused.
+    if (request.method === "POST" && url.pathname === "/api/search/semantic") {
+      let body: { query?: unknown; page?: unknown; pageSize?: unknown } = {};
+      try {
+        body = (await request.json()) as typeof body;
+      } catch {
+        // An unreadable body searches for nothing.
+      }
+      return json(
+        await searchCachedDocuments(
+          typeof body.query === "string" ? body.query : "",
+          store.listColumns(),
+          store.loadRecord,
+          Math.max(1, Number(body.page) || 1),
+          Math.min(100, Math.max(1, Number(body.pageSize) || 20)),
+        ),
+      );
+    }
     if (request.method !== "GET") {
       return readOnlyRefusal();
     }
@@ -115,6 +225,39 @@ export function createOfflineApiHandler({
 
     if (url.pathname === "/api/documents") {
       return listDocuments(url);
+    }
+
+    if (url.pathname === "/api/documents/review") {
+      return listDocuments(url, true);
+    }
+
+    if (url.pathname === "/api/documents/facets") {
+      return json(deriveFacets(store.listColumns()));
+    }
+
+    if (url.pathname === "/api/documents/timeline") {
+      return json(deriveTimeline(store.listColumns()));
+    }
+
+    if (url.pathname === "/api/dashboard/insights") {
+      return json(
+        await deriveDashboard(store.listColumns(), store.loadRecord, now()),
+      );
+    }
+
+    const correspondent = /^\/api\/correspondents\/([^/]+)\/insights$/.exec(
+      url.pathname,
+    );
+    if (correspondent) {
+      const insights = await deriveCorrespondentInsights(
+        decodeURIComponent(correspondent[1]!),
+        store.listColumns(),
+        store.loadRecord,
+        now(),
+      );
+      return insights
+        ? json(insights)
+        : json({ message: "This correspondent is not in the offline copy." }, 404);
     }
 
     const match = DOCUMENT_ROUTE.exec(url.pathname);

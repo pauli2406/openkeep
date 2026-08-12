@@ -435,12 +435,15 @@ connected archive becomes unreachable, the same offer appears beside
 offline. Rejected credentials never lead into an offline session — that path
 still removes the profile as before.
 
-An offline session is read-only and says so in a banner. You can browse and
-search the cached documents, open them, read the extracted text and history,
-and view the preview. Uploading, editing, review actions, reprocessing,
-deleting, AI answers, and archive administration are all disabled until the
-archive is reachable again; the archive itself is never changed by anything
-you do offline.
+An offline session is read-only and says so in a banner. Today, the documents
+list with its filters — including due and year — the timeline, correspondent
+dossiers, review indicators, and search over titles, tags, and extracted text
+all work over the cached documents, and opening one shows its preview, text,
+and history. Search results only ever point at documents the copy can open.
+Uploading, editing, review actions, reprocessing, deleting, AI answers, and
+archive administration are all disabled until the archive is reachable again;
+the archive itself is never changed by anything you do offline. Correspondent
+AI summaries show as unavailable rather than pretending to be generated.
 
 While the offline copy is open, OpenKeep checks the archive in the background
 about every half minute. The first successful check returns you to live data
