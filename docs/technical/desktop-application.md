@@ -677,6 +677,35 @@ its business. A Linux desktop without a notification service reports
 prompting. Removing a profile or repointing it at another server drops its pending
 outcomes with the rest of its state.
 
+## Releases and Updates
+
+Desktop artifacts are built by the `Release Desktop` workflow on native runners
+for the support matrix — macOS arm64 and x64 (ZIP for the Squirrel.Mac feed,
+DMG for installation), Windows x64 (Squirrel installer plus the RELEASES/nupkg
+feed), Linux x64 (deb and rpm with desktop integration and MIME associations) —
+and uploaded to the versioned GitHub Release only after every platform built
+and passed its packaged smoke test, so a partial build can never publish a
+partial release. The workflow refuses a tag whose commit did not pass CI: a
+release never rebuilds an unverified commit. Signing and notarization activate
+when the Apple and Windows credentials exist as repository secrets and are
+otherwise skipped, keeping the pipeline testable without them; no credential
+ever enters the repository. The Linux leg additionally installs the deb,
+verifies the desktop entry and MIME registration, launches the installed
+binary, and confirms uninstall leaves nothing behind.
+
+In-app updates are a main-process service. On macOS and Windows it drives
+Electron's platform updater against update.electronjs.org over the GitHub
+Releases; the renderer sees a small state machine (checking, downloading,
+ready, up to date, error) through the bridge and the desktop-behavior panel,
+and a downloaded update installs only on explicit request or the next ordinary
+restart. Unsigned builds report themselves unable to self-update instead of
+surfacing a signature dump, and development builds declare updates
+unsupported. Linux compares the latest GitHub Release against the running
+version and links to the release page — Electron has no Linux auto-updater and
+the panel does not pretend otherwise. Operational runbooks (release, rollback,
+credential rotation, failed updates) live in
+[Desktop Release Operations](../operations/desktop-release.md).
+
 ## Contributor Commands
 
 From the repository root:
@@ -705,7 +734,7 @@ plugin are pinned to one version to avoid incompatible minor updates.
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
 archives. The offline copy holds only opened documents. Disk limits, eviction, and
-deeper corruption recovery arrive with the last #172 story. There is no launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
+deeper corruption recovery arrive with the last #172 story. There is no launch-at-login setting. Notifications report jobs this installation started;
 they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.

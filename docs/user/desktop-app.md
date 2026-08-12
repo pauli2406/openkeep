@@ -9,6 +9,26 @@ The desktop app uses the same archives and features as the web app. It can save
 multiple named connections to existing OpenKeep servers and opens one archive
 at a time. It does not create or set up a new archive.
 
+## Install OpenKeep
+
+- **macOS** (13 or newer, Apple Silicon and Intel): download the DMG for your
+  Mac from the latest GitHub release and drag OpenKeep to Applications.
+- **Windows** (10 or newer, x64): run `OpenKeep-Setup.exe` from the latest
+  release. It installs per-user and creates the shortcuts.
+- **Linux** (x64): install the `.deb` (`sudo apt install ./openkeep_….deb`) or
+  `.rpm` for your distribution. The package registers the launcher entry and
+  the document file associations.
+
+## Updates
+
+OpenKeep checks for updates shortly after it starts and whenever you choose
+`Check for updates` in the desktop-behavior panel, which also shows the state
+of a check. On macOS and Windows a found update downloads in the background
+and installs when you choose `Restart and install` — or on the next time you
+start OpenKeep. On Linux there is no in-place update: the panel links to the
+release page and the update installs through your package manager. Your
+archives, credentials, and offline copies are never touched by an update.
+
 ## Before You Connect
 
 Sign in to the web app, open `Profile` from the avatar menu, and find
