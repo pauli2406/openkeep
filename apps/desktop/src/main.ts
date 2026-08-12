@@ -1,3 +1,4 @@
+import squirrelStartup from "electron-squirrel-startup";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -110,6 +111,13 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
+
+// Squirrel.Windows relaunches the app with install/update/uninstall flags to
+// manage shortcuts; those invocations must do nothing but exit. Bundled by
+// Vite — the packaged app ships no node_modules to require from.
+if (squirrelStartup) {
+  app.quit();
+}
 
 app.enableSandbox();
 
