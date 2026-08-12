@@ -263,19 +263,18 @@ describe("derived offline surfaces", () => {
   });
 
   // The suite runs in America/Los_Angeles (see jest.config.js), where a
-  // date-only value parsed as UTC midnight lands on the previous day. #207
-  // fixes the offline data layer to read these as local dates; when it does,
-  // this expectation becomes 2026 and the assertion below it goes away.
-  it("puts a January document in the wrong year, until #207", async () => {
+  // date-only value read as UTC midnight lands on the previous day. Until #207
+  // this reported 2025 and 2025-12.
+  it("keeps a January document in its own year and month", async () => {
     const { store } = createStore();
     await store.upsertCachedDocument(
       testRecord(testDocument({ issueDate: "2026-01-01", createdAt: "2026-01-01T00:00:00.000Z" })),
     );
 
     const facets = await store.buildCachedFacets();
-    expect(facets.years).toEqual([{ year: 2025, count: 1 }]);
+    expect(facets.years).toEqual([{ year: 2026, count: 1 }]);
 
     const dashboard = await store.buildCachedDashboard();
-    expect(dashboard.monthlyActivity).toEqual([{ month: "2025-12", count: 1 }]);
+    expect(dashboard.monthlyActivity).toEqual([{ month: "2026-01", count: 1 }]);
   });
 });

@@ -1,4 +1,5 @@
 import * as SQLite from "expo-sqlite";
+import { parseArchiveDate } from "./lib";
 import type {
   ArchiveDocument,
   DashboardInsights,
@@ -175,6 +176,32 @@ function rowToDocument(row: Pick<CachedDocumentRow, "documentJson">) {
   return JSON.parse(row.documentJson) as ArchiveDocument;
 }
 
+/**
+ * Date-only values (`YYYY-MM-DD`) mean a day, not an instant. `parseArchiveDate`
+ * reads them as local days — feeding them to `new Date()` would place them at
+ * UTC midnight, which is the previous day for every user west of Greenwich.
+ * The display layer has always gone through it; these are the offline data
+ * paths that did not.
+ */
+function localDate(value: string | null | undefined) {
+  return parseArchiveDate(value);
+}
+
+/** The day a local date falls on, as a count of days, so DST cannot shift it. */
+function dayNumber(date: Date) {
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
+/**
+ * Whole calendar days from today to `value`, counted between local day starts.
+ * The millisecond difference this replaces made "due today" flip to overdue as
+ * the day wore on, before any timezone was involved.
+ */
+function calendarDaysUntil(value: string, now: Date) {
+  const due = localDate(value);
+  return due ? dayNumber(due) - dayNumber(now) : null;
+}
+
 async function readSchemaVersion(db: OfflineDatabase) {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   return row?.user_version ?? 0;
@@ -243,9 +270,13 @@ export async function migrateOfflineCache(
 export function createOfflineMetadataStore({
   openDatabase,
   migrations = OFFLINE_CACHE_MIGRATIONS,
+  // "Today" decides what counts as overdue, so it is an argument rather than a
+  // call to the clock inside the derivation.
+  now = () => new Date(),
 }: {
   openDatabase: () => Promise<OfflineDatabase>;
   migrations?: OfflineCacheMigration[];
+  now?: () => Date;
 }) {
   let ready: Promise<OfflineDatabase> | null = null;
 
@@ -395,8 +426,9 @@ export function createOfflineMetadataStore({
 
     for (const document of documents) {
       statuses.set(document.status, (statuses.get(document.status) ?? 0) + 1);
-      const year = new Date(document.issueDate ?? document.createdAt).getFullYear();
-      if (Number.isFinite(year)) {
+      const issued = localDate(document.issueDate ?? document.createdAt);
+      if (issued) {
+        const year = issued.getFullYear();
         years.set(year, (years.get(year) ?? 0) + 1);
       }
       if (document.correspondent) {
@@ -450,10 +482,16 @@ export function createOfflineMetadataStore({
         },
         { amount: 0, currency: null },
       );
+      // Sorting these as strings compared `YYYY-MM-DD` against full ISO
+      // timestamps, so the "latest" was whichever happened to sort last.
       const latestDocDate = docs
         .map((document) => document.issueDate ?? document.createdAt)
-        .sort()
-        .at(-1) ?? null;
+        .reduce<string | null>((latest, value) => {
+          const candidate = localDate(value);
+          if (!candidate) return latest;
+          const current = localDate(latest);
+          return !current || candidate.getTime() > current.getTime() ? value : latest;
+        }, null);
 
       return {
         id: correspondent.id,
@@ -466,12 +504,11 @@ export function createOfflineMetadataStore({
       };
     });
 
-    const now = new Date();
+    const today = now();
     const deadlineItems = documents
       .filter((document) => document.dueDate && !document.taskCompletedAt)
       .map((document) => {
-        const due = new Date(document.dueDate!);
-        const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+        const daysUntilDue = calendarDaysUntil(document.dueDate!, today) ?? 0;
         return {
           documentId: document.id,
           title: document.title,
@@ -486,7 +523,10 @@ export function createOfflineMetadataStore({
           isOverdue: daysUntilDue < 0,
         };
       })
-      .sort((left, right) => new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime());
+      .sort(
+        (left, right) =>
+          (localDate(left.dueDate)?.getTime() ?? 0) - (localDate(right.dueDate)?.getTime() ?? 0),
+      );
 
     return {
       stats: {
@@ -521,8 +561,8 @@ export type OfflineMetadataStore = ReturnType<typeof createOfflineMetadataStore>
 function buildMonthlyActivity(documents: ArchiveDocument[]) {
   const counts = new Map<string, number>();
   for (const document of documents) {
-    const date = new Date(document.issueDate ?? document.createdAt);
-    if (!Number.isFinite(date.getTime())) {
+    const date = localDate(document.issueDate ?? document.createdAt);
+    if (!date) {
       continue;
     }
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;

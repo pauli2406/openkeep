@@ -28,6 +28,12 @@ export default defineConfig(({ command }) => ({
       "@openkeep/types": path.resolve(__dirname, "../../packages/types/src/index.ts"),
     },
     dedupe: ["react", "react-dom"],
+    // Forge's Vite plugin defaults the renderer to preserveSymlinks: true, which
+    // resolves the workspace link `@openkeep/web/*` to a different module id than
+    // the web sources reached through the `@` alias. That bundles two copies of
+    // shared modules — two AuthContexts, two API token stores — so the desktop
+    // host provider and the shared app no longer share React context.
+    preserveSymlinks: false,
   },
   server: {
     host: "127.0.0.1",

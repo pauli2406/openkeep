@@ -33,6 +33,15 @@ openkeep-cache/
 
 The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size.
 
+Date-only values (`YYYY-MM-DD`) are days, not instants, and the offline
+derivations read them as local days through `parseArchiveDate` — the helper the
+display layer already used. Read as instants they would sit at UTC midnight,
+which is the previous day for every user west of Greenwich: January documents
+filed in the year before, and documents due today reported overdue. Day counts
+for due and overdue are differences between local day starts rather than
+divided milliseconds, so neither the time of day nor a daylight-saving change
+can move them.
+
 The database records its schema version in `PRAGMA user_version`, and the store
 brings it forward on open through an ordered chain of migrations — each step
 upgrading one version, able to add columns and backfill them from

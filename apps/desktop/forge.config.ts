@@ -1,4 +1,7 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
+import { execFileSync } from "node:child_process";
+import { readdirSync } from "node:fs";
+import path from "node:path";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerDMG } from "@electron-forge/maker-dmg";
@@ -137,6 +140,33 @@ const config: ForgeConfig = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  hooks: {
+    /**
+     * The fuses plugin ad-hoc signs while flipping fuses, but Packager rewrites
+     * Info.plist (bundle id, document types, asar integrity hashes) afterwards,
+     * which invalidates that signature. macOS then refuses the Keychain item
+     * behind Electron's safeStorage, so the unsigned developer build reports
+     * secure storage as unavailable and cannot store archive credentials.
+     * Re-signing ad hoc after packaging keeps local builds usable; release
+     * builds are signed for real by osxSign instead.
+     */
+    postPackage: async (_forgeConfig, options) => {
+      if (options.platform !== "darwin" || macSigningEnabled) return;
+      for (const outputPath of options.outputPaths) {
+        const bundle = readdirSync(outputPath).find((entry) =>
+          entry.endsWith(".app"),
+        );
+        if (!bundle) continue;
+        execFileSync("codesign", [
+          "--sign",
+          "-",
+          "--force",
+          "--deep",
+          path.join(outputPath, bundle),
+        ]);
+      }
+    },
+  },
 };
 
 export default config;
