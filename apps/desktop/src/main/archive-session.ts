@@ -625,6 +625,14 @@ export function createArchiveSessionService(
       return disconnected("signed-out");
     },
 
+    /**
+     * Leaves the online session without touching stored profiles or
+     * credentials — entering an offline session must not look like sign-out.
+     */
+    suspend() {
+      deactivateInMemory();
+    },
+
     dispose() {
       verificationController?.abort();
       verificationController = null;

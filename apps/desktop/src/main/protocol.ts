@@ -21,6 +21,15 @@ type ProtocolHandlerOptions = {
     pathname: string,
     response: Response,
   ) => Response;
+  /**
+   * When set and returning a handler, `/api` requests are answered from the
+   * offline cache instead of the network — the read-only offline session.
+   * Checked per request so one window can move between live and offline
+   * without re-registering the protocol.
+   */
+  getOfflineApiHandler?: () =>
+    | ((request: Request, url: URL) => Promise<Response>)
+    | null;
 };
 
 type AssetResolution =
@@ -170,6 +179,10 @@ export function createAppProtocolHandler(options: ProtocolHandlerOptions) {
     }
 
     if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
+      const offlineHandler = options.getOfflineApiHandler?.();
+      if (offlineHandler) {
+        return offlineHandler(request, url);
+      }
       const active = options.archiveSession.getActiveSession();
       if (!active || !options.profileId || active.profile.id !== options.profileId) {
         return unavailableResponse(503, "Connect to an OpenKeep archive first.");

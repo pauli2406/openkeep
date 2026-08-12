@@ -7,6 +7,7 @@ import type { CredentialCipher } from "../storage/types";
 import {
   createEncryptStream,
   decryptBuffer,
+  decryptFileBuffer,
   encryptBuffer,
   loadOrCreateCacheKey,
 } from "./cache-cipher";
@@ -161,6 +162,7 @@ export function createOfflineCacheStore({
   const filesDir = path.join(rootDirectory, "files");
   const indexPath = path.join(rootDirectory, "index");
   const keyPath = path.join(rootDirectory, "key");
+  const userPath = path.join(rootDirectory, "user");
 
   let key: Buffer | null = null;
   let columns = new Map<string, OfflineCacheColumns>();
@@ -419,10 +421,53 @@ export function createOfflineCacheStore({
       return write;
     },
 
+    /**
+     * The verified archive user, cached so an offline session has an identity
+     * to present. Refreshed whenever `/api/auth/me` flows through the proxy.
+     */
+    async setUser(user: unknown) {
+      requireOpen();
+      if (!isRecord(user) || typeof user.id !== "string") return;
+      await writeSealedAtomically(
+        userPath,
+        Buffer.from(JSON.stringify({ version: OFFLINE_CACHE_VERSION, user })),
+      );
+    },
+
+    async getUser(): Promise<unknown | null> {
+      requireOpen();
+      const sealed = await readOptional(userPath);
+      if (!sealed) return null;
+      try {
+        const parsed: unknown = JSON.parse(decryptBuffer(key!, sealed).toString("utf8"));
+        if (!isRecord(parsed) || parsed.version !== OFFLINE_CACHE_VERSION) return null;
+        return parsed.user ?? null;
+      } catch {
+        return null;
+      }
+    },
+
     /** Sealed record back out, for the offline session stories. */
     async loadRecord(documentId: string) {
       requireOpen();
       return readRecord(documentId);
+    },
+
+    /**
+     * The cached file, decrypted. Buffered rather than streamed: cached files
+     * are preview-sized PDFs, and streaming GCM decryption needs the trailing
+     * tag before the final block — a complication the bounded-cache story can
+     * take on if profiling ever demands it.
+     */
+    async readFile(documentId: string): Promise<Buffer | null> {
+      requireOpen();
+      const sealed = await readOptional(path.join(filesDir, documentId));
+      if (!sealed) return null;
+      try {
+        return decryptFileBuffer(key!, sealed);
+      } catch {
+        return null;
+      }
     },
 
     listColumns(): OfflineCacheColumns[] {

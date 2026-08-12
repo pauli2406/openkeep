@@ -20,7 +20,8 @@ const DOCUMENT_ROUTE =
 
 export type ReadThroughTarget =
   | { kind: "document" | "text" | "history"; documentId: string }
-  | { kind: "file"; documentId: string; fileKind: OfflineCachedKind };
+  | { kind: "file"; documentId: string; fileKind: OfflineCachedKind }
+  | { kind: "user" };
 
 /** Decides whether one proxied request is worth copying into the cache. */
 export function classifyReadThrough(
@@ -28,6 +29,8 @@ export function classifyReadThrough(
   pathname: string,
 ): ReadThroughTarget | null {
   if (method !== "GET") return null;
+  // The verified user is cached so an offline session has an identity.
+  if (pathname === "/api/auth/me") return { kind: "user" };
   const match = DOCUMENT_ROUTE.exec(pathname);
   if (!match) return null;
   const documentId = match[1]!.toLowerCase();
@@ -53,7 +56,7 @@ export function createOfflineReadThrough({
 }: {
   store: Pick<
     OfflineCacheStore,
-    "upsertDocument" | "attachText" | "attachHistory" | "cacheFileStream"
+    "upsertDocument" | "attachText" | "attachHistory" | "cacheFileStream" | "setUser"
   >;
   reportError?: (message: string, error: unknown) => void;
 }) {
@@ -90,7 +93,9 @@ export function createOfflineReadThrough({
       void new Response(toCache)
         .json()
         .then(async (payload: unknown) => {
-          if (target.kind === "document") {
+          if (target.kind === "user") {
+            await store.setUser(payload);
+          } else if (target.kind === "document") {
             await store.upsertDocument(payload);
           } else if (target.kind === "text") {
             await store.attachText(target.documentId, payload);

@@ -348,6 +348,42 @@ describe("offline cache store", () => {
   });
 });
 
+describe("cached archive user", () => {
+  it("stores the verified user sealed and returns it for the offline session", async () => {
+    const { store, memory } = await createOpenStore();
+    await store.setUser({ id: "user-1", email: "owner@example.com", isOwner: true });
+
+    await expect(store.getUser()).resolves.toMatchObject({ id: "user-1" });
+    for (const [name, contents] of memory.files) {
+      expect(contents.toString("latin1"), name).not.toContain("owner@example.com");
+    }
+  });
+
+  it("rejects a malformed user and survives a damaged user file", async () => {
+    const { store, memory } = await createOpenStore();
+    await store.setUser("not a user");
+    await expect(store.getUser()).resolves.toBeNull();
+
+    await store.setUser({ id: "user-1" });
+    memory.files.set("/cache/profile-home/user", Buffer.from("junk"));
+    await expect(store.getUser()).resolves.toBeNull();
+  });
+
+  it("is captured from /api/auth/me by the read-through", async () => {
+    const { store } = await createOpenStore();
+    const readThrough = createOfflineReadThrough({ store });
+    const observed = readThrough.observe(
+      "GET",
+      "/api/auth/me",
+      new Response(JSON.stringify({ id: "user-1", isOwner: true }), { status: 200 }),
+    );
+    await observed.text();
+    await vi.waitFor(async () => {
+      await expect(store.getUser()).resolves.toMatchObject({ id: "user-1" });
+    });
+  });
+});
+
 describe("read-through classification", () => {
   it("targets exactly the document endpoints the detail view reads", () => {
     expect(classifyReadThrough("GET", `/api/documents/${DOC_ID}`)).toEqual({
@@ -378,7 +414,8 @@ describe("read-through classification", () => {
     expect(classifyReadThrough("POST", `/api/documents/${DOC_ID}`)).toBeNull();
     expect(classifyReadThrough("DELETE", `/api/documents/${DOC_ID}`)).toBeNull();
     expect(classifyReadThrough("GET", `/api/documents/${DOC_ID}/preview/1`)).toBeNull();
-    expect(classifyReadThrough("GET", "/api/auth/me")).toBeNull();
+    expect(classifyReadThrough("GET", "/api/auth/me")).toEqual({ kind: "user" });
+    expect(classifyReadThrough("POST", "/api/auth/me")).toBeNull();
   });
 });
 
@@ -409,6 +446,7 @@ describe("read-through observer", () => {
         attachText: vi.fn(),
         attachHistory: vi.fn(),
         cacheFileStream: vi.fn(),
+        setUser: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -428,6 +466,7 @@ describe("read-through observer", () => {
       attachText: vi.fn(),
       attachHistory: vi.fn(),
       cacheFileStream: vi.fn(),
+      setUser: vi.fn(),
     };
     const readThrough = createOfflineReadThrough({ store });
     const response = new Response("denied", { status: 403 });
