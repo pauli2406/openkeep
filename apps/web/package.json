@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     "./app": "./src/app.tsx",
+    "./api": "./src/lib/api.ts",
+    "./auth": "./src/hooks/use-auth.tsx",
     "./styles.css": "./src/index.css"
   },
   "scripts": {

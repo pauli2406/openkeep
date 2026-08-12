@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Correspondent as TaxonomyCorrespondent,
@@ -11,14 +11,23 @@ import type {
   ParseProvider,
   Tag as TaxonomyTag,
 } from "@openkeep/types";
-import { createSseParser } from "@openkeep/sdk";
-
 import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
 import { DocumentQaSection } from "@/components/document-detail/qa-section";
+import { DocumentSummarySection } from "@/components/document-detail/summary-section";
 import { DetailHeader } from "@/components/document-detail/detail-header";
 import { FieldsRail } from "@/components/document-detail/fields-rail";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
+import {
+  evictDeletedArchiveDocument,
+  refreshArchiveDocumentState,
+  refreshArchiveTaxonomyState,
+} from "@/lib/archive-document-state";
+import {
+  asFetchSignal,
+  useArchiveRequestScope,
+} from "@/lib/archive-request-scope";
 import { processingRefetchInterval } from "@/lib/document-processing";
+import { createObjectUrlLease } from "@/lib/object-url";
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import { Button } from "@/components/ui/button";
@@ -29,6 +38,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/lib/i18n";
+import { useOfflineReadOnly } from "@/lib/host-shell";
+import { useHostFileSaver } from "@/lib/host-shell";
 import {
   Dialog,
   DialogContent,
@@ -530,9 +541,15 @@ const EMPTY_SELECT_VALUE = "__none__";
 
 function DocumentDetailPage() {
   const { documentId } = Route.useParams();
+  const location = useLocation();
+  const citedPageMatch = /^page-(\d+)$/.exec(location.hash);
+  const citedPage = citedPageMatch ? Number(citedPageMatch[1]) : undefined;
   const { t } = useI18n();
+  const offlineReadOnly = useOfflineReadOnly();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const requestSignal = useArchiveRequestScope();
+  const hostFileSaver = useHostFileSaver();
   const copy = {
     loadDoc: t("documentDetail.loadDoc"),
     loadText: t("documentDetail.loadText"),
@@ -552,6 +569,7 @@ function DocumentDetailPage() {
     downloadFile: t("documentDetail.downloadFile"),
     downloadOriginal: t("documentDetail.downloadOriginal"),
     downloadSearchable: t("documentDetail.downloadSearchable"),
+    downloadFailed: t("documentDetail.downloadFailed"),
     loadPreviewFailed: t("documentDetail.loadPreviewFailed"),
     loadDocumentTextFailed: t("documentDetail.loadDocumentTextFailed"),
     noOcr: t("documentDetail.noOcr"),
@@ -559,11 +577,12 @@ function DocumentDetailPage() {
   };
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
   const [reprocessDialogOpen, setReprocessDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(100);
-  const [previewPage, setPreviewPage] = useState(1);
+  const [previewPage, setPreviewPage] = useState(citedPage ?? 1);
   const [selectedParseProvider, setSelectedParseProvider] = useState<ParseProvider | "">("");
   const [editForm, setEditForm] = useState({
     title: "",
@@ -584,9 +603,10 @@ function DocumentDetailPage() {
 
   const documentQuery = useQuery({
     queryKey: ["document", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadDoc);
       return data as unknown as Document;
@@ -596,9 +616,10 @@ function DocumentDetailPage() {
 
   const textQuery = useQuery({
     queryKey: ["document-text", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}/text", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadText);
       return data as unknown as { documentId: string; blocks: TextBlock[] };
@@ -609,9 +630,10 @@ function DocumentDetailPage() {
 
   const historyQuery = useQuery({
     queryKey: ["document-history", documentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const { data, error } = await api.GET("/api/documents/{id}/history", {
         params: { path: { id: documentId } },
+        signal: asFetchSignal(signal),
       });
       if (error) throw new Error(copy.loadHistory);
       return data as unknown as DocumentHistoryResponse;
@@ -622,8 +644,10 @@ function DocumentDetailPage() {
 
   const tagsQuery = useQuery({
     queryKey: ["taxonomies", "tags"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/tags", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/tags", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadTags")));
       }
@@ -633,8 +657,10 @@ function DocumentDetailPage() {
 
   const correspondentsQuery = useQuery({
     queryKey: ["taxonomies", "correspondents"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/correspondents", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/correspondents", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadCorrespondents")));
       }
@@ -644,8 +670,10 @@ function DocumentDetailPage() {
 
   const documentTypesQuery = useQuery({
     queryKey: ["taxonomies", "document-types"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/taxonomies/document-types", {});
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/taxonomies/document-types", {
+        signal: asFetchSignal(signal),
+      });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToLoadDocumentTypes")));
       }
@@ -655,8 +683,10 @@ function DocumentDetailPage() {
 
   const previewQuery = useQuery({
     queryKey: ["document-preview", documentId],
-    queryFn: async () => {
-      const response = await authFetch(`/api/documents/${documentId}/download`);
+    queryFn: async ({ signal }) => {
+      const response = await authFetch(`/api/documents/${documentId}/download`, {
+        signal: asFetchSignal(signal),
+      });
       if (!response.ok) {
         throw new Error(t("documentDetail.failedToLoadDocumentPreview"));
       }
@@ -668,8 +698,10 @@ function DocumentDetailPage() {
 
   const providersQuery = useQuery({
     queryKey: ["health", "providers"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/health/providers");
+    queryFn: async ({ signal }) => {
+      const { data, error } = await api.GET("/api/health/providers", {
+        signal: asFetchSignal(signal),
+      });
       if (error) throw new Error(t("documentDetail.failedToFetchProviders"));
       return data as HealthProvidersResponse;
     },
@@ -691,62 +723,59 @@ function DocumentDetailPage() {
       return;
     }
 
-    const objectUrl = URL.createObjectURL(previewQuery.data);
-    setPreviewUrl(objectUrl);
+    const objectUrl = createObjectUrlLease();
+    let active = true;
+    const nextUrl = objectUrl.replace(previewQuery.data);
+    if (!nextUrl) return;
+    setPreviewUrl(nextUrl);
 
     // For text files, also read the blob content as a string
     if (
       documentQuery.data &&
       getPreviewCategory(documentQuery.data.mimeType) === "text"
     ) {
-      previewQuery.data.text().then((text) => {
-        setTextPreviewContent(text);
-      });
+      previewQuery.data
+        .text()
+        .then((text) => {
+          if (active) setTextPreviewContent(text);
+        })
+        .catch(() => {
+          if (active) setTextPreviewContent(null);
+        });
     } else {
       setTextPreviewContent(null);
     }
 
     return () => {
-      URL.revokeObjectURL(objectUrl);
+      active = false;
+      objectUrl.dispose();
     };
   }, [previewQuery.data, documentQuery.data?.mimeType]);
 
-  // --- Mutations ---
+  useEffect(() => {
+    if (citedPage) setPreviewPage(citedPage);
+  }, [documentId, citedPage]);
 
-  const confirmMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await api.POST("/api/documents/{id}/review/resolve", {
-        params: { path: { id: documentId } },
-        body: {},
-      });
-      if (error) throw new Error(getApiErrorMessage(error, t("documentDetail.failedToSaveChanges")));
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
-    },
-  });
+  // --- Mutations ---
 
   const updateMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
       const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: body as any,
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) throw new Error(t("documentDetail.failedToUpdateDocument"));
       return data as unknown as Document;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-    },
+    onSuccess: () => refreshArchiveTaxonomyState(queryClient, documentId),
   });
 
   const createTagMutation = useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await api.POST("/api/taxonomies/tags", {
         body: { name },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateTag")));
@@ -766,6 +795,7 @@ function DocumentDetailPage() {
     mutationFn: async (name: string) => {
       const { data, error } = await api.POST("/api/taxonomies/correspondents", {
         body: { name },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToCreateCorrespondent")));
@@ -793,15 +823,14 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/review/resolve", {
         params: { path: { id: documentId } },
         body: {},
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToResolveReview")));
       }
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const requeueMutation = useMutation({
@@ -809,15 +838,14 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/review/requeue", {
         params: { path: { id: documentId } },
         body: { force: true },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToRequeue")));
       }
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const reprocessMutation = useMutation({
@@ -825,15 +853,16 @@ function DocumentDetailPage() {
       const { data, error } = await api.POST("/api/documents/{id}/reprocess", {
         params: { path: { id: documentId } },
         body: parseProvider ? { parseProvider } : {},
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToReprocessDocument")));
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       setReprocessDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
+      await refreshArchiveDocumentState(queryClient, documentId);
     },
   });
 
@@ -843,22 +872,21 @@ function DocumentDetailPage() {
       const { data, error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: documentId } },
         body: { clearLockedFields: fields },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("documentDetail.failedToClearOverride")));
       }
       return data as unknown as Document;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["document", documentId] });
-      queryClient.invalidateQueries({ queryKey: ["document-history", documentId] });
-    },
+    onSuccess: () => refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const deleteDocumentMutation = useMutation({
     mutationFn: async () => {
       const response = await authFetch(`/api/documents/${documentId}`, {
         method: "DELETE",
+        signal: asFetchSignal(requestSignal()),
       });
       if (!response.ok) {
         let message = t("documentDetail.failedToDeleteDocument");
@@ -873,10 +901,7 @@ function DocumentDetailPage() {
     },
     onSuccess: async () => {
       setDeleteDialogOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.removeQueries({ queryKey: ["document", documentId] });
-      queryClient.removeQueries({ queryKey: ["document-history", documentId] });
-      queryClient.removeQueries({ queryKey: ["document-text", documentId] });
+      await evictDeletedArchiveDocument(queryClient, documentId);
       navigate({ to: "/documents" });
     },
   });
@@ -922,7 +947,7 @@ function DocumentDetailPage() {
     if (!previous) {
       seededFrom.current = serverForm;
       setEditForm(serverForm);
-      setPreviewPage(1);
+      setPreviewPage(citedPage ?? 1);
       return;
     }
     setEditForm((current) => {
@@ -943,13 +968,13 @@ function DocumentDetailPage() {
       return next;
     });
     seededFrom.current = serverForm;
-  }, [serverForm]);
+  }, [serverForm, citedPage]);
 
   // A different document is a fresh start, dirty or not.
   useEffect(() => {
     seededFrom.current = null;
-    setPreviewPage(1);
-  }, [documentId]);
+    setPreviewPage(citedPage ?? 1);
+  }, [documentId, citedPage]);
 
   function saveEdits() {
     const body: Record<string, unknown> = {};
@@ -1017,27 +1042,50 @@ function DocumentDetailPage() {
   }
 
   async function handleDownload(variant: "original" | "searchable") {
+    setDownloadError(null);
+    if (hostFileSaver) {
+      try {
+        const result = await hostFileSaver({
+          kind:
+            variant === "searchable"
+              ? "document-searchable"
+              : "document-original",
+          documentId,
+        });
+        if (result.status === "failed") {
+          setDownloadError(result.message);
+        }
+      } catch {
+        setDownloadError(copy.downloadFailed);
+      }
+      return;
+    }
+
     const url =
       variant === "searchable"
         ? `/api/documents/${documentId}/download/searchable`
         : `/api/documents/${documentId}/download`;
 
-    const res = await authFetch(url);
-    if (!res.ok) return;
+    try {
+      const res = await authFetch(url);
+      if (!res.ok) throw new Error("download-failed");
 
-    const blob = await res.blob();
-    const disposition = res.headers.get("Content-Disposition");
-    let filename = `document.${variant === "searchable" ? "pdf" : "bin"}`;
-    if (disposition) {
-      const match = disposition.match(/filename="?([^"]+)"?/);
-      if (match) filename = match[1];
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `document.${variant === "searchable" ? "pdf" : "bin"}`;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const a = window.document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      setDownloadError(copy.downloadFailed);
     }
-
-    const a = window.document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
   }
 
   // --- Loading / Error states ---
@@ -1166,14 +1214,35 @@ function DocumentDetailPage() {
         ? t("documentDetail.lockedFieldsSticky")
         : null;
 
+  const errorText = (error: unknown) =>
+    error instanceof Error ? error.message : null;
+  const reviewActionError =
+    errorText(resolveReviewMutation.error) ?? errorText(requeueMutation.error);
+  const railActionError =
+    errorText(createTagMutation.error) ??
+    errorText(createCorrespondentMutation.error) ??
+    errorText(clearOverrideMutation.error) ??
+    errorText(reprocessMutation.error);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <DetailHeader
         doc={doc}
         onDownload={handleDownload}
-        onConfirm={() => confirmMutation.mutate()}
-        confirmPending={confirmMutation.isPending}
+        onResolveReview={() => resolveReviewMutation.mutate()}
+        onRequeueReview={() => requeueMutation.mutate()}
+        reviewPending={
+          resolveReviewMutation.isPending || requeueMutation.isPending
+        }
       />
+      {reviewActionError ? (
+        <div
+          className="border-b border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-4 py-2 text-xs text-[var(--ok-red)]"
+          role="alert"
+        >
+          {reviewActionError}
+        </div>
+      ) : null}
       <DocumentProcessingIndicator document={doc} />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
@@ -1365,6 +1434,11 @@ function DocumentDetailPage() {
                       </Button>
                     )}
                   </div>
+                  {downloadError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {downloadError}
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1458,19 +1532,12 @@ function DocumentDetailPage() {
                           ) : null}
                         </div>
 
-                      <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">{t("documentDetail.generatedSummary")}</p>
-                          <p className="text-sm">{intelligence.summary?.value ?? doc.metadata.summary ?? "-"}</p>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            {intelligence.title?.value && <p>{t("documentDetail.titleCandidate")}: {intelligence.title.value}</p>}
-                            {intelligence.summary?.provider && (
-                              <p>
-                                {t("documentDetail.provider")}: {intelligence.summary.provider}
-                                {intelligence.summary.model ? ` / ${intelligence.summary.model}` : ""}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                        <DocumentSummarySection
+                          documentId={doc.id}
+                          initialSummary={intelligence.summary?.value ?? doc.metadata.summary}
+                          initialProvider={intelligence.summary?.provider}
+                          initialModel={intelligence.summary?.model}
+                        />
                       </div>
 
                       <div className="rounded-md border p-3 space-y-3">
@@ -1678,12 +1745,20 @@ function DocumentDetailPage() {
 
 
             <TabsContent value="qa">
-              <DocumentQaSection documentId={doc.id} />
+              {offlineReadOnly ? (
+                <p className="p-4 text-sm text-muted-foreground" role="status">
+                  {t("offline.askDisabled")}
+                </p>
+              ) : (
+                <DocumentQaSection documentId={doc.id} />
+              )}
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Right rail: fields, review, processing */}
+        {/* Right rail: fields, review, processing. One fieldset gates every
+            mutating control in it while the archive is an offline copy. */}
+        <fieldset disabled={offlineReadOnly} className="contents">
         <FieldsRail
           doc={doc}
           form={editForm}
@@ -1701,6 +1776,7 @@ function DocumentDetailPage() {
           onReset={seedForm}
           saving={updateMutation.isPending}
           saveError={updateMutation.isError ? t("documentDetail.failedToSaveChanges") : null}
+          actionError={railActionError}
           lockNote={lockNote}
           onReprocess={() => {
             const available =
@@ -1719,6 +1795,7 @@ function DocumentDetailPage() {
           deletePending={deleteDocumentMutation.isPending}
           processing={doc.status === "processing"}
         />
+        </fieldset>
       </div>
 
           {/* Reprocess provider picker dialog */}
@@ -1731,6 +1808,12 @@ function DocumentDetailPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
+                {reprocessMutation.isError ? (
+                  <p className="text-sm text-[var(--ok-red)]" role="alert">
+                    {errorText(reprocessMutation.error) ??
+                      t("documentDetail.failedToReprocessDocument")}
+                  </p>
+                ) : null}
                 <Label htmlFor="parse-provider-select">{t("documentDetail.ocrProvider")}</Label>
                 <Select
                   value={selectedParseProvider}
@@ -1799,6 +1882,12 @@ function DocumentDetailPage() {
               <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
                 <span className="font-medium">{doc.title}</span>
               </div>
+              {deleteDocumentMutation.isError ? (
+                <p className="text-sm text-[var(--ok-red)]" role="alert">
+                  {errorText(deleteDocumentMutation.error) ??
+                    t("documentDetail.failedToDeleteDocument")}
+                </p>
+              ) : null}
               <DialogFooter>
                 <Button
                   variant="outline"
@@ -1832,4 +1921,3 @@ function DocumentDetailPage() {
 // ---------------------------------------------------------------------------
 // AI Section component — Q&A with SSE streaming
 // ---------------------------------------------------------------------------
-

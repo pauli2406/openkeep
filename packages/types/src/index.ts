@@ -36,6 +36,78 @@ export const reviewReasons = [
 ] as const;
 export const processingJobStatuses = ["queued", "running", "completed", "failed"] as const;
 
+// --- Offline document cache ---
+//
+// Shared vocabulary for client-side offline caches. The mobile app keeps a
+// hand-copied equivalent (it deliberately has no workspace dependencies); the
+// desktop cache reads these directly so both clients describe the same thing.
+
+/**
+ * What an offline cache can say about itself. `lastCachedAt` is the newest
+ * per-document write time — when content actually entered the cache — kept
+ * deliberately separate from any UI refresh counter, which mobile conflated.
+ */
+export type OfflineCacheSummary = {
+  documentCount: number;
+  fileStorageBytes: number;
+  lastCachedAt: number | null;
+};
+
+/**
+ * Parses a date-only value (`YYYY-MM-DD`) as a LOCAL date. Date-only strings
+ * fed to `new Date()` are interpreted as UTC midnight, which shifts them a
+ * day for every user west of Greenwich — offline due/overdue math must never
+ * inherit that.
+ */
+export function parseDateOnlyLocal(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+// --- Accepted import formats ---
+//
+// One table for every client-side import surface: the web drop zone, desktop
+// Open-with and picker imports, and desktop watch folders. They previously kept
+// separate lists, which is how an extension could be accepted in one place and
+// rejected in another.
+
+export const importFormats = [
+  { mimeType: "application/pdf", extensions: [".pdf"] },
+  { mimeType: "image/jpeg", extensions: [".jpg", ".jpeg"] },
+  { mimeType: "image/png", extensions: [".png"] },
+  { mimeType: "image/tiff", extensions: [".tif", ".tiff"] },
+  { mimeType: "image/heic", extensions: [".heic"] },
+] as const;
+
+export type ImportMimeType = (typeof importFormats)[number]["mimeType"];
+
+export const importMimeTypes: readonly ImportMimeType[] = importFormats.map(
+  (format) => format.mimeType,
+);
+
+export const importExtensions: readonly string[] = importFormats.flatMap(
+  (format) => [...format.extensions],
+);
+
+/** The upload limit clients enforce before transferring anything. 64 MiB. */
+export const IMPORT_MAX_BYTES = 67_108_864;
+
+/** Resolves a lower-case extension including its dot, or `null` if unsupported. */
+export function importMimeTypeForExtension(
+  extension: string,
+): ImportMimeType | null {
+  const normalized = extension.toLowerCase();
+  return (
+    importFormats.find((format) =>
+      (format.extensions as readonly string[]).includes(normalized),
+    )?.mimeType ?? null
+  );
+}
+
 export const ProcessingModeSchema = z.enum(processingModes);
 export const AppLanguageSchema = z.enum(appLanguages);
 export const ParseProviderSchema = z.enum(parseProviders);

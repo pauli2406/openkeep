@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AnswerCitation,
   Document,
@@ -30,9 +30,10 @@ type AnswerStructuredData =
     };
 
 export type AnswerHistoryTurn = { role: "user" | "assistant"; content: string };
-import { createSseParser, linkifyAnswerCitations } from "@openkeep/sdk";
+import { linkifyAnswerCitations } from "@openkeep/sdk";
 
 import { authFetch } from "@/lib/api";
+import { consumeJsonSseResponse, isAbortError } from "@/lib/sse-stream";
 
 // ---------------------------------------------------------------------------
 // Inline citation linking
@@ -92,12 +93,26 @@ export function useAnswerStream() {
   });
 
   const abortRef = useRef<AbortController | null>(null);
+  const generationRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      generationRef.current += 1;
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   const startStream = useCallback(async (query: string, history?: AnswerHistoryTurn[]) => {
     // Abort any previous stream
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    const update = (updater: (state: StreamState) => StreamState) => {
+      if (generation === generationRef.current) setState(updater);
+    };
 
     setState({
       status: "searching",
@@ -128,77 +143,84 @@ export function useAnswerStream() {
         signal: controller.signal,
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      const parser = createSseParser((event, data) => {
-        try {
-          const parsed = JSON.parse(data);
-
-          if (event === "search-results") {
-            setState((s) => ({
+      let terminalEvent = false;
+      await consumeJsonSseResponse(response, (event, parsed) => {
+        if (generation !== generationRef.current) return "stop";
+        if (event === "search-results") {
+          update((s) => ({
               ...s,
               status: "streaming",
-              searchResults: parsed.results ?? [],
-            }));
-          } else if (event === "answer-token") {
-            setState((s) => ({
+              searchResults: Array.isArray(parsed.results)
+                ? (parsed.results as SemanticSearchResult[])
+                : [],
+          }));
+        } else if (event === "answer-token") {
+          update((s) => ({
               ...s,
               status: "streaming",
-              answerText: s.answerText + (parsed.text ?? ""),
-            }));
-          } else if (event === "tool-status") {
-            setState((s) => ({
+              answerText: s.answerText + (typeof parsed.text === "string" ? parsed.text : ""),
+          }));
+        } else if (event === "tool-status") {
+          update((s) => ({
               ...s,
               status: "streaming",
-              toolStatus: parsed.status === "started" ? (parsed.label ?? null) : null,
-            }));
-          } else if (event === "done") {
-            setState((s) => ({
+              toolStatus:
+                parsed.status === "started" && typeof parsed.label === "string"
+                  ? parsed.label
+                  : null,
+          }));
+        } else if (event === "done") {
+          terminalEvent = true;
+          update((s) => ({
               ...s,
               status: "done",
-              answerStatus: parsed.status ?? s.answerStatus,
-              lowConfidence: parsed.lowConfidence ?? s.lowConfidence,
-              route: parsed.route ?? s.route,
-              citations: parsed.citations ?? s.citations,
-              answerText: parsed.fullAnswer ?? s.answerText,
-              structuredData: parsed.structuredData ?? s.structuredData,
+              answerStatus:
+                parsed.status === "answered" || parsed.status === "insufficient_evidence"
+                  ? parsed.status
+                  : s.answerStatus,
+              lowConfidence:
+                typeof parsed.lowConfidence === "boolean"
+                  ? parsed.lowConfidence
+                  : s.lowConfidence,
+              route:
+                parsed.route === "semantic" || parsed.route === "structured" || parsed.route === "hybrid"
+                  ? parsed.route
+                  : s.route,
+              citations: Array.isArray(parsed.citations)
+                ? (parsed.citations as AnswerCitation[])
+                : s.citations,
+              answerText: typeof parsed.fullAnswer === "string" ? parsed.fullAnswer : s.answerText,
+              structuredData:
+                parsed.structuredData && typeof parsed.structuredData === "object"
+                  ? (parsed.structuredData as AnswerStructuredData)
+                  : s.structuredData,
               toolStatus: null,
-            }));
-          } else if (event === "error") {
-            setState((s) => ({
+          }));
+          return "stop";
+        } else if (event === "error") {
+          terminalEvent = true;
+          update((s) => ({
               ...s,
               status: "error",
-              errorMessage: parsed.message ?? "Unknown error",
-            }));
-          }
-        } catch {
-          // skip malformed JSON
+              errorMessage:
+                typeof parsed.message === "string"
+                  ? parsed.message
+                  : "The archive could not complete the answer.",
+          }));
+          return "stop";
         }
       });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parser.push(decoder.decode(value, { stream: true }));
+      if (!terminalEvent && generation === generationRef.current) {
+        update((s) => ({
+          ...s,
+          status: "error",
+          errorMessage: "The archive ended the answer stream unexpectedly.",
+        }));
       }
-      parser.flush();
-
-      // Safety: if the stream ended but we never received a `done` event,
-      // force the status to "done" so the UI stops showing the loading state
-      setState((s) =>
-        s.status === "streaming" || s.status === "searching"
-          ? { ...s, status: "done" }
-          : s,
-      );
     } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setState((s) => ({
+      if (isAbortError(err, controller.signal) || generation !== generationRef.current) return;
+      update((s) => ({
         ...s,
         status: "error",
         errorMessage: err instanceof Error ? err.message : "Stream failed",
@@ -207,11 +229,13 @@ export function useAnswerStream() {
   }, []);
 
   const cancel = useCallback(() => {
+    generationRef.current += 1;
     abortRef.current?.abort();
     setState((s) => ({ ...s, status: s.status === "idle" ? "idle" : "done" }));
   }, []);
 
   const reset = useCallback(() => {
+    generationRef.current += 1;
     abortRef.current?.abort();
     setState({
       status: "idle",

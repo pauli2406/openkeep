@@ -17,13 +17,13 @@ import {
 } from "@/lib/api";
 import type { QueryClient } from "@tanstack/react-query";
 
-interface UserLanguagePreferences {
+export interface UserLanguagePreferences {
   uiLanguage: "en" | "de";
   aiProcessingLanguage: "en" | "de";
   aiChatLanguage: "en" | "de";
 }
 
-interface User {
+export interface User {
   id: string;
   email: string;
   displayName: string;

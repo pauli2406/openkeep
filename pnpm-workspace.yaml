@@ -3,6 +3,9 @@ packages:
   - "packages/*"
 
 onlyBuiltDependencies:
+  # appdmg's native helpers, needed by the macOS DMG maker
+  - macos-alias
+  - fs-xattr
   - "@nestjs/core"
   - "@scarf/scarf"
   - "@swc/core"

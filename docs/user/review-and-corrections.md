@@ -59,6 +59,19 @@ undoing it changes nothing on the server and starts no reprocessing.
 values rather than confirming them happens on the document page under
 `Details`. See [Mobile App](./mobile-app.md).
 
+## On Desktop
+
+The desktop app uses the full web review queue and document page. Preview, OCR,
+intelligence, history, metadata corrections, taxonomy creation, manual overrides,
+resolve, requeue, reprocess, and confirmed deletion behave the same way. If a save
+or review action fails, the item stays in place and the page shows the error so you
+can retry.
+
+Switching to another saved archive cancels work for the archive you left. OpenKeep
+also releases its temporary preview before mounting the destination archive, so
+documents and late responses cannot cross profile boundaries. See
+[Desktop App](./desktop-app.md) for the connection and profile model.
+
 ## Keyboard
 
 The queue is built to be worked through without the mouse:

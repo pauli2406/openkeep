@@ -16,7 +16,7 @@ import type {
   Tag,
   WatchFolderScanResponse,
 } from "@openkeep/types";
-import { api } from "@/lib/api";
+import { api, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -70,7 +70,11 @@ export function ApiTokensSection() {
     queryKey: ["auth", "tokens"],
     queryFn: async () => {
       const { data, error } = await api.GET("/api/auth/tokens", {});
-      if (error) throw new Error(t("settings.failedToFetchTokens"));
+      if (error) {
+        throw new Error(
+          getApiErrorMessage(error, t("settings.failedToFetchTokens")),
+        );
+      }
       return (data ?? []) as ApiToken[];
     },
   });
@@ -84,7 +88,11 @@ export function ApiTokensSection() {
       const { data, error } = await api.POST("/api/auth/tokens", {
         body,
       });
-      if (error) throw new Error(t("settings.failedToCreateToken"));
+      if (error) {
+        throw new Error(
+          getApiErrorMessage(error, t("settings.failedToCreateToken")),
+        );
+      }
       return data as unknown as CreateTokenResponse;
     },
     onSuccess: (data) => {
@@ -100,7 +108,11 @@ export function ApiTokensSection() {
       const { error } = await api.DELETE("/api/auth/tokens/{id}", {
         params: { path: { id } },
       });
-      if (error) throw new Error(t("settings.failedToDeleteToken"));
+      if (error) {
+        throw new Error(
+          getApiErrorMessage(error, t("settings.failedToDeleteToken")),
+        );
+      }
     },
     onSuccess: () => {
       setDeleteConfirmId(null);
@@ -230,8 +242,10 @@ export function ApiTokensSection() {
                       />
                     </div>
                     {createMutation.isError && (
-                      <p className="text-sm text-destructive">
-                        {t("settings.createTokenFailed")}
+                      <p className="text-sm text-destructive" role="alert">
+                        {createMutation.error instanceof Error
+                          ? createMutation.error.message
+                          : t("settings.createTokenFailed")}
                       </p>
                     )}
                     <DialogFooter>
@@ -273,8 +287,13 @@ export function ApiTokensSection() {
         )}
 
         {tokensQuery.isError && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-            {t("settings.loadTokensFailed")}
+          <div
+            className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive"
+            role="alert"
+          >
+            {tokensQuery.error instanceof Error
+              ? tokensQuery.error.message
+              : t("settings.loadTokensFailed")}
           </div>
         )}
 
@@ -355,8 +374,15 @@ export function ApiTokensSection() {
             ))}
           </div>
         )}
+
+        {deleteMutation.isError ? (
+          <p className="mt-3 text-sm text-destructive" role="alert">
+            {deleteMutation.error instanceof Error
+              ? deleteMutation.error.message
+              : t("settings.failedToDeleteToken")}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
 }
-

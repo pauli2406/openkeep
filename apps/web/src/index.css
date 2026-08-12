@@ -1,8 +1,72 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
-
-/* Generated from packages/tokens — see scripts/tokens/generate.mjs. */
 @import "./tokens.css";
+
+/* The desktop CSP intentionally has no remote style/font origins. These are
+   the same OFL-licensed files bundled by the mobile client, so both the web
+   and Electron builds keep the canonical typography without a network hop. */
+@font-face {
+  font-family: "Public Sans";
+  src: url("@openkeep/fonts/PublicSans-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Public Sans";
+  src: url("@openkeep/fonts/PublicSans-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Public Sans";
+  src: url("@openkeep/fonts/PublicSans-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Public Sans";
+  src: url("@openkeep/fonts/PublicSans-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Public Sans";
+  src: url("@openkeep/fonts/PublicSans-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("@openkeep/fonts/IBMPlexMono-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("@openkeep/fonts/IBMPlexMono-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("@openkeep/fonts/IBMPlexMono-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
 
 /* ─────────────────────────────────────────────────────────────
    OpenKeep design tokens (#40, shared in #124)
@@ -147,6 +211,23 @@
   /* ─── Type roles (#41) ───
      The four roles the design uses by name. Everything else is a
      plain `text-xs/sm/base` off the scale above. */
+
+  .ok-offline-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: color-mix(in srgb, var(--ok-amber) 14%, var(--ok-bar));
+    border-bottom: 1px solid color-mix(in srgb, var(--ok-amber) 45%, var(--ok-border));
+    color: var(--ok-ink);
+    font-size: 12px;
+  }
+
+  .ok-offline-banner > span:first-child {
+    color: var(--ok-amber);
+    font-size: 9px;
+  }
 
   .ok-page-title {
     font-size: 16px;

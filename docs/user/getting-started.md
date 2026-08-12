@@ -127,6 +127,7 @@ looks like the scan.
 - Learn search, summaries, and Q&A in [Search and AI](./search-and-ai.md)
 - Learn review and manual correction workflows in [Review and Corrections](./review-and-corrections.md)
 - Learn admin tools in [Settings and Admin](./settings-and-admin.md)
+- Learn how to connect the computer client in [Desktop App](./desktop-app.md)
 - Learn the phone app in [Mobile App](./mobile-app.md)
 
 ## Supported Upload Types

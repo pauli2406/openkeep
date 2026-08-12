@@ -46,7 +46,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
   let explorerService: ExplorerService;
   let accessToken = "";
   let apiToken = "";
-  let apiTokenId = "";
   let ownerUserId = "";
   let watchFolderPath = "";
   const originalFetch = global.fetch;
@@ -221,7 +220,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
         name: "Integration token",
       });
     apiToken = apiTokenResponse.body.token;
-    apiTokenId = apiTokenResponse.body.id;
   });
 
   afterAll(async () => {
@@ -288,25 +286,43 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     });
   });
 
-  it("rejects API token management from API-token sessions", async () => {
+  it("lets an owner administer account security from an API-token session", async () => {
     const listResponse = await request(app.getHttpServer())
       .get("/api/auth/tokens")
       .set("Authorization", `Bearer ${apiToken}`);
 
-    expect(listResponse.status).toBe(401);
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Integration token" }),
+      ]),
+    );
 
     const createResponse = await request(app.getHttpServer())
       .post("/api/auth/tokens")
       .set("Authorization", `Bearer ${apiToken}`)
-      .send({ name: "Nested mobile token" });
+      .send({ name: "Desktop-managed token" });
 
-    expect(createResponse.status).toBe(401);
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.token).toMatch(/^okp_[a-f0-9]+\.[a-f0-9]+$/);
 
     const deleteResponse = await request(app.getHttpServer())
-      .delete(`/api/auth/tokens/${apiTokenId}`)
+      .delete(`/api/auth/tokens/${createResponse.body.id}`)
       .set("Authorization", `Bearer ${apiToken}`);
 
-    expect(deleteResponse.status).toBe(401);
+    expect(deleteResponse.status).toBe(200);
+
+    const setupTwoFactorResponse = await request(app.getHttpServer())
+      .post("/api/auth/2fa/setup")
+      .set("Authorization", `Bearer ${apiToken}`)
+      .send({});
+
+    expect(setupTwoFactorResponse.status).toBe(201);
+    expect(setupTwoFactorResponse.body).toMatchObject({
+      secret: expect.any(String),
+      qrDataUrl: expect.stringMatching(/^data:image\/png;base64,/),
+      enrollmentToken: expect.any(String),
+    });
   });
 
   it("rejects invalid date filters before querying the database", async () => {

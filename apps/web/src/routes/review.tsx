@@ -16,6 +16,12 @@ import {
 } from "@/components/ui/select";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { useI18n } from "@/lib/i18n";
+import { createObjectUrlLease } from "@/lib/object-url";
+import { refreshArchiveDocumentState } from "@/lib/archive-document-state";
+import {
+  asFetchSignal,
+  useArchiveRequestScope,
+} from "@/lib/archive-request-scope";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/review")({
@@ -94,6 +100,7 @@ function ReviewPage() {
   const { t, language } = useI18n();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const requestSignal = useArchiveRequestScope();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<ReviewReason | "all">("all");
   const [form, setForm] = useState<FieldForm | null>(null);
@@ -242,22 +249,24 @@ function ReviewPage() {
 
   // Small preview of the selected document.
   useEffect(() => {
-    let objectUrl: string | null = null;
-    let cancelled = false;
+    const objectUrl = createObjectUrlLease();
+    const controller = new AbortController();
     setPreviewUrl(null);
     if (!selected) return;
     (async () => {
-      const response = await authFetch(`/api/documents/${selected.id}/download`);
-      if (!response.ok || cancelled) return;
+      const response = await authFetch(`/api/documents/${selected.id}/download`, {
+        signal: asFetchSignal(controller.signal, requestSignal()),
+      });
+      if (!response.ok || controller.signal.aborted) return;
       const blob = await response.blob();
-      objectUrl = URL.createObjectURL(blob);
-      if (!cancelled) setPreviewUrl(objectUrl);
+      const nextUrl = objectUrl.replace(blob);
+      if (nextUrl) setPreviewUrl(nextUrl);
     })().catch(() => {});
     return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      controller.abort();
+      objectUrl.dispose();
     };
-  }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id, requestSignal]);
 
   // --- Mutations (endpoints unchanged) ---
 
@@ -266,14 +275,12 @@ function ReviewPage() {
       const { error } = await api.POST("/api/documents/{id}/review/resolve", {
         params: { path: { id: documentId } },
         body: {},
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) throw new Error(getApiErrorMessage(error, copy.fetchError));
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard", "insights"] });
-    },
+    onSuccess: (_data, documentId) =>
+      refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const requeueMutation = useMutation({
@@ -281,13 +288,12 @@ function ReviewPage() {
       const { error } = await api.POST("/api/documents/{id}/review/requeue", {
         params: { path: { id: documentId } },
         body: { force: true },
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) throw new Error(getApiErrorMessage(error, copy.fetchError));
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents", "review"] });
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-    },
+    onSuccess: (_data, documentId) =>
+      refreshArchiveDocumentState(queryClient, documentId),
   });
 
   const updateMutation = useMutation({
@@ -298,9 +304,12 @@ function ReviewPage() {
       const { error } = await api.PATCH("/api/documents/{id}", {
         params: { path: { id: input.documentId } },
         body: input.body as never,
+        signal: asFetchSignal(requestSignal()),
       });
       if (error) throw new Error(getApiErrorMessage(error, copy.fetchError));
     },
+    onSuccess: (_data, input) =>
+      refreshArchiveDocumentState(queryClient, input.documentId),
   });
 
   const advance = useCallback(
@@ -355,6 +364,9 @@ function ReviewPage() {
       setBulkRunning(false);
     }
   }, [queue, bulkThreshold, resolveMutation]);
+
+  const actionError =
+    updateMutation.error ?? resolveMutation.error ?? requeueMutation.error;
 
   // --- The keyboard loop the ticket is about ---
 
@@ -670,8 +682,13 @@ function ReviewPage() {
                 </div>
 
                 <div className="flex items-center gap-2 border-t px-3.5 py-2.5">
+                  {actionError ? (
+                    <p className="text-xs text-[var(--ok-red)]" role="alert">
+                      {actionError instanceof Error ? actionError.message : copy.fetchError}
+                    </p>
+                  ) : null}
                   <Button
-                    onClick={() => void confirmSelected()}
+                    onClick={() => void confirmSelected().catch(() => {})}
                     disabled={resolveMutation.isPending || updateMutation.isPending}
                   >
                     {resolveMutation.isPending || updateMutation.isPending ? (

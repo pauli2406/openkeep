@@ -1,15 +1,11 @@
 import "@openkeep/web/styles.css";
 import "./renderer/desktop-bootstrap.css";
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App as WebApp } from "@openkeep/web/app";
-import { ConnectionScreen } from "./renderer/connection-screen";
+import { configureApiAuthMode } from "@openkeep/web/api";
+import { DesktopApp } from "./renderer/desktop-app";
 
-export function DesktopApp() {
-  const [connected, setConnected] = useState(false);
-
-  return connected ? <WebApp /> : <ConnectionScreen onConnected={() => setConnected(true)} />;
-}
+configureApiAuthMode("main-owned");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

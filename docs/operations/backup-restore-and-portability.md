@@ -26,6 +26,10 @@ Use:
 
 The settings UI exposes this as `Export Snapshot`.
 
+In the desktop app, this action uses the operating system's save dialog and streams
+the snapshot from the active archive directly to the selected file. In the web app,
+the snapshot remains available in the JSON editor for copying or importing.
+
 Use exports before:
 
 - risky maintenance work

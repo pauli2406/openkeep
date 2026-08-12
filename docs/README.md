@@ -19,6 +19,7 @@ Start here if you are using OpenKeep to manage your archive.
 - [Search and AI](./user/search-and-ai.md)
 - [Review and Corrections](./user/review-and-corrections.md)
 - [Settings and Admin](./user/settings-and-admin.md)
+- [Desktop App](./user/desktop-app.md)
 - [Mobile App](./user/mobile-app.md)
 - [FAQ](./user/faq.md)
 
@@ -31,6 +32,7 @@ Start here if you are contributing to or extending OpenKeep.
 - [API and Data Flows](./technical/api-and-data-flows.md)
 - [Agentic Document Intelligence](./technical/agentic-document-intelligence.md)
 - [Web Application](./technical/web-application.md)
+- [Desktop Application](./technical/desktop-application.md)
 - [Testing and Validation](./technical/testing-and-validation.md)
 
 Supporting reference material:
@@ -64,8 +66,9 @@ Supporting reference material:
 3. [Search and AI](./user/search-and-ai.md)
 4. [Review and Corrections](./user/review-and-corrections.md)
 5. [Settings and Admin](./user/settings-and-admin.md)
-6. [Mobile App](./user/mobile-app.md)
-7. [FAQ](./user/faq.md)
+6. [Desktop App](./user/desktop-app.md)
+7. [Mobile App](./user/mobile-app.md)
+8. [FAQ](./user/faq.md)
 
 ### If you are building OpenKeep
 
@@ -74,7 +77,8 @@ Supporting reference material:
 3. [API and Data Flows](./technical/api-and-data-flows.md)
 4. [Agentic Document Intelligence](./technical/agentic-document-intelligence.md)
 5. [Web Application](./technical/web-application.md)
-6. [Testing and Validation](./technical/testing-and-validation.md)
+6. [Desktop Application](./technical/desktop-application.md)
+7. [Testing and Validation](./technical/testing-and-validation.md)
 
 ### If you are operating OpenKeep
 

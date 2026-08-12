@@ -1,0 +1,278 @@
+name: Release Desktop
+
+# Builds, signs (when credentials exist), smoke-tests, and publishes the desktop
+# artifacts for one already-created GitHub Release, shaped like the server and
+# iOS release workflows:
+#   1. resolves the tag, refuses a commit whose CI did not pass — a release
+#      never rebuilds an unverified commit into production artifacts
+#   2. builds each platform on its native runner: macOS arm64 and x64 (ZIP for
+#      the update feed + DMG), Windows x64 (Squirrel installer + RELEASES
+#      feed), Linux x64 (deb + rpm)
+#   3. smoke-tests the packaged application on every runner, and additionally
+#      installs, launches, and uninstalls the deb on Linux
+#   4. uploads everything to the existing GitHub Release only after ALL
+#      platforms succeeded — a partial build cannot publish a partial release
+#
+# Updates: macOS and Windows read these release assets through
+# update.electronjs.org (public repository); Linux users are linked to the
+# release page in-app.
+#
+# Signing secrets (all optional — without them the build is unsigned, which is
+# fine for testing the pipeline but not for distribution):
+#   MACOS_CERTIFICATE_P12        base64 Developer ID Application certificate
+#   MACOS_CERTIFICATE_PASSWORD   password of that .p12
+#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarization
+#   WINDOWS_SIGN_PARAMS          full signtool parameter string, including the
+#                                certificate reference and a timestamp server
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag, e.g. v1.2.0"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+concurrency:
+  group: release-desktop-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the release commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      sha: ${{ steps.sha.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.version }}
+          fetch-depth: 0
+
+      - name: Resolve commit
+        id: sha
+        run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Require the release to exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ inputs.version }}" --repo "${{ github.repository }}" >/dev/null \
+            || { echo "::error::release ${{ inputs.version }} does not exist — run the Release workflow first"; exit 1; }
+
+      - name: Wait for CI, and refuse a commit it did not pass
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.sha.outputs.value }}
+        run: |
+          set -euo pipefail
+          waited=0
+          grace=180
+          deadline=2700
+
+          while :; do
+            run=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" \
+              --jq '[.check_runs[] | select(.name == "CI")] | sort_by(.started_at) | last')
+            if [ -z "$run" ] || [ "$run" = "null" ]; then
+              status="absent"
+              conclusion=""
+            else
+              status=$(printf '%s' "$run" | jq -r '.status // "absent"')
+              conclusion=$(printf '%s' "$run" | jq -r '.conclusion // ""')
+            fi
+
+            case "$status:$conclusion" in
+              completed:success) echo "CI passed"; break ;;
+              completed:*) echo "::error::CI concluded '$conclusion' for $SHA"; exit 1 ;;
+              absent:*)
+                if [ "$waited" -ge "$grace" ]; then
+                  echo "::error::no CI run found for $SHA"; exit 1
+                fi ;;
+            esac
+
+            if [ "$waited" -ge "$deadline" ]; then
+              echo "::error::CI did not finish within $deadline seconds"; exit 1
+            fi
+            sleep 30; waited=$((waited + 30))
+          done
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: verify
+    strategy:
+      # One failed platform must fail the whole release, not ship the rest.
+      fail-fast: true
+      matrix:
+        include:
+          - name: macOS arm64
+            os: macos-latest
+            arch: arm64
+            smoke: true
+          - name: macOS x64
+            os: macos-13
+            arch: x64
+            smoke: true
+          - name: Windows x64
+            os: windows-latest
+            arch: x64
+            smoke: true
+          - name: Linux x64
+            os: ubuntu-latest
+            arch: x64
+            smoke: true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: desktop-release-${{ runner.os }}-${{ matrix.arch }}
+
+      - name: Set the release version
+        shell: bash
+        run: |
+          version="${{ inputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const file = 'apps/desktop/package.json';
+            const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            pkg.version = '${version#v}';
+            fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg
+
+      - name: Import the macOS signing certificate
+        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12 != ''
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain=build.keychain
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$keychain"
+          security default-keychain -s "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f /tmp/cert.p12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          echo "OPENKEEP_MAC_SIGNING=1" >> "$GITHUB_ENV"
+
+      - name: Enable Windows signing
+        if: runner.os == 'Windows' && env.WINDOWS_SIGN_PARAMS != ''
+        env:
+          WINDOWS_SIGN_PARAMS: ${{ secrets.WINDOWS_SIGN_PARAMS }}
+        shell: bash
+        run: echo "OPENKEEP_WIN_SIGNING=1" >> "$GITHUB_ENV"
+
+      - name: Make distributables
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WINDOWS_SIGN_PARAMS: ${{ secrets.WINDOWS_SIGN_PARAMS }}
+        run: pnpm --filter @openkeep/desktop make -- --arch=${{ matrix.arch }}
+
+      - name: Smoke-test the packaged application
+        if: matrix.smoke && runner.os != 'Linux'
+        run: pnpm --filter @openkeep/desktop test:smoke
+
+      - name: Smoke-test the packaged application (Linux)
+        if: matrix.smoke && runner.os == 'Linux'
+        run: |
+          sandbox="$(find apps/desktop/out -name chrome-sandbox -maxdepth 2 | head -1)"
+          if [ -n "$sandbox" ]; then
+            sudo chown root:root "$sandbox"
+            sudo chmod 4755 "$sandbox"
+          fi
+          xvfb-run -a pnpm --filter @openkeep/desktop test:smoke
+
+      # The installed package, not just the unpacked build: install the deb,
+      # verify desktop integration and MIME registration, launch the installed
+      # binary, and confirm removal leaves nothing behind.
+      - name: Install, launch, and uninstall the deb
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          deb=$(find apps/desktop/out/make -name '*.deb' | head -1)
+          [ -n "$deb" ] || { echo "::error::no deb was produced"; exit 1; }
+          sudo dpkg -i "$deb"
+
+          test -x /usr/lib/openkeep/openkeep || { echo "::error::installed binary missing"; exit 1; }
+          desktop_file=$(ls /usr/share/applications/*openkeep*.desktop 2>/dev/null | head -1)
+          [ -n "$desktop_file" ] || { echo "::error::.desktop entry missing"; exit 1; }
+          grep -qi "application/pdf" "$desktop_file" \
+            || { echo "::error::MIME associations missing from the desktop entry"; exit 1; }
+
+          sudo chown root:root /usr/lib/openkeep/chrome-sandbox
+          sudo chmod 4755 /usr/lib/openkeep/chrome-sandbox
+          xvfb-run -a /usr/lib/openkeep/openkeep --smoke-test | tee /tmp/smoke.out
+          grep -q OPENKEEP_DESKTOP_SMOKE_OK /tmp/smoke.out
+
+          sudo dpkg -r openkeep
+          [ ! -e /usr/lib/openkeep ] || { echo "::error::uninstall left /usr/lib/openkeep behind"; exit 1; }
+          [ ! -e "$desktop_file" ] || { echo "::error::uninstall left the desktop entry behind"; exit 1; }
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          find apps/desktop/out/make -type f \
+            \( -name '*.zip' -o -name '*.dmg' -o -name '*.exe' -o -name '*.nupkg' \
+               -o -name 'RELEASES' -o -name '*.deb' -o -name '*.rpm' \) \
+            -exec cp {} dist/ \;
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ runner.os }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to the release
+    # `needs: build` only runs when every matrix leg succeeded, which is what
+    # keeps a partial platform build from publishing a partial release.
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload artifacts to the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la dist
+          gh release upload "${{ inputs.version }}" dist/* \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: Summary
+        run: |
+          {
+            echo "## Desktop release ${{ inputs.version }}"
+            echo
+            echo "Uploaded: $(ls dist | tr '\n' ' ')"
+            echo
+            echo "macOS and Windows clients update through update.electronjs.org;"
+            echo "Linux clients link to this release page."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueries, useMutation } from "@tanstack/react-query";
+import { useQueries, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ArchiveImportResult,
   ArchiveSnapshot,
@@ -15,6 +15,7 @@ import type {
   ReadinessResponse,
   Tag,
   WatchFolderScanResponse,
+  WatchFolderStatusResponse,
 } from "@openkeep/types";
 import { api, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -51,18 +52,47 @@ import {
   } from "lucide-react";
 import { format } from "date-fns";
 import { useI18n } from "@/lib/i18n";
+import { useHostFileSaver } from "@/lib/host-shell";
 import { QueueCard, WatchFolderFieldReview, formatWatchFolderAction, formatWatchFolderReason, watchFolderActionVariant } from "./shared";
 
 export function ArchiveOperationsSection() {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const hostFileSaver = useHostFileSaver();
   const [snapshotText, setSnapshotText] = useState("");
   const [importMode, setImportMode] = useState<"replace" | "merge">("replace");
   const [watchDryRun, setWatchDryRun] = useState(true);
   const [lastImportResult, setLastImportResult] = useState<string | null>(null);
   const [watchResult, setWatchResult] = useState<WatchFolderScanResponse | null>(null);
 
+  const watchStatusQuery = useQuery({
+    queryKey: ["archive", "watch-folder", "status"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/archive/watch-folder");
+      if (error || !data) {
+        throw new Error(
+          getApiErrorMessage(error, t("settings.watchFolderStatusFailed")),
+        );
+      }
+      return data as WatchFolderStatusResponse;
+    },
+    refetchInterval: 30_000,
+  });
+
   const exportMutation = useMutation({
     mutationFn: async () => {
+      if (hostFileSaver) {
+        let result;
+        try {
+          result = await hostFileSaver({ kind: "archive-export" });
+        } catch {
+          throw new Error(t("settings.exportArchiveFailed"));
+        }
+        if (result.status === "failed") {
+          throw new Error(result.message);
+        }
+        return null;
+      }
       const { data, error } = await api.GET("/api/archive/export", {});
       if (error) {
         throw new Error(getApiErrorMessage(error, t("settings.failedToExportArchive")));
@@ -70,7 +100,9 @@ export function ArchiveOperationsSection() {
       return data as ArchiveSnapshot;
     },
     onSuccess: (data) => {
-      setSnapshotText(JSON.stringify(data, null, 2));
+      if (data) {
+        setSnapshotText(JSON.stringify(data, null, 2));
+      }
     },
   });
 
@@ -105,6 +137,9 @@ export function ArchiveOperationsSection() {
     },
     onSuccess: (data) => {
       setWatchResult(data);
+      void queryClient.invalidateQueries({
+        queryKey: ["archive", "watch-folder", "status"],
+      });
     },
   });
 
@@ -158,6 +193,53 @@ export function ArchiveOperationsSection() {
           </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        {watchStatusQuery.data ? (
+          <div className="rounded-md border bg-muted/20 px-3 py-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">
+                  {t("settings.watchFolderServer")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.watchFolderServerDescription")}
+                </p>
+              </div>
+              <Badge
+                variant={watchStatusQuery.data.configured ? "success" : "secondary"}
+              >
+                {watchStatusQuery.data.configured
+                  ? t("settings.configured")
+                  : t("settings.notConfigured")}
+              </Badge>
+            </div>
+            {watchStatusQuery.data.configuredPath ? (
+              <p className="ok-num mt-2 break-all text-xs text-muted-foreground">
+                {t("settings.path")}: {watchStatusQuery.data.configuredPath}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                {t("settings.lastScan")}: {watchStatusQuery.data.lastScan
+                  ? format(new Date(watchStatusQuery.data.lastScan.scannedAt), "MMM d, yyyy HH:mm")
+                  : t("settings.neverScanned")}
+              </span>
+              <span>
+                {t("settings.lastImport")}: {watchStatusQuery.data.lastImport
+                  ? format(new Date(watchStatusQuery.data.lastImport.scannedAt), "MMM d, yyyy HH:mm")
+                  : t("settings.neverScanned")}
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        {watchStatusQuery.isError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {watchStatusQuery.error instanceof Error
+              ? watchStatusQuery.error.message
+              : t("settings.watchFolderStatusFailed")}
+          </p>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
             {exportMutation.isPending ? (
@@ -444,4 +526,3 @@ export function ArchiveOperationsSection() {
 }
 
 // --- Processing Activity & Queue Status ---
-

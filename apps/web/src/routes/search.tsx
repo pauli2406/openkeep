@@ -12,7 +12,9 @@ import { useRecentSearches } from "@/hooks/use-recent-searches";
 import { api, authFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { useOfflineReadOnly } from "@/lib/host-shell";
 import { cn } from "@/lib/utils";
+import { createObjectUrlLease } from "@/lib/object-url";
 
 type SearchParams = { q?: string };
 
@@ -83,7 +85,7 @@ function relativeAge(at: number, language: string): string {
 }
 
 function ChatPage() {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const navigate = useNavigate();
   const { q } = Route.useSearch();
   const stream = useAnswerStream();
@@ -92,6 +94,7 @@ function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations);
   const [activeId, setActiveId] = useState<string | null>(conversations[0]?.id ?? null);
   const [draft, setDraft] = useState("");
+  const offlineReadOnly = useOfflineReadOnly();
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   // The conversation the in-flight answer belongs to. Switching conversations
   // mid-stream must not append the turn to whatever is selected when it lands.
@@ -272,7 +275,7 @@ function ChatPage() {
 
   // Preview of the cited page.
   useEffect(() => {
-    let objectUrl: string | null = null;
+    const objectUrl = createObjectUrlLease();
     let cancelled = false;
     setPreviewUrl(null);
     if (!selectedCitation) return;
@@ -282,12 +285,12 @@ function ChatPage() {
       );
       if (!response.ok || cancelled) return;
       const blob = await response.blob();
-      objectUrl = URL.createObjectURL(blob);
-      if (!cancelled) setPreviewUrl(objectUrl);
+      const nextUrl = objectUrl.replace(blob);
+      if (nextUrl) setPreviewUrl(nextUrl);
     })().catch(() => {});
     return () => {
       cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl.dispose();
     };
   }, [selectedCitation?.documentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -592,7 +595,7 @@ function ChatPage() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    ask(draft);
+                    if (!offlineReadOnly) ask(draft);
                   }
                 }}
                 placeholder={copy.placeholder}
@@ -602,8 +605,8 @@ function ChatPage() {
               <Button
                 size="icon"
                 onClick={() => ask(draft)}
-                disabled={!draft.trim() || pendingQuestion !== null}
-                aria-label={copy.sendHint}
+                disabled={!draft.trim() || pendingQuestion !== null || offlineReadOnly}
+                aria-label={offlineReadOnly ? t("offline.askDisabled") : copy.sendHint}
               >
                 {pendingQuestion ? <Loader2 className="animate-spin" /> : <Send />}
               </Button>
@@ -670,6 +673,9 @@ function ChatPage() {
                     navigate({
                       to: "/documents/$documentId",
                       params: { documentId: selectedCitation.documentId },
+                      hash: selectedCitation.pageFrom
+                        ? `page-${selectedCitation.pageFrom}`
+                        : undefined,
                     })
                   }
                 >
