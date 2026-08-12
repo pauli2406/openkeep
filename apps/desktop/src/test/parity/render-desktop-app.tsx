@@ -31,10 +31,11 @@ type RenderDesktopArchiveOptions = {
   route?: string;
   profile?: DesktopProfileSummary;
   bridge?: DesktopBridgeOverrides;
+  sessionStatus?: "connected" | "offline";
 };
 
 function createBridge(
-  connected: Extract<DesktopSessionState, { status: "connected" }>,
+  connected: Extract<DesktopSessionState, { status: "connected" | "offline" }>,
   overrides: DesktopBridgeOverrides = {},
 ): DesktopBridge {
   return createDesktopBridgeStub({
@@ -79,11 +80,11 @@ function createBridge(
 function DesktopArchiveHost({
   initialState,
 }: {
-  initialState: Extract<DesktopSessionState, { status: "connected" }>;
+  initialState: Extract<DesktopSessionState, { status: "connected" | "offline" }>;
 }) {
   const [sessionState, setSessionState] = useState<DesktopSessionState>(initialState);
 
-  if (sessionState.status !== "connected") {
+  if (sessionState.status !== "connected" && sessionState.status !== "offline") {
     return (
       <main aria-live="polite">
         {sessionState.status === "unavailable"
@@ -102,6 +103,7 @@ function DesktopArchiveHost({
         ShellAccessory={DesktopArchiveAccessory}
         platform="darwin"
         fileSaver={(request) => window.openkeepDesktop.save.request(request)}
+        sessionMode={sessionState.status === "offline" ? "offline" : "online"}
       />
     </DesktopSessionContext.Provider>
   );
@@ -116,11 +118,12 @@ export function renderDesktopArchive({
   route = "/",
   profile = DEFAULT_PROFILE,
   bridge: bridgeOverrides,
+  sessionStatus = "connected",
 }: RenderDesktopArchiveOptions = {}) {
   window.history.replaceState({}, "", route);
 
-  const state: Extract<DesktopSessionState, { status: "connected" }> = {
-    status: "connected",
+  const state: Extract<DesktopSessionState, { status: "connected" | "offline" }> = {
+    status: sessionStatus,
     profile,
     user: {
       ...makeUser(),

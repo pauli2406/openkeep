@@ -95,8 +95,9 @@ app rather than a separate desktop copy:
 Back and forward navigation, deep document and correspondent links, theme, and the
 English/German interface behave the same way in both clients. Loading, empty,
 processing, unauthorized, and temporarily unavailable states still depend on the
-active server. Desktop does not substitute stale content from another profile or
-an offline cache when a request fails.
+active server. Desktop never substitutes another profile's content, and a live session never
+silently swaps to cached data — the offline copy opens only as an explicit,
+clearly marked read-only session.
 
 Switching profiles creates a fresh shared-app instance in that profile's isolated
 window. Rows, filters, previews, selections, and query results from the previous
@@ -420,13 +421,38 @@ available. OpenKeep refuses to save credentials when Electron can provide only
 its insecure `basic_text` fallback. Install or unlock a supported keyring, then
 restart the app and connect again.
 
-## No Offline Archive
+## Offline Copy
 
-The desktop app has no offline archive or document cache. Its profile-specific
-Chromium cache is an isolation mechanism, not an offline copy. The app needs a live
-connection for browsing, search, previews, imports, downloads, and changes. If
-you need read-only access to documents previously opened on a device, that is a
-separate capability of the [mobile app](./mobile-app.md), not the desktop app.
+Every document you open while connected is saved into that archive's offline
+copy on this computer — encrypted, and kept strictly apart per archive profile.
+When the archive's server is unreachable, you can open that copy and keep
+reading.
+
+There are two ways in. The archive chooser shows `Open offline copy` under a
+profile that has one, together with how many documents it holds. And when a
+connected archive becomes unreachable, the same offer appears beside
+`Retry last archive`, so you never lose the retry or edit path by going
+offline. Rejected credentials never lead into an offline session — that path
+still removes the profile as before.
+
+An offline session is read-only and says so in a banner. You can browse and
+search the cached documents, open them, read the extracted text and history,
+and view the preview. Uploading, editing, review actions, reprocessing,
+deleting, AI answers, and archive administration are all disabled until the
+archive is reachable again; the archive itself is never changed by anything
+you do offline.
+
+While the offline copy is open, OpenKeep checks the archive in the background
+about every half minute. The first successful check returns you to live data
+automatically — nothing to replay, because nothing could change offline. If
+the archive rejects the saved credentials instead, the profile is removed
+exactly as it would be online.
+
+Only documents you have opened are in the copy — it is not a mirror of the
+archive. A document that never appeared offline simply has not been opened
+while connected yet. If the offline copy cannot be protected by the operating
+system's credential store, it stays disabled entirely rather than being
+written unprotected.
 
 ## Related Documents
 

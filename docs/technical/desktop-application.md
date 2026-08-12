@@ -75,9 +75,10 @@ actions. Once a reachable archive rejects credentials with `401` or `403`, main
 deletes only the failing profile's credentials and profile record. The chooser and
 all other profiles remain usable.
 
-The session is online-only for now: a per-profile offline cache stores what the
-user opens (see Offline Document Cache), but no offline session reads from it yet,
-so an unavailable server still means no archive access.
+A per-profile offline cache stores what the user opens (see Offline Document
+Cache), and an unreachable archive can be reopened as an explicit read-only
+offline session served from it (see Offline Session). A live session never
+silently swaps to cached data.
 
 Desktop does not use the web login, refresh-token, or initial-owner setup routes.
 After verification, `DesktopAuthProvider` presents the already authenticated owner
@@ -495,12 +496,12 @@ directory picker in main, so the only paths that enter are ones the user chose t
 Every mutation additionally requires that the calling window's profile is the
 connected archive. The tray shows watch state as counts only, never a path.
 
-## Offline Document Cache (foundation)
+## Offline Document Cache
 
 Desktop keeps a read-only offline copy of documents the user has opened, as the
-first stage of the offline archive (#172). This section records which mobile cache
-semantics it reuses and where it deliberately departs; the offline *session* that
-reads from this cache is a separate story and does not exist yet.
+storage layer of the offline archive (#172). This section records which mobile
+cache semantics it reuses and where it deliberately departs; the offline session
+that reads from it is described in the next section.
 
 **Reused mobile semantics.** The cache is populated lazily and only ever by reading:
 opening a document online stores its metadata, its preview or searchable file, its
@@ -557,7 +558,54 @@ records hold everything else. Store, cipher, and read-through are covered by tes
 including cross-profile isolation, restart recovery, damaged-index rebuild,
 damaged-record skip, plaintext-leak checks, and the disabled-without-keyring path.
 
-## Import Outcome Notifications
+## Offline Session
+
+An offline session opens one profile's cached copy read-only. Entry is explicit
+and has two doors, both offered only when the copy is usable — cached documents
+plus a cached identity: the archive chooser's `Open offline copy`, and the same
+offer beside `Retry` when a connected archive becomes unreachable. A 401 never
+leads offline; rejected credentials keep removing the profile exactly as before.
+Entering suspends any live session without touching stored credentials — it is
+not a sign-out.
+
+Serving happens at the protocol proxy, mirroring how the cache is populated.
+While a profile is offline, its partition's `/api` traffic routes to an offline
+API handler that answers the read endpoints in the archive's own response
+shapes: the cached user for `/api/auth/me`, the documents list built from the
+column index, document detail, OCR text, history, and decrypted file bytes. A
+cached document therefore renders identically offline and online, and the
+shared web application needs no cached-read forks. Everything else — every
+mutation, AI request, and list the cache cannot honestly answer — receives a
+read-only refusal at the transport, carrying its own header rather than
+`archive-unavailable` so the renderer's failure handler is not sent
+re-verifying on every request. Read-only is enforced in main; the renderer's
+gating is presentation.
+
+The renderer receives the mode as `sessionMode` on the shared `App` and exposes
+it through the host shell as `useOfflineReadOnly()` — the one shared predicate
+(mobile copy-pastes its equivalent across nine screens). It drives a persistent
+read-only banner and disables the mutating surfaces: the import drop zone is
+replaced by an explanation, ask composers are off, and the document rail's
+editing, reprocess, and delete controls sit inside one disabled fieldset.
+Surfaces the cache cannot serve yet (dashboard, facets, review queue) show
+their ordinary error states until the offline-surfaces story lands.
+
+Reconnection is a main-process loop, not a user chore. While a profile is
+offline it is re-verified every thirty seconds through the ordinary activation,
+so outcomes keep their meanings: the first success ends the offline session and
+reopens the profile live — there are no offline mutations to replay — a
+rejected credential removes the profile and the session with it, and transient
+failures stay offline quietly. A verification that finishes after the session
+already ended is discarded. Mobile has no working equivalent; its offline mode
+persists until relaunch.
+
+Offline-session tests cover the offline API's shapes, filters, paging,
+not-cached answers, and read-only refusals; the reconnect outcomes including
+the stale-verification guard; and, at parity level, the banner, the disabled
+import and ask surfaces, and that the read-only refusal never triggers the
+failure-handler retry loop.
+
+## Import Outcome Notifications## Import Outcome Notifications
 
 Notifications are driven by an outcome tracker in main rather than by the upload
 route. A document keeps processing after its upload returns, and the window can be
@@ -635,10 +683,10 @@ plugin are pinned to one version to avoid incompatible minor updates.
 
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
-archives. Desktop has no offline session yet: the offline cache stores what the user opened,
-but an unavailable server still requires the mobile app for offline reading until
-the session stories of #172 land. There is no launch-at-login setting,
-signing, or release automation. Notifications report jobs this installation started;
+archives. The offline copy holds only opened documents, and its session serves reading:
+offline Today, facets, search-derived surfaces, cache inspection, and cache
+lifecycle management arrive with the remaining #172 stories. There is no
+launch-at-login setting, signing, or release automation. Notifications report jobs this installation started;
 they are not a general subscription to server events. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.
