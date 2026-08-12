@@ -56,3 +56,16 @@ Exit the loop when the latest automated review raises no new valid findings and 
 
 - Do not merge. The maintainer does the final review and merge.
 - Finish with a short summary: what was implemented, how it was verified, which review findings were fixed vs. rejected and why, and a link to the PR.
+
+## Mode 3: Release the Mobile App
+
+The release workflows verify the version, they never write it — a release must not rewrite the commit it is releasing. So the bump is ordinary work in an ordinary PR, and it is the step that is easy to forget: the failure surfaces only when someone starts `Release iOS` and it stops with `app.config.js says X but you asked to release Y`, after the release was already meant to be running.
+
+When asked to release the mobile app, or to prepare one:
+
+1. **Bump `version` in `apps/mobile/app.config.js`** to the version being released, on its own branch (`release/mobile-<version>`), before anything is triggered. That one line is the whole bump — the Settings screen reads the version out of the config the binary was stamped from, and `apps/mobile/package.json` is not the source. The tag the workflow creates is `mobile-v<version>`; `git tag -l 'mobile-v*'` shows what is already taken, and the workflow refuses a version that is tagged.
+2. **Re-bless the Settings baselines in the same PR**: `pnpm --filter @openkeep/mobile test:visual:update`. The version is rendered twice on that screen, so the bump changes those two screenshots and nothing else. A bump of one digit can slip under the 100-pixel diff budget and leave the suite green on a stale baseline, so force it when the run reports nothing to update: `./apps/mobile/visual/run-in-container.sh --update-snapshots=all --grep settings`.
+3. **Everything the release needs must be merged first.** The workflow releases a commit on `main` whose `CI` check is green; it will not pick up a fix that is still in review.
+4. Hand off as in Mode 2 — the maintainer merges, and triggers the release.
+
+`docs/operations/mobile-releases.md` is the full procedure, including what the workflow checks before it spends an EAS build.
