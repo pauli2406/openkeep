@@ -35,20 +35,25 @@ export async function loadOrCreateCacheKey(
   credentialCipher: CredentialCipher,
   keyFile: CacheKeyFile,
   createKey: () => Buffer = () => randomBytes(KEY_BYTES),
-): Promise<Buffer> {
+): Promise<{ key: Buffer; recreated: boolean }> {
   await credentialCipher.assertAvailable?.();
   const wrapped = await keyFile.read();
   if (wrapped) {
-    const key = Buffer.from(await credentialCipher.decrypt(wrapped), "base64");
-    if (key.length === KEY_BYTES) {
-      return key;
+    try {
+      const key = Buffer.from(await credentialCipher.decrypt(wrapped), "base64");
+      if (key.length === KEY_BYTES) {
+        return { key, recreated: false };
+      }
+    } catch {
+      // The operating-system store can no longer unwrap this key — an OS
+      // keychain reset, a migrated home directory. The sealed content is
+      // unrecoverable either way; the caller wipes it and starts fresh
+      // rather than wedging offline mode forever.
     }
-    // An unreadable or wrong-sized key means the cache content is lost either
-    // way; fall through and start a fresh key rather than failing forever.
   }
   const key = createKey();
   await keyFile.write(Buffer.from(await credentialCipher.encrypt(key.toString("base64"))));
-  return key;
+  return { key, recreated: wrapped !== null };
 }
 
 export function encryptBuffer(key: Buffer, plaintext: Buffer): Buffer {

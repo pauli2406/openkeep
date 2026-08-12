@@ -179,8 +179,27 @@ describe("cache cipher", () => {
     const cipher = fakeCredentialCipher();
     const first = await loadOrCreateCacheKey(cipher, keyFile);
     const second = await loadOrCreateCacheKey(cipher, keyFile);
-    expect(second.equals(first)).toBe(true);
-    expect(stored!.equals(first)).toBe(false);
+    expect(first.recreated).toBe(false);
+    expect(second.key.equals(first.key)).toBe(true);
+    expect(stored!.equals(first.key)).toBe(false);
+  });
+
+  it("recovers with a fresh key when the wrapped key can no longer be unwrapped", async () => {
+    let stored: Buffer | null = Buffer.from("garbage the OS store cannot decrypt");
+    const cipher: CredentialCipher = {
+      ...fakeCredentialCipher(),
+      decrypt: () => {
+        throw new Error("keychain reset");
+      },
+    };
+    const result = await loadOrCreateCacheKey(cipher, {
+      read: async () => stored,
+      write: async (wrapped: Buffer) => {
+        stored = wrapped;
+      },
+    });
+    expect(result.recreated).toBe(true);
+    expect(result.key).toHaveLength(32);
   });
 });
 
@@ -508,6 +527,7 @@ describe("read-through observer", () => {
         attachHistory: vi.fn(),
         cacheFileStream: vi.fn(),
         setUser: vi.fn(),
+        removeDocument: vi.fn(),
       },
       reportError: vi.fn(),
     });
@@ -528,6 +548,7 @@ describe("read-through observer", () => {
       attachHistory: vi.fn(),
       cacheFileStream: vi.fn(),
       setUser: vi.fn(),
+      removeDocument: vi.fn(),
     };
     const readThrough = createOfflineReadThrough({ store });
     const response = new Response("denied", { status: 403 });

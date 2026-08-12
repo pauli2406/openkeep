@@ -646,6 +646,23 @@
   opacity: 0.6;
 }
 
+.desktop-lifecycle-control__offline-limit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ok-muted);
+  font-size: 10.5px;
+}
+
+.desktop-lifecycle-control__offline-limit select {
+  padding: 3px 6px;
+  border: 1px solid var(--ok-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--ok-panel);
+  color: var(--ok-ink);
+  font-size: 10.5px;
+}
+
 .desktop-lifecycle-control__offline-confirm {
   display: flex;
   flex-wrap: wrap;

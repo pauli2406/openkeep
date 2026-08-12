@@ -3,6 +3,7 @@ import path from "node:path";
 import { Readable, type Writable } from "node:stream";
 import { randomUUID } from "node:crypto";
 import type { OfflineCacheSummary } from "@openkeep/types";
+import { OFFLINE_CACHE_DEFAULT_MAX_BYTES } from "../../shared/desktop-api";
 import type { CredentialCipher } from "../storage/types";
 import {
   createEncryptStream,
@@ -29,7 +30,15 @@ import {
  *   files/<id>       encrypted preview/searchable file bytes
  */
 
-export const OFFLINE_CACHE_VERSION = 1 as const;
+/**
+ * Cache schema version. History:
+ *   1 — initial release: column index without tag identities.
+ *   2 — tag identity triples joined the column index (offline facets/search).
+ * Old versions upgrade in place on open; see `migrateIndexRows`.
+ */
+export const OFFLINE_CACHE_VERSION = 2 as const;
+const OLDEST_MIGRATABLE_VERSION = 1;
+
 
 export type OfflineCachedKind = "original" | "searchable";
 
@@ -162,6 +171,23 @@ export function extractCacheColumns(
   };
 }
 
+/**
+ * Upgrades index rows written by an older schema to the current shape. Each
+ * version's delta is applied in order, so adding version N+1 means adding one
+ * step here rather than rewriting the chain.
+ */
+export function migrateIndexRows(
+  fromVersion: number,
+  rows: unknown[],
+): OfflineCacheColumns[] {
+  let migrated = rows as Array<Record<string, unknown>>;
+  if (fromVersion < 2) {
+    // v1 → v2: tag identities joined the column index.
+    migrated = migrated.map((row) => ({ ...row, tags: row.tags ?? [] }));
+  }
+  return migrated as unknown as OfflineCacheColumns[];
+}
+
 export function createOfflineCacheStore({
   rootDirectory,
   credentialCipher,
@@ -180,9 +206,13 @@ export function createOfflineCacheStore({
   const indexPath = path.join(rootDirectory, "index");
   const keyPath = path.join(rootDirectory, "key");
   const userPath = path.join(rootDirectory, "user");
+  const settingsPath = path.join(rootDirectory, "settings");
 
   let key: Buffer | null = null;
   let columns = new Map<string, OfflineCacheColumns>();
+  /** Rows dropped this session because their sealed content was damaged. */
+  let quarantinedCount = 0;
+  let maxBytes = OFFLINE_CACHE_DEFAULT_MAX_BYTES;
   let writes = Promise.resolve();
   const fileWritesInFlight = new Map<string, Promise<void>>();
 
@@ -222,17 +252,41 @@ export function createOfflineCacheStore({
     return run;
   }
 
-  async function readRecord(documentId: string): Promise<StoredRecord | null> {
+  async function readRecord(
+    documentId: string,
+  ): Promise<StoredRecord | "damaged" | null> {
     const sealed = await readOptional(path.join(recordsDir, documentId));
     if (!sealed) return null;
     try {
       const parsed: unknown = JSON.parse(decryptBuffer(key!, sealed).toString("utf8"));
-      if (!isRecord(parsed) || parsed.version !== OFFLINE_CACHE_VERSION) return null;
+      if (
+        !isRecord(parsed) ||
+        typeof parsed.version !== "number" ||
+        parsed.version < OLDEST_MIGRATABLE_VERSION ||
+        parsed.version > OFFLINE_CACHE_VERSION
+      ) {
+        return "damaged";
+      }
+      // The record payload shape is identical across migratable versions; the
+      // version travels with the next write.
       return parsed as StoredRecord;
     } catch {
-      // One damaged record must never take the store down; the row is simply
-      // not usable until the document is opened online again.
-      return null;
+      return "damaged";
+    }
+  }
+
+  /**
+   * Drops one document from the cache: record, file, and row together, with
+   * the index persisted. Used when the archive deleted the document, and to
+   * quarantine damage — one bad row must never disable offline browsing.
+   */
+  async function dropDocument(documentId: string, reason: "removed" | "damaged") {
+    await fileSystem.unlink(path.join(recordsDir, documentId)).catch(() => undefined);
+    await fileSystem.unlink(path.join(filesDir, documentId)).catch(() => undefined);
+    const existed = columns.delete(documentId);
+    if (reason === "damaged") quarantinedCount += 1;
+    if (existed) {
+      await persistIndex().catch(() => undefined);
     }
   }
 
@@ -254,6 +308,10 @@ export function createOfflineCacheStore({
     for (const name of names) {
       if (name.includes(".tmp")) continue;
       const record = await readRecord(name);
+      if (record === "damaged") {
+        await dropDocument(name, "damaged");
+        continue;
+      }
       if (!record || !record.document) continue;
       const extracted = extractCacheColumns(record.document);
       if (!extracted || extracted.id !== name) continue;
@@ -281,15 +339,83 @@ export function createOfflineCacheStore({
    * the operating-system store cannot protect the data key — the caller
    * leaves the cache disabled rather than writing plaintext.
    */
+  async function removeDirectoryContents(directory: string) {
+    let names: string[] = [];
+    try {
+      names = await fileSystem.readdir(directory);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      await fileSystem.unlink(path.join(directory, name)).catch(() => undefined);
+    }
+  }
+
+  async function loadSettings() {
+    const sealed = await readOptional(settingsPath);
+    if (!sealed) return;
+    try {
+      const parsed: unknown = JSON.parse(decryptBuffer(key!, sealed).toString("utf8"));
+      if (
+        isRecord(parsed) &&
+        typeof parsed.maxBytes === "number" &&
+        Number.isFinite(parsed.maxBytes) &&
+        parsed.maxBytes > 0
+      ) {
+        maxBytes = parsed.maxBytes;
+      }
+    } catch {
+      // Unreadable settings fall back to the default limit, never to none.
+    }
+  }
+
+  function totalFileBytes(): number {
+    let total = 0;
+    for (const row of columns.values()) total += row.fileBytes;
+    return total;
+  }
+
+  /**
+   * Enforces the disk cap by evicting least-recently-viewed documents —
+   * record, file, and row together — until the cache fits. `last_viewed_at`
+   * is the signal mobile indexes but never uses; here it earns its keep.
+   */
+  async function enforceLimit() {
+    if (totalFileBytes() <= maxBytes) return;
+    const evictable = [...columns.values()].sort(
+      (a, b) => a.lastViewedAt - b.lastViewedAt,
+    );
+    for (const row of evictable) {
+      if (totalFileBytes() <= maxBytes) break;
+      await fileSystem.unlink(path.join(recordsDir, row.id)).catch(() => undefined);
+      await fileSystem.unlink(path.join(filesDir, row.id)).catch(() => undefined);
+      columns.delete(row.id);
+    }
+    await persistIndex().catch(() => undefined);
+  }
+
   async function openStore() {
       await fileSystem.mkdir(recordsDir);
       await fileSystem.mkdir(filesDir);
-      key = await loadOrCreateCacheKey(credentialCipher, {
+      const loaded = await loadOrCreateCacheKey(credentialCipher, {
         read: () => readOptional(keyPath),
         write: async (wrapped) => {
           await fileSystem.writeFile(keyPath, wrapped);
         },
       });
+      key = loaded.key;
+      await loadSettings();
+      if (loaded.recreated) {
+        // The previous key is gone, so every sealed file is unrecoverable
+        // ciphertext. Recover to an empty cache instead of a crash loop.
+        await removeDirectoryContents(recordsDir);
+        await removeDirectoryContents(filesDir);
+        await fileSystem.unlink(indexPath).catch(() => undefined);
+        await fileSystem.unlink(userPath).catch(() => undefined);
+        columns = new Map();
+        await persistIndex().catch(() => undefined);
+        return;
+      }
 
       const sealed = await readOptional(indexPath);
       if (sealed) {
@@ -299,15 +425,21 @@ export function createOfflineCacheStore({
           );
           if (
             isRecord(parsed) &&
-            parsed.version === OFFLINE_CACHE_VERSION &&
+            typeof parsed.version === "number" &&
+            parsed.version >= OLDEST_MIGRATABLE_VERSION &&
+            parsed.version <= OFFLINE_CACHE_VERSION &&
             Array.isArray(parsed.rows)
           ) {
             columns = new Map(
-              (parsed.rows as OfflineCacheColumns[]).map((row) => [
+              migrateIndexRows(parsed.version, parsed.rows).map((row) => [
                 row.id,
-                { ...row, tags: row.tags ?? [] },
+                row,
               ]),
             );
+            if (parsed.version !== OFFLINE_CACHE_VERSION) {
+              // Upgrade in place, so the next open reads the current shape.
+              await persistIndex().catch(() => undefined);
+            }
             return;
           }
         } catch {
@@ -327,7 +459,8 @@ export function createOfflineCacheStore({
       const extracted = extractCacheColumns(document);
       if (!extracted) return null;
       const existing = columns.get(extracted.id);
-      const previous = await readRecord(extracted.id);
+      const read = await readRecord(extracted.id);
+      const previous = read === "damaged" ? null : read;
       await writeRecord(extracted.id, {
         version: OFFLINE_CACHE_VERSION,
         document,
@@ -350,7 +483,8 @@ export function createOfflineCacheStore({
 
     async attachText(documentId: string, text: unknown) {
       requireOpen();
-      const previous = await readRecord(documentId);
+      const read = await readRecord(documentId);
+      const previous = read === "damaged" ? null : read;
       await writeRecord(documentId, {
         version: OFFLINE_CACHE_VERSION,
         document: previous?.document ?? null,
@@ -366,7 +500,8 @@ export function createOfflineCacheStore({
 
     async attachHistory(documentId: string, history: unknown) {
       requireOpen();
-      const previous = await readRecord(documentId);
+      const read = await readRecord(documentId);
+      const previous = read === "damaged" ? null : read;
       await writeRecord(documentId, {
         version: OFFLINE_CACHE_VERSION,
         document: previous?.document ?? null,
@@ -430,6 +565,7 @@ export function createOfflineCacheStore({
             columns.set(documentId, { ...row, fileBytes: bytes, fileKind: kind });
             await persistIndex();
           }
+          await enforceLimit();
         } catch (error) {
           sink.destroy();
           await fileSystem.unlink(temporaryPath).catch(() => undefined);
@@ -469,10 +605,21 @@ export function createOfflineCacheStore({
       }
     },
 
-    /** Sealed record back out, for the offline session stories. */
+    /** Sealed record back out; damage is quarantined on sight. */
     async loadRecord(documentId: string) {
       requireOpen();
-      return readRecord(documentId);
+      const record = await readRecord(documentId);
+      if (record === "damaged") {
+        await dropDocument(documentId, "damaged");
+        return null;
+      }
+      return record;
+    },
+
+    /** The archive no longer has this document; neither should the copy. */
+    async removeDocument(documentId: string) {
+      requireOpen();
+      await dropDocument(documentId, "removed");
     },
 
     /**
@@ -484,12 +631,50 @@ export function createOfflineCacheStore({
     async readFile(documentId: string): Promise<Buffer | null> {
       requireOpen();
       const sealed = await readOptional(path.join(filesDir, documentId));
-      if (!sealed) return null;
+      const row = columns.get(documentId);
+      if (!sealed) {
+        // The file vanished under the row: correct the accounting so the
+        // summary stops over-reporting (mobile keeps the stale bytes).
+        if (row && row.fileBytes > 0) {
+          columns.set(documentId, { ...row, fileBytes: 0, fileKind: null });
+          await persistIndex().catch(() => undefined);
+        }
+        return null;
+      }
       try {
         return decryptFileBuffer(key!, sealed);
       } catch {
+        // Truncated or tampered bytes are useless; drop them and the pointer.
+        quarantinedCount += 1;
+        await fileSystem.unlink(path.join(filesDir, documentId)).catch(() => undefined);
+        if (row) {
+          columns.set(documentId, { ...row, fileBytes: 0, fileKind: null });
+          await persistIndex().catch(() => undefined);
+        }
         return null;
       }
+    },
+
+    /** Rows or files dropped this session because their content was damaged. */
+    quarantinedThisSession(): number {
+      return quarantinedCount;
+    },
+
+    limit(): number {
+      return maxBytes;
+    },
+
+    async setLimit(nextMaxBytes: number) {
+      requireOpen();
+      if (!Number.isFinite(nextMaxBytes) || nextMaxBytes <= 0) {
+        throw new Error("Choose a positive offline copy size limit.");
+      }
+      maxBytes = Math.floor(nextMaxBytes);
+      await writeSealedAtomically(
+        settingsPath,
+        Buffer.from(JSON.stringify({ version: OFFLINE_CACHE_VERSION, maxBytes })),
+      );
+      await enforceLimit();
     },
 
     listColumns(): OfflineCacheColumns[] {
@@ -520,20 +705,12 @@ export function createOfflineCacheStore({
       requireOpen();
       await Promise.allSettled([...fileWritesInFlight.values()]);
       await writes;
-      for (const directory of [recordsDir, filesDir]) {
-        let names: string[] = [];
-        try {
-          names = await fileSystem.readdir(directory);
-        } catch {
-          continue;
-        }
-        for (const name of names) {
-          await fileSystem.unlink(path.join(directory, name)).catch(() => undefined);
-        }
-      }
-      for (const filePath of [indexPath, userPath, keyPath]) {
+      await removeDirectoryContents(recordsDir);
+      await removeDirectoryContents(filesDir);
+      for (const filePath of [indexPath, userPath, keyPath, settingsPath]) {
         await fileSystem.unlink(filePath).catch(() => undefined);
       }
+      maxBytes = OFFLINE_CACHE_DEFAULT_MAX_BYTES;
       columns = new Map();
       // The key file is gone; reopen mints a fresh key before the next write.
       key = null;

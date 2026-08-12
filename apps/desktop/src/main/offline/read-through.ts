@@ -56,7 +56,12 @@ export function createOfflineReadThrough({
 }: {
   store: Pick<
     OfflineCacheStore,
-    "upsertDocument" | "attachText" | "attachHistory" | "cacheFileStream" | "setUser"
+    | "upsertDocument"
+    | "attachText"
+    | "attachHistory"
+    | "cacheFileStream"
+    | "setUser"
+    | "removeDocument"
   >;
   reportError?: (message: string, error: unknown) => void;
 }) {
@@ -73,7 +78,19 @@ export function createOfflineReadThrough({
      */
     observe(method: string, pathname: string, response: Response): Response {
       const target = classifyReadThrough(method, pathname);
-      if (!target || !response.ok || !response.body) {
+      if (!target) {
+        return response;
+      }
+      // A document the archive no longer has must leave the cache too, or it
+      // would remain readable offline indefinitely.
+      if (
+        target.kind === "document" &&
+        (response.status === 404 || response.status === 410)
+      ) {
+        void store.removeDocument(target.documentId).catch(report);
+        return response;
+      }
+      if (!response.ok || !response.body) {
         return response;
       }
 

@@ -8,6 +8,7 @@ export const DESKTOP_CHANNELS = {
   sessionOpenOffline: "desktop:session:open-offline",
   sessionOfflineAvailability: "desktop:session:offline-availability",
   sessionClearOfflineCopy: "desktop:session:clear-offline-copy",
+  sessionSetOfflineCopyLimit: "desktop:session:set-offline-copy-limit",
   profilesList: "desktop:profiles:list",
   profilesActivate: "desktop:profiles:activate",
   profilesRename: "desktop:profiles:rename",
@@ -98,9 +99,26 @@ export type DesktopOfflineAvailability = {
       documentCount: number;
       fileStorageBytes: number;
       lastCachedAt: number | null;
+      maxBytes: number;
+      /** Damaged entries dropped this session, for the panel's repair note. */
+      quarantined: number;
     }
   >;
 };
+
+export type DesktopOfflineCopyLimitInput = DesktopProfileIdInput & {
+  maxBytes: number;
+};
+
+/** Default disk cap per offline copy: enough for hundreds of opened documents. */
+export const OFFLINE_CACHE_DEFAULT_MAX_BYTES = 1024 * 1024 * 1024;
+/** The choices offered in the panel; any positive number is accepted. */
+export const OFFLINE_CACHE_LIMIT_CHOICES = [
+  256 * 1024 * 1024,
+  512 * 1024 * 1024,
+  1024 * 1024 * 1024,
+  4 * 1024 * 1024 * 1024,
+] as const;
 
 export type DesktopProfilesSnapshot = {
   profiles: DesktopProfileSummary[];
@@ -296,6 +314,9 @@ export type DesktopBridge = {
     clearOfflineCopy: (
       input: DesktopProfileIdInput,
     ) => Promise<DesktopOfflineAvailability>;
+    setOfflineCopyLimit: (
+      input: DesktopOfflineCopyLimitInput,
+    ) => Promise<DesktopOfflineAvailability>;
   };
   profiles: {
     list: () => Promise<DesktopProfilesSnapshot>;
@@ -371,6 +392,11 @@ export function createDesktopBridge(
       clearOfflineCopy: (input: DesktopProfileIdInput) =>
         invoke(
           DESKTOP_CHANNELS.sessionClearOfflineCopy,
+          input,
+        ) as Promise<DesktopOfflineAvailability>,
+      setOfflineCopyLimit: (input: DesktopOfflineCopyLimitInput) =>
+        invoke(
+          DESKTOP_CHANNELS.sessionSetOfflineCopyLimit,
           input,
         ) as Promise<DesktopOfflineAvailability>,
     }),

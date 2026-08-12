@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { OFFLINE_CACHE_LIMIT_CHOICES } from "../shared/desktop-api";
 import type {
   DesktopBridge,
   DesktopCloseBehavior,
@@ -59,7 +60,7 @@ export function DesktopLifecycleControl({
   bridge?: Pick<DesktopBridge, "lifecycle" | "notifications"> & {
     session?: Pick<
       DesktopBridge["session"],
-      "offlineAvailability" | "clearOfflineCopy"
+      "offlineAvailability" | "clearOfflineCopy" | "setOfflineCopyLimit"
     >;
   };
   /** The active archive, whose offline copy the panel inspects. */
@@ -150,6 +151,23 @@ export function DesktopLifecycleControl({
       setNotifications(await bridge.notifications.setPreference({ kind, enabled }));
     } catch {
       setMessage("That notification setting could not be changed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function changeOfflineLimit(nextMaxBytes: number) {
+    if (!profileId || !bridge.session) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const availability = await bridge.session.setOfflineCopyLimit({
+        profileId,
+        maxBytes: nextMaxBytes,
+      });
+      setOfflineCopy(availability.profiles[profileId] ?? null);
+    } catch {
+      setMessage("The offline copy limit could not be changed.");
     } finally {
       setBusy(false);
     }
@@ -255,6 +273,39 @@ export function DesktopLifecycleControl({
                     : "never"}
                 </small>
               </div>
+              <label className="desktop-lifecycle-control__offline-limit">
+                <span>Size limit</span>
+                <select
+                  disabled={busy}
+                  value={String(offlineCopy.maxBytes)}
+                  onChange={(event) =>
+                    void changeOfflineLimit(Number(event.target.value))
+                  }
+                >
+                  {[...OFFLINE_CACHE_LIMIT_CHOICES]
+                    .concat(
+                      OFFLINE_CACHE_LIMIT_CHOICES.some(
+                        (choice) => choice === offlineCopy.maxBytes,
+                      )
+                        ? []
+                        : [offlineCopy.maxBytes as (typeof OFFLINE_CACHE_LIMIT_CHOICES)[number]],
+                    )
+                    .sort((a, b) => a - b)
+                    .map((choice) => (
+                      <option key={choice} value={String(choice)}>
+                        {formatBytes(choice)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              {offlineCopy.quarantined > 0 ? (
+                <small role="status">
+                  {offlineCopy.quarantined} damaged{" "}
+                  {offlineCopy.quarantined === 1 ? "entry was" : "entries were"}{" "}
+                  removed from the copy. Reopen the affected documents online to
+                  restore them.
+                </small>
+              ) : null}
               {confirmingClear ? (
                 <div className="desktop-lifecycle-control__offline-confirm">
                   <span>Delete the offline copy from this computer? The archive itself is not changed.</span>

@@ -24,6 +24,7 @@ import type {
   DesktopSessionState,
   DesktopWatchFolderIdInput,
   DesktopWatchFolderPauseInput,
+  DesktopOfflineCopyLimitInput,
   DesktopCreatedDocumentsInput,
   DesktopNotificationPreferenceInput,
 } from "./shared/desktop-api";
@@ -306,6 +307,8 @@ function registerIpcHandlers(
         documentCount: number;
         fileStorageBytes: number;
         lastCachedAt: number | null;
+        maxBytes: number;
+        quarantined: number;
       }
     > = {};
     for (const profile of profiles?.profiles ?? []) {
@@ -320,6 +323,8 @@ function registerIpcHandlers(
           documentCount: summary.documentCount,
           fileStorageBytes: summary.fileStorageBytes,
           lastCachedAt: summary.lastCachedAt,
+          maxBytes: store.limit(),
+          quarantined: store.quarantinedThisSession(),
         };
       }
     }
@@ -354,6 +359,27 @@ function registerIpcHandlers(
       onDesktopStateChanged();
       const availability = (await ipcOfflineAvailability()) ?? { profiles: {} };
       return availability;
+    },
+  );
+
+  ipcMain.handle(
+    DESKTOP_CHANNELS.sessionSetOfflineCopyLimit,
+    async (event, input: DesktopOfflineCopyLimitInput) => {
+      assertIpcEvent(event);
+      if (
+        !input ||
+        typeof input.profileId !== "string" ||
+        typeof input.maxBytes !== "number" ||
+        !Number.isFinite(input.maxBytes) ||
+        input.maxBytes <= 0
+      ) {
+        throw new Error("Choose a valid offline copy size limit.");
+      }
+      const store = await offlineCacheFor(input.profileId);
+      if (store) {
+        await store.setLimit(input.maxBytes);
+      }
+      return ipcOfflineAvailability();
     },
   );
 

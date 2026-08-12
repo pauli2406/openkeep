@@ -41,10 +41,13 @@ function createBridge(
           documentCount: 4,
           fileStorageBytes: 3 * 1024 * 1024,
           lastCachedAt: Date.parse("2026-08-11T10:00:00.000Z"),
+          maxBytes: 1024 * 1024 * 1024,
+          quarantined: 0,
         },
       },
     })),
     clearOfflineCopy: vi.fn(async () => ({ profiles: {} })),
+    setOfflineCopyLimit: vi.fn(async () => ({ profiles: {} })),
   };
   return { lifecycle, notifications, session };
 }
