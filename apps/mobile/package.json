@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@op-engineering/op-sqlite": "^17.2.0",
     "@openkeep/tokens": "workspace:*",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/netinfo": "^11.4.1",
@@ -39,6 +40,7 @@
     "buffer": "^6.0.3",
     "expo": "~54.0.34",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "~15.0.9",
     "expo-dev-client": "~6.0.21",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.22",
@@ -85,5 +87,8 @@
         ]
       }
     }
+  },
+  "op-sqlite": {
+    "sqlcipher": true
   }
 }

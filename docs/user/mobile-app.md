@@ -128,6 +128,14 @@ open while connected, and falls back to those copies when the archive cannot be
 reached. There is nothing to switch on, no download-over-Wi-Fi setting and no
 retention setting.
 
+The copy is encrypted on the device with a key held in the system keychain, so
+what is stored — titles, amounts, recognised text and the files themselves — is
+not readable from a backup or by another app. While you have a document open, a
+readable copy of that one file exists in temporary storage so the viewer can show
+it; it is removed when you close the document. If the device has no working
+keychain, the app keeps no offline copy at all rather than storing one in the
+clear.
+
 The copy belongs to the account and the archive it came from. Signing in as
 someone else, or pointing the app at another archive, never shows you the
 previous copy.

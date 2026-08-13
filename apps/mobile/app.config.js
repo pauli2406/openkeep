@@ -26,6 +26,11 @@ export default {
       "bundleIdentifier": IS_DEV ? "com.openkeep.mobile.dev" : "com.openkeep.mobile",
       "infoPlist": {
         "NSCameraUsageDescription": "OpenKeep uses the camera to scan paper documents into your archive.",
+        // The offline copy is encrypted with SQLCipher (AES) and the key lives in
+        // the keychain. That is data protection with standard cryptography, which
+        // Apple's exemption covers — but it is a declaration about this build, so
+        // re-read the current export-compliance questions before a submission
+        // rather than trusting this comment.
         "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "6DTWU4679K"

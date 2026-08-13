@@ -1,6 +1,6 @@
-import * as SQLite from "expo-sqlite";
 import { parseArchiveDate } from "./lib";
-import { offlineCacheDatabaseName } from "./offline-scope";
+import { SecureStoreUnavailableError } from "./offline-cache-key";
+import { openEncryptedDatabase } from "./offline-database";
 import type {
   ArchiveDocument,
   DashboardInsights,
@@ -187,6 +187,12 @@ const SCHEMA_TABLE = `
     CREATE TABLE IF NOT EXISTS cache_settings (
       key TEXT PRIMARY KEY NOT NULL,
       value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cached_file_chunks (
+      document_id TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      bytes BLOB NOT NULL,
+      PRIMARY KEY (document_id, chunk_index)
     );
   `;
 
@@ -510,6 +516,7 @@ export function createOfflineMetadataStore({
       documentId,
     );
     await db.runAsync("DELETE FROM cached_documents WHERE id = ?", documentId);
+    await db.runAsync("DELETE FROM cached_file_chunks WHERE document_id = ?", documentId);
     return row?.fileUri ?? null;
   }
 
@@ -719,6 +726,7 @@ export function createOfflineMetadataStore({
       documentId,
     );
     await db.runAsync("DELETE FROM cached_documents WHERE id = ?", documentId);
+    await db.runAsync("DELETE FROM cached_file_chunks WHERE document_id = ?", documentId);
     return row?.fileUri ?? null;
   }
 
@@ -734,6 +742,58 @@ export function createOfflineMetadataStore({
       "UPDATE cached_documents SET file_uri = NULL, file_storage_bytes = 0 WHERE id = ?",
       documentId,
     );
+  }
+
+  /**
+   * Files are stored in the encrypted database in chunks rather than as whole
+   * values. Nothing then has to hold a whole PDF in memory to read or write it —
+   * the base64 buffering this replaces is exactly what desktop avoided by
+   * streaming.
+   */
+  const FILE_CHUNK_BYTES = 512 * 1024;
+
+  async function writeFileChunks(documentId: string, bytes: Uint8Array) {
+    const db = await getDb();
+    await db.runAsync("DELETE FROM cached_file_chunks WHERE document_id = ?", documentId);
+    for (let index = 0, offset = 0; offset < bytes.byteLength; index += 1) {
+      const chunk = bytes.subarray(offset, offset + FILE_CHUNK_BYTES);
+      await db.runAsync(
+        "INSERT INTO cached_file_chunks (document_id, chunk_index, bytes) VALUES (?, ?, ?)",
+        documentId,
+        index,
+        chunk as unknown as OfflineSqlParam,
+      );
+      offset += chunk.byteLength;
+    }
+    await db.runAsync(
+      "UPDATE cached_documents SET file_storage_bytes = ?, file_uri = NULL WHERE id = ?",
+      bytes.byteLength,
+      documentId,
+    );
+  }
+
+  /** Chunks in order, for materializing a decrypted copy a viewer can open. */
+  async function readFileChunks(documentId: string) {
+    const db = await getDb();
+    const rows = await db.getAllAsync<{ bytes: Uint8Array }>(
+      "SELECT bytes FROM cached_file_chunks WHERE document_id = ? ORDER BY chunk_index ASC",
+      documentId,
+    );
+    return rows.map((row) => row.bytes);
+  }
+
+  async function hasFileChunks(documentId: string) {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM cached_file_chunks WHERE document_id = ?",
+      documentId,
+    );
+    return (row?.count ?? 0) > 0;
+  }
+
+  async function deleteFileChunks(documentId: string) {
+    const db = await getDb();
+    await db.runAsync("DELETE FROM cached_file_chunks WHERE document_id = ?", documentId);
   }
 
   const MAX_BYTES_KEY = "maxBytes";
@@ -804,6 +864,7 @@ export function createOfflineMetadataStore({
         break;
       }
       await db.runAsync("DELETE FROM cached_documents WHERE id = ?", candidate.id);
+      await db.runAsync("DELETE FROM cached_file_chunks WHERE document_id = ?", candidate.id);
       used -= candidate.fileStorageBytes;
       evicted.push(candidate.id);
       if (candidate.fileUri) {
@@ -827,6 +888,7 @@ export function createOfflineMetadataStore({
   async function clearCachedDocumentRows() {
     const db = await getDb();
     await db.runAsync("DELETE FROM cached_documents");
+    await db.runAsync("DELETE FROM cached_file_chunks");
   }
 
   async function buildCachedFacets(): Promise<FacetsResponse> {
@@ -963,6 +1025,10 @@ export function createOfflineMetadataStore({
     quarantinedCount,
     removeCachedDocument,
     correctFileAccounting,
+    writeFileChunks,
+    readFileChunks,
+    hasFileChunks,
+    deleteFileChunks,
     getLimit,
     setLimit,
     enforceLimit,
@@ -1020,21 +1086,64 @@ export function offlineCacheScopeInUse() {
 export function resetOfflineStores() {
   stores.clear();
   currentScope = null;
+  encryptionUnavailable = false;
+}
+
+/**
+ * Set when the device has no keystore to hold the encryption key. The cache then
+ * stays shut for the session: writing the copy in the clear instead would turn a
+ * missing keystore into a silent downgrade, which is the one outcome this must
+ * not have.
+ */
+let encryptionUnavailable = false;
+
+export function isOfflineCacheDisabled() {
+  return encryptionUnavailable;
 }
 
 function store(): OfflineMetadataStore | null {
-  if (!currentScope) {
+  if (!currentScope || encryptionUnavailable) {
     return null;
   }
   let scoped = stores.get(currentScope);
   if (!scoped) {
-    const name = offlineCacheDatabaseName(currentScope);
+    const scope = currentScope;
     scoped = createOfflineMetadataStore({
-      openDatabase: () => SQLite.openDatabaseAsync(name),
+      openDatabase: async () => {
+        try {
+          return await openEncryptedDatabase({ scope });
+        } catch (error) {
+          if (error instanceof SecureStoreUnavailableError) {
+            encryptionUnavailable = true;
+            stores.delete(scope);
+          }
+          throw error;
+        }
+      },
     });
     stores.set(currentScope, scoped);
   }
   return scoped;
+}
+
+/**
+ * Runs `use` against the scoped store, answering `fallback` when there is no
+ * scope, no keystore, or the database refuses to open. Offline screens get an
+ * empty copy rather than an error: the cache is a convenience, and a screen that
+ * throws because encryption is unavailable would be worse than one that shows
+ * nothing cached.
+ */
+function safely<T>(use: (scoped: OfflineMetadataStore) => Promise<T>, fallback: T): Promise<T> {
+  const scoped = store();
+  if (!scoped) {
+    return Promise.resolve(fallback);
+  }
+  return use(scoped).catch((error) => {
+    if (error instanceof SecureStoreUnavailableError) {
+      return fallback;
+    }
+    throw error;
+  });
 }
 
 const EMPTY_STATS = { documentCount: 0, fileStorageBytes: 0, lastCachedAt: null };
@@ -1062,59 +1171,71 @@ const EMPTY_DASHBOARD: DashboardInsights = {
 
 export function upsertCachedDocument(record: CachedDocumentRecord) {
   // Refusing beats writing into a cache nobody can attribute to an account.
-  return store()?.upsertCachedDocument(record) ?? Promise.resolve();
+  return safely((scoped) => scoped.upsertCachedDocument(record), undefined);
 }
 
 export function getCachedDocument(documentId: string) {
-  return store()?.getCachedDocument(documentId) ?? Promise.resolve(null);
+  return safely((scoped) => scoped.getCachedDocument(documentId), null);
 }
 
 export function searchCachedDocuments(options?: LoadDocumentsOptions) {
-  return store()?.searchCachedDocuments(options) ?? Promise.resolve(EMPTY_PAGE);
+  return safely((scoped) => scoped.searchCachedDocuments(options), EMPTY_PAGE);
 }
 
 export function queryCachedDocuments(options?: LoadDocumentsOptions) {
-  return store()?.queryCachedDocuments(options) ?? Promise.resolve([]);
+  return safely((scoped) => scoped.queryCachedDocuments(options), []);
 }
 
 export function listCachedDocuments() {
-  return store()?.listCachedDocuments() ?? Promise.resolve([]);
+  return safely((scoped) => scoped.listCachedDocuments(), []);
 }
 
 export function getCacheStats() {
-  return store()?.getCacheStats() ?? Promise.resolve(EMPTY_STATS);
+  return safely((scoped) => scoped.getCacheStats(), EMPTY_STATS);
 }
 
 export function getCachedFileUris() {
-  return store()?.getCachedFileUris() ?? Promise.resolve([]);
+  return safely((scoped) => scoped.getCachedFileUris(), []);
 }
 
 export function removeCachedDocument(documentId: string) {
-  return store()?.removeCachedDocument(documentId) ?? Promise.resolve(null);
+  return safely((scoped) => scoped.removeCachedDocument(documentId), null);
 }
 
 export function correctFileAccounting(documentId: string) {
-  return store()?.correctFileAccounting(documentId) ?? Promise.resolve();
+  return safely((scoped) => scoped.correctFileAccounting(documentId), undefined);
+}
+
+export function writeCachedFileBytes(documentId: string, bytes: Uint8Array) {
+  return safely((scoped) => scoped.writeFileChunks(documentId, bytes), undefined);
+}
+
+export function readCachedFileBytes(documentId: string) {
+  return safely((scoped) => scoped.readFileChunks(documentId), []);
+}
+
+export function hasCachedFileBytes(documentId: string) {
+  return safely((scoped) => scoped.hasFileChunks(documentId), false);
+}
+
+export function deleteCachedFileBytes(documentId: string) {
+  return safely((scoped) => scoped.deleteFileChunks(documentId), undefined);
 }
 
 export function getCacheLimit() {
-  return store()?.getLimit() ?? Promise.resolve(OFFLINE_CACHE_DEFAULT_MAX_BYTES);
+  return safely((scoped) => scoped.getLimit(), OFFLINE_CACHE_DEFAULT_MAX_BYTES);
 }
 
 export function setCacheLimit(maxBytes: number) {
-  return (
-    store()?.setLimit(maxBytes) ?? Promise.resolve({ evicted: [] as string[], files: [] as string[] })
-  );
+  return safely((scoped) => scoped.setLimit(maxBytes), { evicted: [] as string[], files: [] as string[] });
 }
 
 export function enforceCacheLimit() {
-  return (
-    store()?.enforceLimit() ?? Promise.resolve({ evicted: [] as string[], files: [] as string[] })
-  );
+  return safely((scoped) => scoped.enforceLimit(), { evicted: [] as string[], files: [] as string[] });
 }
 
 export function markCachedDocumentViewed(documentId: string, viewedAt: string) {
-  return store()?.markViewed(documentId, viewedAt) ?? Promise.resolve();
+  return safely((scoped) => scoped.markViewed(documentId, viewedAt), undefined);
 }
 
 export function quarantinedCount() {
@@ -1122,13 +1243,13 @@ export function quarantinedCount() {
 }
 
 export function clearCachedDocumentRows() {
-  return store()?.clearCachedDocumentRows() ?? Promise.resolve();
+  return safely((scoped) => scoped.clearCachedDocumentRows(), undefined);
 }
 
 export function buildCachedFacets() {
-  return store()?.buildCachedFacets() ?? Promise.resolve(EMPTY_FACETS);
+  return safely((scoped) => scoped.buildCachedFacets(), EMPTY_FACETS);
 }
 
 export function buildCachedDashboard() {
-  return store()?.buildCachedDashboard() ?? Promise.resolve(EMPTY_DASHBOARD);
+  return safely((scoped) => scoped.buildCachedDashboard(), EMPTY_DASHBOARD);
 }

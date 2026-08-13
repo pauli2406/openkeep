@@ -23,7 +23,7 @@ function respondWith(body: string, status = 200) {
 }
 
 describe("download", () => {
-  it("writes the document's bytes into the cache, and reports their size", async () => {
+  it("returns the document's bytes, and writes nothing to disk", async () => {
     const { files, cache } = createCache();
     const authFetch = respondWith(bytes(64));
     const document = testDocument();
@@ -31,10 +31,12 @@ describe("download", () => {
     const result = await cache.download(authFetch, document);
 
     expect(authFetch).toHaveBeenCalledWith(`/api/documents/${document.id}/download`);
-    expect(result).toEqual({ uri: `${cache.filesDir}/${document.id}.pdf`, bytes: 64 });
-    expect(files.entries.get(result.uri)).toBe(64);
-    // Nothing may be left behind under the temporary name.
-    expect(files.entries.has(`${result.uri}.tmp`)).toBe(false);
+    expect(result.byteLength).toBe(64);
+    expect(result.bytes.byteLength).toBe(64);
+    expect(result.extension).toBe(".pdf");
+    // The bytes go to the encrypted store; a plaintext file here is exactly what
+    // #214 removed.
+    expect([...files.entries.keys()].filter((key) => key.endsWith(".pdf"))).toEqual([]);
   });
 
   it("prefers the searchable PDF when the archive has one", async () => {
@@ -55,7 +57,7 @@ describe("download", () => {
     const result = await cache.download(authFetch, document);
 
     expect(authFetch).toHaveBeenCalledWith(`/api/documents/${document.id}/download`);
-    expect(result.uri.endsWith(".jpg")).toBe(true);
+    expect(result.extension).toBe(".jpg");
   });
 
   it("names the file from the document's type, falling back to .bin", async () => {
@@ -64,13 +66,12 @@ describe("download", () => {
     expect(extensionForMime("application/vnd.openkeep.unknown")).toBe(".bin");
   });
 
-  it("replaces an older copy of the same document", async () => {
-    const { files, cache } = createCache();
+  it("reports the newest bytes when a document is downloaded again", async () => {
+    const { cache } = createCache();
     const document = testDocument();
     await cache.download(respondWith(bytes(10)), document);
-    await cache.download(respondWith(bytes(20)), document);
 
-    expect(files.entries.get(`${cache.filesDir}/${document.id}.pdf`)).toBe(20);
+    expect((await cache.download(respondWith(bytes(20)), document)).byteLength).toBe(20);
   });
 
   it("fails without writing anything when the archive refuses", async () => {
@@ -80,7 +81,7 @@ describe("download", () => {
     await expect(cache.download(respondWith(bytes(0), 503), document)).rejects.toThrow(
       "Download failed (503)",
     );
-    expect(files.entries.has(`${cache.filesDir}/${document.id}.pdf`)).toBe(false);
+    expect([...files.entries.keys()].filter((key) => key.endsWith(".pdf"))).toEqual([]);
   });
 
   it("downloads once when two callers ask at the same time", async () => {
@@ -102,7 +103,9 @@ describe("download", () => {
     const document = testDocument();
 
     await expect(cache.download(respondWith(bytes(0), 500), document)).rejects.toThrow();
-    await expect(cache.download(respondWith(bytes(4)), document)).resolves.toMatchObject({ bytes: 4 });
+    await expect(cache.download(respondWith(bytes(4)), document)).resolves.toMatchObject({
+      byteLength: 4,
+    });
   });
 });
 
@@ -138,11 +141,10 @@ describe("housekeeping", () => {
 
   it("keeps the files directory in place after a reset", async () => {
     const { files, cache } = createCache();
-    await cache.download(respondWith(bytes(16)), testDocument());
+    await cache.ensureDirs();
 
     await cache.resetFiles();
 
-    expect([...files.entries.keys()].filter((key) => key.endsWith(".pdf"))).toEqual([]);
     expect(files.entries.has(cache.filesDir)).toBe(true);
   });
 });

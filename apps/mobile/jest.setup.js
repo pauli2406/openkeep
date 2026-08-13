@@ -108,3 +108,13 @@ jest.mock("@react-navigation/native", () => ({
   }),
   useIsFocused: () => true,
 }));
+
+// The encrypted store is opened through op-sqlite, a native module with no
+// JavaScript fallback. The offline suites inject their own database handle, so
+// nothing here needs to work — it only needs to load.
+jest.mock("@op-engineering/op-sqlite", () => ({
+  open: () => {
+    throw new Error("op-sqlite is not available under Jest");
+  },
+  isSQLCipher: () => true,
+}));
