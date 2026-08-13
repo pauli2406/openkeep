@@ -69,6 +69,12 @@ const config: ForgeConfig = {
     // to those trusted build artifacts.
     prune: false,
     appBundleId: "de.openkeep.desktop",
+    // Without this the executable is named after the package — `@openkeep/desktop`
+    // — and the Linux makers look for a binary at that path and fail. A scoped
+    // name is not a file name, and Linux conventionally wants a lowercase one,
+    // which is also what the deb's desktop entry and its `/usr/lib/openkeep`
+    // layout expect.
+    executableName: "openkeep",
     extendInfo: {
       CFBundleDocumentTypes: MACOS_DOCUMENT_TYPES,
     },
@@ -95,6 +101,9 @@ const config: ForgeConfig = {
       options: {
         name: "openkeep",
         productName: "OpenKeep",
+        // Explicit rather than derived: the maker otherwise looks for a binary
+        // named after the package, and `@openkeep/desktop` is not a file name.
+        bin: "openkeep",
         genericName: "Document Archive",
         categories: ["Office"],
         section: "misc",
@@ -115,6 +124,9 @@ const config: ForgeConfig = {
       options: {
         name: "openkeep",
         productName: "OpenKeep",
+        // Explicit rather than derived: the maker otherwise looks for a binary
+        // named after the package, and `@openkeep/desktop` is not a file name.
+        bin: "openkeep",
         genericName: "Document Archive",
         categories: ["Office"],
         homepage: "https://openkeep.de",

@@ -16,9 +16,15 @@ if (packageDirectories.length !== 1) {
 const packageDirectory = packageDirectories[0];
 const candidates =
   process.platform === "darwin"
-    ? [path.join(packageDirectory, "OpenKeep.app", "Contents", "MacOS", "OpenKeep")]
+    ? [
+        path.join(packageDirectory, "OpenKeep.app", "Contents", "MacOS", "openkeep"),
+        path.join(packageDirectory, "OpenKeep.app", "Contents", "MacOS", "OpenKeep"),
+      ]
     : process.platform === "win32"
-      ? [path.join(packageDirectory, "OpenKeep.exe")]
+      ? [
+          path.join(packageDirectory, "openkeep.exe"),
+          path.join(packageDirectory, "OpenKeep.exe"),
+        ]
       : [path.join(packageDirectory, "openkeep"), path.join(packageDirectory, "OpenKeep")];
 
 let executable;

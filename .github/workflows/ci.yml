@@ -95,6 +95,21 @@ jobs:
       # Electron aborts rather than run unsandboxed. Grant the ownership and mode
       # the SUID sandbox requires instead of passing `--no-sandbox`, which would
       # verify a weaker runtime than the one users get.
+      # The deb and rpm makers only ran in the release workflow, so a packaging
+      # mistake could pass every check and then fail a release — which is exactly
+      # what happened: the makers look for a binary named after the package, and
+      # `@openkeep/desktop` is not a file name. One minute here beats an abandoned
+      # release, since the build matrix is fail-fast.
+      - name: Make the Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y rpm fakeroot
+          pnpm --filter @openkeep/desktop make -- --arch=x64
+          test -n "$(find apps/desktop/out/make -name '*.deb' | head -1)" || {
+            echo "::error::no deb was produced"; exit 1; }
+          test -n "$(find apps/desktop/out/make -name '*.rpm' | head -1)" || {
+            echo "::error::no rpm was produced"; exit 1; }
+
       - name: Start packaged desktop application (Linux)
         if: runner.os == 'Linux'
         run: |
