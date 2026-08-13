@@ -1,12 +1,12 @@
 /**
  * Desktop update checks and installation.
  *
- * macOS and Windows use Electron's built-in platform updaters (Squirrel.Mac
- * behind a ZIP feed, Squirrel.Windows behind a RELEASES feed), pointed at
- * update.electronjs.org over this repository's GitHub Releases. Linux has no
- * Electron auto-updater, and pretending otherwise would be a lie: there the
- * check compares the latest GitHub Release against the running version and
- * links to it, leaving installation to the package manager that owns it.
+ * macOS uses Electron's built-in Squirrel.Mac updater behind a ZIP feed,
+ * pointed at update.electronjs.org over this repository's GitHub Releases.
+ * Windows and Linux have no in-place updater — Windows ships an MSI and Linux
+ * a distribution package — so both compare the latest GitHub Release against
+ * the running version and link to it, leaving installation to the installer
+ * or package manager that owns it.
  *
  * Updates are checked shortly after startup and on demand, never installed
  * without the user's say-so: `install()` restarts into the downloaded
@@ -86,8 +86,10 @@ export function createDesktopUpdateService({
   startupDelayMs?: number;
 }) {
   let state: DesktopUpdateState = { status: "idle" };
-  const nativeUpdates =
-    isPackaged && (platform === "darwin" || platform === "win32");
+  // Only Squirrel.Mac remains an in-place updater. Windows ships an MSI, which
+  // has no Squirrel feed, so it takes the same manual path as Linux: compare
+  // against the latest GitHub release and link to it.
+  const nativeUpdates = isPackaged && platform === "darwin";
 
   function setState(next: DesktopUpdateState) {
     state = next;

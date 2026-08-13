@@ -17,7 +17,7 @@ Linux clients link to the release page.
 | Platform | Architectures | Artifact | Updates |
 | --- | --- | --- | --- |
 | macOS 13+ | arm64, x64 | DMG (install), ZIP (update feed) | Automatic in-app (Squirrel.Mac) |
-| Windows 10+ | x64 | Squirrel installer (`OpenKeep-Setup.exe`), RELEASES + nupkg feed | Automatic in-app (Squirrel.Windows) |
+| Windows 10+ | x64 | WiX MSI (`OpenKeep.msi`) | Manual: in-app link to the release page; installing the MSI is the update |
 | Linux | x64 | deb, rpm | Manual — in-app link to the release page |
 
 ## When a Build Fails on the Electron Download
@@ -38,7 +38,7 @@ immune.
 2. To rebuild desktop artifacts for an existing release (a runner failure, new
    signing credentials), run `Release Desktop` directly with the same tag. It
    refuses a tag whose commit did not pass CI and re-uploads with `--clobber`.
-3. Verify: the release page carries the DMGs, darwin ZIPs, `OpenKeep-Setup.exe`
+3. Verify: the release page carries the DMGs, darwin ZIPs, the MSI
    with `RELEASES` + `.nupkg`, and the deb/rpm. A signed macOS build passes
    `spctl -a -vv OpenKeep.app`; a signed Windows installer shows a valid
    signature in the file properties.
@@ -57,7 +57,7 @@ Desktop clients update to the **latest** GitHub Release.
    release becomes `latest` again — update.electronjs.org and the Linux
    in-app check both follow `latest`. Clients that already updated stay on the
    bad version until a newer release exists; for a defective build, ship a
-   fixed `vX.Y.Z+1` rather than relying on downgrade, which Squirrel does not
+   fixed `vX.Y.Z+1` rather than relying on downgrade, which the updater does not
    support.
 
 ## Signing credentials

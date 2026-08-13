@@ -6,16 +6,15 @@ name: Release Desktop
 #   1. resolves the tag, refuses a commit whose CI did not pass — a release
 #      never rebuilds an unverified commit into production artifacts
 #   2. builds each platform on its native runner: macOS arm64 and x64 (ZIP for
-#      the update feed + DMG), Windows x64 (Squirrel installer + RELEASES
-#      feed), Linux x64 (deb + rpm)
+#      the update feed + DMG), Windows x64 (WiX MSI), Linux x64 (deb + rpm)
 #   3. smoke-tests the packaged application on every runner, and additionally
 #      installs, launches, and uninstalls the deb on Linux
 #   4. uploads everything to the existing GitHub Release only after ALL
 #      platforms succeeded — a partial build cannot publish a partial release
 #
-# Updates: macOS and Windows read these release assets through
-# update.electronjs.org (public repository); Linux users are linked to the
-# release page in-app.
+# Updates: macOS reads these release assets through update.electronjs.org
+# (public repository); Windows and Linux users are linked to the release page
+# in-app — an MSI has no Squirrel feed, and installing it is the update.
 #
 # Signing secrets (all optional — without them the build is unsigned, which is
 # fine for testing the pipeline but not for distribution):
@@ -127,12 +126,8 @@ jobs:
             arch: x64
             smoke: true
           - name: Windows x64
-            # Pinned rather than `windows-latest`, which is now
-            # windows-2025-vs2026: Squirrel.Windows fails there inside
-            # `CreateZipFromDirectory`, shelling out to tooling the image no
-            # longer provides. Squirrel.Windows is effectively unmaintained, so
-            # the durable fix is a different installer; revisit when this image
-            # is retired.
+            # Pinned to an image that ships WiX 3; `windows-latest` (2025) does
+            # not carry the toolset the MSI maker needs.
             os: windows-2022
             arch: x64
             smoke: true
@@ -297,8 +292,8 @@ jobs:
         run: |
           mkdir -p dist
           find apps/desktop/out/make -type f \
-            \( -name '*.zip' -o -name '*.dmg' -o -name '*.exe' -o -name '*.nupkg' \
-               -o -name 'RELEASES' -o -name '*.deb' -o -name '*.rpm' \) \
+            \( -name '*.zip' -o -name '*.dmg' -o -name '*.msi' \
+               -o -name '*.deb' -o -name '*.rpm' \) \
             -exec cp {} dist/ \;
           ls -la dist
 
@@ -337,6 +332,6 @@ jobs:
             echo
             echo "Uploaded: $(ls dist | tr '\n' ' ')"
             echo
-            echo "macOS and Windows clients update through update.electronjs.org;"
+            echo "macOS clients update through update.electronjs.org; Windows and"
             echo "Linux clients link to this release page."
           } >> "$GITHUB_STEP_SUMMARY"

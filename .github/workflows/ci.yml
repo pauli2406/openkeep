@@ -56,8 +56,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # windows-2022, not `windows-latest`: Squirrel.Windows fails on the
-        # 2025 image (see the release workflow for the detail).
+        # windows-2022, not `windows-latest`: the 2025 image does not ship the
+        # WiX 3 toolset the MSI maker needs.
         os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -90,16 +90,15 @@ jobs:
           done
           exit 1
         shell: bash
-      # Squirrel derives its nuspec and package id from the package name, which is
-      # scoped — the same class of failure the Linux makers had, and equally
-      # invisible until something builds the installer outside a release.
+      # The MSI maker only ever ran in a release before #238's CI guards; keep
+      # it exercised on every push, like the Linux packages.
       - name: Make the Windows installer
         if: runner.os == 'Windows'
         shell: bash
         run: |
           pnpm --filter @openkeep/desktop make -- --arch=x64
-          test -n "$(find apps/desktop/out/make -name '*.exe' | head -1)" || {
-            echo "::error::no Windows installer was produced"; exit 1; }
+          test -n "$(find apps/desktop/out/make -name '*.msi' | head -1)" || {
+            echo "::error::no MSI was produced"; exit 1; }
 
       - name: Start packaged desktop application
         if: runner.os != 'Linux'
