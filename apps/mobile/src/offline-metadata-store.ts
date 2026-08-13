@@ -55,19 +55,53 @@ type CachedDocumentRow = {
   documentTypeSlug: string | null;
   searchText: string;
   fileStorageBytes: number;
+  issueDate: string | null;
+  dueDate: string | null;
+  expiryDate: string | null;
 };
+
+export type CachedSortField = "createdAt" | "issueDate" | "dueDate" | "title";
 
 type LoadDocumentsOptions = {
   query?: string;
   status?: "all" | "pending" | "processing" | "ready" | "failed";
   reviewOnly?: boolean;
   correspondentSlug?: string;
+  /** Year of the issue date, or of the created date where there is none. */
+  year?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  sort?: CachedSortField;
+  direction?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
+};
+
+const MAX_PAGE_SIZE = 100;
+
+/**
+ * The date a document is filed under: its issue date, or the day it was created
+ * where it has none. `localtime` is what keeps this agreeing with the year and
+ * month the derived surfaces report — a UTC date part would disagree with them
+ * for anyone west of Greenwich, which is the same defect in a different place.
+ */
+const FILED_DATE_SQL = "coalesce(issue_date, date(created_at, 'localtime'))";
+
+const ORDER_COLUMNS: Record<CachedSortField, string> = {
+  createdAt: "created_at",
+  issueDate: "issue_date",
+  dueDate: "due_date",
+  title: "title",
 };
 
 /**
  * Cache schema version. History:
  *   1 — the shape shipped before versioning existed: one row per cached
  *       document, denormalized columns for the filters the app offers.
+ *   2 — issue, due and expiry dates as queryable columns, so the offline list
+ *       can filter and sort by them instead of hiding the controls.
  *
  * A database from before this constant carries `user_version = 0` and is
  * already shape 1, so it is adopted rather than migrated. Versions above the
@@ -75,7 +109,7 @@ type LoadDocumentsOptions = {
  * a convenience copy of the archive, so re-caching is always safe and is safer
  * than reading a shape that no longer exists.
  */
-export const OFFLINE_CACHE_SCHEMA_VERSION = 1;
+export const OFFLINE_CACHE_SCHEMA_VERSION = 2;
 const OLDEST_MIGRATABLE_VERSION = 1;
 /** The shape a database written before `user_version` was recorded is in. */
 const PRE_VERSIONING_SHAPE = 1;
@@ -91,9 +125,28 @@ export type OfflineCacheMigration = {
   apply(db: OfflineDatabase): Promise<void>;
 };
 
-export const OFFLINE_CACHE_MIGRATIONS: OfflineCacheMigration[] = [];
+export const OFFLINE_CACHE_MIGRATIONS: OfflineCacheMigration[] = [
+  {
+    to: 2,
+    // Backfilled from `document_json`, which already holds these values — an
+    // existing cache gains working date filters without re-downloading a thing.
+    apply: async (db) => {
+      for (const [column, field] of [
+        ["issue_date", "issueDate"],
+        ["due_date", "dueDate"],
+        ["expiry_date", "expiryDate"],
+      ] as const) {
+        await db.execAsync(`ALTER TABLE cached_documents ADD COLUMN ${column} TEXT`);
+        await db.execAsync(
+          `UPDATE cached_documents SET ${column} = json_extract(document_json, '$.${field}')`,
+        );
+      }
+      await db.execAsync(DATE_INDEXES);
+    },
+  },
+];
 
-const SCHEMA = `
+const SCHEMA_TABLE = `
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS cached_documents (
       id TEXT PRIMARY KEY NOT NULL,
@@ -114,13 +167,30 @@ const SCHEMA = `
       document_type_name TEXT,
       document_type_slug TEXT,
       search_text TEXT NOT NULL,
-      file_storage_bytes INTEGER NOT NULL DEFAULT 0
+      file_storage_bytes INTEGER NOT NULL DEFAULT 0,
+      issue_date TEXT,
+      due_date TEXT,
+      expiry_date TEXT
     );
+  `;
+
+/**
+ * Indexes are owned by the version that introduced their columns: a fresh
+ * database gets all of them, because `SCHEMA_TABLE` creates every column, while
+ * an existing one gets each version's from the step that adds those columns.
+ * Indexing a column before its step has run is the failure this shape avoids.
+ */
+const BASE_INDEXES = `
     CREATE INDEX IF NOT EXISTS idx_cached_documents_last_viewed_at ON cached_documents(last_viewed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_cached_documents_created_at ON cached_documents(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_cached_documents_status ON cached_documents(status);
     CREATE INDEX IF NOT EXISTS idx_cached_documents_review_status ON cached_documents(review_status);
     CREATE INDEX IF NOT EXISTS idx_cached_documents_correspondent_slug ON cached_documents(correspondent_slug);
+  `;
+
+const DATE_INDEXES = `
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_issue_date ON cached_documents(issue_date);
+    CREATE INDEX IF NOT EXISTS idx_cached_documents_due_date ON cached_documents(due_date);
   `;
 
 const SELECT_ROW_COLUMNS = `
@@ -142,7 +212,10 @@ const SELECT_ROW_COLUMNS = `
       document_type_name as documentTypeName,
       document_type_slug as documentTypeSlug,
       search_text as searchText,
-      file_storage_bytes as fileStorageBytes`;
+      file_storage_bytes as fileStorageBytes,
+      issue_date as issueDate,
+      due_date as dueDate,
+      expiry_date as expiryDate`;
 
 function buildSearchText(document: ArchiveDocument, text: DocumentTextResponse) {
   return [
@@ -253,7 +326,14 @@ export async function migrateOfflineCache(
     await db.execAsync("DROP TABLE IF EXISTS cached_documents");
   }
 
-  await db.execAsync(SCHEMA);
+  await db.execAsync(SCHEMA_TABLE);
+  await db.execAsync(BASE_INDEXES);
+
+  // A database created or replaced just now already has every column, so it
+  // takes the current indexes directly instead of walking the chain.
+  if (!existing || unusable) {
+    await db.execAsync(DATE_INDEXES);
+  }
 
   if (!unusable && existing) {
     for (const migration of [...migrations].sort((left, right) => left.to - right.to)) {
@@ -316,8 +396,11 @@ export function createOfflineMetadataStore({
       document_type_name,
       document_type_slug,
       search_text,
-      file_storage_bytes
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      file_storage_bytes,
+      issue_date,
+      due_date,
+      expiry_date
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       document.id,
       JSON.stringify(document),
       JSON.stringify(record.text),
@@ -337,6 +420,9 @@ export function createOfflineMetadataStore({
       document.documentType?.slug ?? null,
       buildSearchText(document, record.text),
       record.fileStorageBytes,
+      document.issueDate ?? null,
+      document.dueDate ?? null,
+      document.expiryDate ?? null,
     );
   }
 
@@ -350,10 +436,9 @@ export function createOfflineMetadataStore({
     return row ? rowToRecord(row) : null;
   }
 
-  async function queryCachedDocuments(options?: LoadDocumentsOptions) {
-    const db = await getDb();
+  function buildWhere(options?: LoadDocumentsOptions) {
     const clauses = ["1 = 1"];
-    const params: string[] = [];
+    const params: OfflineSqlParam[] = [];
 
     if (options?.status && options.status !== "all") {
       clauses.push("status = ?");
@@ -374,11 +459,89 @@ export function createOfflineMetadataStore({
       params.push(`%${options.query.trim().toLowerCase()}%`);
     }
 
+    if (options?.year) {
+      clauses.push(`substr(${FILED_DATE_SQL}, 1, 4) = ?`);
+      params.push(String(options.year));
+    }
+
+    // Date-only values compare correctly as strings, so this needs no parsing
+    // and carries no timezone of its own.
+    if (options?.dateFrom) {
+      clauses.push(`${FILED_DATE_SQL} >= ?`);
+      params.push(options.dateFrom);
+    }
+
+    if (options?.dateTo) {
+      clauses.push(`${FILED_DATE_SQL} <= ?`);
+      params.push(options.dateTo);
+    }
+
+    if (options?.dueDateFrom) {
+      clauses.push("due_date >= ?");
+      params.push(options.dueDateFrom);
+    }
+
+    if (options?.dueDateTo) {
+      clauses.push("due_date <= ?");
+      params.push(options.dueDateTo);
+    }
+
+    return { where: clauses.join(" AND "), params };
+  }
+
+  function buildOrder(options?: LoadDocumentsOptions) {
+    // Without an explicit sort the list stays in the order the offline mirror
+    // has always used: what you opened most recently.
+    if (!options?.sort) {
+      return "last_viewed_at DESC, created_at DESC, id DESC";
+    }
+    const column = ORDER_COLUMNS[options.sort];
+    const direction = options.direction === "asc" ? "ASC" : "DESC";
+    // SQLite sorts NULLs first ascending, Postgres sorts them last. Being
+    // explicit is what keeps a document with no due date in the same place
+    // offline as online.
+    const nulls = direction === "ASC" ? "NULLS LAST" : "NULLS FIRST";
+    return `${column} ${direction} ${nulls}, id DESC`;
+  }
+
+  /** One page of the offline mirror, in the shape the online endpoint returns. */
+  async function searchCachedDocuments(options?: LoadDocumentsOptions) {
+    const db = await getDb();
+    const { where, params } = buildWhere(options);
+    const page = Math.max(1, Math.trunc(options?.page ?? 1));
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.trunc(options?.pageSize ?? 30)));
+
+    const totals = await db.getFirstAsync<{ total: number }>(
+      `SELECT COUNT(*) as total FROM cached_documents WHERE ${where}`,
+      ...params,
+    );
     const rows = await db.getAllAsync<Pick<CachedDocumentRow, "documentJson">>(
       `SELECT document_json as documentJson
      FROM cached_documents
-     WHERE ${clauses.join(" AND ")}
-     ORDER BY last_viewed_at DESC, created_at DESC`,
+     WHERE ${where}
+     ORDER BY ${buildOrder(options)}
+     LIMIT ? OFFSET ?`,
+      ...params,
+      pageSize,
+      (page - 1) * pageSize,
+    );
+
+    return {
+      items: rows.map(rowToDocument),
+      total: totals?.total ?? 0,
+      page,
+      pageSize,
+    };
+  }
+
+  async function queryCachedDocuments(options?: LoadDocumentsOptions) {
+    const db = await getDb();
+    const { where, params } = buildWhere(options);
+    const rows = await db.getAllAsync<Pick<CachedDocumentRow, "documentJson">>(
+      `SELECT document_json as documentJson
+     FROM cached_documents
+     WHERE ${where}
+     ORDER BY ${buildOrder(options)}`,
       ...params,
     );
 
@@ -546,6 +709,7 @@ export function createOfflineMetadataStore({
   return {
     upsertCachedDocument,
     getCachedDocument,
+    searchCachedDocuments,
     queryCachedDocuments,
     listCachedDocuments,
     getCacheStats,
@@ -592,6 +756,10 @@ export function upsertCachedDocument(record: CachedDocumentRecord) {
 
 export function getCachedDocument(documentId: string) {
   return store().getCachedDocument(documentId);
+}
+
+export function searchCachedDocuments(options?: LoadDocumentsOptions) {
+  return store().searchCachedDocuments(options);
 }
 
 export function queryCachedDocuments(options?: LoadDocumentsOptions) {

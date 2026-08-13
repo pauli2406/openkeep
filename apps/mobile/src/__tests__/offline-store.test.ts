@@ -278,3 +278,111 @@ describe("derived offline surfaces", () => {
     expect(dashboard.monthlyActivity).toEqual([{ month: "2026-01", count: 1 }]);
   });
 });
+
+describe("filtering, sorting, and paging by date", () => {
+  async function seeded() {
+    const { store } = createStore();
+    const rows: Array<[string, string | null, string | null]> = [
+      // title, issueDate, dueDate
+      ["Januar", "2026-01-15", "2026-02-01"],
+      ["März", "2026-03-20", null],
+      ["Vorjahr", "2025-11-02", "2026-01-10"],
+    ];
+    for (const [index, [title, issueDate, dueDate]] of rows.entries()) {
+      await store.upsertCachedDocument(
+        testRecord(
+          testDocument({
+            id: `aaaaaaaa-0000-4000-8000-00000000000${index + 1}`,
+            title,
+            issueDate,
+            dueDate,
+            createdAt: `${issueDate}T12:00:00.000Z`,
+          }),
+        ),
+      );
+    }
+    return store;
+  }
+
+  it("filters by the year a document is filed under", async () => {
+    const store = await seeded();
+    const page = await store.searchCachedDocuments({ year: 2026 });
+    expect(page.items.map((document) => document.title).sort()).toEqual(["Januar", "März"]);
+    expect(page.total).toBe(2);
+  });
+
+  it("filters by a date range over the filed date", async () => {
+    const store = await seeded();
+    expect(
+      (await store.searchCachedDocuments({ dateFrom: "2026-01-01", dateTo: "2026-02-28" })).items.map(
+        (document) => document.title,
+      ),
+    ).toEqual(["Januar"]);
+  });
+
+  it("filters by a due-date range", async () => {
+    const store = await seeded();
+    expect(
+      (await store.searchCachedDocuments({ dueDateTo: "2026-01-31" })).items.map((d) => d.title),
+    ).toEqual(["Vorjahr"]);
+  });
+
+  it("sorts by issue date in both directions", async () => {
+    const store = await seeded();
+    expect(
+      (await store.searchCachedDocuments({ sort: "issueDate", direction: "asc" })).items.map(
+        (d) => d.title,
+      ),
+    ).toEqual(["Vorjahr", "Januar", "März"]);
+    expect(
+      (await store.searchCachedDocuments({ sort: "issueDate", direction: "desc" })).items.map(
+        (d) => d.title,
+      ),
+    ).toEqual(["März", "Januar", "Vorjahr"]);
+  });
+
+  it("puts a document with no due date last when sorting by due date, as the archive does", async () => {
+    const store = await seeded();
+    // SQLite would sort the NULL first ascending; Postgres sorts it last. The
+    // offline list must not reorder around a missing value.
+    expect(
+      (await store.searchCachedDocuments({ sort: "dueDate", direction: "asc" })).items.map(
+        (d) => d.title,
+      ),
+    ).toEqual(["Vorjahr", "Januar", "März"]);
+  });
+
+  it("pages in SQL, so the total and the page agree", async () => {
+    const store = await seeded();
+    const first = await store.searchCachedDocuments({
+      sort: "issueDate",
+      direction: "asc",
+      page: 1,
+      pageSize: 2,
+    });
+    const second = await store.searchCachedDocuments({
+      sort: "issueDate",
+      direction: "asc",
+      page: 2,
+      pageSize: 2,
+    });
+
+    expect(first.items.map((d) => d.title)).toEqual(["Vorjahr", "Januar"]);
+    expect(first.total).toBe(3);
+    // The second page was unreachable while the caller sliced in JavaScript.
+    expect(second.items.map((d) => d.title)).toEqual(["März"]);
+    expect(second.total).toBe(3);
+    expect(second.page).toBe(2);
+  });
+
+  it("keeps most-recently-opened order when no sort is asked for", async () => {
+    const store = await seeded();
+    expect((await store.searchCachedDocuments()).items).toHaveLength(3);
+  });
+
+  it("caps an unreasonable page size instead of reading the whole cache", async () => {
+    const store = await seeded();
+    expect((await store.searchCachedDocuments({ pageSize: 5000 })).pageSize).toBe(100);
+    expect((await store.searchCachedDocuments({ page: 0, pageSize: 0 })).page).toBe(1);
+  });
+});

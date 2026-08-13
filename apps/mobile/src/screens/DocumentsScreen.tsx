@@ -197,9 +197,18 @@ export function DocumentsScreen() {
     ],
     queryFn: async () => {
       if (shouldUseCache) {
+        // The same filter, sort, and page the online request would carry.
         return offline.queryCachedDocuments({
           query,
           reviewOnly: filter === "review",
+          pageSize: PAGE_SIZE,
+          ...(filter === "year" ? { year: currentYear } : {}),
+          ...(filter === "due"
+            ? { sort: "dueDate" as const, direction: "asc" as const }
+            : {
+                sort: "createdAt" as const,
+                direction: oldestFirst ? ("asc" as const) : ("desc" as const),
+              }),
         });
       }
 
@@ -333,23 +342,17 @@ export function DocumentsScreen() {
     },
   });
 
-  // The offline mirror stores `created_at` but no issue or due date, so `Fällig`
-  // and a year cannot be honoured there. Offering a chip that quietly does
-  // nothing is worse than not offering it.
+  // The offline mirror carries issue and due dates as queryable columns, so
+  // every chip means the same thing offline as online.
   const chips: Array<{ key: DocFilter; label: string; count?: number }> = [
     { key: "all", label: t("documents.filter.all") },
     { key: "review", label: t("documents.filter.review"), count: reviewCount },
-    ...(shouldUseCache
-      ? []
-      : [
-          { key: "due" as const, label: t("documents.filter.due") },
-          { key: "year" as const, label: String(currentYear) },
-        ]),
+    { key: "due", label: t("documents.filter.due") },
+    { key: "year", label: String(currentYear) },
   ];
 
-  const orderLabel = shouldUseCache
-    ? t("documents.sortRecentlyOpened")
-    : filter === "due"
+  const orderLabel =
+    filter === "due"
       ? t("documents.sortDue")
       : oldestFirst
         ? t("documents.sortOldest")
@@ -442,12 +445,12 @@ export function DocumentsScreen() {
             accessibilityLabel={t("documents.sortAction")}
             onPress={() => setOldestFirst((current) => !current)}
             hitSlop={12}
-            disabled={filter === "due" || shouldUseCache}
+            disabled={filter === "due"}
           >
             <MaterialCommunityIcons
               name="arrow-up-down"
               size={18}
-              color={filter === "due" || shouldUseCache ? colors.faint : colors.muted}
+              color={filter === "due" ? colors.faint : colors.muted}
             />
           </Pressable>
         </>

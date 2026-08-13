@@ -136,7 +136,8 @@ retention setting.
 - `Delete the offline copy`, which removes the local copy and never touches the
   server
 
-What works from the local copy: browsing, filtering, searching titles, senders
+What works from the local copy: browsing, every filter chip including due and
+the current year, sorting by newest or oldest, searching titles, senders
 and recognised text, opening a document with its page and text, the correspondent
 list, and seeing which documents were pending review. AI answers, uploads, edits,
 review actions, reprocessing and deleting all need the archive.

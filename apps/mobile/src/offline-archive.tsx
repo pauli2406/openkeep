@@ -31,9 +31,10 @@ import {
   getCacheStats,
   getCachedDocument,
   getCachedFileUris,
-  queryCachedDocuments,
+  searchCachedDocuments,
   upsertCachedDocument,
   type CachedDocumentRecord,
+  type CachedSortField,
 } from "./offline-metadata-store";
 
 const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v1";
@@ -49,6 +50,15 @@ type LoadDocumentsOptions = {
   status?: "all" | "pending" | "processing" | "ready" | "failed";
   reviewOnly?: boolean;
   correspondentSlug?: string;
+  year?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  sort?: CachedSortField;
+  direction?: "asc" | "desc";
+  page?: number;
+  pageSize?: number;
 };
 
 type CacheSummary = {
@@ -234,14 +244,13 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   }, [refreshCacheSummary]);
 
   const queryCachedDocumentsResponse = useCallback(async (options?: LoadDocumentsOptions) => {
-    const items = await queryCachedDocuments(options);
-    const pageSize = options?.reviewOnly ? 25 : 30;
-    return {
-      items: items.slice(0, pageSize),
-      total: items.length,
-      page: 1,
-      pageSize,
-    } satisfies SearchDocumentsResponse;
+    // Paged in SQL, so `total` counts every match while `items` is the page that
+    // was asked for. Slicing in JavaScript made those two disagree, and left
+    // every page after the first unreachable.
+    return (await searchCachedDocuments({
+      pageSize: options?.reviewOnly ? 25 : 30,
+      ...options,
+    })) satisfies SearchDocumentsResponse;
   }, []);
 
   const clearCachedDocuments = useCallback(async () => {

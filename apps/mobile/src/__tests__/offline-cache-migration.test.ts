@@ -128,11 +128,41 @@ describe("opening a database", () => {
   });
 });
 
+/**
+ * A database at the current shape, then rewound to claim `version` — the honest
+ * fixture for chain tests, since a database claiming version N must actually
+ * have version N's columns.
+ */
+async function atVersion(version: number) {
+  const db = createTestDatabase();
+  await migrateOfflineCache(db);
+  await db.execAsync(`PRAGMA user_version = ${version}`);
+  return db;
+}
+
+describe("upgrading an install that predates the date columns", () => {
+  it("backfills the dates from what it already cached, and filters by them", async () => {
+    const db = createTestDatabase();
+    const document = await seedExistingInstall(db);
+
+    // The real chain, not a test double: an existing cache gains working date
+    // filters without re-downloading anything.
+    const store = createOfflineMetadataStore({ openDatabase: async () => db });
+    const page = await store.searchCachedDocuments({ year: 2026 });
+
+    expect(page.items.map((item) => item.id)).toEqual([document.id]);
+    expect(await version(db)).toBe(OFFLINE_CACHE_SCHEMA_VERSION);
+    const row = await db.getFirstAsync<{ issueDate: string | null }>(
+      "SELECT issue_date as issueDate FROM cached_documents WHERE id = ?",
+      document.id,
+    );
+    expect(row?.issueDate).toBe(document.issueDate);
+  });
+});
+
 describe("the migration chain", () => {
   it("runs the steps a database is behind, in order, and no others", async () => {
-    const db = createTestDatabase();
-    await seedExistingInstall(db);
-    await db.execAsync("PRAGMA user_version = 1");
+    const db = await atVersion(1);
     const applied: number[] = [];
     const migrations: OfflineCacheMigration[] = [
       { to: 4, apply: async () => void applied.push(4) },
@@ -149,9 +179,7 @@ describe("the migration chain", () => {
   });
 
   it("skips a step a database already has", async () => {
-    const db = createTestDatabase();
-    await seedExistingInstall(db);
-    await db.execAsync("PRAGMA user_version = 2");
+    const db = await atVersion(2);
     const applied: number[] = [];
 
     await migrateOfflineCache(db, {
@@ -170,13 +198,15 @@ describe("the migration chain", () => {
     // `document_json`, and leave the cache readable.
     const db = createTestDatabase();
     const document = await seedExistingInstall(db);
+    // A column the shipped schema does not have, so this exercises the step
+    // rather than a column that would already be there.
     const migrations: OfflineCacheMigration[] = [
       {
         to: 2,
         apply: async (database) => {
-          await database.execAsync("ALTER TABLE cached_documents ADD COLUMN issue_date TEXT");
+          await database.execAsync("ALTER TABLE cached_documents ADD COLUMN holder_name TEXT");
           await database.execAsync(
-            "UPDATE cached_documents SET issue_date = json_extract(document_json, '$.issueDate')",
+            "UPDATE cached_documents SET holder_name = json_extract(document_json, '$.holderName')",
           );
         },
       },
@@ -184,11 +214,11 @@ describe("the migration chain", () => {
 
     await migrateOfflineCache(db, { migrations, targetVersion: 2 });
 
-    const row = await db.getFirstAsync<{ issueDate: string | null }>(
-      "SELECT issue_date as issueDate FROM cached_documents WHERE id = ?",
+    const row = await db.getFirstAsync<{ holderName: string | null }>(
+      "SELECT holder_name as holderName FROM cached_documents WHERE id = ?",
       document.id,
     );
-    expect(row?.issueDate).toBe(document.issueDate);
+    expect(row?.holderName).toBe(document.holderName);
     expect(await version(db)).toBe(2);
 
     // A second open must not try to add the column again.
@@ -199,9 +229,7 @@ describe("the migration chain", () => {
   });
 
   it("keeps a cache the app can no longer read out of the app's hands", async () => {
-    const db = createTestDatabase();
-    await seedExistingInstall(db);
-    await db.execAsync("PRAGMA user_version = 1");
+    const db = await atVersion(1);
 
     // A build whose oldest migratable version has moved past 1 discards it
     // rather than migrate from a shape it no longer describes. Simulated here
