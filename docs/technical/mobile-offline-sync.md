@@ -33,6 +33,19 @@ openkeep-cache/
 
 The SQLite store keeps each cached record with `cachedAt`, `lastViewedAt`, searchable metadata, OCR text, history JSON, and file size.
 
+The database records its schema version in `PRAGMA user_version`, and the store
+brings it forward on open through an ordered chain of migrations — each step
+upgrading one version, able to add columns and backfill them from
+`document_json`, which holds the whole document. This is not optional
+bookkeeping: `CREATE TABLE IF NOT EXISTS` is a no-op on a database that already
+has the table, so without the chain a new column would never appear on an
+upgraded install and the offline filters would quietly read missing data. A
+database written before versioning existed carries `0` and is adopted as the
+oldest known shape, keeping what it cached. A database from a newer build, or
+from a version too old to migrate, is discarded and re-caches as documents are
+opened — the cache is a convenience copy, so that is both safe and safer than
+reading a shape the app no longer describes.
+
 Neither half of the cache reaches the device directly. `offline-metadata-store.ts` takes the SQLite handle it queries through, and `offline-file-cache.ts` takes a small filesystem interface — so the store's real SQL runs against Node's own SQLite in tests, and the download flow runs against an in-memory filesystem, with no simulator and no Expo runtime. Production wires the same code to `expo-sqlite` and `expo-file-system` in one place per module.
 
 `CacheSummary` exposes exactly three values — `documentCount`, `fileStorageBytes` and `updatedAt` — and the `Settings` -> `Offline` screen shows those three and nothing else. `updatedAt` is the revision the cached queries are keyed by, moved only when the counts change, so it is presented as when the cache was last checked rather than when a document was last written.

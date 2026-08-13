@@ -63,6 +63,35 @@ type LoadDocumentsOptions = {
   correspondentSlug?: string;
 };
 
+/**
+ * Cache schema version. History:
+ *   1 — the shape shipped before versioning existed: one row per cached
+ *       document, denormalized columns for the filters the app offers.
+ *
+ * A database from before this constant carries `user_version = 0` and is
+ * already shape 1, so it is adopted rather than migrated. Versions above the
+ * current one, or below the oldest we can migrate, are discarded: the cache is
+ * a convenience copy of the archive, so re-caching is always safe and is safer
+ * than reading a shape that no longer exists.
+ */
+export const OFFLINE_CACHE_SCHEMA_VERSION = 1;
+const OLDEST_MIGRATABLE_VERSION = 1;
+/** The shape a database written before `user_version` was recorded is in. */
+const PRE_VERSIONING_SHAPE = 1;
+
+/**
+ * Ordered forward steps, one per version. Each `apply` upgrades a database at
+ * `to - 1` to `to`, and may add columns and backfill them from `document_json`,
+ * which holds the whole document. The chain is empty while the current version
+ * is also the oldest; #208 adds the first real step.
+ */
+export type OfflineCacheMigration = {
+  to: number;
+  apply(db: OfflineDatabase): Promise<void>;
+};
+
+export const OFFLINE_CACHE_MIGRATIONS: OfflineCacheMigration[] = [];
+
 const SCHEMA = `
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS cached_documents (
@@ -146,19 +175,86 @@ function rowToDocument(row: Pick<CachedDocumentRow, "documentJson">) {
   return JSON.parse(row.documentJson) as ArchiveDocument;
 }
 
+async function readSchemaVersion(db: OfflineDatabase) {
+  const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
+  return row?.user_version ?? 0;
+}
+
+async function writeSchemaVersion(db: OfflineDatabase, version: number) {
+  // Pragmas take no parameters, so the value is interpolated — hence the guard.
+  if (!Number.isInteger(version) || version < 0) {
+    throw new Error(`Refusing to record a non-integer cache schema version: ${version}`);
+  }
+  await db.execAsync(`PRAGMA user_version = ${version}`);
+}
+
+async function hasCacheTable(db: OfflineDatabase) {
+  const row = await db.getFirstAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cached_documents'",
+  );
+  return Boolean(row);
+}
+
+/**
+ * Brings the database to the current schema version, and records it — so the
+ * next open reads the current shape instead of migrating again. `CREATE TABLE
+ * IF NOT EXISTS` alone can never do this: on an existing database it is a
+ * no-op, which is why a column added without a migration would silently never
+ * appear.
+ */
+export async function migrateOfflineCache(
+  db: OfflineDatabase,
+  {
+    migrations = OFFLINE_CACHE_MIGRATIONS,
+    // Always the current version in the app. Tests set it so the chain's
+    // behaviour — order, and which steps are skipped — can be exercised while
+    // the shipped chain is still empty.
+    targetVersion = OFFLINE_CACHE_SCHEMA_VERSION,
+  }: { migrations?: OfflineCacheMigration[]; targetVersion?: number } = {},
+) {
+  const existing = await hasCacheTable(db);
+  const recorded = await readSchemaVersion(db);
+  // A database written before versioning existed carries 0 and is shape 1 —
+  // that specific shape, not merely "the oldest we still migrate". Conflating
+  // the two would silently mislabel a version 1 database once support for it is
+  // dropped, and migrate it as though it were newer than it is.
+  const version = existing && recorded === 0 ? PRE_VERSIONING_SHAPE : recorded;
+
+  const unusable =
+    existing && (version > targetVersion || version < OLDEST_MIGRATABLE_VERSION);
+  if (unusable) {
+    await db.execAsync("DROP TABLE IF EXISTS cached_documents");
+  }
+
+  await db.execAsync(SCHEMA);
+
+  if (!unusable && existing) {
+    for (const migration of [...migrations].sort((left, right) => left.to - right.to)) {
+      if (migration.to > version && migration.to <= targetVersion) {
+        await migration.apply(db);
+      }
+    }
+  }
+
+  await writeSchemaVersion(db, targetVersion);
+  return { discarded: unusable, from: existing ? version : null };
+}
+
 export function createOfflineMetadataStore({
   openDatabase,
+  migrations = OFFLINE_CACHE_MIGRATIONS,
 }: {
   openDatabase: () => Promise<OfflineDatabase>;
+  migrations?: OfflineCacheMigration[];
 }) {
   let ready: Promise<OfflineDatabase> | null = null;
 
-  // The schema runs once per store rather than on every call. It is still
-  // `IF NOT EXISTS`, so opening an existing database is unchanged.
+  // Runs once per store rather than on every call, so a second open does no
+  // migration work.
   function getDb() {
     ready ??= (async () => {
       const db = await openDatabase();
-      await db.execAsync(SCHEMA);
+      await migrateOfflineCache(db, { migrations });
       return db;
     })();
     return ready;
