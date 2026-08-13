@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 import { parseArchiveDate } from "./lib";
+import { offlineCacheDatabaseName } from "./offline-scope";
 import type {
   ArchiveDocument,
   DashboardInsights,
@@ -7,8 +8,6 @@ import type {
   DocumentTextResponse,
   FacetsResponse,
 } from "./lib";
-
-const DB_NAME = "openkeep-cache.db";
 
 /**
  * The slice of a SQLite handle this store uses. Naming it is what makes the
@@ -751,53 +750,106 @@ function buildMonthlyActivity(documents: ArchiveDocument[]) {
     .map(([month, count]) => ({ month, count }));
 }
 
-// The app's one store, over the device database. Everything above is reachable
-// with any handle; this is the single place that names `expo-sqlite`.
-let defaultStore: OfflineMetadataStore | null = null;
+/**
+ * One store per scope, over the device database. Everything above is reachable
+ * with any handle; this is the single place that names `expo-sqlite`.
+ *
+ * Without a scope there is no store — not a shared one. An unscoped fallback is
+ * exactly what let one account read another's documents, so the reads below
+ * answer empty instead, and the writes refuse.
+ */
+const stores = new Map<string, OfflineMetadataStore>();
+let currentScope: string | null = null;
 
-function store() {
-  defaultStore ??= createOfflineMetadataStore({
-    openDatabase: () => SQLite.openDatabaseAsync(DB_NAME),
-  });
-  return defaultStore;
+export function setOfflineCacheScope(scope: string | null) {
+  currentScope = scope;
 }
 
+export function offlineCacheScopeInUse() {
+  return currentScope;
+}
+
+/** Forgets the in-memory handles; the databases themselves are untouched. */
+export function resetOfflineStores() {
+  stores.clear();
+  currentScope = null;
+}
+
+function store(): OfflineMetadataStore | null {
+  if (!currentScope) {
+    return null;
+  }
+  let scoped = stores.get(currentScope);
+  if (!scoped) {
+    const name = offlineCacheDatabaseName(currentScope);
+    scoped = createOfflineMetadataStore({
+      openDatabase: () => SQLite.openDatabaseAsync(name),
+    });
+    stores.set(currentScope, scoped);
+  }
+  return scoped;
+}
+
+const EMPTY_STATS = { documentCount: 0, fileStorageBytes: 0, lastCachedAt: null };
+const EMPTY_PAGE = { items: [], total: 0, page: 1, pageSize: 30 };
+const EMPTY_FACETS: FacetsResponse = {
+  correspondents: [],
+  documentTypes: [],
+  tags: [],
+  statuses: [],
+  years: [],
+};
+const EMPTY_DASHBOARD: DashboardInsights = {
+  stats: {
+    totalDocuments: 0,
+    pendingReview: 0,
+    documentTypesCount: 0,
+    correspondentsCount: 0,
+  },
+  recentDocuments: [],
+  topCorrespondents: [],
+  upcomingDeadlines: [],
+  overdueItems: [],
+  monthlyActivity: [],
+};
+
 export function upsertCachedDocument(record: CachedDocumentRecord) {
-  return store().upsertCachedDocument(record);
+  // Refusing beats writing into a cache nobody can attribute to an account.
+  return store()?.upsertCachedDocument(record) ?? Promise.resolve();
 }
 
 export function getCachedDocument(documentId: string) {
-  return store().getCachedDocument(documentId);
+  return store()?.getCachedDocument(documentId) ?? Promise.resolve(null);
 }
 
 export function searchCachedDocuments(options?: LoadDocumentsOptions) {
-  return store().searchCachedDocuments(options);
+  return store()?.searchCachedDocuments(options) ?? Promise.resolve(EMPTY_PAGE);
 }
 
 export function queryCachedDocuments(options?: LoadDocumentsOptions) {
-  return store().queryCachedDocuments(options);
+  return store()?.queryCachedDocuments(options) ?? Promise.resolve([]);
 }
 
 export function listCachedDocuments() {
-  return store().listCachedDocuments();
+  return store()?.listCachedDocuments() ?? Promise.resolve([]);
 }
 
 export function getCacheStats() {
-  return store().getCacheStats();
+  return store()?.getCacheStats() ?? Promise.resolve(EMPTY_STATS);
 }
 
 export function getCachedFileUris() {
-  return store().getCachedFileUris();
+  return store()?.getCachedFileUris() ?? Promise.resolve([]);
 }
 
 export function clearCachedDocumentRows() {
-  return store().clearCachedDocumentRows();
+  return store()?.clearCachedDocumentRows() ?? Promise.resolve();
 }
 
 export function buildCachedFacets() {
-  return store().buildCachedFacets();
+  return store()?.buildCachedFacets() ?? Promise.resolve(EMPTY_FACETS);
 }
 
 export function buildCachedDashboard() {
-  return store().buildCachedDashboard();
+  return store()?.buildCachedDashboard() ?? Promise.resolve(EMPTY_DASHBOARD);
 }
