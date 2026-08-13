@@ -681,8 +681,10 @@ outcomes with the rest of its state.
 
 Desktop artifacts are built by the `Release Desktop` workflow on native runners
 for the support matrix — macOS arm64 and x64 (ZIP for the Squirrel.Mac feed,
-DMG for installation), Windows x64 (Squirrel installer plus the RELEASES/nupkg
-feed), Linux x64 (deb and rpm with desktop integration and MIME associations) —
+DMG for installation), Windows x64 (a WiX MSI — Squirrel.Windows is effectively
+unmaintained and broke on current runner images, and WiX is Microsoft's own
+toolchain), Linux x64 (deb and rpm with desktop integration and MIME
+associations) —
 and uploaded to the versioned GitHub Release only after every platform built
 and passed its packaged smoke test, so a partial build can never publish a
 partial release. The workflow refuses a tag whose commit did not pass CI: a
@@ -693,16 +695,16 @@ ever enters the repository. The Linux leg additionally installs the deb,
 verifies the desktop entry and MIME registration, launches the installed
 binary, and confirms uninstall leaves nothing behind.
 
-In-app updates are a main-process service. On macOS and Windows it drives
-Electron's platform updater against update.electronjs.org over the GitHub
-Releases; the renderer sees a small state machine (checking, downloading,
-ready, up to date, error) through the bridge and the desktop-behavior panel,
-and a downloaded update installs only on explicit request or the next ordinary
+In-app updates are a main-process service. On macOS it drives Electron's
+Squirrel.Mac updater against update.electronjs.org over the GitHub Releases;
+the renderer sees a small state machine (checking, downloading, ready, up to
+date, error) through the bridge and the desktop-behavior panel, and a
+downloaded update installs only on explicit request or the next ordinary
 restart. Unsigned builds report themselves unable to self-update instead of
 surfacing a signature dump, and development builds declare updates
-unsupported. Linux compares the latest GitHub Release against the running
-version and links to the release page — Electron has no Linux auto-updater and
-the panel does not pretend otherwise. Operational runbooks (release, rollback,
+unsupported. Windows and Linux compare the latest GitHub Release against the
+running version and link to the release page — an MSI has no update feed and
+Electron has no Linux auto-updater, and the panel does not pretend otherwise. Operational runbooks (release, rollback,
 credential rotation, failed updates) live in
 [Desktop Release Operations](../operations/desktop-release.md).
 

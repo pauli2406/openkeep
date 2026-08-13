@@ -1,4 +1,3 @@
-import squirrelStartup from "electron-squirrel-startup";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -120,9 +119,6 @@ protocol.registerSchemesAsPrivileged([
 // Squirrel.Windows relaunches the app with install/update/uninstall flags to
 // manage shortcuts; those invocations must do nothing but exit. Bundled by
 // Vite — the packaged app ships no node_modules to require from.
-if (squirrelStartup) {
-  app.quit();
-}
 
 app.enableSandbox();
 
@@ -1304,7 +1300,10 @@ void app.whenReady().then(async () => {
     currentVersion: app.getVersion(),
     isPackaged: app.isPackaged,
     autoUpdater:
-      process.platform === "darwin" || process.platform === "win32"
+      // Only macOS has an in-place updater now: Windows moved to an MSI, which
+      // has no Squirrel feed, so it takes the manual release-page path Linux
+      // uses.
+      process.platform === "darwin"
         ? autoUpdater
         : null,
     fetchRequest: (input, init) => net.fetch(input, init),

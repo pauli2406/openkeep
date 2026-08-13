@@ -56,7 +56,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # windows-2022, not `windows-latest`: the 2025 image does not ship the
+        # WiX 3 toolset the MSI maker needs.
+        os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +90,19 @@ jobs:
           done
           exit 1
         shell: bash
+      # The MSI maker only ever ran in a release before #238's CI guards; keep
+      # it exercised on every push, like the Linux packages.
+      - name: Make the Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pnpm --filter @openkeep/desktop make -- --arch=x64
+          test -n "$(find apps/desktop/out/make -name '*.msi' | head -1)" || {
+            echo "::error::no MSI was produced"; exit 1; }
+          pnpm --filter @openkeep/desktop make:windows-setup
+          test -n "$(find apps/desktop/out/make -name 'OpenKeep-Setup.exe' | head -1)" || {
+            echo "::error::no setup bundle was produced"; exit 1; }
+
       - name: Start packaged desktop application
         if: runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke

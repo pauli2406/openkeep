@@ -14,7 +14,8 @@ at a time. It does not create or set up a new archive.
 - **macOS** (13 or newer, Apple Silicon and Intel): download the DMG for your
   Mac from the latest GitHub release and drag OpenKeep to Applications.
 - **Windows** (10 or newer, x64): run `OpenKeep-Setup.exe` from the latest
-  release. It installs per-user and creates the shortcuts.
+  release, or the MSI if you prefer one — the setup is the same MSI in a
+  familiar wrapper, and both install the same application.
 - **Linux** (x64): install the `.deb` (`sudo apt install ./openkeep_….deb`) or
   `.rpm` for your distribution. The package registers the launcher entry and
   the document file associations.
@@ -23,10 +24,11 @@ at a time. It does not create or set up a new archive.
 
 OpenKeep checks for updates shortly after it starts and whenever you choose
 `Check for updates` in the desktop-behavior panel, which also shows the state
-of a check. On macOS and Windows a found update downloads in the background
-and installs when you choose `Restart and install` — or on the next time you
-start OpenKeep. On Linux there is no in-place update: the panel links to the
-release page and the update installs through your package manager. Your
+of a check. On macOS a found update downloads in the background and installs
+when you choose `Restart and install` — or the next time you start OpenKeep.
+On Windows and Linux there is no in-place update: the panel links to the
+release page, and installing the new MSI or package is the update. Your
+settings and archives are untouched by that. Your
 archives, credentials, and offline copies are never touched by an update.
 
 ## Before You Connect

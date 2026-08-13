@@ -15,14 +15,15 @@
     "test:smoke": "node ./scripts/run-smoke.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "make:windows-setup": "node ./scripts/make-windows-setup.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",
     "@electron-forge/maker-deb": "7.11.2",
     "@electron-forge/maker-dmg": "7.11.2",
     "@electron-forge/maker-rpm": "7.11.2",
-    "@electron-forge/maker-squirrel": "7.11.2",
+    "@electron-forge/maker-wix": "7.11.2",
     "@electron-forge/maker-zip": "7.11.2",
     "@electron-forge/plugin-fuses": "7.11.2",
     "@electron-forge/plugin-vite": "7.11.2",
@@ -39,7 +40,6 @@
     "@types/react-dom": "19.1.11",
     "@vitejs/plugin-react": "^4.5.2",
     "electron": "43.3.0",
-    "electron-squirrel-startup": "^1.0.1",
     "jsdom": "^26.1.0",
     "msw": "^2.11.3",
     "react": "19.1.0",

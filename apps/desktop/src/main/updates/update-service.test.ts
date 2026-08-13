@@ -94,7 +94,7 @@ describe("native platform updates", () => {
   it("reports up to date and never installs without a downloaded update", async () => {
     const fake = fakeAutoUpdater();
     const { service } = createHarness({
-      platform: "win32",
+      platform: "darwin",
       autoUpdater: fake.updater,
     });
 
@@ -104,6 +104,23 @@ describe("native platform updates", () => {
 
     service.install();
     expect(fake.updater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
+  it("takes the manual path on Windows, MSI having no update feed", async () => {
+    const fake = fakeAutoUpdater();
+    const { service } = createHarness({
+      platform: "win32",
+      autoUpdater: fake.updater,
+      latestRelease: {
+        tag_name: "v1.3.0",
+        html_url: "https://github.com/pauli2406/openkeep/releases/tag/v1.3.0",
+      },
+    });
+
+    await service.check();
+
+    expect(fake.updater.checkForUpdates).not.toHaveBeenCalled();
+    expect(service.state()).toMatchObject({ status: "available-manual", version: "v1.3.0" });
   });
 
   it("explains an unsigned build instead of dumping the signature error", () => {

@@ -6,7 +6,7 @@ import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerDMG } from "@electron-forge/maker-dmg";
 import { MakerRpm } from "@electron-forge/maker-rpm";
-import { MakerSquirrel } from "@electron-forge/maker-squirrel";
+import { MakerWix } from "@electron-forge/maker-wix";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
@@ -91,10 +91,21 @@ const config: ForgeConfig = {
     // what users download and drag to /Applications.
     new MakerZIP({}, ["darwin"]),
     new MakerDMG({ format: "ULFO" }, ["darwin"]),
-    // Squirrel.Windows produces the installer plus the RELEASES/nupkg feed the
-    // built-in Windows auto-updater consumes.
-    new MakerSquirrel({
-      setupExe: "OpenKeep-Setup.exe",
+    // A WiX MSI rather than Squirrel.Windows: Squirrel is effectively
+    // unmaintained and broke on current runner images inside its own zip step.
+    // WiX is Microsoft's own toolchain and is what the runners ship. The trade
+    // is the update model — MSI has no Squirrel feed, so Windows checks for
+    // updates the way Linux does: compare against the latest GitHub release and
+    // hand the user the installer.
+    new MakerWix({
+      // The upgrade code is what makes an MSI an update of the previous one
+      // rather than a second install; it must never change once released.
+      upgradeCode: "b7a7e2a4-4f0a-4e64-9f6e-0e4c5a9b1d2e",
+      manufacturer: "OpenKeep contributors",
+      name: "OpenKeep",
+      shortcutFolderName: "OpenKeep",
+      exe: "openkeep",
+      ui: { chooseDirectory: true },
       ...(windowsSignParams ? { signWithParams: windowsSignParams } : {}),
     }),
     new MakerDeb({
