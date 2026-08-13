@@ -63,6 +63,16 @@ column, and every search would have had to decrypt every row. Document bytes liv
 in the same database in chunks, so there is one cipher and one key rather than
 two, and nothing holds a whole PDF in memory.
 
+**Where the build flag has to live.** `op-sqlite` compiles SQLCipher in only when
+its config says so, and its podspec finds that config by walking up from
+`node_modules/@op-engineering/op-sqlite`, taking the first `package.json` it
+meets. Under pnpm's hoisted linker the package sits at the workspace root, so the
+file it reads is the **root** `package.json` — not `apps/mobile/package.json`,
+where the flag looks like it belongs. Putting it only in the app's file is what
+shipped 0.3.0 and 0.3.1 without encryption: the JavaScript was identical, the app
+correctly refused to cache, and the only evidence was one line on the Offline
+screen. `native-config.test.ts` guards both files now.
+
 The key is 256 random bits per scope, held in the device keystore. Without a
 keystore there is no key and the copy stays disabled for the session: falling back
 to plaintext would turn a missing keystore into a silent downgrade. A key that
