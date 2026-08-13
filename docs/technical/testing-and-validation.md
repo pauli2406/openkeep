@@ -302,14 +302,16 @@ pnpm --filter @openkeep/mobile test:visual:update    # re-bless
 
 Baselines are re-rendered by the `Bless Mobile Baselines` workflow
 (`workflow_dispatch`, optionally filtered with `grep`), which runs the container
-and opens a pull request with whatever changed. That exists because the baselines
+and pushes a branch with whatever changed, for one `gh pr create` to turn into a
+pull request. It stops short of opening the pull request itself because this
+repository does not permit Actions to create them. That exists because the baselines
 are only reproducible against one font stack: a contributor whose container is
 broken cannot bless an intended change, and taking `-actual.png` out of a failed
 run's artifact only works when the run fails. A version bump can slip under the
 diff budget — green suite, stale baseline — and that drift silently spends the
-budget a real regression needs. The pull request is deliberate: a baseline change
-is a claim about how the app should look, and deserves the same review as the
-change that caused it.
+budget a real regression needs. Reviewing the result is deliberate: a baseline change is
+a claim about how the app should look, and deserves the same review as the change
+that caused it.
 
 `OPENKEEP_VISUAL=1 expo export --platform web` renders the app in a browser.
 `metro.config.js` swaps `src/auth` and `src/offline-archive` for fixture-backed

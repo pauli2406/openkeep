@@ -26,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -61,26 +60,41 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # A pull request rather than a push to main: a baseline change is a claim
-      # about how the app should look, and that deserves the same review as the
-      # change that caused it.
-      - name: Open a pull request
+      # Pushing a branch rather than opening the pull request: repositories can
+      # forbid Actions from creating pull requests, and this one does — the run
+      # would otherwise re-render correctly and then fail on its last step. A
+      # branch needs only `contents: write`, and the pull request is one command.
+      - name: Push the re-rendered baselines
         if: steps.diff.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@v7
+        run: |
+          branch="chore/bless-mobile-baselines"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -m "test(mobile): re-render the visual baselines
+
+          Rendered by the Bless Mobile Baselines workflow in the pinned
+          Playwright container, which is the only environment these are
+          reproducible in."
+          git push --force origin "$branch"
+          {
+            echo
+            echo "Branch \`$branch\` pushed. Open the pull request with:"
+            echo
+            echo '```'
+            echo "gh pr create --base main --head $branch \\"
+            echo "  --title 'test(mobile): re-render the visual baselines'"
+            echo '```'
+            echo
+            echo "Review the images as a claim about how the app should look: a"
+            echo "screen that changed in a way the originating change did not"
+            echo "intend is a bug the baseline would otherwise hide."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The images themselves, so a reviewer can look without checking the
+      # branch out.
+      - uses: actions/upload-artifact@v4
+        if: steps.diff.outputs.changed == 'true'
         with:
-          branch: chore/bless-mobile-baselines
-          delete-branch: true
-          title: "test(mobile): re-render the visual baselines"
-          commit-message: |
-            test(mobile): re-render the visual baselines
-
-            Rendered by the Bless Mobile Baselines workflow in the pinned
-            Playwright container, which is the only environment these are
-            reproducible in.
-          body: |
-            Re-rendered by the `Bless Mobile Baselines` workflow${{ inputs.grep && format(', filtered to `{0}`', inputs.grep) || '' }}.
-
-            Every image here is what the pinned Playwright container renders from
-            this commit. Review them as a claim about how the app should look: if
-            a screen changed in a way the originating change did not intend, that
-            is a bug the baseline would otherwise hide.
+          name: mobile-baselines
+          path: apps/mobile/visual/__screenshots__/*.png
