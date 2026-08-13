@@ -33,9 +33,12 @@ import {
   buildCachedDashboard,
   buildCachedFacets,
   clearCachedDocumentRows,
+  correctFileAccounting,
   getCacheStats,
   getCachedDocument,
   getCachedFileUris,
+  quarantinedCount,
+  removeCachedDocument,
   searchCachedDocuments,
   setOfflineCacheScope,
   upsertCachedDocument,
@@ -103,6 +106,8 @@ type OfflineArchiveContextValue = {
   loadCachedFacets: () => Promise<FacetsResponse>;
   clearCachedDocuments: () => Promise<void>;
   getCacheSummary: () => Promise<CacheSummary>;
+  /** Rows dropped this session because they could not be read. */
+  quarantinedCount: number;
 };
 
 const OfflineArchiveContext = createContext<OfflineArchiveContextValue | null>(null);
@@ -134,6 +139,9 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     revision: null,
   });
   const cacheSummaryRef = useRef(cacheSummary);
+  // Rows the store had to drop because they could not be decoded. Surfaced so an
+  // unexplained gap in the copy is explainable rather than mysterious.
+  const [quarantinedRows, setQuarantinedRows] = useState(0);
 
   const refreshCacheSummary = useCallback(async () => {
     const stats = await getCacheStats();
@@ -159,6 +167,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       : { ...stats, revision: `${scopeTag}#${new Date().toISOString()}` };
     cacheSummaryRef.current = next;
     setCacheSummary(next);
+    setQuarantinedRows(quarantinedCount());
     return next;
   }, [scope]);
 
@@ -218,18 +227,28 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    if (cached.fileUri) {
-      if (!(await fileCache.exists(cached.fileUri))) {
-        return {
-          ...cached,
-          fileUri: null,
-          fileStorageBytes: 0,
-        };
-      }
+    if (cached.fileUri && !(await fileCache.exists(cached.fileUri))) {
+      // The row kept its byte count while the file was gone, so the Offline
+      // screen reported storage that had already been freed. Correct the row,
+      // not just the answer.
+      await correctFileAccounting(cached.document.id);
+      await refreshCacheSummary();
+      return { ...cached, fileUri: null, fileStorageBytes: 0 };
     }
 
     return cached;
-  }, []);
+  }, [fileCache, refreshCacheSummary]);
+
+  /**
+   * Forgets a document the archive says is gone. Only 404 and 410 qualify: a 500
+   * or a timeout means the archive could not answer, and evicting on those would
+   * throw away a perfectly good copy exactly when it is most needed.
+   */
+  const forgetDeletedDocument = useCallback(async (documentId: string) => {
+    const fileUri = await removeCachedDocument(documentId);
+    await fileCache.deleteIfExists(fileUri);
+    await refreshCacheSummary();
+  }, [fileCache, refreshCacheSummary]);
 
   const cacheOpenedDocument = useCallback(async (
     authFetch: AuthFetch,
@@ -238,7 +257,15 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     await fileCache.ensureDirs();
     const previous = await getCachedDocument(documentId);
     const now = new Date().toISOString();
-    const document = await fetchJson<ArchiveDocument>(authFetch, `/api/documents/${documentId}`);
+    const response = await authFetch(`/api/documents/${documentId}`);
+    if (response.status === 404 || response.status === 410) {
+      await forgetDeletedDocument(documentId);
+      throw new Error(`Request failed for /api/documents/${documentId} (${response.status})`);
+    }
+    if (!response.ok) {
+      throw new Error(`Request failed for /api/documents/${documentId} (${response.status})`);
+    }
+    const document = (await response.json()) as ArchiveDocument;
     const [text, history, file] = await Promise.all([
       fetchJson<DocumentTextResponse>(authFetch, `/api/documents/${documentId}/text`).catch(() => previous?.text ?? { documentId, blocks: [] }),
       fetchJson<DocumentHistoryResponse>(authFetch, `/api/documents/${documentId}/history`).catch(() => previous?.history ?? { documentId, items: [] }),
@@ -263,7 +290,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     }
     await refreshCacheSummary();
     return record;
-  }, [refreshCacheSummary]);
+  }, [fileCache, forgetDeletedDocument, refreshCacheSummary]);
 
   const ensureCachedFile = useCallback(async (
     authFetch: AuthFetch,
@@ -330,6 +357,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       loadCachedFacets: buildCachedFacets,
       clearCachedDocuments,
       getCacheSummary,
+      quarantinedCount: quarantinedRows,
     }),
     [
       cacheOpenedDocument,
@@ -340,6 +368,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       isConnected,
       isReady,
       loadCachedDocument,
+      quarantinedRows,
       queryCachedDocumentsResponse,
     ],
   );

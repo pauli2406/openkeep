@@ -75,6 +75,27 @@ Neither half of the cache reaches the device directly. `offline-metadata-store.t
 
 `CacheSummary` exposes `documentCount`, `fileStorageBytes`, `lastCachedAt` and `revision`, and the `Settings` -> `Offline` screen shows the first three. The last two are deliberately separate values: `lastCachedAt` is read from the rows (`MAX(cached_at)`) and is when a document was last written to the cache, so it survives a restart; `revision` is an opaque token the cached queries are keyed by, moved only when the cache really changed. Conflating them is what previously left the reported figure meaning "when the app last counted", resetting on every cold start — and left a document re-cached at an unchanged size invisible to every query reading the cache, since nothing in the comparison had moved.
 
+## When the Copy Is Damaged
+
+A row that cannot be decoded is dropped and the read carries on with the rest.
+`JSON.parse` inside a `rows.map(...)` used to throw out of the whole read, so one
+corrupt row took the list, the dashboard, the facets and search down together —
+for a convenience copy, going dark is strictly worse than losing one document.
+The decoded document is shape-checked as well as parsed, so a changed contract is
+noticed rather than rendered as undefined; text and history are detail, and an
+unreadable one is emptied rather than costing the document. Dropped rows are
+counted and the `Settings` -> `Offline` screen says so, because an unexplained
+gap in the copy is worse than an explained one.
+
+A file that has gone missing under its row zeroes that row's byte count, so the
+screen stops reporting storage that was already freed. The document itself
+stays: its metadata and recognised text are still worth having.
+
+A document the archive answers `404` or `410` for is removed from the copy along
+with its file. Only those two: a `500` or a timeout means the archive could not
+answer, and evicting on those would throw away a good copy exactly when it is
+most needed.
+
 ## Offline Read Paths
 
 When the app is offline or running from an offline-restored session:
