@@ -56,7 +56,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # windows-2022, not `windows-latest`: Squirrel.Windows fails on the
+        # 2025 image (see the release workflow for the detail).
+        os: [macos-latest, windows-2022, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

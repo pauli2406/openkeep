@@ -124,7 +124,13 @@ jobs:
             arch: x64
             smoke: true
           - name: Windows x64
-            os: windows-latest
+            # Pinned rather than `windows-latest`, which is now
+            # windows-2025-vs2026: Squirrel.Windows fails there inside
+            # `CreateZipFromDirectory`, shelling out to tooling the image no
+            # longer provides. Squirrel.Windows is effectively unmaintained, so
+            # the durable fix is a different installer; revisit when this image
+            # is retired.
+            os: windows-2022
             arch: x64
             smoke: true
           - name: Linux x64
