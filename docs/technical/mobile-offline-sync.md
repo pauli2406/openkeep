@@ -53,6 +53,34 @@ The previous unencrypted databases, scoped and unscoped, are deleted on upgrade
 along with the plaintext files directory. They are plaintext by definition;
 documents re-cache as they are opened.
 
+## Encrypted at Rest
+
+The database is opened through `op-sqlite` built with SQLCipher, so the file
+itself is ciphertext — metadata, recognised text, and the `search_text` column
+offline search runs `LIKE` against. That is why the cipher sits under the
+database rather than over the values: field-level encryption would have cost that
+column, and every search would have had to decrypt every row. Document bytes live
+in the same database in chunks, so there is one cipher and one key rather than
+two, and nothing holds a whole PDF in memory.
+
+The key is 256 random bits per scope, held in the device keystore. Without a
+keystore there is no key and the copy stays disabled for the session: falling back
+to plaintext would turn a missing keystore into a silent downgrade. A key that
+existed but cannot be read — a keystore reset, a backup restored onto another
+device — means its ciphertext is unrecoverable, so the copy is discarded and
+rebuilt rather than reopened forever. SQLCipher being compiled in is a native
+build flag, so the app checks `isSQLCipher()` before opening anything and refuses
+to cache if it is false.
+
+**Viewing a document decrypts it briefly.** `react-native-pdf` and the OS file
+viewer take a path, not a buffer, so the bytes are written to the cache directory
+while a document is open and deleted when it closes; a launch after a crash sweeps
+whatever was left behind. That copy is plaintext for as long as the viewer is
+open, which is stated here rather than implied away.
+
+CI proves the at-rest property rather than assuming it: see `offline-encryption`
+in [Testing and Validation](./testing-and-validation.md).
+
 ## Whose Copy It Is
 
 The cache belongs to one archive and one account. Both the database name and the

@@ -12,7 +12,7 @@
  * definition, its documents re-cache as they are opened, and carrying plaintext
  * into a sealed store would be work in service of nothing.
  */
-import { open, type DB } from "@op-engineering/op-sqlite";
+import { isSQLCipher, open, type DB } from "@op-engineering/op-sqlite";
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import {
@@ -80,6 +80,27 @@ const expoRandomBytes: RandomBytes = (byteCount) => Crypto.getRandomBytes(byteCo
  * — the caller leaves the cache disabled for the session rather than writing
  * anything readable to disk.
  */
+/**
+ * Whether this build's op-sqlite actually has SQLCipher compiled in. It is a
+ * native build flag (`op-sqlite.sqlcipher` in package.json), so it can be lost
+ * by a dependency bump or a stale prebuilt binary without a single line of
+ * JavaScript changing. Checked here rather than assumed: a build that cannot
+ * encrypt must not cache.
+ */
+function assertCipherAvailable() {
+  let available: boolean;
+  try {
+    available = isSQLCipher();
+  } catch (error) {
+    throw new SecureStoreUnavailableError(error);
+  }
+  if (!available) {
+    throw new SecureStoreUnavailableError(
+      new Error("op-sqlite was built without SQLCipher, so the copy cannot be encrypted"),
+    );
+  }
+}
+
 export async function openEncryptedDatabase({
   scope,
   store = expoSecureStore,
@@ -91,6 +112,7 @@ export async function openEncryptedDatabase({
   randomBytes?: RandomBytes;
   openDatabase?: typeof open;
 }): Promise<OfflineDatabase> {
+  assertCipherAvailable();
   const { key, recreated } = await loadOrCreateCacheKey({ scope, store, randomBytes });
   const name = encryptedDatabaseName(scope);
 

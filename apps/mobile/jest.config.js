@@ -26,5 +26,11 @@ module.exports = {
   ],
   // `render.tsx` is the shared harness, not a suite.
   testMatch: ["<rootDir>/src/**/*.test.ts?(x)"],
+  // The at-rest encryption proof needs a SQLCipher-capable SQLite for Node,
+  // which builds natively and has no business in a Windows or macOS install. CI
+  // installs it in one Linux job and sets this flag; nothing else pays for it.
+  testPathIgnorePatterns: process.env.OPENKEEP_CIPHER_TEST
+    ? []
+    : ["<rootDir>/src/__tests__/offline-encryption.test.ts"],
   collectCoverageFrom: ["src/**/*.{ts,tsx}"],
 };

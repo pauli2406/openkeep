@@ -3,6 +3,9 @@ packages:
   - "packages/*"
 
 onlyBuiltDependencies:
+  # Added by the `Encryption at rest (mobile)` CI job only, never committed as a
+  # dependency: it builds natively and a Windows install would fail on it.
+  - better-sqlite3-multiple-ciphers
   # appdmg's native helpers, needed by the macOS DMG maker
   - macos-alias
   - fs-xattr

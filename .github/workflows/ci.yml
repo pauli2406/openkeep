@@ -194,12 +194,46 @@ jobs:
         if: github.event_name != 'pull_request'
         run: sh ./scripts/security/run-gitleaks.sh git
 
+  # Proves the mobile offline copy is ciphertext at rest, which no other job can:
+  # the ordinary suites run against Node's own SQLite, which has no SQLCipher.
+  # The driver that does builds natively and needs a toolchain, so it is installed
+  # here and nowhere else — a Windows or macOS install would try to compile it for
+  # no reason, and fail.
+  encryption:
+    name: Encryption at rest (mobile)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: encryption
+      - name: Install a SQLCipher-capable SQLite for Node
+        # Added here rather than committed: only this job needs it, and only on
+        # Linux. Through pnpm, not npm — npm rewrites the root `node_modules`
+        # tree and takes pnpm's binaries with it, so `jest` disappears.
+        run: pnpm add -w -D better-sqlite3-multiple-ciphers
+      - name: Assert nothing readable reaches the disk
+        env:
+          OPENKEEP_CIPHER_TEST: "1"
+        run: pnpm --filter @openkeep/mobile test -- --testPathPattern offline-encryption
+
   # A single required check to protect `main` with, so adding a job later does
   # not mean editing branch protection.
   ci:
     name: CI
     runs-on: ubuntu-latest
-    needs: [lint, test, build, desktop, integration, visual, visual-mobile, secrets]
+    needs:
+      [
+        lint,
+        test,
+        build,
+        desktop,
+        integration,
+        visual,
+        visual-mobile,
+        encryption,
+        secrets,
+      ]
     if: always()
     steps:
       - name: Verify every job succeeded
