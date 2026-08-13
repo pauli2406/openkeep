@@ -111,8 +111,11 @@ jobs:
     name: Build ${{ matrix.name }}
     needs: verify
     strategy:
-      # One failed platform must fail the whole release, not ship the rest.
-      fail-fast: true
+      # Every platform reports, even when one fails. `publish` needs all of them,
+      # so a partial build still cannot publish a partial release — but a Windows
+      # problem no longer hides whether macOS signing and notarization worked,
+      # which is what happened three runs in a row.
+      fail-fast: false
       matrix:
         include:
           - name: macOS arm64
