@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "./auth";
 import type {
   ArchiveDocument,
   DashboardInsights,
@@ -25,6 +26,10 @@ import {
   type AuthFetch,
 } from "./offline-file-cache";
 import {
+  LEGACY_UNSCOPED_DATABASE,
+  offlineCacheScope,
+} from "./offline-scope";
+import {
   buildCachedDashboard,
   buildCachedFacets,
   clearCachedDocumentRows,
@@ -32,18 +37,22 @@ import {
   getCachedDocument,
   getCachedFileUris,
   searchCachedDocuments,
+  setOfflineCacheScope,
   upsertCachedDocument,
   type CachedDocumentRecord,
   type CachedSortField,
 } from "./offline-metadata-store";
 
-const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v1";
+// v2 also removes the unscoped cache this replaced. Its documents cannot be
+// attributed to an account, so they are deleted rather than shown to whoever
+// signs in next.
+const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v2";
 const LEGACY_KEYS = [
   "openkeep.mobile.offline-archive-mode",
   "openkeep.mobile.offline-retention-settings",
 ];
 
-const fileCache = createOfflineFileCache({ files: createExpoOfflineFileSystem() });
+const deviceFiles = createExpoOfflineFileSystem();
 
 type LoadDocumentsOptions = {
   query?: string;
@@ -108,6 +117,14 @@ async function fetchJson<T>(authFetch: AuthFetch, path: string) {
 }
 
 export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  // The archive and the account this copy belongs to. Null before sign-in, and
+  // the cache stays shut rather than falling back to a shared one.
+  const scope = offlineCacheScope({ apiUrl: auth.apiUrl, userId: auth.user?.id });
+  const fileCache = useMemo(
+    () => createOfflineFileCache({ files: deviceFiles, scope }),
+    [scope],
+  );
   const [isConnected, setIsConnected] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [cacheSummary, setCacheSummary] = useState<CacheSummary>({
@@ -125,16 +142,25 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     // housekeeping call would re-key live queries and unmount whatever they
     // render. `lastCachedAt` is part of that comparison, so re-caching a
     // document at an unchanged size still refreshes what reads it.
+    //
+    // The scope is part of the revision, not just the comparison: two accounts
+    // whose copies happen to hold the same count and bytes would otherwise
+    // produce an identical revision, and every cached query would keep serving
+    // the previous account's render.
+    const scopeTag = scope ?? "none";
     const unchanged =
       current.revision !== null &&
+      current.revision.startsWith(`${scopeTag}#`) &&
       current.documentCount === stats.documentCount &&
       current.fileStorageBytes === stats.fileStorageBytes &&
       current.lastCachedAt === stats.lastCachedAt;
-    const next = unchanged ? current : { ...stats, revision: new Date().toISOString() };
+    const next = unchanged
+      ? current
+      : { ...stats, revision: `${scopeTag}#${new Date().toISOString()}` };
     cacheSummaryRef.current = next;
     setCacheSummary(next);
     return next;
-  }, []);
+  }, [scope]);
 
   const clearLegacyOfflineState = useCallback(async () => {
     const alreadyCleaned = await AsyncStorage.getItem(LEGACY_CLEANUP_KEY);
@@ -144,9 +170,15 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
 
     await Promise.all(LEGACY_KEYS.map((key) => AsyncStorage.removeItem(key).catch(() => undefined)));
     await SQLite.deleteDatabaseAsync("openkeep-offline.db").catch(() => undefined);
+    await SQLite.deleteDatabaseAsync(LEGACY_UNSCOPED_DATABASE).catch(() => undefined);
     await fileCache.deleteIfExists(fileCache.legacyRootDir);
+    await fileCache.deleteIfExists(fileCache.legacyFilesDir);
     await AsyncStorage.setItem(LEGACY_CLEANUP_KEY, "true");
   }, []);
+
+  // Set synchronously on render rather than in an effect: a screen must never
+  // get one paint's worth of the previous scope's documents.
+  setOfflineCacheScope(scope);
 
   useEffect(() => {
     let isMounted = true;
@@ -175,7 +207,10 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       isMounted = false;
       unsubscribe();
     };
-  }, [clearLegacyOfflineState, refreshCacheSummary]);
+    // `scope` is a dependency: signing in as someone else, or repointing the
+    // app at another archive, has to re-read the summary from that copy rather
+    // than keep reporting the previous one.
+  }, [clearLegacyOfflineState, fileCache, refreshCacheSummary, scope]);
 
   const loadCachedDocument = useCallback(async (documentId: string) => {
     const cached = await getCachedDocument(documentId);

@@ -21,6 +21,22 @@ Opening a document detail page online stores one local cache record:
 
 The cache is last-opened state. It is refreshed the next time the same document is opened online.
 
+## Whose Copy It Is
+
+The cache belongs to one archive and one account. Both the database name and the
+files directory carry that scope — `openkeep-cache-<account>--<host>.db` and
+`openkeep-cache/<account>--<host>/files` — so isolation does not depend on every
+query remembering a `WHERE` clause. Before sign-in there is no scope and no
+cache: reads answer empty and writes refuse, rather than falling back to a shared
+copy, which is what previously let one account read another's documents after an
+archive URL change or a sign-in as someone else. The scope also prefixes the
+revision the cached queries are keyed by, so two copies holding the same counts
+cannot serve each other's render.
+
+The unscoped database this replaced is deleted once on upgrade. Its documents
+cannot be attributed to an account, so they are removed rather than shown to
+whoever signs in next; they re-cache as documents are opened.
+
 ## On-Device Storage
 
 The cache uses SQLite for queryable document metadata and Expo's persistent document directory for files:

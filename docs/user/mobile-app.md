@@ -128,6 +128,10 @@ open while connected, and falls back to those copies when the archive cannot be
 reached. There is nothing to switch on, no download-over-Wi-Fi setting and no
 retention setting.
 
+The copy belongs to the account and the archive it came from. Signing in as
+someone else, or pointing the app at another archive, never shows you the
+previous copy.
+
 `Settings` -> `Offline` shows what is stored:
 
 - how many documents are cached and how much file storage they use

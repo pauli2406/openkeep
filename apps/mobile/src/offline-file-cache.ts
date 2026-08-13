@@ -59,15 +59,30 @@ export function createExpoOfflineFileSystem(): OfflineFileSystem {
   };
 }
 
-export function createOfflineFileCache({ files }: { files: OfflineFileSystem }) {
+export function createOfflineFileCache({
+  files,
+  scope,
+}: {
+  files: OfflineFileSystem;
+  /**
+   * Which archive and account these bytes belong to. The scope is part of the
+   * path, so one account's files cannot be read through another's cache — the
+   * same reason the database name carries it.
+   */
+  scope?: string | null;
+}) {
   const rootDir = `${files.rootDirectory}openkeep-cache`;
-  const filesDir = `${rootDir}/files`;
+  const filesDir = scope ? `${rootDir}/${scope}/files` : `${rootDir}/files`;
   const legacyRootDir = `${files.rootDirectory}openkeep-offline`;
+  const legacyFilesDir = `${rootDir}/files`;
   // Two viewers opening the same document must not race for the same file.
   const inFlight = new Map<string, Promise<{ uri: string; bytes: number }>>();
 
   async function ensureDirs() {
     await files.makeDirectory(rootDir);
+    if (scope) {
+      await files.makeDirectory(`${rootDir}/${scope}`);
+    }
     await files.makeDirectory(filesDir);
   }
 
@@ -147,6 +162,7 @@ export function createOfflineFileCache({ files }: { files: OfflineFileSystem }) 
     rootDir,
     filesDir,
     legacyRootDir,
+    legacyFilesDir,
     ensureDirs,
     deleteIfExists,
     exists,
