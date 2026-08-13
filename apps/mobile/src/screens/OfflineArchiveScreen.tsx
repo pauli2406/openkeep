@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -25,6 +26,7 @@ export function OfflineArchiveScreen() {
   const navigation = useNavigation();
   const offline = useOfflineArchive();
   const auth = useAuth();
+  const [retrying, setRetrying] = useState(false);
   const { t } = useI18n();
 
   // A session restored offline reads the local copy even when the device itself
@@ -147,6 +149,20 @@ export function OfflineArchiveScreen() {
         <Text style={styles.repairNote}>{t("offline.repaired")}</Text>
       ) : null}
 
+
+      {auth.isOfflineSession ? (
+        <View style={styles.limitRow}>
+          <Button
+            label={t("offline.retry")}
+            loading={retrying}
+            disabled={retrying}
+            onPress={() => {
+              setRetrying(true);
+              void auth.retryOfflineSession().finally(() => setRetrying(false));
+            }}
+          />
+        </View>
+      ) : null}
 
       <SectionHeader label={t("offline.limitTitle")} />
       <View style={styles.limitRow}>

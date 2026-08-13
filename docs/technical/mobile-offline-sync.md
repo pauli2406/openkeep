@@ -113,6 +113,29 @@ with its file. Only those two: a `500` or a timeout means the archive could not
 answer, and evicting on those would throw away a good copy exactly when it is
 most needed.
 
+## Returning to Live Data
+
+An offline session used to be a dead end. `revalidateSession` was defined,
+exported on the auth context, and called from nowhere — the only other reference
+in the repo was a visual-test stub — so nothing ever cleared `sessionMode`, every
+refetch interval was disabled while the cache was in use, and relaunching the app
+was the only way back.
+
+While an offline session is open the app now probes the archive every 30 seconds,
+immediately when connectivity returns, and on demand from `Try to reconnect` on
+the `Settings` -> `Offline` screen. The probe distinguishes the answers rather
+than returning a bare boolean: reachable ends the offline session on live data,
+`401` or `403` clears the session and hands over to the connect screen rather
+than leaving one nobody can use, and anything else — including a `500`, a
+timeout, or a thrown error — stays offline and tries again. Tearing down a usable
+copy because the archive could not answer would be the wrong way round.
+
+Two guards keep the loop honest: one check runs at a time, so a connectivity flip
+during a slow probe cannot start a second, and a result that arrives after the
+session has changed is discarded rather than applied to a session that has moved
+on. The rules live in `offline-reconnect.ts`, apart from the provider, so they are
+tested without React.
+
 ## Offline Read Paths
 
 When the app is offline or running from an offline-restored session:
