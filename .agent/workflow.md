@@ -64,8 +64,10 @@ The release workflows verify the version, they never write it — a release must
 When asked to release the mobile app, or to prepare one:
 
 1. **Bump `version` in `apps/mobile/app.config.js`** to the version being released, on its own branch (`release/mobile-<version>`), before anything is triggered. That one line is the whole bump — the Settings screen reads the version out of the config the binary was stamped from, and `apps/mobile/package.json` is not the source. The tag the workflow creates is `mobile-v<version>`; `git tag -l 'mobile-v*'` shows what is already taken, and the workflow refuses a version that is tagged.
-2. **Re-bless the Settings baselines in the same PR**: `pnpm --filter @openkeep/mobile test:visual:update`. The version is rendered twice on that screen, so the bump changes those two screenshots and nothing else. A bump of one digit can slip under the 100-pixel diff budget and leave the suite green on a stale baseline, so force it when the run reports nothing to update: `./apps/mobile/visual/run-in-container.sh --update-snapshots=all --grep settings`.
-3. **Everything the release needs must be merged first.** The workflow releases a commit on `main` whose `CI` check is green; it will not pick up a fix that is still in review.
-4. Hand off as in Mode 2 — the maintainer merges, and triggers the release.
+2. **Re-bless the Settings baselines**: run the `Bless Mobile Baselines` workflow with `grep: settings`, which re-renders in the pinned container and opens a pull request. The version is rendered twice on that screen, so the bump changes those two screenshots and nothing else. Do not rely on the suite going red first: a bump of one digit can slip under the 100-pixel diff budget, leaving the suite green against a baseline that still shows the old version. Locally the equivalent is `./apps/mobile/visual/run-in-container.sh --update-snapshots=all --grep settings`, if your container works.
+
+3. **Wait for `main`'s CI before triggering the release.** The release workflow refuses a commit with no CI run, and it only waits three minutes for one to appear — dispatching straight after a merge outruns it.
+4. **Everything the release needs must be merged first.** The workflow releases a commit on `main` whose `CI` check is green; it will not pick up a fix that is still in review.
+5. Hand off as in Mode 2 — the maintainer merges, and triggers the release.
 
 `docs/operations/mobile-releases.md` is the full procedure, including what the workflow checks before it spends an EAS build.

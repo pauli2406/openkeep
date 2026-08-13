@@ -24,6 +24,18 @@ module.exports = {
   transformIgnorePatterns: [
     "node_modules/(?!.*(react-native|expo|@react-navigation|@openkeep|@testing-library))",
   ],
+  // These suites mount real React Native screens, which takes seconds rather
+  // than milliseconds — the whole file runs in about half a minute. Jest's
+  // default five-second budget per test is then a coin flip on a loaded runner,
+  // and the loser is reported as a failed assertion in whichever test was
+  // mounting at the time. Slow is fine here; flaky is not, and a flake makes a
+  // real failure easy to dismiss (#229).
+  testTimeout: 30_000,
+  // CI runs every workspace's suites at once through Turbo, so this one's
+  // workers compete with the API, web and desktop suites for two cores. Fewer
+  // workers here means each React Native mount gets enough CPU to finish inside
+  // its budget; locally, where nothing else is running, Jest decides.
+  ...(process.env.CI ? { maxWorkers: 2 } : {}),
   // `render.tsx` is the shared harness, not a suite.
   testMatch: ["<rootDir>/src/**/*.test.ts?(x)"],
   // The at-rest encryption proof needs a SQLCipher-capable SQLite for Node,
