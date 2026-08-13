@@ -156,6 +156,24 @@ bump.
 | EAS | distribution certificate, provisioning profile, App Store Connect API key, and the iOS build number |
 | This repository | the user-facing `version`, and nothing else about releasing |
 
+## Verifying the Offline Copy Is Encrypted
+
+The encryption cannot be proven in CI: Jest drives the store through Node's own
+SQLite, which has no SQLCipher, so the unit suite covers the key handling and the
+chunked storage but not the ciphertext on disk. Confirm that once per dev-client
+build, on a simulator:
+
+1. `pnpm --filter @openkeep/mobile eas:build:dev:ios` (a native build is required —
+   op-sqlite is a native module, and Expo Go cannot load it).
+2. Open a document in the app so it is cached.
+3. Pull the container and check the database is not readable:
+   `xcrun simctl get_app_container booted com.openkeep.mobile.dev data`, then
+   `strings Documents/openkeep-cache-enc-*.db | head`. A document title or any
+   recognised word appearing there means the build is not encrypted — stop and
+   check that `op-sqlite.sqlcipher` is still `true` in `apps/mobile/package.json`
+   and that the native build picked it up.
+4. `sqlite3 <that file> .tables` must fail with "file is not a database".
+
 ## Releasing
 
 1. **Bump the version in a PR.** `version` in `apps/mobile/app.config.js` — for

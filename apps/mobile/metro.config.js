@@ -39,6 +39,7 @@ if (process.env.OPENKEEP_VISUAL === "1") {
     ["react-native-document-scanner-plugin", path.join(stubs, "document-scanner.ts")],
     ["react-native-blob-util", path.join(stubs, "blob-util.ts")],
     ["expo-sqlite", path.join(stubs, "sqlite.ts")],
+    ["@op-engineering/op-sqlite", path.join(stubs, "op-sqlite.ts")],
     ["expo-secure-store", path.join(stubs, "secure-store.ts")],
     ["pdf-lib", path.join(stubs, "pdf-lib.ts")],
     // For the web platform Metro reads `browser`/`module`/`main`, never

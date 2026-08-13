@@ -57,6 +57,7 @@ export function createTestFileSystem(rootDirectory = "file:///cache/"): TestFile
 
   return {
     rootDirectory,
+    scratchDirectory: rootDirectory,
     entries,
     seed(uri, size) {
       entries.set(uri, size);
@@ -70,6 +71,10 @@ export function createTestFileSystem(rootDirectory = "file:///cache/"): TestFile
     },
     async writeBase64(uri, base64) {
       entries.set(uri, Buffer.from(base64, "base64").byteLength);
+    },
+    async appendBytes(uri, bytes, first) {
+      const existing = first ? 0 : (entries.get(uri) ?? 0);
+      entries.set(uri, existing + bytes.byteLength);
     },
     async move(from, to) {
       const size = entries.get(from);

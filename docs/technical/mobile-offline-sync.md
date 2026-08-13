@@ -21,6 +21,66 @@ Opening a document detail page online stores one local cache record:
 
 The cache is last-opened state. It is refreshed the next time the same document is opened online.
 
+## Encryption at Rest
+
+The copy is encrypted. `op-sqlite` is built with SQLCipher (the `op-sqlite` block
+in `apps/mobile/package.json`), so the whole database file is ciphertext:
+metadata, recognised text, and the `search_text` column offline search runs `LIKE`
+against. The cipher sits under the database rather than over the values for that
+reason — field-level encryption would have cost the searchable column, making
+every offline search decrypt every row.
+
+The key is 256 random bits per scope, held in `expo-secure-store` — the keystore
+the app already used for tokens. Without a keystore there is no key, and without
+a key there is no cache: reads answer empty and writes refuse for the session.
+Falling back to plaintext would turn a missing keystore into a silent downgrade,
+which is the one outcome this must not have. If a key existed and cannot be read
+— a keystore reset, a backup restored onto another device — the database it sealed
+is unrecoverable ciphertext, so it is deleted and the copy starts empty rather
+than reopening a file that can never be read.
+
+Document bytes live in the database as 512 KiB chunks rather than as files, so one
+cipher and one key cover everything and nothing holds a whole PDF in memory.
+
+**What is not protected:** the viewer takes a path, not a buffer, so opening a
+document writes a decrypted copy to the cache directory for as long as it is open.
+That copy is deleted when the screen closes, and swept at the next launch in case
+a crash skipped that. So bytes do touch disk in the clear, briefly, while you are
+reading — the archive of record stays encrypted, and this is stated rather than
+implied.
+
+The previous unencrypted databases, scoped and unscoped, are deleted on upgrade
+along with the plaintext files directory. They are plaintext by definition;
+documents re-cache as they are opened.
+
+## Encrypted at Rest
+
+The database is opened through `op-sqlite` built with SQLCipher, so the file
+itself is ciphertext — metadata, recognised text, and the `search_text` column
+offline search runs `LIKE` against. That is why the cipher sits under the
+database rather than over the values: field-level encryption would have cost that
+column, and every search would have had to decrypt every row. Document bytes live
+in the same database in chunks, so there is one cipher and one key rather than
+two, and nothing holds a whole PDF in memory.
+
+The key is 256 random bits per scope, held in the device keystore. Without a
+keystore there is no key and the copy stays disabled for the session: falling back
+to plaintext would turn a missing keystore into a silent downgrade. A key that
+existed but cannot be read — a keystore reset, a backup restored onto another
+device — means its ciphertext is unrecoverable, so the copy is discarded and
+rebuilt rather than reopened forever. SQLCipher being compiled in is a native
+build flag, so the app checks `isSQLCipher()` before opening anything and refuses
+to cache if it is false.
+
+**Viewing a document decrypts it briefly.** `react-native-pdf` and the OS file
+viewer take a path, not a buffer, so the bytes are written to the cache directory
+while a document is open and deleted when it closes; a launch after a crash sweeps
+whatever was left behind. That copy is plaintext for as long as the viewer is
+open, which is stated here rather than implied away.
+
+CI proves the at-rest property rather than assuming it: see `offline-encryption`
+in [Testing and Validation](./testing-and-validation.md).
+
 ## Whose Copy It Is
 
 The cache belongs to one archive and one account. Both the database name and the

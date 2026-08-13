@@ -243,12 +243,31 @@ going wrong:
 | `offline-store` | the offline mirror's real SQL: what a cached document reads back as, the status/review/correspondent filters, the search-text match, cache accounting, and the derived dashboard and facets |
 | `offline-file-cache` | which endpoint a document's bytes come from, the write-to-temporary-then-move flow, byte accounting, and two viewers collapsing into one download |
 | `offline-cache-migration` | the cache schema version: adopting a pre-versioning database, running each step once in version order, and discarding a shape this build cannot read |
+| `offline-encryption` | that the copy is **ciphertext at rest**: the same store code driven through a real SQLCipher driver, then the raw file read back for the title, the recognised text and the document bytes — in UTF-8 and UTF-16 — plus the journal, the file header, and that neither a wrong key nor no key can read it |
 | `offline-surfaces` | dates in the offline derivations: due today is not overdue at any hour, day counts survive a daylight-saving change, a document keeps its own local year and month, and the latest document is compared as a date |
 
 Native modules with no JavaScript fallback are mocked in `jest.setup.js` — SQLite,
 the OS document scanner, the PDF view, the file viewer, secure storage. Screens
 mock `../auth` and `../offline-archive` at the module boundary; the screen's own
 logic is never mocked.
+
+One suite goes further than the rest. `offline-encryption` runs the store against
+`better-sqlite3-multiple-ciphers`, a SQLCipher-capable SQLite for Node, so CI can
+assert what actually lands on disk rather than take a device's word for it.
+Turning the cipher off in that harness fails five of its six tests, which is how
+we know it is testing the property and not the wiring.
+
+That driver builds natively, so it is **not** a workspace dependency — a Windows
+install would try to compile it and fail for no reason. The `Encryption at rest
+(mobile)` job installs it on Linux and sets `OPENKEEP_CIPHER_TEST=1`, which is
+what un-skips the suite; the job is required, so the property cannot regress
+unnoticed. To run it locally: `npm install --no-save
+better-sqlite3-multiple-ciphers`, then
+`OPENKEEP_CIPHER_TEST=1 pnpm --filter @openkeep/mobile test -- --testPathPattern offline-encryption`.
+
+What no Node driver can cover is whether the shipped app's `op-sqlite` was *built*
+with SQLCipher — that is a native flag, so the app asserts `isSQLCipher()` before
+it opens the copy and refuses to cache when it is false.
 
 The two offline suites are the exception to that mock, and deliberately so: the
 offline store and file cache take their database handle and filesystem as

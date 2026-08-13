@@ -23,10 +23,13 @@ import type {
 import {
   createExpoOfflineFileSystem,
   createOfflineFileCache,
+  extensionForMime,
   type AuthFetch,
 } from "./offline-file-cache";
+import { createOfflineFileMaterializer } from "./offline-file-materializer";
 import {
   LEGACY_UNSCOPED_DATABASE,
+  offlineCacheDatabaseName,
   offlineCacheScope,
 } from "./offline-scope";
 import {
@@ -40,12 +43,15 @@ import {
   getCacheStats,
   getCachedDocument,
   getCachedFileUris,
+  hasCachedFileBytes,
   markCachedDocumentViewed,
   quarantinedCount,
+  readCachedFileBytes,
   removeCachedDocument,
   setCacheLimit,
   searchCachedDocuments,
   setOfflineCacheScope,
+  writeCachedFileBytes,
   upsertCachedDocument,
   type CachedDocumentRecord,
   type CachedSortField,
@@ -54,13 +60,20 @@ import {
 // v2 also removes the unscoped cache this replaced. Its documents cannot be
 // attributed to an account, so they are deleted rather than shown to whoever
 // signs in next.
-const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v2";
+// v3 also removes the unencrypted per-scope database and its plaintext files.
+// They are plaintext by definition, so they are deleted rather than migrated;
+// documents re-cache as they are opened.
+const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v3";
 const LEGACY_KEYS = [
   "openkeep.mobile.offline-archive-mode",
   "openkeep.mobile.offline-retention-settings",
 ];
 
 const deviceFiles = createExpoOfflineFileSystem();
+const materializer = createOfflineFileMaterializer({
+  files: deviceFiles,
+  scratchDirectory: deviceFiles.scratchDirectory,
+});
 
 type LoadDocumentsOptions = {
   query?: string;
@@ -105,6 +118,7 @@ type OfflineArchiveContextValue = {
     authFetch: AuthFetch,
     document: ArchiveDocument,
   ) => Promise<string>;
+  releaseCachedFile: (documentId: string) => Promise<void>;
   loadCachedDocument: (documentId: string) => Promise<CachedDocumentRecord | null>;
   queryCachedDocuments: (options?: LoadDocumentsOptions) => Promise<SearchDocumentsResponse>;
   loadCachedDashboard: () => Promise<DashboardInsights>;
@@ -212,10 +226,14 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     await Promise.all(LEGACY_KEYS.map((key) => AsyncStorage.removeItem(key).catch(() => undefined)));
     await SQLite.deleteDatabaseAsync("openkeep-offline.db").catch(() => undefined);
     await SQLite.deleteDatabaseAsync(LEGACY_UNSCOPED_DATABASE).catch(() => undefined);
+    if (scope) {
+      await SQLite.deleteDatabaseAsync(offlineCacheDatabaseName(scope)).catch(() => undefined);
+      await fileCache.deleteIfExists(fileCache.filesDir);
+    }
     await fileCache.deleteIfExists(fileCache.legacyRootDir);
     await fileCache.deleteIfExists(fileCache.legacyFilesDir);
     await AsyncStorage.setItem(LEGACY_CLEANUP_KEY, "true");
-  }, []);
+  }, [fileCache, scope]);
 
   // Set synchronously on render rather than in an effect: a screen must never
   // get one paint's worth of the previous scope's documents.
@@ -226,6 +244,9 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
 
     async function bootstrap() {
       await fileCache.ensureDirs();
+      // A kill or a crash skips `releaseCachedFile`, and a decrypted document
+      // must not survive that.
+      await materializer.sweep();
       await clearLegacyOfflineState();
       if (isMounted) {
         setMaxBytesState(await getCacheLimit());
@@ -312,21 +333,20 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       fileCache.download(authFetch, document).catch(() => null),
     ]);
 
-    const fileUri = file?.uri ?? previous?.fileUri ?? null;
-    const fileStorageBytes = file?.bytes ?? (await fileCache.fileSize(fileUri));
     const record: CachedDocumentRecord = {
       document,
       text,
       history,
-      fileUri,
+      // Bytes live in the encrypted database now, so a row carries no path.
+      fileUri: null,
       cachedAt: now,
       lastViewedAt: now,
-      fileStorageBytes,
+      fileStorageBytes: file?.byteLength ?? previous?.fileStorageBytes ?? 0,
     };
 
     await upsertCachedDocument(record);
-    if (previous?.fileUri && file?.uri && previous.fileUri !== file.uri) {
-      await fileCache.deleteIfExists(previous.fileUri);
+    if (file) {
+      await writeCachedFileBytes(document.id, file.bytes);
     }
     // Enforced here rather than on a timer: the cache only grows when a file
     // lands, so this is the moment it can exceed its budget.
@@ -335,31 +355,48 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     return record;
   }, [applyEviction, fileCache, forgetDeletedDocument, refreshCacheSummary]);
 
+  /**
+   * A URI the viewer can open. The bytes are decrypted into the scratch
+   * directory for as long as the document is open — a viewer takes a path, not a
+   * buffer — and `releaseCachedFile` deletes that copy when it closes.
+   */
   const ensureCachedFile = useCallback(async (
     authFetch: AuthFetch,
     document: ArchiveDocument,
   ) => {
-    const previous = await getCachedDocument(document.id);
-    if (previous?.fileUri && (await fileCache.exists(previous.fileUri))) {
-      return previous.fileUri;
+    const now = new Date().toISOString();
+    if (!(await hasCachedFileBytes(document.id))) {
+      const file = await fileCache.download(authFetch, document);
+      const previous = await getCachedDocument(document.id);
+      await upsertCachedDocument({
+        document: previous?.document ?? document,
+        text: previous?.text ?? { documentId: document.id, blocks: [] },
+        history: previous?.history ?? { documentId: document.id, items: [] },
+        fileUri: null,
+        cachedAt: previous?.cachedAt ?? now,
+        lastViewedAt: now,
+        fileStorageBytes: file.byteLength,
+      });
+      await writeCachedFileBytes(document.id, file.bytes);
+      await applyEviction(await enforceCacheLimit());
+      await refreshCacheSummary();
     }
 
-    const file = await fileCache.download(authFetch, document);
-    const now = new Date().toISOString();
-    const record: CachedDocumentRecord = {
-      document: previous?.document ?? document,
-      text: previous?.text ?? { documentId: document.id, blocks: [] },
-      history: previous?.history ?? { documentId: document.id, items: [] },
-      fileUri: file.uri,
-      cachedAt: previous?.cachedAt ?? now,
-      lastViewedAt: now,
-      fileStorageBytes: file.bytes,
-    };
-    await upsertCachedDocument(record);
-    await applyEviction(await enforceCacheLimit());
-    await refreshCacheSummary();
-    return file.uri;
+    return materializer.materialize({
+      documentId: document.id,
+      extension: extensionForMime(
+        document.searchablePdfAvailable && document.mimeType === "application/pdf"
+          ? "application/pdf"
+          : document.mimeType,
+      ),
+      chunks: await readCachedFileBytes(document.id),
+    });
   }, [applyEviction, fileCache, refreshCacheSummary]);
+
+  /** Deletes the decrypted scratch copy; the encrypted original stays. */
+  const releaseCachedFile = useCallback(async (documentId: string) => {
+    await materializer.release(documentId);
+  }, []);
 
   const queryCachedDocumentsResponse = useCallback(async (options?: LoadDocumentsOptions) => {
     // Paged in SQL, so `total` counts every match while `items` is the page that
@@ -395,6 +432,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       cacheSummary,
       cacheOpenedDocument,
       ensureCachedFile,
+      releaseCachedFile,
       loadCachedDocument,
       queryCachedDocuments: queryCachedDocumentsResponse,
       loadCachedDashboard: buildCachedDashboard,
@@ -415,6 +453,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       isReady,
       loadCachedDocument,
       maxBytes,
+      releaseCachedFile,
       setMaxBytes,
       quarantinedRows,
       queryCachedDocumentsResponse,

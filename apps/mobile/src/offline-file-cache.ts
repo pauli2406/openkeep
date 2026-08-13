@@ -14,9 +14,13 @@ import type { ArchiveDocument } from "./lib";
 export type OfflineFileSystem = {
   /** Where the cache lives; `documentDirectory` on a device. */
   rootDirectory: string;
+  /** Evictable scratch space, excluded from backups; `cacheDirectory`. */
+  scratchDirectory: string;
   makeDirectory(uri: string): Promise<void>;
   info(uri: string): Promise<{ exists: boolean; size?: number }>;
   writeBase64(uri: string, base64: string): Promise<void>;
+  /** Appends raw bytes, replacing the file when `first` is set. */
+  appendBytes(uri: string, bytes: Uint8Array, first: boolean): Promise<void>;
   move(from: string, to: string): Promise<void>;
   delete(uri: string): Promise<void>;
 };
@@ -45,6 +49,7 @@ export function extensionForMime(mimeType: string) {
 export function createExpoOfflineFileSystem(): OfflineFileSystem {
   return {
     rootDirectory: FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? "",
+    scratchDirectory: FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "",
     makeDirectory: (uri) => FileSystem.makeDirectoryAsync(uri, { intermediates: true }),
     info: async (uri) => {
       const info = await FileSystem.getInfoAsync(uri);
@@ -54,6 +59,25 @@ export function createExpoOfflineFileSystem(): OfflineFileSystem {
     },
     writeBase64: (uri, base64) =>
       FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 }),
+    appendBytes: async (uri, bytes, first) => {
+      // `expo-file-system/legacy` writes base64, so each chunk is encoded on its
+      // own rather than the whole file at once — the point of chunking.
+      const base64 = Buffer.from(bytes).toString("base64");
+      if (first) {
+        await FileSystem.writeAsStringAsync(uri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        return;
+      }
+      const existing = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      await FileSystem.writeAsStringAsync(
+        uri,
+        Buffer.concat([Buffer.from(existing, "base64"), Buffer.from(bytes)]).toString("base64"),
+        { encoding: FileSystem.EncodingType.Base64 },
+      );
+    },
     move: (from, to) => FileSystem.moveAsync({ from, to }),
     delete: (uri) => FileSystem.deleteAsync(uri, { idempotent: true }),
   };
@@ -76,7 +100,10 @@ export function createOfflineFileCache({
   const legacyRootDir = `${files.rootDirectory}openkeep-offline`;
   const legacyFilesDir = `${rootDir}/files`;
   // Two viewers opening the same document must not race for the same file.
-  const inFlight = new Map<string, Promise<{ uri: string; bytes: number }>>();
+  const inFlight = new Map<
+    string,
+    Promise<{ bytes: Uint8Array; extension: string; byteLength: number }>
+  >();
 
   async function ensureDirs() {
     await files.makeDirectory(rootDir);
@@ -142,14 +169,11 @@ export function createOfflineFileCache({
       }
 
       const extension = extensionForMime(searchable ? "application/pdf" : document.mimeType);
-      const uri = `${filesDir}/${document.id}${extension}`;
-      const tempUri = `${uri}.tmp`;
       const arrayBuffer = await response.arrayBuffer();
-      await files.writeBase64(tempUri, Buffer.from(arrayBuffer).toString("base64"));
-      await deleteIfExists(uri);
-      await files.move(tempUri, uri);
-
-      return { uri, bytes: arrayBuffer.byteLength };
+      // The bytes go to the caller, which puts them in the encrypted store. They
+      // are deliberately not written to a file here: a plaintext copy on disk is
+      // what this story exists to remove.
+      return { bytes: new Uint8Array(arrayBuffer), extension, byteLength: arrayBuffer.byteLength };
     })();
 
     inFlight.set(document.id, run);

@@ -89,6 +89,7 @@ export function DocumentDetailScreen() {
     },
   });
 
+
   const documentQuery = useQuery({
     queryKey: ["document", documentId, shouldUseCache, cacheRevision],
     queryFn: async () => {
@@ -106,6 +107,24 @@ export function DocumentDetailScreen() {
       ? false
       : (query) => processingRefetchInterval(query.state.data, (data) => data),
   });
+
+  /**
+   * The viewer takes a path, not a buffer, so the encrypted bytes are decrypted
+   * into the cache directory for as long as this screen is open. The effect
+   * below deletes that copy on the way out.
+   */
+  const localFileQuery = useQuery({
+    queryKey: ["cached-file", documentId, shouldUseCache, cacheRevision],
+    enabled: shouldUseCache && documentQuery.isSuccess,
+    queryFn: () => offline.ensureCachedFile(auth.authFetch, documentQuery.data!),
+  });
+
+  useEffect(
+    () => () => {
+      void offline.releaseCachedFile(documentId);
+    },
+    [documentId, offline],
+  );
 
   const textQuery = useQuery({
     queryKey: ["document-text", documentId, shouldUseCache, cacheRevision],
@@ -327,7 +346,7 @@ export function DocumentDetailScreen() {
               <DocumentTab
                 document={document}
                 authFetch={auth.authFetch}
-                localFileUri={cachedRecordQuery.data?.fileUri ?? null}
+                localFileUri={localFileQuery.data ?? null}
                 hasLocalFile={Boolean(cachedRecordQuery.data?.fileUri)}
                 offlineMode={shouldUseCache}
                 textBlocks={textQuery.data?.blocks}
