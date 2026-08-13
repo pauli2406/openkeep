@@ -65,7 +65,7 @@ export function DocumentDetailScreen() {
   // Only queries that actually read the offline cache should re-key when it changes. Online
   // queries fetch from the network, so a cache refresh must not discard their entry — that would
   // unmount the metadata form mid-edit.
-  const cacheRevision = shouldUseCache ? offline.cacheSummary.updatedAt : null;
+  const cacheRevision = shouldUseCache ? offline.cacheSummary.revision : null;
 
   const [activeTab, setActiveTab] = useState<TabKey>("document");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -78,7 +78,7 @@ export function DocumentDetailScreen() {
       "cached-document-record",
       documentId,
       shouldUseCache,
-      offline.cacheSummary.updatedAt,
+      offline.cacheSummary.revision,
     ],
     queryFn: async () => {
       const record = await offline.loadCachedDocument(documentId);

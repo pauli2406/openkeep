@@ -64,7 +64,15 @@ type LoadDocumentsOptions = {
 type CacheSummary = {
   documentCount: number;
   fileStorageBytes: number;
-  updatedAt: string | null;
+  /** When a document was last written to the cache, read from the rows. */
+  lastCachedAt: string | null;
+  /**
+   * Opaque token the cached queries are keyed by. Deliberately not the
+   * timestamp above: conflating the two is what left the reported figure
+   * meaning "when the app last counted", and left a re-cache at an unchanged
+   * size invisible to every query that reads the cache.
+   */
+  revision: string | null;
 };
 
 type OfflineArchiveContextValue = {
@@ -105,20 +113,24 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   const [cacheSummary, setCacheSummary] = useState<CacheSummary>({
     documentCount: 0,
     fileStorageBytes: 0,
-    updatedAt: null,
+    lastCachedAt: null,
+    revision: null,
   });
   const cacheSummaryRef = useRef(cacheSummary);
 
   const refreshCacheSummary = useCallback(async () => {
     const stats = await getCacheStats();
     const current = cacheSummaryRef.current;
-    // `updatedAt` feeds query keys, so only move it when the cache really changed. Bumping it on
-    // every housekeeping call would re-key live queries and unmount whatever they render.
+    // The revision only moves when the cache really changed; bumping it on every
+    // housekeeping call would re-key live queries and unmount whatever they
+    // render. `lastCachedAt` is part of that comparison, so re-caching a
+    // document at an unchanged size still refreshes what reads it.
     const unchanged =
-      current.updatedAt !== null &&
+      current.revision !== null &&
       current.documentCount === stats.documentCount &&
-      current.fileStorageBytes === stats.fileStorageBytes;
-    const next = unchanged ? current : { ...stats, updatedAt: new Date().toISOString() };
+      current.fileStorageBytes === stats.fileStorageBytes &&
+      current.lastCachedAt === stats.lastCachedAt;
+    const next = unchanged ? current : { ...stats, revision: new Date().toISOString() };
     cacheSummaryRef.current = next;
     setCacheSummary(next);
     return next;
@@ -265,9 +277,9 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     const stats = await getCacheStats();
     return {
       ...stats,
-      updatedAt: cacheSummary.updatedAt,
+      revision: cacheSummary.revision,
     };
-  }, [cacheSummary.updatedAt]);
+  }, [cacheSummary.revision]);
 
   const value = useMemo<OfflineArchiveContextValue>(
     () => ({

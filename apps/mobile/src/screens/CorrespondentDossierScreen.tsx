@@ -154,7 +154,7 @@ export function CorrespondentDossierScreen() {
       correspondentId,
       auth.apiUrl,
       shouldUseCache,
-      offline.cacheSummary.updatedAt,
+      offline.cacheSummary.revision,
     ],
     queryFn: async () => {
       if (shouldUseCache) {

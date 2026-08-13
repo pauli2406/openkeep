@@ -173,8 +173,64 @@ describe("cache accounting", () => {
       }),
     );
 
-    expect(await store.getCacheStats()).toEqual({ documentCount: 2, fileStorageBytes: 100 });
+    expect(await store.getCacheStats()).toMatchObject({ documentCount: 2, fileStorageBytes: 100 });
     expect(await store.getCachedFileUris()).toEqual(["file:///a.pdf"]);
+  });
+
+  it("reports when a document was last written, from the rows", async () => {
+    const { store } = createStore();
+    await store.upsertCachedDocument(
+      testRecord(testDocument({ id: "aaaaaaaa-0000-4000-8000-000000000001" }), {
+        cachedAt: "2026-03-01T08:00:00.000Z",
+      }),
+    );
+    await store.upsertCachedDocument(
+      testRecord(testDocument({ id: "aaaaaaaa-0000-4000-8000-000000000002" }), {
+        cachedAt: "2026-03-04T09:30:00.000Z",
+      }),
+    );
+
+    expect((await store.getCacheStats()).lastCachedAt).toBe("2026-03-04T09:30:00.000Z");
+  });
+
+  it("keeps that timestamp across a cold start", async () => {
+    // The figure used to be stamped when the app counted the cache, so it reset
+    // to "now" on every launch. Reading it from the rows means a second store
+    // over the same database reports the original write.
+    const database = createTestDatabase();
+    const first = createOfflineMetadataStore({ openDatabase: async () => database });
+    await first.upsertCachedDocument(
+      testRecord(testDocument(), { cachedAt: "2026-02-14T11:00:00.000Z" }),
+    );
+
+    const second = createOfflineMetadataStore({ openDatabase: async () => database });
+    expect((await second.getCacheStats()).lastCachedAt).toBe("2026-02-14T11:00:00.000Z");
+  });
+
+  it("moves that timestamp when a document is re-cached at the same size", async () => {
+    const { store } = createStore();
+    const document = testDocument();
+    await store.upsertCachedDocument(
+      testRecord(document, { cachedAt: "2026-03-01T08:00:00.000Z", fileStorageBytes: 100 }),
+    );
+    await store.upsertCachedDocument(
+      testRecord(document, { cachedAt: "2026-03-09T08:00:00.000Z", fileStorageBytes: 100 }),
+    );
+
+    const stats = await store.getCacheStats();
+    expect(stats.lastCachedAt).toBe("2026-03-09T08:00:00.000Z");
+    // Same count, same bytes: only the timestamp distinguishes these, which is
+    // why the provider's revision has to include it.
+    expect(stats).toMatchObject({ documentCount: 1, fileStorageBytes: 100 });
+  });
+
+  it("has nothing to report when the cache is empty", async () => {
+    const { store } = createStore();
+    expect(await store.getCacheStats()).toEqual({
+      documentCount: 0,
+      fileStorageBytes: 0,
+      lastCachedAt: null,
+    });
   });
 
   it("empties completely when cleared", async () => {
@@ -182,7 +238,11 @@ describe("cache accounting", () => {
     await store.upsertCachedDocument(testRecord(testDocument()));
     await store.clearCachedDocumentRows();
 
-    expect(await store.getCacheStats()).toEqual({ documentCount: 0, fileStorageBytes: 0 });
+    expect(await store.getCacheStats()).toEqual({
+      documentCount: 0,
+      fileStorageBytes: 0,
+      lastCachedAt: null,
+    });
     expect(await store.listCachedDocuments()).toEqual([]);
   });
 });

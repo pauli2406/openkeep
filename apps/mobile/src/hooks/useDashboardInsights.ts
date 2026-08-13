@@ -17,7 +17,7 @@ export function useDashboardInsights() {
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
   return useQuery({
-    queryKey: ["dashboard", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["dashboard", auth.apiUrl, shouldUseCache, offline.cacheSummary.revision],
     queryFn: async () => {
       if (shouldUseCache) {
         return offline.loadCachedDashboard();

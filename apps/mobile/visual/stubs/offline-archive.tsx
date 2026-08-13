@@ -25,7 +25,8 @@ export function useOfflineArchive() {
     cacheSummary: {
       documentCount: cached.length,
       fileStorageBytes: 18_452_119,
-      updatedAt: "2026-03-20T08:12:00.000Z",
+      lastCachedAt: "2026-03-20T08:12:00.000Z",
+      revision: "2026-03-20T08:12:00.000Z",
     },
     cacheOpenedDocument: async () => record(),
     ensureCachedFile: async () => "file:///cache/d-2.pdf",
@@ -47,7 +48,8 @@ export function useOfflineArchive() {
     getCacheSummary: async () => ({
       documentCount: cached.length,
       fileStorageBytes: 18_452_119,
-      updatedAt: "2026-03-20T08:12:00.000Z",
+      lastCachedAt: "2026-03-20T08:12:00.000Z",
+      revision: "2026-03-20T08:12:00.000Z",
     }),
   };
 }

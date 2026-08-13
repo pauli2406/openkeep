@@ -193,7 +193,7 @@ export function DocumentsScreen() {
       filter,
       params,
       shouldUseCache,
-      offline.cacheSummary.updatedAt,
+      offline.cacheSummary.revision,
     ],
     queryFn: async () => {
       if (shouldUseCache) {
