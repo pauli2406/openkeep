@@ -290,6 +290,27 @@ Two constraints worth knowing before adding a suite:
 What the unit suite does **not** cover is how a screen is laid out. That is the
 visual suite below — and neither one proves how the app looks on a device.
 
+### Why there is no native screenshot job
+
+Considered and declined, with the reasoning recorded because the question recurs
+(issue #154). Maestro or Detox against an Android emulator on `ubuntu-latest`
+needs a dev-client build per run — ten to twenty minutes — and emulator
+screenshot jobs are a well-known source of flake; iOS needs macOS runners at
+several times the cost. Against that, the defects a device actually catches are
+concentrated and enumerable, so a **release checklist** buys most of the coverage
+for none of the flake: see `Before you ship to anyone` in
+[Mobile Releases](../operations/mobile-releases.md).
+
+This is not a guess about what a device catches. Two defects shipped in 0.3.0
+with all 34 screenshots green, and both were on #154's list of what
+react-native-web cannot show: a `Modal`'s missing safe-area insets put four
+headers under the status bar, and the PDF viewer — stubbed as an empty sheet in
+the visual build — failed on a real document. The checklist now names both.
+
+Revisit if device-only regressions keep reaching a release despite the checklist:
+that would mean the list is being skipped or is incomplete, and an emulator job's
+flake becomes the cheaper problem.
+
 ## Mobile Visual Regression
 
 Thirty-four screenshots — seventeen screens in both themes — of the real app at
