@@ -137,8 +137,14 @@ previous copy.
 - how many documents are cached and how much file storage they use
 - when a document was last written to the copy — a time today, a date before that
 - what is kept per document: metadata, the original file, recognised text, history
+- a storage limit for the copy, and what it is using of it
 - `Delete the offline copy`, which removes the local copy and never touches the
   server
+
+When the copy passes its limit, the documents you opened longest ago are removed
+first — opening one again offline counts as opening it, so what you actually read
+stays. Removed documents come back the next time you open them with a
+connection.
 
 If a stored document ever turns out to be unreadable, the app removes it from the
 copy and says so on that screen rather than failing to open the list; it comes

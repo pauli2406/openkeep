@@ -46,6 +46,8 @@ export function useOfflineArchive() {
     loadCachedFacets: async () => FACETS,
     clearCachedDocuments: async () => {},
     quarantinedCount: 0,
+    maxBytes: 256 * 1024 * 1024,
+    setMaxBytes: async () => {},
     getCacheSummary: async () => ({
       documentCount: cached.length,
       fileStorageBytes: 18_452_119,

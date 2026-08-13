@@ -75,6 +75,23 @@ Neither half of the cache reaches the device directly. `offline-metadata-store.t
 
 `CacheSummary` exposes `documentCount`, `fileStorageBytes`, `lastCachedAt` and `revision`, and the `Settings` -> `Offline` screen shows the first three. The last two are deliberately separate values: `lastCachedAt` is read from the rows (`MAX(cached_at)`) and is when a document was last written to the cache, so it survives a restart; `revision` is an opaque token the cached queries are keyed by, moved only when the cache really changed. Conflating them is what previously left the reported figure meaning "when the app last counted", resetting on every cold start — and left a document re-cached at an unchanged size invisible to every query reading the cache, since nothing in the comparison had moved.
 
+## What Bounds the Copy
+
+Each archive's copy has a byte budget, stored beside its rows so it is per scope
+like everything else: 256 MiB by default — a phone is tighter than a laptop, so
+this is not desktop's 1 GiB — with 64 MiB, 256 MiB and 1 GiB offered on the
+`Settings` -> `Offline` screen. When a cached file pushes the copy past the
+budget, documents are evicted least-recently-viewed first until it fits, rows and
+files together, and lowering the limit evicts immediately rather than at the next
+download. An unreadable stored limit falls back to the default, never to no
+limit.
+
+Only file bytes count against the budget. Row JSON is small, and evicting
+metadata would cost the ability to list what the copy holds for no real saving.
+`last_viewed_at` is refreshed when a document is opened offline as well as
+online, so the copy someone reads every week without a connection is not the
+first thing dropped.
+
 ## When the Copy Is Damaged
 
 A row that cannot be decoded is dropped and the read carries on with the rest.
