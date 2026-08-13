@@ -179,6 +179,20 @@ jobs:
         shell: bash
         run: echo "OPENKEEP_WIN_SIGNING=1" >> "$GITHUB_ENV"
 
+      # The Electron binary comes from GitHub releases, ~100 MB per leg, and that
+      # download has no retry of its own. One dropped connection would fail a
+      # leg, and `fail-fast` then abandons the whole release — so it is cached,
+      # and the packaging step gets more than one chance.
+      - name: Cache the Electron download
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~\AppData\Local\electron\Cache
+          key: electron-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-${{ runner.os }}-${{ matrix.arch }}-
+
       - name: Make distributables
         shell: bash
         env:
@@ -186,7 +200,13 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           WINDOWS_SIGN_PARAMS: ${{ secrets.WINDOWS_SIGN_PARAMS }}
-        run: pnpm --filter @openkeep/desktop make -- --arch=${{ matrix.arch }}
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm --filter @openkeep/desktop make -- --arch=${{ matrix.arch }}; then exit 0; fi
+            echo "::warning::make attempt $attempt failed; retrying"
+            sleep 20
+          done
+          exit 1
 
       - name: Smoke-test the packaged application
         if: matrix.smoke && runner.os != 'Linux'

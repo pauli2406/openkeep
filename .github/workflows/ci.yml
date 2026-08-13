@@ -63,7 +63,31 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: desktop-${{ runner.os }}
-      - run: pnpm --filter @openkeep/desktop build
+      # Packaging downloads the Electron binary from GitHub releases, ~100 MB
+      # per job. That download has no retry: a single dropped connection fails
+      # the job with `socket hang up`, which is how this job turned red on main
+      # while nothing about the code had changed. Caching it means only the
+      # first run of a given version fetches anything.
+      - name: Cache the Electron download
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/Library/Caches/electron
+            ~\AppData\Local\electron\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-${{ runner.os }}-
+      # A cache miss still has to survive a flaky download, so the packaging
+      # step gets two more chances before the job is called broken.
+      - name: Package the desktop application
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm --filter @openkeep/desktop build; then exit 0; fi
+            echo "::warning::desktop packaging attempt $attempt failed; retrying"
+            sleep 15
+          done
+          exit 1
+        shell: bash
       - name: Start packaged desktop application
         if: runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke
