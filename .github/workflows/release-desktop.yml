@@ -243,6 +243,16 @@ jobs:
           done
           exit 1
 
+      # The setup exe is the MSI wrapped in a Burn bundle — same toolchain, for
+      # the people who expect a Setup.exe rather than an MSI.
+      - name: Make the Windows setup bundle
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pnpm --filter @openkeep/desktop make:windows-setup
+          test -n "$(find apps/desktop/out/make -name 'OpenKeep-Setup.exe' | head -1)" || {
+            echo "::error::no setup bundle was produced"; exit 1; }
+
       - name: Smoke-test the packaged application
         if: matrix.smoke && runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke
@@ -292,7 +302,7 @@ jobs:
         run: |
           mkdir -p dist
           find apps/desktop/out/make -type f \
-            \( -name '*.zip' -o -name '*.dmg' -o -name '*.msi' \
+            \( -name '*.zip' -o -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
                -o -name '*.deb' -o -name '*.rpm' \) \
             -exec cp {} dist/ \;
           ls -la dist

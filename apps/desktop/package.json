@@ -15,7 +15,8 @@
     "test:smoke": "node ./scripts/run-smoke.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "make:windows-setup": "node ./scripts/make-windows-setup.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",

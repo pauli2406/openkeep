@@ -13,8 +13,9 @@ at a time. It does not create or set up a new archive.
 
 - **macOS** (13 or newer, Apple Silicon and Intel): download the DMG for your
   Mac from the latest GitHub release and drag OpenKeep to Applications.
-- **Windows** (10 or newer, x64): run the MSI from the latest release. It
-  installs like any Windows application and creates the shortcuts.
+- **Windows** (10 or newer, x64): run `OpenKeep-Setup.exe` from the latest
+  release, or the MSI if you prefer one — the setup is the same MSI in a
+  familiar wrapper, and both install the same application.
 - **Linux** (x64): install the `.deb` (`sudo apt install ./openkeep_….deb`) or
   `.rpm` for your distribution. The package registers the launcher entry and
   the document file associations.

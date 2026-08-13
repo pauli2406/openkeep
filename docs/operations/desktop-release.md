@@ -17,7 +17,7 @@ Linux clients link to the release page.
 | Platform | Architectures | Artifact | Updates |
 | --- | --- | --- | --- |
 | macOS 13+ | arm64, x64 | DMG (install), ZIP (update feed) | Automatic in-app (Squirrel.Mac) |
-| Windows 10+ | x64 | WiX MSI (`OpenKeep.msi`) | Manual: in-app link to the release page; installing the MSI is the update |
+| Windows 10+ | x64 | WiX MSI, plus `OpenKeep-Setup.exe` (the MSI in a Burn bundle) | Manual: in-app link to the release page; installing either is the update |
 | Linux | x64 | deb, rpm | Manual — in-app link to the release page |
 
 ## When a Build Fails on the Electron Download
@@ -38,7 +38,7 @@ immune.
 2. To rebuild desktop artifacts for an existing release (a runner failure, new
    signing credentials), run `Release Desktop` directly with the same tag. It
    refuses a tag whose commit did not pass CI and re-uploads with `--clobber`.
-3. Verify: the release page carries the DMGs, darwin ZIPs, the MSI
+3. Verify: the release page carries the DMGs, darwin ZIPs, the MSI, `OpenKeep-Setup.exe`
    with `RELEASES` + `.nupkg`, and the deb/rpm. A signed macOS build passes
    `spctl -a -vv OpenKeep.app`; a signed Windows installer shows a valid
    signature in the file properties.
