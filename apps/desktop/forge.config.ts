@@ -19,19 +19,44 @@ import { MACOS_DOCUMENT_TYPES } from "./src/main/file-associations";
  * Nothing here embeds a secret; the secret scan stays clean by construction.
  *
  * macOS: OPENKEEP_MAC_SIGNING=1 enables signing with the keychain identity;
- * notarization additionally needs APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and
- * APPLE_TEAM_ID. Windows: OPENKEEP_WIN_SIGNING=1 enables Squirrel signing via
+ * notarization additionally needs either an App Store Connect API key
+ * (APPLE_API_KEY_PATH, APPLE_API_KEY_ID, APPLE_API_ISSUER) or an Apple ID
+ * (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID). Windows: OPENKEEP_WIN_SIGNING=1 enables Squirrel signing via
  * WINDOWS_SIGN_PARAMS (a complete signtool parameter string, including a
  * timestamp server).
  */
 const macSigningEnabled = process.env.OPENKEEP_MAC_SIGNING === "1";
-const macNotarizeEnabled =
-  macSigningEnabled &&
-  Boolean(
-    process.env.APPLE_ID &&
-      process.env.APPLE_APP_SPECIFIC_PASSWORD &&
-      process.env.APPLE_TEAM_ID,
-  );
+
+/**
+ * Notarization takes either an App Store Connect API key or an Apple ID with an
+ * app-specific password. The key is preferred where both exist: it is scoped to
+ * the team rather than to a person, it does not expire when someone changes their
+ * Apple ID password, and it is what this repository already holds.
+ */
+const notaryApiKey =
+  process.env.APPLE_API_KEY_PATH &&
+  process.env.APPLE_API_KEY_ID &&
+  process.env.APPLE_API_ISSUER
+    ? {
+        appleApiKey: process.env.APPLE_API_KEY_PATH,
+        appleApiKeyId: process.env.APPLE_API_KEY_ID,
+        appleApiIssuer: process.env.APPLE_API_ISSUER,
+      }
+    : null;
+
+const notaryAppleId =
+  process.env.APPLE_ID &&
+  process.env.APPLE_APP_SPECIFIC_PASSWORD &&
+  process.env.APPLE_TEAM_ID
+    ? {
+        appleId: process.env.APPLE_ID,
+        appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+        teamId: process.env.APPLE_TEAM_ID,
+      }
+    : null;
+
+const notarize = notaryApiKey ?? notaryAppleId;
+const macNotarizeEnabled = macSigningEnabled && Boolean(notarize);
 const windowsSignParams = process.env.OPENKEEP_WIN_SIGNING === "1"
   ? process.env.WINDOWS_SIGN_PARAMS
   : undefined;
@@ -50,15 +75,7 @@ const config: ForgeConfig = {
     ...(macSigningEnabled
       ? {
           osxSign: {},
-          ...(macNotarizeEnabled
-            ? {
-                osxNotarize: {
-                  appleId: process.env.APPLE_ID!,
-                  appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD!,
-                  teamId: process.env.APPLE_TEAM_ID!,
-                },
-              }
-            : {}),
+          ...(macNotarizeEnabled ? { osxNotarize: notarize! } : {}),
         }
       : {}),
   },

@@ -19,11 +19,14 @@ name: Release Desktop
 #
 # Signing secrets (all optional — without them the build is unsigned, which is
 # fine for testing the pipeline but not for distribution):
-#   MACOS_CERTIFICATE_P12        base64 Developer ID Application certificate
-#   MACOS_CERTIFICATE_PASSWORD   password of that .p12
-#   APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarization
-#   WINDOWS_SIGN_PARAMS          full signtool parameter string, including the
-#                                certificate reference and a timestamp server
+#   APPLE_APP_CERT_P12        base64 Developer ID Application certificate
+#   APPLE_APP_CERT_PASSWORD   password of that .p12
+#   notarization, either:
+#     APPLE_NOTARY_KEY_P8 / APPLE_NOTARY_KEY_ID / APPLE_NOTARY_ISSUER
+#       an App Store Connect key — preferred, and what this repository holds
+#     APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+#   WINDOWS_SIGN_PARAMS       full signtool parameter string, including the
+#                             certificate reference and a timestamp server
 
 on:
   workflow_dispatch:
@@ -154,23 +157,47 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm fakeroot dpkg
 
+      # `APPLE_APP_CERT_P12` is the Developer ID Application certificate. The name
+      # comes from the secrets this repository already held for Apple
+      # distribution; reusing them beats asking for a second copy of the same
+      # certificate under a different name.
       - name: Import the macOS signing certificate
-        if: runner.os == 'macOS' && env.MACOS_CERTIFICATE_P12 != ''
+        if: runner.os == 'macOS' && env.APPLE_APP_CERT_P12 != ''
         env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_APP_CERT_P12: ${{ secrets.APPLE_APP_CERT_P12 }}
+          APPLE_APP_CERT_PASSWORD: ${{ secrets.APPLE_APP_CERT_PASSWORD }}
         run: |
           keychain=build.keychain
           password="$(openssl rand -base64 24)"
           security create-keychain -p "$password" "$keychain"
           security default-keychain -s "$keychain"
           security unlock-keychain -p "$password" "$keychain"
-          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+          echo "$APPLE_APP_CERT_P12" | base64 --decode > /tmp/cert.p12
           security import /tmp/cert.p12 -k "$keychain" \
-            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            -P "$APPLE_APP_CERT_PASSWORD" -T /usr/bin/codesign
           rm -f /tmp/cert.p12
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
           echo "OPENKEEP_MAC_SIGNING=1" >> "$GITHUB_ENV"
+          # Which identity landed, so a certificate that is not a Developer ID
+          # one fails here with a readable message rather than deep inside
+          # packaging.
+          security find-identity -v -p codesigning "$keychain"
+          if ! security find-identity -v -p codesigning "$keychain" | grep -q "Developer ID Application"; then
+            echo "::error::the imported certificate is not a Developer ID Application certificate, so the app cannot be distributed outside the App Store"
+            exit 1
+          fi
+
+      # notarytool takes the App Store Connect key as a file, so the secret is
+      # written to one for the length of the job.
+      - name: Write the notarization key
+        if: runner.os == 'macOS' && env.APPLE_NOTARY_KEY_P8 != ''
+        env:
+          APPLE_NOTARY_KEY_P8: ${{ secrets.APPLE_NOTARY_KEY_P8 }}
+        run: |
+          path="$RUNNER_TEMP/notary-key.p8"
+          printf '%s' "$APPLE_NOTARY_KEY_P8" > "$path"
+          chmod 600 "$path"
+          echo "APPLE_API_KEY_PATH=$path" >> "$GITHUB_ENV"
 
       - name: Enable Windows signing
         if: runner.os == 'Windows' && env.WINDOWS_SIGN_PARAMS != ''
@@ -196,6 +223,10 @@ jobs:
       - name: Make distributables
         shell: bash
         env:
+          # An App Store Connect key if the repository has one, an Apple ID and
+          # app-specific password otherwise; the packager prefers the key.
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
