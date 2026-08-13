@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* Tailwind's automatic source detection starts at the build root, so a host that
+   bundles these components from another root — the Electron renderer builds from
+   apps/desktop — would emit this stylesheet without any of the utilities the
+   shared app uses. Registering the sources here keeps every host in step. */
+@source "./";
 @import "./tokens.css";
 
 /* The desktop CSP intentionally has no remote style/font origins. These are
