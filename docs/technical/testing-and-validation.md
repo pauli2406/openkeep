@@ -243,6 +243,7 @@ going wrong:
 | `offline-store` | the offline mirror's real SQL: what a cached document reads back as, the status/review/correspondent filters, the search-text match, cache accounting, and the derived dashboard and facets |
 | `offline-file-cache` | which endpoint a document's bytes come from, the write-to-temporary-then-move flow, byte accounting, and two viewers collapsing into one download |
 | `offline-cache-migration` | the cache schema version: adopting a pre-versioning database, running each step once in version order, and discarding a shape this build cannot read |
+| `offline-surfaces` | dates in the offline derivations: due today is not overdue at any hour, day counts survive a daylight-saving change, a document keeps its own local year and month, and the latest document is compared as a date |
 
 Native modules with no JavaScript fallback are mocked in `jest.setup.js` — SQLite,
 the OS document scanner, the PDF view, the file viewer, secure storage. Screens
