@@ -1,4 +1,4 @@
-import { Alert, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
@@ -6,6 +6,7 @@ import { Button, Pill, Row, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { formatShortDate, parseArchiveDate } from "../lib";
 import { useOfflineArchive } from "../offline-archive";
+import { OFFLINE_CACHE_LIMIT_CHOICES } from "../offline-metadata-store";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
 
@@ -147,6 +148,27 @@ export function OfflineArchiveScreen() {
       ) : null}
 
 
+      <SectionHeader label={t("offline.limitTitle")} />
+      <View style={styles.limitRow}>
+        {OFFLINE_CACHE_LIMIT_CHOICES.map((choice) => {
+          const active = choice === offline.maxBytes;
+          return (
+            <Pressable
+              key={choice}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() => void offline.setMaxBytes(choice)}
+              style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
+            >
+              <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>
+                {formatBytes(choice)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.repairNote}>{t("offline.limitBody")}</Text>
+
       <SectionHeader label={t("offline.perDocument")} />
       {parts.map((part) => (
         <Row
@@ -187,6 +209,35 @@ export function OfflineArchiveScreen() {
 }
 
 const useStyles = createThemedStyles((c) => ({
+  chip: {
+    flexShrink: 0,
+    borderRadius: radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  chipIdle: {
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
+  chipActive: {
+    backgroundColor: c.accentFill,
+  },
+  chipText: {
+    ...text.meta,
+    color: c.muted,
+  },
+  chipTextActive: {
+    ...text.metaStrong,
+    color: c.accentFillInk,
+  },
+  limitRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
   repairNote: {
     ...text.small,
     color: c.muted,

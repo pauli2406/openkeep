@@ -33,12 +33,17 @@ import {
   buildCachedDashboard,
   buildCachedFacets,
   clearCachedDocumentRows,
+  OFFLINE_CACHE_DEFAULT_MAX_BYTES,
   correctFileAccounting,
+  enforceCacheLimit,
+  getCacheLimit,
   getCacheStats,
   getCachedDocument,
   getCachedFileUris,
+  markCachedDocumentViewed,
   quarantinedCount,
   removeCachedDocument,
+  setCacheLimit,
   searchCachedDocuments,
   setOfflineCacheScope,
   upsertCachedDocument,
@@ -106,6 +111,9 @@ type OfflineArchiveContextValue = {
   loadCachedFacets: () => Promise<FacetsResponse>;
   clearCachedDocuments: () => Promise<void>;
   getCacheSummary: () => Promise<CacheSummary>;
+  /** Byte budget for this archive's copy, and the choices offered for it. */
+  maxBytes: number;
+  setMaxBytes: (bytes: number) => Promise<void>;
   /** Rows dropped this session because they could not be read. */
   quarantinedCount: number;
 };
@@ -142,6 +150,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   // Rows the store had to drop because they could not be decoded. Surfaced so an
   // unexplained gap in the copy is explainable rather than mysterious.
   const [quarantinedRows, setQuarantinedRows] = useState(0);
+  const [maxBytes, setMaxBytesState] = useState(OFFLINE_CACHE_DEFAULT_MAX_BYTES);
 
   const refreshCacheSummary = useCallback(async () => {
     const stats = await getCacheStats();
@@ -171,6 +180,29 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     return next;
   }, [scope]);
 
+  /**
+   * Deletes the files eviction just dropped rows for. The store owns the rows
+   * and reports the files, because the filesystem belongs to this layer.
+   */
+  const applyEviction = useCallback(
+    async (result: { files: string[] }) => {
+      for (const fileUri of result.files) {
+        await fileCache.deleteIfExists(fileUri);
+      }
+      return result;
+    },
+    [fileCache],
+  );
+
+  const setMaxBytes = useCallback(
+    async (bytes: number) => {
+      await applyEviction(await setCacheLimit(bytes));
+      setMaxBytesState(bytes);
+      await refreshCacheSummary();
+    },
+    [applyEviction, refreshCacheSummary],
+  );
+
   const clearLegacyOfflineState = useCallback(async () => {
     const alreadyCleaned = await AsyncStorage.getItem(LEGACY_CLEANUP_KEY);
     if (alreadyCleaned === "true") {
@@ -195,6 +227,9 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     async function bootstrap() {
       await fileCache.ensureDirs();
       await clearLegacyOfflineState();
+      if (isMounted) {
+        setMaxBytesState(await getCacheLimit());
+      }
       await refreshCacheSummary();
       if (isMounted) {
         setIsReady(true);
@@ -226,6 +261,11 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     if (!cached) {
       return null;
     }
+
+    // Opening a document offline is still using it. Without this, eviction would
+    // rank documents only by when they were cached, and the copy a user reads
+    // every week offline would be the first to go.
+    await markCachedDocumentViewed(cached.document.id, new Date().toISOString());
 
     if (cached.fileUri && !(await fileCache.exists(cached.fileUri))) {
       // The row kept its byte count while the file was gone, so the Offline
@@ -288,9 +328,12 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     if (previous?.fileUri && file?.uri && previous.fileUri !== file.uri) {
       await fileCache.deleteIfExists(previous.fileUri);
     }
+    // Enforced here rather than on a timer: the cache only grows when a file
+    // lands, so this is the moment it can exceed its budget.
+    await applyEviction(await enforceCacheLimit());
     await refreshCacheSummary();
     return record;
-  }, [fileCache, forgetDeletedDocument, refreshCacheSummary]);
+  }, [applyEviction, fileCache, forgetDeletedDocument, refreshCacheSummary]);
 
   const ensureCachedFile = useCallback(async (
     authFetch: AuthFetch,
@@ -313,9 +356,10 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       fileStorageBytes: file.bytes,
     };
     await upsertCachedDocument(record);
+    await applyEviction(await enforceCacheLimit());
     await refreshCacheSummary();
     return file.uri;
-  }, [refreshCacheSummary]);
+  }, [applyEviction, fileCache, refreshCacheSummary]);
 
   const queryCachedDocumentsResponse = useCallback(async (options?: LoadDocumentsOptions) => {
     // Paged in SQL, so `total` counts every match while `items` is the page that
@@ -358,6 +402,8 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       clearCachedDocuments,
       getCacheSummary,
       quarantinedCount: quarantinedRows,
+      maxBytes,
+      setMaxBytes,
     }),
     [
       cacheOpenedDocument,
@@ -368,6 +414,8 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       isConnected,
       isReady,
       loadCachedDocument,
+      maxBytes,
+      setMaxBytes,
       quarantinedRows,
       queryCachedDocumentsResponse,
     ],

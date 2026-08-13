@@ -81,6 +81,19 @@ type LoadDocumentsOptions = {
 const MAX_PAGE_SIZE = 100;
 
 /**
+ * Default byte budget for one archive's copy. A phone is tighter than a laptop,
+ * so this is not desktop's 1 GiB: 256 MiB holds a few hundred ordinary documents
+ * and is a size a user is unlikely to notice.
+ */
+export const OFFLINE_CACHE_DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
+
+export const OFFLINE_CACHE_LIMIT_CHOICES = [
+  64 * 1024 * 1024,
+  256 * 1024 * 1024,
+  1024 * 1024 * 1024,
+] as const;
+
+/**
  * The date a document is filed under: its issue date, or the day it was created
  * where it has none. `localtime` is what keeps this agreeing with the year and
  * month the derived surfaces report — a UTC date part would disagree with them
@@ -170,6 +183,10 @@ const SCHEMA_TABLE = `
       issue_date TEXT,
       due_date TEXT,
       expiry_date TEXT
+    );
+    CREATE TABLE IF NOT EXISTS cache_settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
     );
   `;
 
@@ -719,6 +736,94 @@ export function createOfflineMetadataStore({
     );
   }
 
+  const MAX_BYTES_KEY = "maxBytes";
+
+  /**
+   * The byte budget for this copy. An unreadable or nonsensical stored value
+   * falls back to the default, never to no limit — unbounded growth is the
+   * failure this exists to prevent.
+   */
+  async function getLimit() {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ value: string }>(
+      "SELECT value FROM cache_settings WHERE key = ?",
+      MAX_BYTES_KEY,
+    );
+    const parsed = Number.parseInt(row?.value ?? "", 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : OFFLINE_CACHE_DEFAULT_MAX_BYTES;
+  }
+
+  async function setLimit(maxBytes: number) {
+    if (!Number.isFinite(maxBytes) || maxBytes <= 0) {
+      throw new Error(`Refusing a cache limit of ${maxBytes} bytes`);
+    }
+    const db = await getDb();
+    await db.runAsync(
+      "INSERT OR REPLACE INTO cache_settings (key, value) VALUES (?, ?)",
+      MAX_BYTES_KEY,
+      String(Math.trunc(maxBytes)),
+    );
+    // Lowering the limit has to take effect now, not at the next download.
+    return enforceLimit();
+  }
+
+  /**
+   * Evicts least-recently-viewed documents until the copy fits its budget, and
+   * reports the files the caller has to delete. `last_viewed_at` is the signal
+   * the schema has always recorded and never used; this is what it is for.
+   *
+   * Only file bytes count against the limit — row JSON is small, and a limit
+   * that evicted metadata would lose the ability to list what was cached.
+   */
+  async function enforceLimit() {
+    const db = await getDb();
+    const maxBytes = await getLimit();
+    const totals = await db.getFirstAsync<{ total: number }>(
+      "SELECT COALESCE(SUM(file_storage_bytes), 0) as total FROM cached_documents",
+    );
+    let used = totals?.total ?? 0;
+    if (used <= maxBytes) {
+      return { evicted: [] as string[], files: [] as string[] };
+    }
+
+    const candidates = await db.getAllAsync<{
+      id: string;
+      fileUri: string | null;
+      fileStorageBytes: number;
+    }>(
+      `SELECT id, file_uri as fileUri, file_storage_bytes as fileStorageBytes
+       FROM cached_documents
+       WHERE file_storage_bytes > 0
+       ORDER BY last_viewed_at ASC, created_at ASC`,
+    );
+
+    const evicted: string[] = [];
+    const files: string[] = [];
+    for (const candidate of candidates) {
+      if (used <= maxBytes) {
+        break;
+      }
+      await db.runAsync("DELETE FROM cached_documents WHERE id = ?", candidate.id);
+      used -= candidate.fileStorageBytes;
+      evicted.push(candidate.id);
+      if (candidate.fileUri) {
+        files.push(candidate.fileUri);
+      }
+    }
+
+    return { evicted, files };
+  }
+
+  /** Records that a document was actually looked at, which is what eviction reads. */
+  async function markViewed(documentId: string, viewedAt: string) {
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE cached_documents SET last_viewed_at = ? WHERE id = ?",
+      viewedAt,
+      documentId,
+    );
+  }
+
   async function clearCachedDocumentRows() {
     const db = await getDb();
     await db.runAsync("DELETE FROM cached_documents");
@@ -858,6 +963,10 @@ export function createOfflineMetadataStore({
     quarantinedCount,
     removeCachedDocument,
     correctFileAccounting,
+    getLimit,
+    setLimit,
+    enforceLimit,
+    markViewed,
     searchCachedDocuments,
     queryCachedDocuments,
     listCachedDocuments,
@@ -986,6 +1095,26 @@ export function removeCachedDocument(documentId: string) {
 
 export function correctFileAccounting(documentId: string) {
   return store()?.correctFileAccounting(documentId) ?? Promise.resolve();
+}
+
+export function getCacheLimit() {
+  return store()?.getLimit() ?? Promise.resolve(OFFLINE_CACHE_DEFAULT_MAX_BYTES);
+}
+
+export function setCacheLimit(maxBytes: number) {
+  return (
+    store()?.setLimit(maxBytes) ?? Promise.resolve({ evicted: [] as string[], files: [] as string[] })
+  );
+}
+
+export function enforceCacheLimit() {
+  return (
+    store()?.enforceLimit() ?? Promise.resolve({ evicted: [] as string[], files: [] as string[] })
+  );
+}
+
+export function markCachedDocumentViewed(documentId: string, viewedAt: string) {
+  return store()?.markViewed(documentId, viewedAt) ?? Promise.resolve();
 }
 
 export function quarantinedCount() {
