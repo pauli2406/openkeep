@@ -1,0 +1,86 @@
+name: Bless Mobile Baselines
+
+# Re-renders the mobile visual baselines in the pinned Playwright container and
+# opens a pull request with whatever changed.
+#
+# The baselines are only reproducible against one font stack, which is why the
+# suite runs in a container — and a contributor whose container is broken (or who
+# has no Docker at all) otherwise cannot bless an intended UI change. Taking the
+# `-actual.png` files out of a failed run's artifact works but only when the run
+# fails, and a version bump can slip under the diff budget: green suite, stale
+# baseline, and the drift silently eats the budget a real regression needs.
+#
+# So this does it deliberately, in the only environment that counts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      grep:
+        description: "Only bless screens matching this (Playwright --grep), e.g. settings"
+        required: false
+        type: string
+
+jobs:
+  bless:
+    name: Re-render and open a pull request
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: bless-mobile
+
+      # `--update-snapshots=all` rather than the default: a bump of one digit can
+      # be smaller than the diff budget, and the default then reports nothing to
+      # update while the baseline still shows the old value.
+      - name: Re-render the baselines
+        working-directory: apps/mobile
+        run: |
+          if [ -n "${{ inputs.grep }}" ]; then
+            ./visual/run-in-container.sh --update-snapshots=all --grep "${{ inputs.grep }}"
+          else
+            ./visual/run-in-container.sh --update-snapshots=all
+          fi
+
+      - name: Show what changed
+        id: diff
+        run: |
+          git add -A apps/mobile/visual/__screenshots__
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "The baselines already match what the container renders." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Re-rendered baselines"
+              echo
+              git diff --cached --stat
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # A pull request rather than a push to main: a baseline change is a claim
+      # about how the app should look, and that deserves the same review as the
+      # change that caused it.
+      - name: Open a pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/bless-mobile-baselines
+          delete-branch: true
+          title: "test(mobile): re-render the visual baselines"
+          commit-message: |
+            test(mobile): re-render the visual baselines
+
+            Rendered by the Bless Mobile Baselines workflow in the pinned
+            Playwright container, which is the only environment these are
+            reproducible in.
+          body: |
+            Re-rendered by the `Bless Mobile Baselines` workflow${{ inputs.grep && format(', filtered to `{0}`', inputs.grep) || '' }}.
+
+            Every image here is what the pinned Playwright container renders from
+            this commit. Review them as a claim about how the app should look: if
+            a screen changed in a way the originating change did not intend, that
+            is a bug the baseline would otherwise hide.
