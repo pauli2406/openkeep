@@ -5,18 +5,7 @@ import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "reac
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../auth";
-import {
-  Button,
-  EmptyState,
-  ErrorCard,
-  Notice,
-  Panel,
-  Pill,
-  Row,
-  Screen,
-  type PillTone,
-  type RowDot,
-} from "../components/ui";
+import { Button, EmptyState, ErrorCard, FullScreenModal, Notice, Panel, Pill, Row, Screen, type PillTone, type RowDot } from "../components/ui";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { documentRowState, processingRefetchInterval } from "../document-processing";
 import { useDashboardInsights } from "../hooks/useDashboardInsights";
@@ -587,12 +576,11 @@ export function DocumentsScreen() {
         </View>
       ) : null}
 
-      <Modal
+      <FullScreenModal
         visible={tagSheetOpen}
-        animationType="slide"
         onRequestClose={() => setTagSheetOpen(false)}
+        style={styles.sheetRoot}
       >
-        <SafeAreaView style={styles.sheetRoot} edges={["top", "bottom"]}>
           <View style={styles.sheetBar}>
             <Text style={styles.sheetTitle}>{t("documents.tagSheetTitle")}</Text>
             <Pressable onPress={() => setTagSheetOpen(false)} hitSlop={10}>
@@ -635,8 +623,7 @@ export function DocumentsScreen() {
               <EmptyState title={t("documents.noTags")} />
             ) : null}
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        </FullScreenModal>
 
       {/* One action for the list rather than a button on every failed row */}
       {failedDocument && !shouldUseCache ? (

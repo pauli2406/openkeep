@@ -7,14 +7,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Markdown from "react-native-markdown-display";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
-import {
-  EmptyState,
-  ErrorCard,
-  Notice,
-  PulsingDot,
-  Row,
-  Screen,
-} from "../components/ui";
+import { EmptyState, ErrorCard, FullScreenModal, Notice, PulsingDot, Row, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
@@ -536,12 +529,11 @@ export function SearchScreen() {
       </View>
 
       {/* Recent questions, behind the history icon */}
-      <Modal
+      <FullScreenModal
         visible={historyOpen}
-        animationType="slide"
         onRequestClose={() => setHistoryOpen(false)}
+        style={styles.historyRoot}
       >
-        <SafeAreaView style={styles.historyRoot} edges={["top", "bottom"]}>
           <View style={styles.historyBar}>
             <Text style={styles.historyTitle}>{t("chat.recentTitle")}</Text>
             {recentSearches.length > 0 ? (
@@ -576,8 +568,7 @@ export function SearchScreen() {
               ))
             )}
           </ScrollView>
-        </SafeAreaView>
-      </Modal>
+        </FullScreenModal>
     </Screen>
   );
 }

@@ -1,6 +1,6 @@
 import { Modal, ScrollView, Text, View, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Field } from "../../components/ui";
+import { Button, Field, FullScreenModal } from "../../components/ui";
 import { useI18n } from "../../i18n";
 import { createThemedStyles } from "../../theme";
 import { text } from "../../typography";
@@ -53,8 +53,7 @@ export function EditFieldsSheet({
   const { t } = useI18n();
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+    <FullScreenModal visible={visible} onRequestClose={onClose} style={styles.root}>
         <View style={styles.bar}>
           <Text style={styles.title}>{t("documentDetail.editTitle")}</Text>
           <Pressable onPress={onClose} hitSlop={10}>
@@ -169,8 +168,7 @@ export function EditFieldsSheet({
             disabled={disabled}
           />
         </View>
-      </SafeAreaView>
-    </Modal>
+      </FullScreenModal>
   );
 }
 

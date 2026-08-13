@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
 import { DocumentViewer } from "../components/DocumentViewer";
 import { findPassage, firstLines, PassagePaper, type Passage } from "../components/Passage";
-import { Button, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
+import { Button, ErrorCard, FullScreenModal, Notice, Panel, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -198,8 +198,7 @@ function Reader({
   const scrollRef = useRef<ScrollView>(null);
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.readerRoot} edges={["top", "bottom"]}>
+    <FullScreenModal onRequestClose={onClose} style={styles.readerRoot}>
         <View style={styles.readerBar}>
           <Pressable onPress={onClose} hitSlop={10} style={styles.readerBack}>
             <MaterialCommunityIcons name="chevron-left" size={18} color={colors.accent} />
@@ -267,8 +266,7 @@ function Reader({
             </View>
           </View>
         ) : null}
-      </SafeAreaView>
-    </Modal>
+      </FullScreenModal>
   );
 }
 

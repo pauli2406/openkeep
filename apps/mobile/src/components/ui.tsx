@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { useScrollToTop } from "@react-navigation/native";
 import {
+  Modal,
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
@@ -16,9 +17,40 @@ import {
   type ViewStyle,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
 import { createThemedStyles, DENSITY_SCALE, radii, useAppearance, useColors } from "../theme";
+
+/**
+ * A modal that covers the screen, with its safe area respected.
+ *
+ * A `Modal` is its own native view hierarchy, so the insets measured for the app
+ * window never reach it: a `SafeAreaView` inside one measures nothing, and a
+ * header ends up under the status bar and the clock. Nesting a provider inside
+ * the modal is what makes the insets real, and having one component do it means
+ * the next full-screen sheet cannot forget.
+ */
+export function FullScreenModal({
+  visible = true,
+  onRequestClose,
+  style,
+  children,
+}: {
+  visible?: boolean;
+  onRequestClose: () => void;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onRequestClose}>
+      <SafeAreaProvider>
+        <SafeAreaView style={style} edges={["top", "bottom"]}>
+          {children}
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
 import { text } from "../typography";
 
 /**
