@@ -45,6 +45,7 @@ export function useOfflineArchive() {
     loadCachedDashboard: async () => DASHBOARD,
     loadCachedFacets: async () => FACETS,
     clearCachedDocuments: async () => {},
+    quarantinedCount: 0,
     getCacheSummary: async () => ({
       documentCount: cached.length,
       fileStorageBytes: 18_452_119,

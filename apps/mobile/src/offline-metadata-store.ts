@@ -232,20 +232,73 @@ function buildSearchText(document: ArchiveDocument, text: DocumentTextResponse) 
     .toLowerCase();
 }
 
-function rowToRecord(row: Pick<CachedDocumentRow, "documentJson" | "textJson" | "historyJson" | "fileUri" | "cachedAt" | "lastViewedAt" | "fileStorageBytes">): CachedDocumentRecord {
+/**
+ * A row that cannot be decoded, told apart from one that decoded to nothing.
+ * `JSON.parse` inside a `rows.map(...)` used to throw out of the whole read, so
+ * one bad row took the list, the dashboard, the facets and search with it. The
+ * cache is a convenience copy: dropping the row and carrying on is strictly
+ * better than going dark.
+ */
+const DAMAGED = Symbol("damaged-cache-row");
+
+/**
+ * Enough of a shape check that a changed document contract is noticed rather
+ * than rendered as undefined everywhere. It deliberately checks only what every
+ * offline surface needs — id, title, and the two collections they iterate.
+ */
+function looksLikeDocument(value: unknown): value is ArchiveDocument {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<ArchiveDocument>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.title === "string" &&
+    Array.isArray(candidate.tags)
+  );
+}
+
+function decodeDocument(documentJson: string): ArchiveDocument | typeof DAMAGED {
+  try {
+    const parsed = JSON.parse(documentJson) as unknown;
+    return looksLikeDocument(parsed) ? parsed : DAMAGED;
+  } catch {
+    return DAMAGED;
+  }
+}
+
+/** Text and history are optional detail: a bad one is emptied, not fatal. */
+function decodeDetail<T>(json: string, fallback: T): T {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToRecord(
+  row: Pick<CachedDocumentRow, "documentJson" | "textJson" | "historyJson" | "fileUri" | "cachedAt" | "lastViewedAt" | "fileStorageBytes">,
+): CachedDocumentRecord | typeof DAMAGED {
+  const document = decodeDocument(row.documentJson);
+  if (document === DAMAGED) {
+    return DAMAGED;
+  }
   return {
-    document: JSON.parse(row.documentJson) as ArchiveDocument,
-    text: JSON.parse(row.textJson) as DocumentTextResponse,
-    history: JSON.parse(row.historyJson) as DocumentHistoryResponse,
+    document,
+    text: decodeDetail<DocumentTextResponse>(row.textJson, {
+      documentId: document.id,
+      blocks: [],
+    }),
+    history: decodeDetail<DocumentHistoryResponse>(row.historyJson, {
+      documentId: document.id,
+      items: [],
+    }),
     fileUri: row.fileUri,
     cachedAt: row.cachedAt,
     lastViewedAt: row.lastViewedAt,
     fileStorageBytes: row.fileStorageBytes,
   };
-}
-
-function rowToDocument(row: Pick<CachedDocumentRow, "documentJson">) {
-  return JSON.parse(row.documentJson) as ArchiveDocument;
 }
 
 /**
@@ -425,6 +478,29 @@ export function createOfflineMetadataStore({
     );
   }
 
+  let quarantined = 0;
+
+  /**
+   * Removes a row the app cannot read. The file it pointed at goes too — the
+   * caller owns the filesystem, so it is reported rather than deleted here, and
+   * the row is gone either way so the read can carry on.
+   */
+  async function quarantineRow(documentId: string) {
+    quarantined += 1;
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ fileUri: string | null }>(
+      "SELECT file_uri as fileUri FROM cached_documents WHERE id = ?",
+      documentId,
+    );
+    await db.runAsync("DELETE FROM cached_documents WHERE id = ?", documentId);
+    return row?.fileUri ?? null;
+  }
+
+  /** How many rows this session had to drop, for the Offline screen's note. */
+  function quarantinedCount() {
+    return quarantined;
+  }
+
   async function getCachedDocument(documentId: string) {
     const db = await getDb();
     const row = await db.getFirstAsync<CachedDocumentRow>(
@@ -432,7 +508,37 @@ export function createOfflineMetadataStore({
      FROM cached_documents WHERE id = ?`,
       documentId,
     );
-    return row ? rowToRecord(row) : null;
+    if (!row) {
+      return null;
+    }
+    const record = rowToRecord(row);
+    if (record === DAMAGED) {
+      await quarantineRow(documentId);
+      return null;
+    }
+    return record;
+  }
+
+  /**
+   * Decodes a page of rows, dropping any the app cannot read. The read that
+   * triggered this still returns the documents that were fine, which is the
+   * whole point: one bad row must never disable offline browsing.
+   */
+  async function decodeRows(rows: Array<Pick<CachedDocumentRow, "id" | "documentJson">>) {
+    const documents: ArchiveDocument[] = [];
+    const damaged: string[] = [];
+    for (const row of rows) {
+      const document = decodeDocument(row.documentJson);
+      if (document === DAMAGED) {
+        damaged.push(row.id);
+      } else {
+        documents.push(document);
+      }
+    }
+    for (const id of damaged) {
+      await quarantineRow(id);
+    }
+    return documents;
   }
 
   function buildWhere(options?: LoadDocumentsOptions) {
@@ -514,8 +620,8 @@ export function createOfflineMetadataStore({
       `SELECT COUNT(*) as total FROM cached_documents WHERE ${where}`,
       ...params,
     );
-    const rows = await db.getAllAsync<Pick<CachedDocumentRow, "documentJson">>(
-      `SELECT document_json as documentJson
+    const rows = await db.getAllAsync<Pick<CachedDocumentRow, "id" | "documentJson">>(
+      `SELECT id, document_json as documentJson
      FROM cached_documents
      WHERE ${where}
      ORDER BY ${buildOrder(options)}
@@ -526,7 +632,7 @@ export function createOfflineMetadataStore({
     );
 
     return {
-      items: rows.map(rowToDocument),
+      items: await decodeRows(rows),
       total: totals?.total ?? 0,
       page,
       pageSize,
@@ -536,15 +642,15 @@ export function createOfflineMetadataStore({
   async function queryCachedDocuments(options?: LoadDocumentsOptions) {
     const db = await getDb();
     const { where, params } = buildWhere(options);
-    const rows = await db.getAllAsync<Pick<CachedDocumentRow, "documentJson">>(
-      `SELECT document_json as documentJson
+    const rows = await db.getAllAsync<Pick<CachedDocumentRow, "id" | "documentJson">>(
+      `SELECT id, document_json as documentJson
      FROM cached_documents
      WHERE ${where}
      ORDER BY ${buildOrder(options)}`,
       ...params,
     );
 
-    return rows.map(rowToDocument);
+    return decodeRows(rows);
   }
 
   async function listCachedDocuments() {
@@ -583,6 +689,34 @@ export function createOfflineMetadataStore({
       "SELECT file_uri as fileUri FROM cached_documents WHERE file_uri IS NOT NULL",
     );
     return rows.map((row) => row.fileUri).filter(Boolean) as string[];
+  }
+
+  /**
+   * Forgets a document the archive no longer has. Returns the file that has to
+   * go with it, since the filesystem belongs to the caller.
+   */
+  async function removeCachedDocument(documentId: string) {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ fileUri: string | null }>(
+      "SELECT file_uri as fileUri FROM cached_documents WHERE id = ?",
+      documentId,
+    );
+    await db.runAsync("DELETE FROM cached_documents WHERE id = ?", documentId);
+    return row?.fileUri ?? null;
+  }
+
+  /**
+   * Zeroes the recorded bytes for a file that is no longer on disk. The read
+   * path already noticed and told the caller the file was gone, but the row kept
+   * its byte count, so the Offline screen went on reporting storage that had
+   * been freed.
+   */
+  async function correctFileAccounting(documentId: string) {
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE cached_documents SET file_uri = NULL, file_storage_bytes = 0 WHERE id = ?",
+      documentId,
+    );
   }
 
   async function clearCachedDocumentRows() {
@@ -720,6 +854,10 @@ export function createOfflineMetadataStore({
   return {
     upsertCachedDocument,
     getCachedDocument,
+    quarantineRow,
+    quarantinedCount,
+    removeCachedDocument,
+    correctFileAccounting,
     searchCachedDocuments,
     queryCachedDocuments,
     listCachedDocuments,
@@ -840,6 +978,18 @@ export function getCacheStats() {
 
 export function getCachedFileUris() {
   return store()?.getCachedFileUris() ?? Promise.resolve([]);
+}
+
+export function removeCachedDocument(documentId: string) {
+  return store()?.removeCachedDocument(documentId) ?? Promise.resolve(null);
+}
+
+export function correctFileAccounting(documentId: string) {
+  return store()?.correctFileAccounting(documentId) ?? Promise.resolve();
+}
+
+export function quarantinedCount() {
+  return store()?.quarantinedCount() ?? 0;
 }
 
 export function clearCachedDocumentRows() {

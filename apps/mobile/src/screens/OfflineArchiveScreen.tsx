@@ -142,6 +142,11 @@ export function OfflineArchiveScreen() {
         ))}
       </View>
 
+      {offline.quarantinedCount > 0 ? (
+        <Text style={styles.repairNote}>{t("offline.repaired")}</Text>
+      ) : null}
+
+
       <SectionHeader label={t("offline.perDocument")} />
       {parts.map((part) => (
         <Row
@@ -182,6 +187,12 @@ export function OfflineArchiveScreen() {
 }
 
 const useStyles = createThemedStyles((c) => ({
+  repairNote: {
+    ...text.small,
+    color: c.muted,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
   badge: {
     height: 44,
     width: 44,

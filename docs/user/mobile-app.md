@@ -140,6 +140,11 @@ previous copy.
 - `Delete the offline copy`, which removes the local copy and never touches the
   server
 
+If a stored document ever turns out to be unreadable, the app removes it from the
+copy and says so on that screen rather than failing to open the list; it comes
+back the next time you open the document online. A document deleted from the
+archive leaves the copy the next time you open it.
+
 What works from the local copy: browsing, every filter chip including due and
 the current year, sorting by newest or oldest, searching titles, senders
 and recognised text, opening a document with its page and text, the correspondent
