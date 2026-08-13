@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { fetch as expoFetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
 import {
@@ -11,6 +12,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  createOfflineReconnect,
+  type OfflineReconnect,
+  type SessionProbe,
+} from "./offline-reconnect";
 
 const API_URL_KEY = "openkeep.mobile.api-url";
 const API_TOKEN_KEY = "openkeep.mobile.api-token";
@@ -51,7 +57,10 @@ type AuthContextValue = {
   }) => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
-  revalidateSession: () => Promise<boolean>;
+  /** Asks the archive whether this session still works. */
+  revalidateSession: () => Promise<SessionProbe>;
+  /** Explicit retry from an offline session; true when it is live again. */
+  retryOfflineSession: () => Promise<boolean>;
   /**
    * Enter the offline session on purpose. Until #118 this only happened at boot
    * when the server was unreachable, so the Connect screen had no way to offer
@@ -399,21 +408,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [restoreCachedSession]);
 
-  const revalidateSession = useCallback(async () => {
+  /**
+   * Asks the archive whether this session still works, and tells the answers
+   * apart: reachable, credentials refused, or simply not reachable. Returning a
+   * bare boolean is what made the offline session a dead end — a refused token
+   * and a dropped connection are the same word, so neither could be acted on.
+   */
+  const revalidateSession = useCallback(async (): Promise<SessionProbe> => {
     if (
       !apiUrlRef.current ||
       (!apiTokenRef.current && (!tokensRef.current.accessToken || !tokensRef.current.refreshToken))
     ) {
-      return false;
+      return "rejected";
     }
 
+    let response: Response;
     try {
-      await loadCurrentUser();
-      return true;
+      response = await withTimeout(authFetch("/api/auth/me"), "Session restore");
     } catch {
-      return false;
+      return "unreachable";
     }
-  }, [loadCurrentUser]);
+
+    if (response.ok) {
+      const payload = (await response.json()) as User;
+      await persistUser(payload);
+      setSessionMode("online");
+      return "online";
+    }
+
+    // Only the archive saying "not you" ends the session. A 500 or a gateway
+    // error means it could not answer, and tearing down a usable offline copy
+    // over that would be the wrong way round.
+    return response.status === 401 || response.status === 403 ? "rejected" : "unreachable";
+  }, [authFetch, persistUser]);
+
+  const reconnectRef = useRef<OfflineReconnect | null>(null);
+  const sessionModeRef = useRef(sessionMode);
+  sessionModeRef.current = sessionMode;
+
+  useEffect(() => {
+    if (sessionMode !== "offline") {
+      reconnectRef.current?.stop();
+      reconnectRef.current = null;
+      return;
+    }
+
+    let handle: ReturnType<typeof setInterval> | null = null;
+    const reconnect = createOfflineReconnect({
+      probe: () => revalidateSession(),
+      isOffline: () => sessionModeRef.current === "offline",
+      onOnline: () => undefined,
+      onRejected: () => void clearSession(),
+      timer: {
+        start: (run, intervalMs) => {
+          handle = setInterval(run, intervalMs);
+        },
+        stop: () => {
+          if (handle) {
+            clearInterval(handle);
+            handle = null;
+          }
+        },
+      },
+    });
+    reconnectRef.current = reconnect;
+    reconnect.start();
+
+    // A connectivity change is the signal worth acting on immediately; the
+    // interval is the fallback for a network that never announces itself.
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      if (state.isConnected && state.isInternetReachable !== false) {
+        void reconnect.check();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      reconnect.stop();
+      reconnectRef.current = null;
+    };
+  }, [clearSession, revalidateSession, sessionMode]);
+
+  /** An explicit retry, for the button on the Offline screen. */
+  const retryOfflineSession = useCallback(async () => {
+    const outcome = await (reconnectRef.current?.check() ?? revalidateSession());
+    return outcome === "online";
+  }, [revalidateSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -643,6 +723,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       connect,
       updatePreferences,
       logout,
+      retryOfflineSession,
       revalidateSession,
       authFetch,
       streamFetch,
@@ -655,6 +736,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       logout,
       probeServer,
+      retryOfflineSession,
       revalidateSession,
       sessionMode,
       setApiUrl,

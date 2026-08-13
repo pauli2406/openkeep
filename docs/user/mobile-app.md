@@ -157,6 +157,12 @@ and recognised text, opening a document with its page and text, the corresponden
 list, and seeing which documents were pending review. AI answers, uploads, edits,
 review actions, reprocessing and deleting all need the archive.
 
+When you opened the local copy from the connect screen, the app keeps checking
+whether the archive is back — every half minute, and straight away when the
+device regains a connection — and switches to live data by itself. `Try to
+reconnect` on that screen asks immediately. You no longer have to restart the app
+to get back online.
+
 Offline sessions are read-only throughout. A screen that has mutating actions
 shows an `Offline — read-only` strip and disables them, including the overflow
 actions on a document.
