@@ -94,6 +94,14 @@ const config: ForgeConfig = {
     // Squirrel.Windows produces the installer plus the RELEASES/nupkg feed the
     // built-in Windows auto-updater consumes.
     new MakerSquirrel({
+      // Squirrel names its nuspec after the package, and `@openkeep/desktop`
+      // turns the scope into a directory that does not exist. The name also ends
+      // up in the NuGet package id, where a scope is not allowed at all.
+      name: "openkeep",
+      // Has to match `executableName`, or the installer looks for the wrong file.
+      exe: "openkeep.exe",
+      authors: "OpenKeep contributors",
+      description: "OpenKeep desktop client",
       setupExe: "OpenKeep-Setup.exe",
       ...(windowsSignParams ? { signWithParams: windowsSignParams } : {}),
     }),

@@ -88,6 +88,17 @@ jobs:
           done
           exit 1
         shell: bash
+      # Squirrel derives its nuspec and package id from the package name, which is
+      # scoped — the same class of failure the Linux makers had, and equally
+      # invisible until something builds the installer outside a release.
+      - name: Make the Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pnpm --filter @openkeep/desktop make -- --arch=x64
+          test -n "$(find apps/desktop/out/make -name '*.exe' | head -1)" || {
+            echo "::error::no Windows installer was produced"; exit 1; }
+
       - name: Start packaged desktop application
         if: runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke
