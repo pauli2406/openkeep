@@ -60,21 +60,44 @@ Desktop clients update to the **latest** GitHub Release.
    fixed `vX.Y.Z+1` rather than relying on downgrade, which Squirrel does not
    support.
 
-## Credential rotation runbook
+## Signing credentials
 
-All signing credentials live only in GitHub Actions secrets and are read only
-by the `Release Desktop` workflow; the repository secret scan covers the tree,
-not the secret store.
+The macOS half reuses the Apple secrets this repository already holds, rather than
+a second copy of the same certificate under a desktop-specific name:
 
-- **Apple**: replace `MACOS_CERTIFICATE_P12`/`MACOS_CERTIFICATE_PASSWORD` with
-  the new Developer ID Application certificate export, and rotate
-  `APPLE_APP_SPECIFIC_PASSWORD` from appleid.apple.com. Old releases stay
-  valid; notarization is per-artifact.
-- **Windows**: update `WINDOWS_SIGN_PARAMS` with the new certificate reference
-  (keep a timestamp server in the parameters — timestamped signatures outlive
-  the certificate).
-- After rotating, re-run `Release Desktop` against a test tag before the next
-  real release.
+| Secret | What it is |
+|---|---|
+| `APPLE_APP_CERT_P12` | Developer ID Application certificate, base64 |
+| `APPLE_APP_CERT_PASSWORD` | password of that `.p12` |
+| `APPLE_NOTARY_KEY_P8` | App Store Connect key for notarytool |
+| `APPLE_NOTARY_KEY_ID` | that key's id |
+| `APPLE_NOTARY_ISSUER` | the issuer it belongs to |
+
+An App Store Connect key beats an Apple ID with an app-specific password: it
+belongs to the team rather than a person and survives a password change. The
+packager takes either and prefers the key. Signing only happens when the
+certificate secret exists, and the import step fails loudly if what it imported is
+not a Developer ID Application certificate — a distribution build must not quietly
+fall back to a development identity.
+
+**Windows stays unsigned until `WINDOWS_SIGN_PARAMS` exists.** Since June 2023 an
+ordinary OV certificate has to live on a hardware token, which a runner cannot
+use, so signing Windows in CI means a cloud service: Azure Trusted Signing,
+SSL.com eSigner or DigiCert KeyLocker. Each needs its signing library installed in
+the job before `signtool` can reference it — a small change to make once a
+provider is chosen. An unsigned installer works and shows a SmartScreen warning on
+first run.
+
+Rotation is one command per secret, read from a file rather than the shell so the
+value never reaches the history:
+
+```bash
+base64 -i dev-id.p12 | gh secret set APPLE_APP_CERT_P12 --repo pauli2406/openkeep
+```
+
+Old releases stay valid — notarization is per artifact, and a timestamped
+signature outlives its certificate. After rotating, run `Release Desktop` against a
+test tag before the next real release.
 
 ## Failed-update runbook
 
