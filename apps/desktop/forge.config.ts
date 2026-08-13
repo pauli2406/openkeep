@@ -127,6 +127,9 @@ const config: ForgeConfig = {
         // Explicit rather than derived: the maker otherwise looks for a binary
         // named after the package, and `@openkeep/desktop` is not a file name.
         bin: "openkeep",
+        // rpmbuild refuses a package without one, and the root package.json says
+        // "SEE LICENSE IN LICENSE", which is not a license identifier.
+        license: "PolyForm-Noncommercial-1.0.0",
         genericName: "Document Archive",
         categories: ["Office"],
         homepage: "https://openkeep.de",
