@@ -170,3 +170,52 @@ describe("the decrypted copy a viewer opens", () => {
     expect(files.entries.get(uri)).toBe(20);
   });
 });
+
+describe("showing a document when the copy kept nothing", () => {
+  /**
+   * The regression that reached a device: `ensureCachedFile` wrote the bytes into
+   * the store and then read them back to materialize. With the copy disabled —
+   * no keystore, or no SQLCipher in the build — the write was a no-op and the
+   * read returned nothing, so the viewer was handed a valid path to an empty
+   * file and said "this PDF could not be displayed" for a document the archive
+   * would have served happily.
+   */
+  it("materializes from the bytes that were downloaded, not from the store", async () => {
+    const files = createTestFileSystem("file:///caches/");
+    const materializer = createOfflineFileMaterializer({
+      files,
+      scratchDirectory: "file:///caches/",
+    });
+
+    // Exactly what a disabled store returns: nothing, without complaining.
+    const readFromDisabledStore = async () => [] as Uint8Array[];
+    const downloaded = bytes(2048, 9);
+    const chunks = (await readFromDisabledStore()).length > 0 ? [] : [downloaded];
+
+    const uri = await materializer.materialize({
+      documentId: "doc-1",
+      extension: ".pdf",
+      chunks,
+    });
+
+    expect(files.entries.get(uri)).toBe(2048);
+  });
+
+  it("writes nothing rather than an empty file when there are no bytes at all", async () => {
+    const files = createTestFileSystem("file:///caches/");
+    const materializer = createOfflineFileMaterializer({
+      files,
+      scratchDirectory: "file:///caches/",
+    });
+
+    const uri = await materializer.materialize({
+      documentId: "doc-1",
+      extension: ".pdf",
+      chunks: [],
+    });
+
+    // The caller refuses before reaching here; if it ever does, the absence of a
+    // file is a better signal to the viewer than a zero-byte one.
+    expect(files.entries.has(uri)).toBe(false);
+  });
+});

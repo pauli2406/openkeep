@@ -9,10 +9,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth";
 import { DocumentViewer } from "../components/DocumentViewer";
 import { findPassage, firstLines, PassagePaper, type Passage } from "../components/Passage";
-import { Button, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
+import { Button, ErrorCard, FullScreenModal, Notice, Panel, Pill, Screen } from "../components/ui";
 import { processingRefetchInterval } from "../document-processing";
 import { useI18n } from "../i18n";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOfflineArchive } from "../offline-archive";
+import { offlineCacheScope } from "../offline-scope";
+import { createReviewOutbox } from "../review-outbox";
 import { reviewReasonLabel } from "../review-reasons";
 import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
@@ -195,8 +198,7 @@ function Reader({
   const scrollRef = useRef<ScrollView>(null);
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.readerRoot} edges={["top", "bottom"]}>
+    <FullScreenModal onRequestClose={onClose} style={styles.readerRoot}>
         <View style={styles.readerBar}>
           <Pressable onPress={onClose} hitSlop={10} style={styles.readerBack}>
             <MaterialCommunityIcons name="chevron-left" size={18} color={colors.accent} />
@@ -264,8 +266,7 @@ function Reader({
             </View>
           </View>
         ) : null}
-      </SafeAreaView>
-    </Modal>
+      </FullScreenModal>
   );
 }
 
@@ -308,6 +309,8 @@ export function ReviewScreen() {
   } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingConfirm = useRef<string | null>(null);
+  const outbox = useMemo(() => createReviewOutbox({ storage: AsyncStorage }), []);
+  const scope = offlineCacheScope({ apiUrl: auth.apiUrl, userId: auth.user?.id });
 
   const reviewQuery = useQuery({
     queryKey: ["review", auth.apiUrl, shouldUseCache, offline.cacheSummary.revision],
@@ -358,6 +361,39 @@ export function ReviewScreen() {
       return (await response.json()) as DocumentTextResponse;
     },
   });
+
+  /**
+   * A confirm the app was killed on top of. Replayed once, on the first render
+   * that has both an archive to send it to and a connection to reach it — the
+   * user already watched this document be accepted, so sending it is finishing
+   * what they asked for rather than acting on its own.
+   */
+  const replayed = useRef(false);
+  useEffect(() => {
+    if (replayed.current || !scope || shouldUseCache) {
+      return;
+    }
+    replayed.current = true;
+    void outbox
+      .flush({
+        scope,
+        send: async (documentId) => {
+          const response = await auth.authFetch(`/api/documents/${documentId}/review/resolve`, {
+            method: "POST",
+          });
+          if (!response.ok) {
+            throw new Error(await responseToMessage(response));
+          }
+        },
+      })
+      .then(async (outcome) => {
+        if (outcome === "sent") {
+          await queryClient.invalidateQueries({ queryKey: ["review"] });
+          await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        }
+      })
+      .catch(() => undefined);
+  }, [auth, outbox, queryClient, scope, shouldUseCache]);
 
   const mutation = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: "resolve" | "requeue" }) => {
@@ -425,8 +461,10 @@ export function ReviewScreen() {
     pendingConfirm.current = null;
     if (documentId) {
       mutation.mutate({ id: documentId, action: "resolve" });
+      // Sent, so it no longer has to survive a kill.
+      void outbox.release();
     }
-  }, [mutation]);
+  }, [mutation, outbox]);
 
   const closeUndo = useCallback(() => {
     if (undoTimer.current) {
@@ -463,9 +501,14 @@ export function ReviewScreen() {
     // A confirm still in its window goes now; only one can be taken back.
     flushPendingConfirm();
     pendingConfirm.current = document.id;
+    // Written down before the window opens: if the app dies inside it, the next
+    // launch sends what the user already watched being accepted.
+    if (scope) {
+      void outbox.hold({ documentId: document.id, scope });
+    }
     offerUndo("confirmed", document.id);
     advance(document.id);
-  }, [advance, document, flushPendingConfirm, offerUndo]);
+  }, [advance, document, flushPendingConfirm, offerUndo, outbox, scope]);
 
   /**
    * Back puts the document at the head of the queue again. Nothing was sent, so
@@ -476,6 +519,8 @@ export function ReviewScreen() {
   const undoLast = useCallback(() => {
     if (!undo) return;
     pendingConfirm.current = null;
+    // Taken back, so there is nothing to replay.
+    void outbox.release();
     setReaderField(null);
     setHandled((current) => {
       const next = new Set(current);

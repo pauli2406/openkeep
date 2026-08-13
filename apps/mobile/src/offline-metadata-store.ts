@@ -1087,6 +1087,7 @@ export function resetOfflineStores() {
   stores.clear();
   currentScope = null;
   encryptionUnavailable = false;
+  disabledReason = null;
 }
 
 /**
@@ -1096,9 +1097,19 @@ export function resetOfflineStores() {
  * not have.
  */
 let encryptionUnavailable = false;
+let disabledReason: string | null = null;
 
 export function isOfflineCacheDisabled() {
   return encryptionUnavailable;
+}
+
+/**
+ * Why the copy is off, for the Offline screen to say out loud. Refusing to cache
+ * is correct, but refusing silently while reporting "0 documents" tells a user
+ * their copy is empty rather than disabled — two very different facts.
+ */
+export function offlineCacheDisabledReason() {
+  return disabledReason;
 }
 
 function store(): OfflineMetadataStore | null {
@@ -1115,6 +1126,8 @@ function store(): OfflineMetadataStore | null {
         } catch (error) {
           if (error instanceof SecureStoreUnavailableError) {
             encryptionUnavailable = true;
+            disabledReason =
+              error.cause instanceof Error ? error.cause.message : error.message;
             stores.delete(scope);
           }
           throw error;

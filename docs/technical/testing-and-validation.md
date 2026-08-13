@@ -239,6 +239,7 @@ going wrong:
 | `i18n` | both locales carry the same keys, once each, and every literal `t()` key resolves |
 | `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
 | `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
+| `review-outbox` | a confirm held for the undo window survives a kill: written down before the window opens, replayed once on the next launch, kept when the send fails, refused for another account, and dropped once too old to be meaningful |
 | `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |
 | `offline-store` | the offline mirror's real SQL: what a cached document reads back as, the status/review/correspondent filters, the search-text match, cache accounting, and the derived dashboard and facets |
 | `offline-file-cache` | which endpoint a document's bytes come from, the write-to-temporary-then-move flow, byte accounting, and two viewers collapsing into one download |

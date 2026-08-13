@@ -164,6 +164,12 @@ export function OfflineArchiveScreen() {
         </View>
       ) : null}
 
+      {offline.cacheDisabledReason ? (
+        <Text style={styles.disabledNote}>
+          {`${t("offline.disabled")} (${offline.cacheDisabledReason})`}
+        </Text>
+      ) : null}
+
       <SectionHeader label={t("offline.limitTitle")} />
       <View style={styles.limitRow}>
         {OFFLINE_CACHE_LIMIT_CHOICES.map((choice) => {
@@ -251,6 +257,12 @@ const useStyles = createThemedStyles((c) => ({
   limitRow: {
     flexDirection: "row",
     gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  disabledNote: {
+    ...text.small,
+    color: c.muted,
     paddingHorizontal: 16,
     paddingTop: 12,
   },

@@ -43,8 +43,9 @@ import {
   getCacheStats,
   getCachedDocument,
   getCachedFileUris,
-  hasCachedFileBytes,
+  isOfflineCacheDisabled,
   markCachedDocumentViewed,
+  offlineCacheDisabledReason,
   quarantinedCount,
   readCachedFileBytes,
   removeCachedDocument,
@@ -130,6 +131,11 @@ type OfflineArchiveContextValue = {
   setMaxBytes: (bytes: number) => Promise<void>;
   /** Rows dropped this session because they could not be read. */
   quarantinedCount: number;
+  /**
+   * Set when the copy is off because this device cannot encrypt it, with the
+   * reason. Saying so beats reporting an empty copy that is actually disabled.
+   */
+  cacheDisabledReason: string | null;
 };
 
 const OfflineArchiveContext = createContext<OfflineArchiveContextValue | null>(null);
@@ -165,6 +171,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   // unexplained gap in the copy is explainable rather than mysterious.
   const [quarantinedRows, setQuarantinedRows] = useState(0);
   const [maxBytes, setMaxBytesState] = useState(OFFLINE_CACHE_DEFAULT_MAX_BYTES);
+  const [cacheDisabledReason, setCacheDisabled] = useState<string | null>(null);
 
   const refreshCacheSummary = useCallback(async () => {
     const stats = await getCacheStats();
@@ -191,6 +198,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     cacheSummaryRef.current = next;
     setCacheSummary(next);
     setQuarantinedRows(quarantinedCount());
+    setCacheDisabled(isOfflineCacheDisabled() ? offlineCacheDisabledReason() : null);
     return next;
   }, [scope]);
 
@@ -365,32 +373,51 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     document: ArchiveDocument,
   ) => {
     const now = new Date().toISOString();
-    if (!(await hasCachedFileBytes(document.id))) {
+    const extension = extensionForMime(
+      document.searchablePdfAvailable && document.mimeType === "application/pdf"
+        ? "application/pdf"
+        : document.mimeType,
+    );
+
+    /**
+     * Viewing must not depend on the copy having kept anything. Reading the bytes
+     * back out of the store to show them meant a disabled or empty cache produced
+     * an empty file, and the viewer had a valid path to nothing — "this PDF could
+     * not be displayed" for a document the archive would have served happily.
+     * So the bytes that were just downloaded are what gets written out, and
+     * persisting them is a separate, best-effort step.
+     */
+    let chunks = await readCachedFileBytes(document.id);
+
+    if (chunks.length === 0) {
       const file = await fileCache.download(authFetch, document);
-      const previous = await getCachedDocument(document.id);
-      await upsertCachedDocument({
-        document: previous?.document ?? document,
-        text: previous?.text ?? { documentId: document.id, blocks: [] },
-        history: previous?.history ?? { documentId: document.id, items: [] },
-        fileUri: null,
-        cachedAt: previous?.cachedAt ?? now,
-        lastViewedAt: now,
-        fileStorageBytes: file.byteLength,
-      });
-      await writeCachedFileBytes(document.id, file.bytes);
-      await applyEviction(await enforceCacheLimit());
-      await refreshCacheSummary();
+      chunks = [file.bytes];
+
+      try {
+        const previous = await getCachedDocument(document.id);
+        await upsertCachedDocument({
+          document: previous?.document ?? document,
+          text: previous?.text ?? { documentId: document.id, blocks: [] },
+          history: previous?.history ?? { documentId: document.id, items: [] },
+          fileUri: null,
+          cachedAt: previous?.cachedAt ?? now,
+          lastViewedAt: now,
+          fileStorageBytes: file.byteLength,
+        });
+        await writeCachedFileBytes(document.id, file.bytes);
+        await applyEviction(await enforceCacheLimit());
+        await refreshCacheSummary();
+      } catch {
+        // Failing to keep a copy is not a reason to fail to show the document.
+      }
     }
 
-    return materializer.materialize({
-      documentId: document.id,
-      extension: extensionForMime(
-        document.searchablePdfAvailable && document.mimeType === "application/pdf"
-          ? "application/pdf"
-          : document.mimeType,
-      ),
-      chunks: await readCachedFileBytes(document.id),
-    });
+    if (chunks.every((chunk) => chunk.byteLength === 0)) {
+      // Better to say so than to hand back a path to an empty file.
+      throw new Error(`No bytes available for document ${document.id}`);
+    }
+
+    return materializer.materialize({ documentId: document.id, extension, chunks });
   }, [applyEviction, fileCache, refreshCacheSummary]);
 
   /** Deletes the decrypted scratch copy; the encrypted original stays. */
@@ -440,6 +467,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       clearCachedDocuments,
       getCacheSummary,
       quarantinedCount: quarantinedRows,
+      cacheDisabledReason,
       maxBytes,
       setMaxBytes,
     }),
@@ -449,6 +477,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
       clearCachedDocuments,
       ensureCachedFile,
       getCacheSummary,
+      cacheDisabledReason,
       isConnected,
       isReady,
       loadCachedDocument,
