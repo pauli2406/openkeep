@@ -208,12 +208,33 @@ Connect: `pnpm exec eas build:version:set`.
 
 ## Before you ship to anyone
 
-- **Run the app on a device.** Nothing in CI has (see issue #154). The screenshot
-  suite renders through react-native-web, which does not prove native text
-  metrics, the native header, the real PDF viewer or the OS scanner.
-- Check both themes and the offline path on that device.
-- `pnpm test` and `pnpm --filter @openkeep/mobile test:visual` are already covered
-  by the `CI` check the workflow requires.
+`pnpm test` and `pnpm --filter @openkeep/mobile test:visual` are already covered by
+the `CI` check the workflow requires. What follows is the part CI cannot do.
+
+**Run the build on a device and walk this list.** Every item is here because a
+browser cannot show it, and the first two shipped broken in 0.3.0 despite 34 green
+screenshots:
+
+- [ ] **Open a full-screen sheet** — review reader, field editor, tag sheet, search
+      history. A `Modal` is its own native view hierarchy, so safe-area insets do
+      not reach it and headers land under the status bar.
+- [ ] **Open a PDF and an image.** `react-native-pdf` is stubbed as an empty sheet
+      in the screenshot suite, so nothing about real rendering is covered.
+- [ ] **Scan a document** through the OS scanner, and share a file out.
+- [ ] **Swipe to skip a review**, and confirm one — including taking it back inside
+      the undo window.
+- [ ] **Both themes**, including whatever the OS theme switch does to native
+      controls.
+- [ ] **Offline**: turn the network off, browse and search the copy, then turn it
+      back on and confirm the app returns to live data by itself.
+- [ ] **`Settings` → `Offline verfügbar`**: no "cannot encrypt" notice, and the
+      counters move after opening a document. See
+      [Verifying the Offline Copy Is Encrypted](#verifying-the-offline-copy-is-encrypted).
+- [ ] **Long text**: a document with a long title, and a correspondent with a long
+      name. Native text measurement is not Chromium's.
+
+Anything found gets a fix and, where the defect has a testable shape, a test — the
+modal insets became a `FullScreenModal` component rather than four patches.
 
 ## What the free EAS plan gives you
 
