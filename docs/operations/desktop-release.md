@@ -20,6 +20,15 @@ Linux clients link to the release page.
 | Windows 10+ | x64 | Squirrel installer (`OpenKeep-Setup.exe`), RELEASES + nupkg feed | Automatic in-app (Squirrel.Windows) |
 | Linux | x64 | deb, rpm | Manual — in-app link to the release page |
 
+## When a Build Fails on the Electron Download
+
+`socket hang up` partway through `Packaging application` is the Electron binary
+download failing, not the code. Both the CI desktop job and the release build
+cache that download and retry the packaging step three times, so this should be
+rare — but a cold cache plus a bad network can still exhaust the retries. Re-run
+the failed jobs; the cache entry from the successful attempt makes the next run
+immune.
+
 ## Release runbook
 
 1. Run the `Release` workflow with the version (`vX.Y.Z`). It verifies the
