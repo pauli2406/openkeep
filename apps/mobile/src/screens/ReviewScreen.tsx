@@ -310,7 +310,7 @@ export function ReviewScreen() {
   const pendingConfirm = useRef<string | null>(null);
 
   const reviewQuery = useQuery({
-    queryKey: ["review", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["review", auth.apiUrl, shouldUseCache, offline.cacheSummary.revision],
     queryFn: async () => {
       if (shouldUseCache) {
         return offline.queryCachedDocuments({ reviewOnly: true });
@@ -335,13 +335,13 @@ export function ReviewScreen() {
 
   // The cached record carries the file the offline reader needs.
   const cachedRecordQuery = useQuery({
-    queryKey: ["cached-document-record", document?.id, offline.cacheSummary.updatedAt],
+    queryKey: ["cached-document-record", document?.id, offline.cacheSummary.revision],
     enabled: readerOpen && Boolean(document),
     queryFn: () => (document ? offline.loadCachedDocument(document.id) : null),
   });
 
   const textQuery = useQuery({
-    queryKey: ["document-text", document?.id, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["document-text", document?.id, shouldUseCache, offline.cacheSummary.revision],
     enabled: Boolean(document),
     queryFn: async () => {
       if (!document) {

@@ -124,7 +124,7 @@ describe("opening a database", () => {
     // Nothing was read out of a shape this version cannot know; the copy is
     // simply gone, and re-caches as documents are opened.
     expect(await store.getCachedDocument(document.id)).toBeNull();
-    expect(await store.getCacheStats()).toEqual({ documentCount: 0, fileStorageBytes: 0 });
+    expect(await store.getCacheStats()).toMatchObject({ documentCount: 0, fileStorageBytes: 0 });
   });
 });
 

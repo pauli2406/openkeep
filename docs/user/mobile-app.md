@@ -131,7 +131,7 @@ retention setting.
 `Settings` -> `Offline` shows what is stored:
 
 - how many documents are cached and how much file storage they use
-- when the app last checked the cache
+- when a document was last written to the copy — a time today, a date before that
 - what is kept per document: metadata, the original file, recognised text, history
 - `Delete the offline copy`, which removes the local copy and never touches the
   server

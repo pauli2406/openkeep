@@ -293,7 +293,7 @@ export function SearchScreen() {
   const { suggestions } = useSuggestions(auth.authFetch, !shouldUseCache);
 
   const cachedSearch = useQuery({
-    queryKey: ["cached-search", draft.trim(), offline.cacheSummary.updatedAt],
+    queryKey: ["cached-search", draft.trim(), offline.cacheSummary.revision],
     enabled: shouldUseCache && draft.trim().length > 0,
     queryFn: () => offline.queryCachedDocuments({ query: draft }),
   });
@@ -318,7 +318,7 @@ export function SearchScreen() {
   // Which documents the local copy actually holds, so a citation can say when
   // it cannot be followed.
   const cachedList = useQuery({
-    queryKey: ["cached-ids", offline.cacheSummary.updatedAt],
+    queryKey: ["cached-ids", offline.cacheSummary.revision],
     enabled: shouldUseCache,
     queryFn: () => offline.queryCachedDocuments(),
   });

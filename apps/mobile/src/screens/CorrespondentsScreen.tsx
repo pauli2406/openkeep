@@ -39,7 +39,7 @@ export function CorrespondentsScreen() {
   const [query, setQuery] = useState("");
 
   const facetsQuery = useQuery({
-    queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.updatedAt],
+    queryKey: ["document-facets", auth.apiUrl, shouldUseCache, offline.cacheSummary.revision],
     queryFn: async () => {
       if (shouldUseCache) {
         return offline.loadCachedFacets();

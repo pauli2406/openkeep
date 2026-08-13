@@ -57,7 +57,7 @@ reading a shape the app no longer describes.
 
 Neither half of the cache reaches the device directly. `offline-metadata-store.ts` takes the SQLite handle it queries through, and `offline-file-cache.ts` takes a small filesystem interface — so the store's real SQL runs against Node's own SQLite in tests, and the download flow runs against an in-memory filesystem, with no simulator and no Expo runtime. Production wires the same code to `expo-sqlite` and `expo-file-system` in one place per module.
 
-`CacheSummary` exposes exactly three values — `documentCount`, `fileStorageBytes` and `updatedAt` — and the `Settings` -> `Offline` screen shows those three and nothing else. `updatedAt` is the revision the cached queries are keyed by, moved only when the counts change, so it is presented as when the cache was last checked rather than when a document was last written.
+`CacheSummary` exposes `documentCount`, `fileStorageBytes`, `lastCachedAt` and `revision`, and the `Settings` -> `Offline` screen shows the first three. The last two are deliberately separate values: `lastCachedAt` is read from the rows (`MAX(cached_at)`) and is when a document was last written to the cache, so it survives a restart; `revision` is an opaque token the cached queries are keyed by, moved only when the cache really changed. Conflating them is what previously left the reported figure meaning "when the app last counted", resetting on every cold start — and left a document re-cached at an unchanged size invisible to every query reading the cache, since nothing in the comparison had moved.
 
 ## Offline Read Paths
 

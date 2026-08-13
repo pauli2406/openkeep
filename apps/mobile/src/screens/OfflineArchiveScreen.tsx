@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
 import { Button, Pill, Row, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
+import { formatShortDate, parseArchiveDate } from "../lib";
 import { useOfflineArchive } from "../offline-archive";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
@@ -44,19 +45,27 @@ export function OfflineArchiveScreen() {
   }
 
   /**
-   * `updatedAt` is the revision the query keys hang off — the last time the app
-   * counted the cache, not the last time a document was written to it. The stat
-   * is labelled accordingly, and an empty cache has never been anything.
+   * When a document was last written to the cache, read from the rows rather
+   * than stamped when the app counted them. A clock time alone would be a poor
+   * answer for a copy last written days ago, so anything but today is shown as
+   * a date.
    */
-  function formatUpdated(value: string | null) {
+  function formatLastWritten(value: string | null) {
     if (!value || offline.cacheSummary.documentCount === 0) {
       return t("offline.never");
     }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
+    const date = parseArchiveDate(value);
+    if (!date) {
       return t("offline.never");
     }
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+    const now = new Date();
+    const sameDay =
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+    return sameDay
+      ? `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+      : formatShortDate(value);
   }
 
   function confirmClear() {
@@ -94,7 +103,7 @@ export function OfflineArchiveScreen() {
   const stats = [
     { label: t("offline.statDocuments"), value: String(offline.cacheSummary.documentCount) },
     { label: t("offline.statUsed"), value: formatBytes(offline.cacheSummary.fileStorageBytes) },
-    { label: t("offline.statUpdated"), value: formatUpdated(offline.cacheSummary.updatedAt) },
+    { label: t("offline.statWritten"), value: formatLastWritten(offline.cacheSummary.lastCachedAt) },
   ];
 
   return (

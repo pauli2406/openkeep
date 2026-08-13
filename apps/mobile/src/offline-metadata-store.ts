@@ -552,17 +552,29 @@ export function createOfflineMetadataStore({
     return queryCachedDocuments();
   }
 
+  /**
+   * `lastCachedAt` is read from the rows, not stamped when this runs: it is when
+   * a document was last written to the cache, which survives a restart and moves
+   * when a document is re-cached at the same size. Reporting the clock at read
+   * time instead is what made the figure reset on every cold start.
+   */
   async function getCacheStats() {
     const db = await getDb();
-    const row = await db.getFirstAsync<{ documentCount: number; fileStorageBytes: number }>(
+    const row = await db.getFirstAsync<{
+      documentCount: number;
+      fileStorageBytes: number;
+      lastCachedAt: string | null;
+    }>(
       `SELECT COUNT(*) as documentCount,
-            COALESCE(SUM(file_storage_bytes), 0) as fileStorageBytes
+            COALESCE(SUM(file_storage_bytes), 0) as fileStorageBytes,
+            MAX(cached_at) as lastCachedAt
      FROM cached_documents`,
     );
 
     return {
       documentCount: row?.documentCount ?? 0,
       fileStorageBytes: row?.fileStorageBytes ?? 0,
+      lastCachedAt: row?.lastCachedAt ?? null,
     };
   }
 
