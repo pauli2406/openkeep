@@ -71,7 +71,9 @@ Review shows one document at a time rather than a list.
 
 After either action a `Back` bar appears for a few seconds. Confirming is not
 sent to the server until that window closes, so taking it back is instant and
-leaves no trace — no reprocessing is triggered.
+leaves no trace — no reprocessing is triggered. If the app is closed inside that
+window, the confirm is sent the next time you open Review with a connection: what
+you saw accepted stays accepted.
 
 When a document is in review for a reason that carries no field evidence — a
 failed conversion, empty OCR, an unsupported format — the field list says
