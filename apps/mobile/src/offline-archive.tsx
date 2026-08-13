@@ -1,8 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
-import * as FileSystem from "expo-file-system/legacy";
 import * as SQLite from "expo-sqlite";
-import { Buffer } from "buffer";
 import {
   createContext,
   useCallback,
@@ -22,6 +20,11 @@ import type {
   SearchDocumentsResponse,
 } from "./lib";
 import {
+  createExpoOfflineFileSystem,
+  createOfflineFileCache,
+  type AuthFetch,
+} from "./offline-file-cache";
+import {
   buildCachedDashboard,
   buildCachedFacets,
   clearCachedDocumentRows,
@@ -33,15 +36,13 @@ import {
   type CachedDocumentRecord,
 } from "./offline-metadata-store";
 
-const CACHE_ROOT_DIR = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? ""}openkeep-cache`;
-const CACHE_FILES_DIR = `${CACHE_ROOT_DIR}/files`;
-const LEGACY_OFFLINE_ROOT_DIR = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? ""}openkeep-offline`;
 const LEGACY_CLEANUP_KEY = "openkeep.mobile.cache.legacy-cleaned-v1";
 const LEGACY_KEYS = [
   "openkeep.mobile.offline-archive-mode",
   "openkeep.mobile.offline-retention-settings",
 ];
-const inFlightFileDownloads = new Map<string, Promise<{ uri: string; bytes: number }>>();
+
+const fileCache = createOfflineFileCache({ files: createExpoOfflineFileSystem() });
 
 type LoadDocumentsOptions = {
   query?: string;
@@ -62,11 +63,11 @@ type OfflineArchiveContextValue = {
   isReady: boolean;
   cacheSummary: CacheSummary;
   cacheOpenedDocument: (
-    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    authFetch: AuthFetch,
     documentId: string,
   ) => Promise<CachedDocumentRecord>;
   ensureCachedFile: (
-    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    authFetch: AuthFetch,
     document: ArchiveDocument,
   ) => Promise<string>;
   loadCachedDocument: (documentId: string) => Promise<CachedDocumentRecord | null>;
@@ -79,113 +80,13 @@ type OfflineArchiveContextValue = {
 
 const OfflineArchiveContext = createContext<OfflineArchiveContextValue | null>(null);
 
-function extensionForMime(mimeType: string) {
-  const map: Record<string, string> = {
-    "application/pdf": ".pdf",
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/gif": ".gif",
-    "image/webp": ".webp",
-    "image/bmp": ".bmp",
-    "image/tiff": ".tiff",
-    "text/plain": ".txt",
-    "text/html": ".html",
-    "text/csv": ".csv",
-    "application/json": ".json",
-    "application/xml": ".xml",
-  };
-
-  return map[mimeType] ?? ".bin";
-}
-
-async function ensureCacheDirs() {
-  await FileSystem.makeDirectoryAsync(CACHE_ROOT_DIR, { intermediates: true });
-  await FileSystem.makeDirectoryAsync(CACHE_FILES_DIR, { intermediates: true });
-}
-
-async function deleteIfExists(fileUri: string | null | undefined) {
-  if (!fileUri) {
-    return;
-  }
-
-  try {
-    const info = await FileSystem.getInfoAsync(fileUri);
-    if (info.exists) {
-      await FileSystem.deleteAsync(fileUri, { idempotent: true });
-    }
-  } catch {
-    // Best-effort cleanup only.
-  }
-}
-
-async function fetchJson<T>(
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  path: string,
-) {
+async function fetchJson<T>(authFetch: AuthFetch, path: string) {
   const response = await authFetch(path);
   if (!response.ok) {
     throw new Error(`Request failed for ${path} (${response.status})`);
   }
 
   return (await response.json()) as T;
-}
-
-async function downloadDocumentFile(
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>,
-  document: ArchiveDocument,
-) {
-  const existing = inFlightFileDownloads.get(document.id);
-  if (existing) {
-    return existing;
-  }
-
-  const download = (async () => {
-    await ensureCacheDirs();
-    const preferredMimeType = document.searchablePdfAvailable && document.mimeType === "application/pdf"
-      ? "application/pdf"
-      : document.mimeType;
-    const endpoint = document.searchablePdfAvailable && document.mimeType === "application/pdf"
-      ? `/api/documents/${document.id}/download/searchable`
-      : `/api/documents/${document.id}/download`;
-    const response = await authFetch(endpoint);
-    if (!response.ok) {
-      throw new Error(`Download failed (${response.status})`);
-    }
-
-    const extension = extensionForMime(preferredMimeType);
-    const uri = `${CACHE_FILES_DIR}/${document.id}${extension}`;
-    const tempUri = `${uri}.tmp`;
-    const arrayBuffer = await response.arrayBuffer();
-    await FileSystem.writeAsStringAsync(tempUri, Buffer.from(arrayBuffer).toString("base64"), {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    await deleteIfExists(uri);
-    await FileSystem.moveAsync({ from: tempUri, to: uri });
-
-    return { uri, bytes: arrayBuffer.byteLength };
-  })();
-
-  inFlightFileDownloads.set(document.id, download);
-  try {
-    return await download;
-  } finally {
-    inFlightFileDownloads.delete(document.id);
-  }
-}
-
-async function getFileSize(fileUri: string | null) {
-  if (!fileUri) {
-    return 0;
-  }
-  try {
-    const info = await FileSystem.getInfoAsync(fileUri);
-    if (info.exists && "size" in info && typeof info.size === "number") {
-      return info.size;
-    }
-  } catch {
-    // Missing files are reconciled on next refresh.
-  }
-  return 0;
 }
 
 export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
@@ -221,7 +122,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
 
     await Promise.all(LEGACY_KEYS.map((key) => AsyncStorage.removeItem(key).catch(() => undefined)));
     await SQLite.deleteDatabaseAsync("openkeep-offline.db").catch(() => undefined);
-    await deleteIfExists(LEGACY_OFFLINE_ROOT_DIR);
+    await fileCache.deleteIfExists(fileCache.legacyRootDir);
     await AsyncStorage.setItem(LEGACY_CLEANUP_KEY, "true");
   }, []);
 
@@ -229,7 +130,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     let isMounted = true;
 
     async function bootstrap() {
-      await ensureCacheDirs();
+      await fileCache.ensureDirs();
       await clearLegacyOfflineState();
       await refreshCacheSummary();
       if (isMounted) {
@@ -261,8 +162,7 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
     }
 
     if (cached.fileUri) {
-      const info = await FileSystem.getInfoAsync(cached.fileUri).catch(() => ({ exists: false }));
-      if (!info.exists) {
+      if (!(await fileCache.exists(cached.fileUri))) {
         return {
           ...cached,
           fileUri: null,
@@ -275,21 +175,21 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cacheOpenedDocument = useCallback(async (
-    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    authFetch: AuthFetch,
     documentId: string,
   ) => {
-    await ensureCacheDirs();
+    await fileCache.ensureDirs();
     const previous = await getCachedDocument(documentId);
     const now = new Date().toISOString();
     const document = await fetchJson<ArchiveDocument>(authFetch, `/api/documents/${documentId}`);
     const [text, history, file] = await Promise.all([
       fetchJson<DocumentTextResponse>(authFetch, `/api/documents/${documentId}/text`).catch(() => previous?.text ?? { documentId, blocks: [] }),
       fetchJson<DocumentHistoryResponse>(authFetch, `/api/documents/${documentId}/history`).catch(() => previous?.history ?? { documentId, items: [] }),
-      downloadDocumentFile(authFetch, document).catch(() => null),
+      fileCache.download(authFetch, document).catch(() => null),
     ]);
 
     const fileUri = file?.uri ?? previous?.fileUri ?? null;
-    const fileStorageBytes = file?.bytes ?? (await getFileSize(fileUri));
+    const fileStorageBytes = file?.bytes ?? (await fileCache.fileSize(fileUri));
     const record: CachedDocumentRecord = {
       document,
       text,
@@ -302,25 +202,22 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
 
     await upsertCachedDocument(record);
     if (previous?.fileUri && file?.uri && previous.fileUri !== file.uri) {
-      await deleteIfExists(previous.fileUri);
+      await fileCache.deleteIfExists(previous.fileUri);
     }
     await refreshCacheSummary();
     return record;
   }, [refreshCacheSummary]);
 
   const ensureCachedFile = useCallback(async (
-    authFetch: (path: string, init?: RequestInit) => Promise<Response>,
+    authFetch: AuthFetch,
     document: ArchiveDocument,
   ) => {
     const previous = await getCachedDocument(document.id);
-    if (previous?.fileUri) {
-      const info = await FileSystem.getInfoAsync(previous.fileUri).catch(() => ({ exists: false }));
-      if (info.exists) {
-        return previous.fileUri;
-      }
+    if (previous?.fileUri && (await fileCache.exists(previous.fileUri))) {
+      return previous.fileUri;
     }
 
-    const file = await downloadDocumentFile(authFetch, document);
+    const file = await fileCache.download(authFetch, document);
     const now = new Date().toISOString();
     const record: CachedDocumentRecord = {
       document: previous?.document ?? document,
@@ -349,10 +246,9 @@ export function OfflineArchiveProvider({ children }: { children: ReactNode }) {
 
   const clearCachedDocuments = useCallback(async () => {
     const fileUris = await getCachedFileUris();
-    await Promise.all(fileUris.map((fileUri) => deleteIfExists(fileUri)));
+    await Promise.all(fileUris.map((fileUri) => fileCache.deleteIfExists(fileUri)));
     await clearCachedDocumentRows();
-    await deleteIfExists(CACHE_FILES_DIR);
-    await ensureCacheDirs();
+    await fileCache.resetFiles();
     await refreshCacheSummary();
   }, [refreshCacheSummary]);
 
