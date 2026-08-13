@@ -262,7 +262,11 @@ jobs:
           set -euo pipefail
           deb=$(find apps/desktop/out/make -name '*.deb' | head -1)
           [ -n "$deb" ] || { echo "::error::no deb was produced"; exit 1; }
-          sudo dpkg -i "$deb"
+          # `apt-get install` rather than `dpkg -i`: the package depends on
+          # libnotify4 and dpkg does not resolve dependencies, so it would leave
+          # the package unconfigured and fail. This is also what a user runs.
+          sudo apt-get update
+          sudo apt-get install -y "$(realpath "$deb")"
 
           test -x /usr/lib/openkeep/openkeep || { echo "::error::installed binary missing"; exit 1; }
           desktop_file=$(ls /usr/share/applications/*openkeep*.desktop 2>/dev/null | head -1)
@@ -275,7 +279,7 @@ jobs:
           xvfb-run -a /usr/lib/openkeep/openkeep --smoke-test | tee /tmp/smoke.out
           grep -q OPENKEEP_DESKTOP_SMOKE_OK /tmp/smoke.out
 
-          sudo dpkg -r openkeep
+          sudo apt-get remove -y openkeep
           [ ! -e /usr/lib/openkeep ] || { echo "::error::uninstall left /usr/lib/openkeep behind"; exit 1; }
           [ ! -e "$desktop_file" ] || { echo "::error::uninstall left the desktop entry behind"; exit 1; }
 
