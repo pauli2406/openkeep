@@ -264,7 +264,7 @@ jobs:
           WINDOWS_SIGN_PARAMS: ${{ secrets.WINDOWS_SIGN_PARAMS }}
         run: |
           for attempt in 1 2 3; do
-            if pnpm --filter @openkeep/desktop make -- --arch=${{ matrix.arch }}; then exit 0; fi
+            if pnpm --filter @openkeep/desktop exec electron-forge make --arch=${{ matrix.arch }}; then exit 0; fi
             echo "::warning::make attempt $attempt failed; retrying"
             sleep 20
           done
