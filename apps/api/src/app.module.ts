@@ -15,6 +15,7 @@ import { HealthController } from "./health/health.controller";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ProcessingModule } from "./processing/processing.module";
 import { SearchModule } from "./search/search.module";
+import { TaxesModule } from "./taxes/taxes.module";
 import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
 
 @Module({
@@ -41,6 +42,7 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
     ExplorerModule,
     NotificationsModule,
     SearchModule,
+    TaxesModule,
     TaxonomiesModule,
   ],
   controllers: [HealthController],

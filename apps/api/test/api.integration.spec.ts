@@ -16,11 +16,13 @@ import {
   documentChunkEmbeddings,
   documentFiles,
   documentPages,
+  documentTagLinks,
   documentTextBlocks,
   documentTypes,
   documents,
   processingJobs,
   tags,
+  users,
 } from "@openkeep/db";
 import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
@@ -1442,6 +1444,63 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
           originalFilename: "due.pdf",
           mimeType: "application/pdf",
           sizeBytes: 32,
+  it("aggregates a tax year by tag and type membership, with sums per currency", async () => {
+    const suffix = randomUUID().slice(0, 8);
+
+    const [taxType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Tax Document", slug: `tax-document-${suffix}` })
+      .returning();
+    const [invoiceType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Invoice", slug: `invoice-tax-${suffix}` })
+      .returning();
+    // The processing pipeline may already have minted the `tax` tag in an
+    // earlier test; membership only cares about the slug, so reuse it.
+    const [insertedTaxTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: "tax", slug: "tax" })
+      .onConflictDoNothing()
+      .returning();
+    const taxTag =
+      insertedTaxTag ??
+      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Finanzamt",
+        slug: `finanzamt-${suffix}`,
+        normalizedName: "finanzamt",
+      })
+      .returning();
+
+    const [otherUser] = await databaseService.db
+      .insert(users)
+      .values({
+        email: `second-${suffix}@example.com`,
+        passwordHash: "x",
+        displayName: "Second User",
+        isOwner: false,
+      })
+      .returning();
+
+    const seedDocument = async (input: {
+      title: string;
+      issueDate: string;
+      amount?: string;
+      currency?: string;
+      documentTypeId?: string;
+      tagged?: boolean;
+      ownerId?: string;
+    }) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "e").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/tax.pdf`,
+          originalFilename: "tax.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 64,
         })
         .returning();
       const [document] = await databaseService.db
@@ -2003,6 +2062,165 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
       `%${suffix}@example.com%`,
     ]);
+          ownerUserId: input.ownerId ?? ownerUserId,
+          fileId: file.id,
+          title: input.title,
+          mimeType: "application/pdf",
+          status: "ready",
+          issueDate: new Date(input.issueDate),
+          amount: input.amount,
+          currency: input.currency,
+          correspondentId: correspondent.id,
+          documentTypeId: input.documentTypeId,
+          fullText: input.title,
+        } as never)
+        .returning();
+      if (input.tagged) {
+        await databaseService.db
+          .insert(documentTagLinks)
+          .values({ documentId: document.id, tagId: taxTag.id });
+      }
+      return { document, file };
+    };
+
+    const seeded = [
+      // Member via type only, on the first day of the year.
+      await seedDocument({
+        title: "Steuerbescheid 2025",
+        issueDate: "2025-01-01",
+        amount: "100.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+      }),
+      // Member via tag only, filed under a non-tax type.
+      await seedDocument({
+        title: "Spendenquittung",
+        issueDate: "2025-06-15",
+        amount: "50.50",
+        currency: "EUR",
+        documentTypeId: invoiceType.id,
+        tagged: true,
+      }),
+      // Member via both, without an amount.
+      await seedDocument({
+        title: "Steuerunterlagen ohne Betrag",
+        issueDate: "2025-07-01",
+        documentTypeId: taxType.id,
+        tagged: true,
+      }),
+      // Member via tag, unfiled, second currency.
+      await seedDocument({
+        title: "US withholding statement",
+        issueDate: "2025-09-30",
+        amount: "20.00",
+        currency: "USD",
+        tagged: true,
+      }),
+      // Previous year, last day — must not leak into 2025.
+      await seedDocument({
+        title: "Steuerbescheid 2024",
+        issueDate: "2024-12-31",
+        amount: "999.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+      }),
+      // Same year, but neither tagged nor of a tax type.
+      await seedDocument({
+        title: "Ordinary invoice",
+        issueDate: "2025-03-03",
+        amount: "77.00",
+        currency: "EUR",
+        documentTypeId: invoiceType.id,
+      }),
+      // Another user's tax document must stay invisible.
+      await seedDocument({
+        title: "Foreign tax document",
+        issueDate: "2025-05-05",
+        amount: "500.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+        ownerId: otherUser.id,
+      }),
+    ];
+
+    const response = await request(app.getHttpServer())
+      .get("/api/taxes/2025")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.year).toBe(2025);
+    expect(response.body.documentCount).toBe(4);
+    expect(response.body.unsummedCount).toBe(1);
+    expect(response.body.totals).toEqual([
+      { currency: "EUR", sum: 150.5, count: 2 },
+      { currency: "USD", sum: 20, count: 1 },
+    ]);
+
+    const titles = response.body.groups.flatMap(
+      (group: { documents: Array<{ title: string }> }) =>
+        group.documents.map((document) => document.title),
+    );
+    expect(titles).not.toContain("Ordinary invoice");
+    expect(titles).not.toContain("Foreign tax document");
+    expect(titles).not.toContain("Steuerbescheid 2024");
+
+    const taxGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === "Tax Document",
+    );
+    expect(taxGroup.count).toBe(2);
+    expect(taxGroup.unsummedCount).toBe(1);
+    expect(taxGroup.totals).toEqual([{ currency: "EUR", sum: 100, count: 1 }]);
+    expect(
+      taxGroup.documents.map((document: { title: string; memberVia: string }) => document.memberVia),
+    ).toEqual(["type", "both"]);
+
+    const invoiceGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === "Invoice",
+    );
+    expect(invoiceGroup.count).toBe(1);
+    expect(invoiceGroup.documents[0].memberVia).toBe("tag");
+    expect(invoiceGroup.documents[0].correspondentName).toBe("Finanzamt");
+
+    const unfiledGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === null,
+    );
+    expect(unfiledGroup.totals).toEqual([{ currency: "USD", sum: 20, count: 1 }]);
+    // The unfiled group sorts last regardless of size.
+    expect(response.body.groups[response.body.groups.length - 1].documentType).toBeNull();
+
+    const previousYear = await request(app.getHttpServer())
+      .get("/api/taxes/2024")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(previousYear.status).toBe(200);
+    expect(previousYear.body.documentCount).toBe(1);
+    expect(previousYear.body.groups[0].documents[0].title).toBe("Steuerbescheid 2024");
+    expect(previousYear.body.groups[0].documents[0].issueDate).toBe("2024-12-31");
+
+    const invalidYear = await request(app.getHttpServer())
+      .get("/api/taxes/20x5")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(invalidYear.status).toBe(400);
+
+    const unauthenticated = await request(app.getHttpServer()).get("/api/taxes/2025");
+    expect(unauthenticated.status).toBe(401);
+
+    const documentIds = seeded.map((entry) => entry.document.id);
+    const fileIds = seeded.map((entry) => entry.file.id);
+    await databaseService.pool.query(
+      `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+      [documentIds],
+    );
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      fileIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = ANY($1::uuid[])`, [
+      [taxType.id, invoiceType.id],
+    ]);
+    await databaseService.pool.query(`DELETE FROM tags WHERE id = $1::uuid`, [taxTag.id]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1::uuid`, [
+      correspondent.id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM users WHERE id = $1::uuid`, [otherUser.id]);
   });
 
   it("scans the watch folder and exports and imports archive snapshots", async () => {

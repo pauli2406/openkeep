@@ -916,6 +916,38 @@ export const EmailIngestStatusResponseSchema = z.object({
       createdAt: z.string(),
     }),
   ),
+export const TaxYearMembershipSchema = z.enum(["tag", "type", "both"]);
+
+export const TaxYearDocumentSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  issueDate: z.string().nullable(),
+  correspondentName: z.string().nullable(),
+  amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  memberVia: TaxYearMembershipSchema,
+});
+
+export const TaxYearTotalSchema = z.object({
+  currency: z.string(),
+  sum: z.number(),
+  count: z.number().int().nonnegative(),
+});
+
+export const TaxYearGroupSchema = z.object({
+  documentType: z.string().nullable(),
+  count: z.number().int().nonnegative(),
+  unsummedCount: z.number().int().nonnegative(),
+  totals: z.array(TaxYearTotalSchema),
+  documents: z.array(TaxYearDocumentSchema),
+});
+
+export const TaxYearResponseSchema = z.object({
+  year: z.number().int().min(1970).max(2100),
+  documentCount: z.number().int().nonnegative(),
+  unsummedCount: z.number().int().nonnegative(),
+  totals: z.array(TaxYearTotalSchema),
+  groups: z.array(TaxYearGroupSchema),
 });
 
 export const UploadDocumentMetadataSchema = z.object({
@@ -1673,6 +1705,11 @@ export type DeadlineWindow = z.infer<typeof DeadlineWindowSchema>;
 export type NotificationItem = z.infer<typeof NotificationItemSchema>;
 export type NotificationsResponse = z.infer<typeof NotificationsResponseSchema>;
 export type EmailIngestStatusResponse = z.infer<typeof EmailIngestStatusResponseSchema>;
+export type TaxYearMembership = z.infer<typeof TaxYearMembershipSchema>;
+export type TaxYearDocument = z.infer<typeof TaxYearDocumentSchema>;
+export type TaxYearTotal = z.infer<typeof TaxYearTotalSchema>;
+export type TaxYearGroup = z.infer<typeof TaxYearGroupSchema>;
+export type TaxYearResponse = z.infer<typeof TaxYearResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;
