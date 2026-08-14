@@ -563,6 +563,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/bulk/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add or remove one tag on a set of documents */
+        post: operations["DocumentsController_bulkTagDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/bulk/type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set (or clear) the document type on a set of documents */
+        post: operations["DocumentsController_bulkSetDocumentType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/reembed": {
         parameters: {
             query?: never;
@@ -1642,6 +1676,18 @@ export interface components {
             };
             /** @enum {string} */
             parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+        };
+        BulkTagDocumentsDto: {
+            documentIds: string[];
+            /** Format: uuid */
+            tagId: string;
+            /** @enum {string} */
+            action: "add" | "remove";
+        };
+        BulkSetDocumentTypeDto: {
+            documentIds: string[];
+            /** Format: uuid */
+            documentTypeId: string | null;
         };
         DocumentAskDto: {
             question: string;
@@ -3142,39 +3188,6 @@ export interface components {
                 }[];
             }[];
         };
-        TaxYearResponse: {
-            year: number;
-            documentCount: number;
-            unsummedCount: number;
-            totals: {
-                currency: string;
-                sum: number;
-                count: number;
-            }[];
-            groups: {
-                /** Format: uuid */
-                documentTypeId: string | null;
-                documentType: string | null;
-                count: number;
-                unsummedCount: number;
-                totals: {
-                    currency: string;
-                    sum: number;
-                    count: number;
-                }[];
-                documents: {
-                    /** Format: uuid */
-                    id: string;
-                    title: string;
-                    issueDate: string | null;
-                    correspondentName: string | null;
-                    amount: number | null;
-                    currency: string | null;
-                    /** @enum {string} */
-                    memberVia: "tag" | "type" | "both";
-                }[];
-            }[];
-        };
         EmailIngestStatusResponse: {
             configured: boolean;
             mailbox: {
@@ -3218,6 +3231,59 @@ export interface components {
                 desktopDeliveredAt: string | null;
             }[];
             unreadCount: number;
+        };
+        TaxYearResponse: {
+            year: number;
+            documentCount: number;
+            unsummedCount: number;
+            totals: {
+                currency: string;
+                sum: number;
+                count: number;
+            }[];
+            groups: {
+                /** Format: uuid */
+                documentTypeId: string | null;
+                documentType: string | null;
+                count: number;
+                unsummedCount: number;
+                totals: {
+                    currency: string;
+                    sum: number;
+                    count: number;
+                }[];
+                documents: {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    issueDate: string | null;
+                    correspondentName: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    /** @enum {string} */
+                    memberVia: "tag" | "type" | "both";
+                }[];
+            }[];
+        };
+        BulkDocumentsResponse: {
+            updated: string[];
+            failed: {
+                /** Format: uuid */
+                id: string;
+                reason: string;
+            }[];
+        };
+        BulkTagDocumentsRequest: {
+            documentIds: string[];
+            /** Format: uuid */
+            tagId: string;
+            /** @enum {string} */
+            action: "add" | "remove";
+        };
+        BulkSetDocumentTypeRequest: {
+            documentIds: string[];
+            /** Format: uuid */
+            documentTypeId: string | null;
         };
         UploadDocumentResponse: {
             /** Format: uuid */
@@ -6962,6 +7028,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchReprocessDocumentsResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_bulkTagDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkTagDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk tag result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDocumentsResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_bulkSetDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSetDocumentTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk set-type result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDocumentsResponse"];
                 };
             };
         };

@@ -40,6 +40,8 @@ import {
   ReviewDocumentsQueryDto,
   SearchDocumentsQueryDto,
   UpdateDocumentDto,
+  BulkTagDocumentsDto,
+  BulkSetDocumentTypeDto,
 } from "./dto/document.dto";
 import { DocumentsService } from "./documents.service";
 import { BooleanFlagQuery, ValidatedBody, ValidatedQuery } from "../common/validated-params";
@@ -266,6 +268,26 @@ export class DocumentsController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<BatchReprocessDocumentsResponseDto> {
     return this.documentsService.batchReprocessDocuments(body, principal);
+  }
+
+  @Post("bulk/tags")
+  @ApiOperation({ summary: "Add or remove one tag on a set of documents" })
+  @ApiCreatedResponse({ description: "Which documents were updated, and which failed" })
+  async bulkTagDocuments(
+    @ValidatedBody(BulkTagDocumentsDto) body: BulkTagDocumentsDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.bulkTagDocuments(principal, body);
+  }
+
+  @Post("bulk/type")
+  @ApiOperation({ summary: "Set (or clear) the document type on a set of documents" })
+  @ApiCreatedResponse({ description: "Which documents were updated, and which failed" })
+  async bulkSetDocumentType(
+    @ValidatedBody(BulkSetDocumentTypeDto) body: BulkSetDocumentTypeDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.documentsService.bulkSetDocumentType(principal, body);
   }
 
   @Post(":id/reembed")

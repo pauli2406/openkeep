@@ -22,6 +22,8 @@ import {
   SemanticSearchRequestSchema,
   SearchDocumentsRequestSchema,
   UpdateDocumentSchema,
+  BulkTagDocumentsRequestSchema,
+  BulkSetDocumentTypeRequestSchema,
 } from "@openkeep/types";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
@@ -84,6 +86,8 @@ const ReviewDocumentsQuerySchema = z.object({
 });
 
 export class UpdateDocumentDto extends createZodDto(UpdateDocumentSchema) {}
+export class BulkTagDocumentsDto extends createZodDto(BulkTagDocumentsRequestSchema) {}
+export class BulkSetDocumentTypeDto extends createZodDto(BulkSetDocumentTypeRequestSchema) {}
 export class SearchDocumentsQueryDto extends createZodDto(SearchDocumentsQuerySchema) {}
 export class ReviewDocumentsQueryDto extends createZodDto(ReviewDocumentsQuerySchema) {}
 export class SearchDocumentsResponseDto extends createZodDto(SearchDocumentsResponseSchema) {}

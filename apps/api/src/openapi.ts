@@ -10,6 +10,9 @@ import {
   ArchiveSnapshotSchema,
   AuthTokensSchema,
   BatchReprocessDocumentsRequestSchema,
+  BulkDocumentsResponseSchema,
+  BulkSetDocumentTypeRequestSchema,
+  BulkTagDocumentsRequestSchema,
   BatchReprocessDocumentsResponseSchema,
   CorrespondentSchema,
   CorrespondentInsightsResponseSchema,
@@ -534,15 +537,6 @@ function patchGeneratedDocument(document: Record<string, any>) {
   patchCsvTagsQuery(document, "/api/documents/timeline");
   patchJsonResponse(
     document,
-    "/api/taxes/{year}",
-    "get",
-    200,
-    "Tax year aggregation response",
-    "TaxYearResponse",
-    TaxYearResponseSchema,
-  );
-  patchJsonResponse(
-    document,
     "/api/email-ingest/status",
     "get",
     200,
@@ -558,6 +552,47 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "Pending deadline notifications",
     "NotificationsResponse",
     NotificationsResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/taxes/{year}",
+    "get",
+    200,
+    "Tax year aggregation response",
+    "TaxYearResponse",
+    TaxYearResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/bulk/tags",
+    "post",
+    201,
+    "Bulk tag result",
+    "BulkDocumentsResponse",
+    BulkDocumentsResponseSchema,
+  );
+  patchJsonRequest(
+    document,
+    "/api/documents/bulk/tags",
+    "post",
+    "BulkTagDocumentsRequest",
+    BulkTagDocumentsRequestSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/bulk/type",
+    "post",
+    201,
+    "Bulk set-type result",
+    "BulkDocumentsResponse",
+    BulkDocumentsResponseSchema,
+  );
+  patchJsonRequest(
+    document,
+    "/api/documents/bulk/type",
+    "post",
+    "BulkSetDocumentTypeRequest",
+    BulkSetDocumentTypeRequestSchema,
   );
   patchJsonResponse(
     document,

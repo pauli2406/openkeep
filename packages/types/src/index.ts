@@ -953,6 +953,27 @@ export const TaxYearResponseSchema = z.object({
   groups: z.array(TaxYearGroupSchema),
 });
 
+export const BulkTagDocumentsRequestSchema = z.object({
+  documentIds: z.array(z.string().uuid()).min(1).max(200),
+  tagId: z.string().uuid(),
+  action: z.enum(["add", "remove"]),
+});
+
+export const BulkSetDocumentTypeRequestSchema = z.object({
+  documentIds: z.array(z.string().uuid()).min(1).max(200),
+  documentTypeId: z.string().uuid().nullable(),
+});
+
+export const BulkDocumentsResponseSchema = z.object({
+  updated: z.array(z.string().uuid()),
+  failed: z.array(
+    z.object({
+      id: z.string().uuid(),
+      reason: z.string(),
+    }),
+  ),
+});
+
 export const UploadDocumentMetadataSchema = z.object({
   title: z.string().trim().min(1).optional(),
   source: DocumentSourceSchema.default("upload"),
@@ -1713,6 +1734,9 @@ export type TaxYearDocument = z.infer<typeof TaxYearDocumentSchema>;
 export type TaxYearTotal = z.infer<typeof TaxYearTotalSchema>;
 export type TaxYearGroup = z.infer<typeof TaxYearGroupSchema>;
 export type TaxYearResponse = z.infer<typeof TaxYearResponseSchema>;
+export type BulkTagDocumentsRequest = z.infer<typeof BulkTagDocumentsRequestSchema>;
+export type BulkSetDocumentTypeRequest = z.infer<typeof BulkSetDocumentTypeRequestSchema>;
+export type BulkDocumentsResponse = z.infer<typeof BulkDocumentsResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;

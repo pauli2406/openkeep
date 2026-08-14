@@ -8,9 +8,11 @@ import {
   CalendarRange,
   Loader2,
   RefreshCw,
+  Tag as TagIcon,
   Trash2,
   X,
 } from "lucide-react";
+import type { BulkDocumentsResponse, DocumentType, Tag } from "@openkeep/types";
 import type { ExplorerSearch, ExplorerView } from "@/lib/explorer";
 import {
   fetchDocumentsTimeline,
@@ -78,6 +80,12 @@ export function ExplorerSurface({
   const [queryDraft, setQueryDraft] = useState(search.query ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [typeDialogOpen, setTypeDialogOpen] = useState(false);
+  const [bulkTagId, setBulkTagId] = useState<string>("");
+  const [bulkTagAction, setBulkTagAction] = useState<"add" | "remove">("add");
+  const [bulkTypeId, setBulkTypeId] = useState<string>("");
+  const [bulkFailureCount, setBulkFailureCount] = useState(0);
 
   // Bulk export = the existing per-document download endpoint, once per
   // selection. There is no archive-export endpoint to call here.
@@ -136,6 +144,72 @@ export function ExplorerSurface({
   useEffect(() => {
     setSelectedIds((current) => current.filter((id) => visibleDocumentIds.includes(id)));
   }, [visibleDocumentIds]);
+
+  const tagsQuery = useQuery({
+    queryKey: ["taxonomies", "tags"],
+    queryFn: async () => {
+      const response = await authFetch("/api/taxonomies/tags");
+      if (!response.ok) throw new Error("Failed to load tags");
+      return (await response.json()) as Tag[];
+    },
+    enabled: tagDialogOpen,
+  });
+
+  const documentTypesQuery = useQuery({
+    queryKey: ["taxonomies", "document-types"],
+    queryFn: async () => {
+      const response = await authFetch("/api/taxonomies/document-types");
+      if (!response.ok) throw new Error("Failed to load document types");
+      return (await response.json()) as DocumentType[];
+    },
+    enabled: typeDialogOpen,
+  });
+
+  // Mirrors mobile's partial-failure pattern: what failed stays selected, so
+  // a retry touches only that.
+  async function applyBulkResult(result: BulkDocumentsResponse, close: () => void) {
+    setBulkFailureCount(result.failed.length);
+    setSelectedIds(result.failed.map((entry) => entry.id));
+    if (result.failed.length === 0) close();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["documents", "explorer"] }),
+      queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
+      queryClient.invalidateQueries({ queryKey: ["documents", "timeline"] }),
+    ]);
+  }
+
+  const bulkTagMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authFetch("/api/documents/bulk/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentIds: selectedIds,
+          tagId: bulkTagId,
+          action: bulkTagAction,
+        }),
+      });
+      if (!response.ok) throw new Error("Bulk tagging failed");
+      return (await response.json()) as BulkDocumentsResponse;
+    },
+    onSuccess: (result) => applyBulkResult(result, () => setTagDialogOpen(false)),
+  });
+
+  const bulkTypeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authFetch("/api/documents/bulk/type", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentIds: selectedIds,
+          documentTypeId: bulkTypeId === "" ? null : bulkTypeId,
+        }),
+      });
+      if (!response.ok) throw new Error("Bulk type assignment failed");
+      return (await response.json()) as BulkDocumentsResponse;
+    },
+    onSuccess: (result) => applyBulkResult(result, () => setTypeDialogOpen(false)),
+  });
 
   const batchDeleteMutation = useMutation({
     mutationFn: async (documentIds: string[]) => {
@@ -271,21 +345,24 @@ export function ExplorerSurface({
             {t("documents.selected")}
           </span>
           <div className="ml-2 flex flex-wrap items-center gap-2">
-            {/* No bulk tag / set-type endpoint exists; this ticket is
-                web-only, so these stay disabled rather than faked. */}
             <Button
               variant="outline"
               size="sm"
-              disabled
-              title={t("documents.bulkUnavailable")}
+              onClick={() => {
+                setBulkFailureCount(0);
+                setTagDialogOpen(true);
+              }}
             >
+              <TagIcon className="h-4 w-4" />
               {t("documents.bulkTag")}
             </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled
-              title={t("documents.bulkUnavailable")}
+              onClick={() => {
+                setBulkFailureCount(0);
+                setTypeDialogOpen(true);
+              }}
             >
               {t("documents.bulkSetType")}
             </Button>
@@ -413,6 +490,120 @@ export function ExplorerSurface({
           ) : null}
         </div>
       </div>
+
+      <Dialog open={tagDialogOpen} onOpenChange={setTagDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("documents.bulkTagTitle").replace("{count}", String(selectedIds.length))}</DialogTitle>
+            <DialogDescription>{t("documents.bulkTagDescription")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Button
+                variant={bulkTagAction === "add" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setBulkTagAction("add")}
+              >
+                {t("documents.bulkTagAdd")}
+              </Button>
+              <Button
+                variant={bulkTagAction === "remove" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setBulkTagAction("remove")}
+              >
+                {t("documents.bulkTagRemove")}
+              </Button>
+            </div>
+            <select
+              className="h-9 w-full rounded-[var(--r-md)] border border-input bg-card px-3 text-sm"
+              value={bulkTagId}
+              onChange={(event) => setBulkTagId(event.target.value)}
+            >
+              <option value="">{t("documents.bulkPickTag")}</option>
+              {(tagsQuery.data ?? []).map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+            {bulkFailureCount > 0 ? (
+              <p className="text-sm text-destructive">
+                {t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
+              </p>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setTagDialogOpen(false)}
+              disabled={bulkTagMutation.isPending}
+            >
+              <X className="h-4 w-4" />
+              {t("documents.bulkCancel")}
+            </Button>
+            <Button
+              onClick={() => bulkTagMutation.mutate()}
+              disabled={!bulkTagId || selectedIds.length === 0 || bulkTagMutation.isPending}
+            >
+              {bulkTagMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <TagIcon className="h-4 w-4" />
+              )}
+              {t("documents.bulkApply")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("documents.bulkTypeTitle").replace("{count}", String(selectedIds.length))}</DialogTitle>
+            <DialogDescription>{t("documents.bulkTypeDescription")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <select
+              className="h-9 w-full rounded-[var(--r-md)] border border-input bg-card px-3 text-sm"
+              value={bulkTypeId}
+              onChange={(event) => setBulkTypeId(event.target.value)}
+            >
+              <option value="">{t("documents.bulkTypeNone")}</option>
+              {(documentTypesQuery.data ?? []).map((documentType) => (
+                <option key={documentType.id} value={documentType.id}>
+                  {documentType.name}
+                </option>
+              ))}
+            </select>
+            {bulkFailureCount > 0 ? (
+              <p className="text-sm text-destructive">
+                {t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
+              </p>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setTypeDialogOpen(false)}
+              disabled={bulkTypeMutation.isPending}
+            >
+              <X className="h-4 w-4" />
+              {t("documents.bulkCancel")}
+            </Button>
+            <Button
+              onClick={() => bulkTypeMutation.mutate()}
+              disabled={selectedIds.length === 0 || bulkTypeMutation.isPending}
+            >
+              {bulkTypeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {t("documents.bulkApply")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="border-[color:var(--explorer-border)] bg-card text-[color:var(--explorer-ink)]">

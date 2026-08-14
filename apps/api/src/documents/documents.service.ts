@@ -52,6 +52,9 @@ import type {
   SearchDocumentsResponse,
   UpdateDocumentInput,
   UploadDocumentMetadata,
+  BulkDocumentsResponse,
+  BulkSetDocumentTypeRequest,
+  BulkTagDocumentsRequest,
 } from "@openkeep/types";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHash } from "crypto";
@@ -2836,6 +2839,122 @@ export class DocumentsService {
     }
 
     return nextMetadata;
+  }
+
+  /**
+   * Resolves a bulk request's ids into the owner's existing documents and the
+   * rest. Partial-failure semantics: the rest is reported, never silently
+   * dropped, and the existing ones are still applied.
+   */
+  private async partitionOwnedDocuments(
+    documentIds: string[],
+    ownerUserId: string,
+  ): Promise<{ owned: string[]; failed: Array<{ id: string; reason: string }> }> {
+    const unique = [...new Set(documentIds)];
+    const rows = await this.databaseService.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(inArray(documents.id, unique), eq(documents.ownerUserId, ownerUserId)));
+    const owned = new Set(rows.map((row) => row.id));
+    return {
+      owned: unique.filter((id) => owned.has(id)),
+      failed: unique
+        .filter((id) => !owned.has(id))
+        .map((id) => ({ id, reason: "not-found" })),
+    };
+  }
+
+  async bulkTagDocuments(
+    principal: AuthenticatedPrincipal,
+    input: BulkTagDocumentsRequest,
+  ): Promise<BulkDocumentsResponse> {
+    const [tag] = await this.databaseService.db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(eq(tags.id, input.tagId))
+      .limit(1);
+    if (!tag) {
+      throw new NotFoundException("Tag not found");
+    }
+
+    const { owned, failed } = await this.partitionOwnedDocuments(
+      input.documentIds,
+      principal.userId,
+    );
+
+    if (owned.length > 0) {
+      if (input.action === "add") {
+        await this.databaseService.db
+          .insert(documentTagLinks)
+          .values(owned.map((documentId) => ({ documentId, tagId: input.tagId })))
+          .onConflictDoNothing();
+      } else {
+        await this.databaseService.db
+          .delete(documentTagLinks)
+          .where(
+            and(
+              inArray(documentTagLinks.documentId, owned),
+              eq(documentTagLinks.tagId, input.tagId),
+            ),
+          );
+      }
+
+      await this.databaseService.db.insert(auditEvents).values(
+        owned.map((documentId) => ({
+          actorUserId: principal.userId,
+          documentId,
+          eventType: "document.metadata_updated",
+          payload: {
+            changedFields: ["tagIds"],
+            bulk: { tagId: input.tagId, action: input.action },
+          },
+        })),
+      );
+    }
+
+    return { updated: owned, failed };
+  }
+
+  async bulkSetDocumentType(
+    principal: AuthenticatedPrincipal,
+    input: BulkSetDocumentTypeRequest,
+  ): Promise<BulkDocumentsResponse> {
+    if (input.documentTypeId !== null) {
+      const [documentType] = await this.databaseService.db
+        .select({ id: documentTypes.id })
+        .from(documentTypes)
+        .where(eq(documentTypes.id, input.documentTypeId))
+        .limit(1);
+      if (!documentType) {
+        throw new NotFoundException("Document type not found");
+      }
+    }
+
+    const { owned, failed } = await this.partitionOwnedDocuments(
+      input.documentIds,
+      principal.userId,
+    );
+
+    if (owned.length > 0) {
+      await this.databaseService.db
+        .update(documents)
+        .set({ documentTypeId: input.documentTypeId, updatedAt: new Date() })
+        .where(inArray(documents.id, owned));
+
+      await this.databaseService.db.insert(auditEvents).values(
+        owned.map((documentId) => ({
+          actorUserId: principal.userId,
+          documentId,
+          eventType: "document.metadata_updated",
+          payload: {
+            changedFields: ["documentTypeId"],
+            bulk: { documentTypeId: input.documentTypeId },
+          },
+        })),
+      );
+    }
+
+    return { updated: owned, failed };
   }
 
   private async recordAuditEvent(input: {

@@ -223,15 +223,38 @@ export function DocumentsScreen() {
   });
 
   /**
-   * There is no bulk endpoint, so a bulk action is N calls to the per-document
-   * one. `PATCH` replaces `tagIds` wholesale, which is why adding a tag reads
-   * each document's current tags first.
+   * Tagging goes through the bulk endpoint — one request, one audit entry per
+   * document, no read-modify-write of each document's tag list. Done and
+   * delete stay per-document calls; either way, one failure must not hide the
+   * requests that already landed, so failures are reported back.
    */
   const bulkMutation = useMutation({
     mutationFn: async (action: { kind: "tag"; tagId: string } | { kind: "done" } | { kind: "delete" }) => {
       const documents = Array.from(selected.values());
-      // One failure must not hide the requests that already landed, so each
-      // document is tracked and the outcome reported back.
+
+      if (action.kind === "tag") {
+        try {
+          const response = await auth.authFetch("/api/documents/bulk/tags", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              documentIds: documents.map((document) => document.id),
+              tagId: action.tagId,
+              action: "add",
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(await responseToMessage(response));
+          }
+          const result = (await response.json()) as {
+            failed: Array<{ id: string; reason: string }>;
+          };
+          return { failed: result.failed.map((entry) => entry.id) };
+        } catch {
+          return { failed: documents.map((document) => document.id) };
+        }
+      }
+
       const failed: string[] = [];
       for (const document of documents) {
         const init: RequestInit =
@@ -240,15 +263,7 @@ export function DocumentsScreen() {
             : {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(
-                  action.kind === "tag"
-                    ? {
-                        tagIds: Array.from(
-                          new Set([...document.tags.map((tag) => tag.id), action.tagId]),
-                        ),
-                      }
-                    : { taskCompletedAt: new Date().toISOString() },
-                ),
+                body: JSON.stringify({ taskCompletedAt: new Date().toISOString() }),
               };
         try {
           const response = await auth.authFetch(`/api/documents/${document.id}`, init);

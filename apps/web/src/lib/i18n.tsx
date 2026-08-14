@@ -332,7 +332,6 @@ export type TranslationKey =
   | "today.reference"
   | "today.documentType"
   | "today.previewUnavailable"
-  | "documents.bulkUnavailable"
   | "timeline.monthError"
   | "filters.title"
   | "filters.clear"
@@ -410,6 +409,17 @@ export type TranslationKey =
   | "documents.selected"
   | "documents.bulkTag"
   | "documents.bulkSetType"
+  | "documents.bulkTagTitle"
+  | "documents.bulkTagDescription"
+  | "documents.bulkTagAdd"
+  | "documents.bulkTagRemove"
+  | "documents.bulkPickTag"
+  | "documents.bulkTypeTitle"
+  | "documents.bulkTypeDescription"
+  | "documents.bulkTypeNone"
+  | "documents.bulkApply"
+  | "documents.bulkCancel"
+  | "documents.bulkPartialFailure"
   | "documents.bulkExport"
   | "documents.bulkDelete"
   | "documents.clearSelection"
@@ -921,7 +931,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Reference",
     "today.documentType": "Document type",
     "today.previewUnavailable": "No preview available",
-    "documents.bulkUnavailable": "Not available yet",
     "timeline.monthError": "Could not load this month.",
     "filters.title": "Filters",
     "filters.clear": "Clear",
@@ -1000,6 +1009,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.selected": "selected",
     "documents.bulkTag": "Tag",
     "documents.bulkSetType": "Set type",
+    "documents.bulkTagTitle": "Tag {count} documents",
+    "documents.bulkTagDescription": "Add or remove one tag on every selected document. Other tags stay untouched.",
+    "documents.bulkTagAdd": "Add tag",
+    "documents.bulkTagRemove": "Remove tag",
+    "documents.bulkPickTag": "Pick a tag…",
+    "documents.bulkTypeTitle": "Set the type of {count} documents",
+    "documents.bulkTypeDescription": "Every selected document gets this document type.",
+    "documents.bulkTypeNone": "No type (unfiled)",
+    "documents.bulkApply": "Apply",
+    "documents.bulkCancel": "Cancel",
+    "documents.bulkPartialFailure": "{count} documents could not be updated and stay selected — retry applies to only those.",
     "documents.bulkExport": "Export",
     "documents.bulkDelete": "Delete",
     "documents.clearSelection": "Clear",
@@ -1510,7 +1530,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Referenz",
     "today.documentType": "Dokumententyp",
     "today.previewUnavailable": "Keine Vorschau verfügbar",
-    "documents.bulkUnavailable": "Noch nicht verfügbar",
     "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
     "filters.title": "Filter",
     "filters.clear": "Zurücksetzen",
@@ -1589,6 +1608,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.selected": "ausgewählt",
     "documents.bulkTag": "Schlagwort",
     "documents.bulkSetType": "Typ setzen",
+    "documents.bulkTagTitle": "{count} Dokumente taggen",
+    "documents.bulkTagDescription": "Ein Schlagwort auf allen ausgewählten Dokumenten hinzufügen oder entfernen. Andere Schlagworte bleiben unberührt.",
+    "documents.bulkTagAdd": "Schlagwort hinzufügen",
+    "documents.bulkTagRemove": "Schlagwort entfernen",
+    "documents.bulkPickTag": "Schlagwort wählen…",
+    "documents.bulkTypeTitle": "Typ von {count} Dokumenten setzen",
+    "documents.bulkTypeDescription": "Jedes ausgewählte Dokument erhält diesen Dokumenttyp.",
+    "documents.bulkTypeNone": "Kein Typ (unsortiert)",
+    "documents.bulkApply": "Anwenden",
+    "documents.bulkCancel": "Abbrechen",
+    "documents.bulkPartialFailure": "{count} Dokumente konnten nicht aktualisiert werden und bleiben ausgewählt — ein erneuter Versuch trifft nur diese.",
     "documents.bulkExport": "Exportieren",
     "documents.bulkDelete": "Löschen",
     "documents.clearSelection": "Aufheben",

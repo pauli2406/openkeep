@@ -2386,6 +2386,150 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       correspondent.id,
     ]);
   });
+  it("bulk-tags and bulk-types documents in one request with partial-failure reporting", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const [bulkTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: `bulk-${suffix}`, slug: `bulk-${suffix}` })
+      .returning();
+    const [bulkType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: `Bulk Type ${suffix}`, slug: `bulk-type-${suffix}` })
+      .returning();
+
+    const seedDocument = async (title: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "7").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/bulk.pdf`,
+          originalFilename: "bulk.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const first = await seedDocument("Bulk A");
+    const second = await seedDocument("Bulk B");
+    const ghostId = randomUUID();
+
+    // One request tags all of them; the unknown id is reported, not fatal.
+    const tagResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id, ghostId],
+        tagId: bulkTag.id,
+        action: "add",
+      });
+    expect(tagResponse.status).toBe(201);
+    expect(tagResponse.body.updated).toEqual(
+      expect.arrayContaining([first.document.id, second.document.id]),
+    );
+    expect(tagResponse.body.failed).toEqual([{ id: ghostId, reason: "not-found" }]);
+
+    // Applying the same tag again is a no-op, not an error.
+    const repeat = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        tagId: bulkTag.id,
+        action: "add",
+      });
+    expect(repeat.status).toBe(201);
+
+    const links = await databaseService.pool.query(
+      `SELECT count(*)::int AS links FROM document_tag_links WHERE tag_id = $1`,
+      [bulkTag.id],
+    );
+    expect(links.rows[0].links).toBe(2);
+
+    // Each document's history shows the change.
+    const history = await request(app.getHttpServer())
+      .get(`/api/documents/${first.document.id}/history`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(history.status).toBe(200);
+    expect(JSON.stringify(history.body)).toContain("tagIds");
+
+    // Removing takes it off both.
+    await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id],
+        tagId: bulkTag.id,
+        action: "remove",
+      });
+    const afterRemove = await databaseService.pool.query(
+      `SELECT count(*)::int AS links FROM document_tag_links WHERE tag_id = $1`,
+      [bulkTag.id],
+    );
+    expect(afterRemove.rows[0].links).toBe(0);
+
+    // Bulk type set and clear.
+    const typeResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/type")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id],
+        documentTypeId: bulkType.id,
+      });
+    expect(typeResponse.status).toBe(201);
+    const typed = await databaseService.pool.query(
+      `SELECT count(*)::int AS typed FROM documents WHERE document_type_id = $1`,
+      [bulkType.id],
+    );
+    expect(typed.rows[0].typed).toBe(2);
+
+    const clearResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/type")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        documentTypeId: null,
+      });
+    expect(clearResponse.status).toBe(201);
+
+    // An unknown tag is a request-level 404, not a partial failure.
+    const missingTag = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        tagId: randomUUID(),
+        action: "add",
+      });
+    expect(missingTag.status).toBe(404);
+
+    const documentIds = [first, second].map((entry) => entry.document.id);
+    await databaseService.pool.query(`DELETE FROM audit_events WHERE document_id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      [first, second].map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM tags WHERE id = $1::uuid`, [bulkTag.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1::uuid`, [
+      bulkType.id,
+    ]);
+  });
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(
