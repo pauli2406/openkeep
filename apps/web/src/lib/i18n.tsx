@@ -7,7 +7,7 @@ import {
 
 export type AppLanguage = "en" | "de";
 
-type TranslationKey =
+export type TranslationKey =
   | "root.loading"
   | "root.nav.today"
   | "root.nav.chat"
@@ -21,6 +21,28 @@ type TranslationKey =
   | "root.nav.dashboard"
   | "root.nav.documents"
   | "root.nav.review"
+  | "root.nav.taxes"
+  | "taxes.eyebrow"
+  | "taxes.title"
+  | "taxes.description"
+  | "taxes.yearPicker"
+  | "taxes.loading"
+  | "taxes.error"
+  | "taxes.retry"
+  | "taxes.empty"
+  | "taxes.unfiled"
+  | "taxes.metricDocuments"
+  | "taxes.metricTotal"
+  | "taxes.metricUnsummed"
+  | "taxes.groupUnsummed"
+  | "taxes.openInExplorer"
+  | "taxes.noAmount"
+  | "taxes.viaTag"
+  | "taxes.viaType"
+  | "taxes.viaBoth"
+  | "taxes.viaTagHint"
+  | "taxes.viaTypeHint"
+  | "omnibar.goTaxes"
   | "root.nav.search"
   | "root.nav.upload"
   | "root.nav.settings"
@@ -585,6 +607,28 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Documents",
     "root.nav.review": "Review",
+    "root.nav.taxes": "Taxes",
+    "taxes.eyebrow": "Tax Year",
+    "taxes.title": "Tax year {year}",
+    "taxes.description":
+      "Everything that belongs to this tax year, grouped the way an accountant thinks. Membership follows the tax tag and the tax document types — remove the tag on a document to take it out.",
+    "taxes.yearPicker": "Year",
+    "taxes.loading": "Loading the tax year",
+    "taxes.error": "Failed to load the tax year.",
+    "taxes.retry": "Retry",
+    "taxes.empty": "Nothing is filed under tax year {year} yet. Documents join it via the tax tag or a tax document type.",
+    "taxes.unfiled": "Unfiled",
+    "taxes.metricDocuments": "Documents",
+    "taxes.metricTotal": "Total ({currency})",
+    "taxes.metricUnsummed": "Without amount",
+    "taxes.groupUnsummed": "{count} without amount",
+    "taxes.openInExplorer": "Open in explorer",
+    "taxes.noAmount": "No amount",
+    "taxes.viaTag": "Tag",
+    "taxes.viaType": "Type",
+    "taxes.viaBoth": "Tag + Type",
+    "taxes.viaTagHint": "Included because it carries the tax tag. Remove the tag on the document to take it out of the year.",
+    "taxes.viaTypeHint": "Included because its document type is tax-relevant.",
     "root.nav.search": "Search",
     "root.nav.upload": "Upload",
     "root.nav.settings": "Settings",
@@ -927,6 +971,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.sectionJump": "Jump to",
     "omnibar.goToday": "Today",
     "omnibar.goDocuments": "Documents",
+    "omnibar.goTaxes": "Taxes",
     "omnibar.goReview": "Review queue",
     "omnibar.goImport": "Import files",
     "omnibar.goSettings": "Settings",
@@ -1148,6 +1193,28 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Dokumente",
     "root.nav.review": "Prüfung",
+    "root.nav.taxes": "Steuern",
+    "taxes.eyebrow": "Steuerjahr",
+    "taxes.title": "Steuerjahr {year}",
+    "taxes.description":
+      "Alles, was zu diesem Steuerjahr gehört, gruppiert wie ein Steuerberater denkt. Die Zugehörigkeit folgt dem Steuer-Tag und den Steuer-Dokumenttypen — entferne das Tag an einem Dokument, um es herauszunehmen.",
+    "taxes.yearPicker": "Jahr",
+    "taxes.loading": "Steuerjahr wird geladen",
+    "taxes.error": "Das Steuerjahr konnte nicht geladen werden.",
+    "taxes.retry": "Erneut versuchen",
+    "taxes.empty": "Im Steuerjahr {year} ist noch nichts abgelegt. Dokumente gehören über das Steuer-Tag oder einen Steuer-Dokumenttyp dazu.",
+    "taxes.unfiled": "Ohne Typ",
+    "taxes.metricDocuments": "Dokumente",
+    "taxes.metricTotal": "Summe ({currency})",
+    "taxes.metricUnsummed": "Ohne Betrag",
+    "taxes.groupUnsummed": "{count} ohne Betrag",
+    "taxes.openInExplorer": "Im Explorer öffnen",
+    "taxes.noAmount": "Kein Betrag",
+    "taxes.viaTag": "Tag",
+    "taxes.viaType": "Typ",
+    "taxes.viaBoth": "Tag + Typ",
+    "taxes.viaTagHint": "Enthalten, weil es das Steuer-Tag trägt. Entferne das Tag am Dokument, um es aus dem Jahr zu nehmen.",
+    "taxes.viaTypeHint": "Enthalten, weil der Dokumenttyp steuerrelevant ist.",
     "root.nav.search": "Suche",
     "root.nav.upload": "Hochladen",
     "root.nav.settings": "Einstellungen",
@@ -1490,6 +1557,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.sectionJump": "Springen zu",
     "omnibar.goToday": "Heute",
     "omnibar.goDocuments": "Dokumente",
+    "omnibar.goTaxes": "Steuern",
     "omnibar.goReview": "Prüfungswarteschlange",
     "omnibar.goImport": "Dateien importieren",
     "omnibar.goSettings": "Einstellungen",

@@ -27,6 +27,7 @@ const SCREENS = [
   { name: "documents-groups", path: "/documents?view=groups", ready: "main" },
   { name: "documents-timeline", path: "/documents?view=timeline", ready: "main" },
   { name: "review", path: "/review", ready: "main" },
+  { name: "taxes", path: "/taxes", ready: "main" },
   { name: "chat", path: "/search", ready: "main" },
   { name: "import", path: "/upload", ready: "main" },
   { name: "settings-general", path: "/settings", ready: "main" },
