@@ -42,6 +42,9 @@ export type TranslationKey =
   | "taxes.viaBoth"
   | "taxes.viaTagHint"
   | "taxes.viaTypeHint"
+  | "taxes.export"
+  | "taxes.exporting"
+  | "taxes.exportFailed"
   | "omnibar.goTaxes"
   | "root.nav.search"
   | "root.nav.upload"
@@ -629,6 +632,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "taxes.viaBoth": "Tag + Type",
     "taxes.viaTagHint": "Included because it carries the tax tag. Remove the tag on the document to take it out of the year.",
     "taxes.viaTypeHint": "Included because its document type is tax-relevant.",
+    "taxes.export": "Export year",
+    "taxes.exporting": "Exporting…",
+    "taxes.exportFailed": "Export failed. Try again.",
     "root.nav.search": "Search",
     "root.nav.upload": "Upload",
     "root.nav.settings": "Settings",
@@ -1215,6 +1221,9 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "taxes.viaBoth": "Tag + Typ",
     "taxes.viaTagHint": "Enthalten, weil es das Steuer-Tag trägt. Entferne das Tag am Dokument, um es aus dem Jahr zu nehmen.",
     "taxes.viaTypeHint": "Enthalten, weil der Dokumenttyp steuerrelevant ist.",
+    "taxes.export": "Jahr exportieren",
+    "taxes.exporting": "Exportiere…",
+    "taxes.exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
     "root.nav.search": "Suche",
     "root.nav.upload": "Hochladen",
     "root.nav.settings": "Einstellungen",

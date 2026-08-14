@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, FolderOpen } from "lucide-react";
 import type { TaxYearGroup, TaxYearMembership, TaxYearResponse } from "@openkeep/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
   MetricRibbon,
 } from "@/components/explorer/shared";
 import { fetchExplorerFacets, formatCurrency } from "@/lib/explorer";
-import { defaultTaxYear, fetchTaxYear, parseTaxesSearch } from "@/lib/taxes";
+import { defaultTaxYear, downloadTaxYearExport, fetchTaxYear, parseTaxesSearch } from "@/lib/taxes";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/taxes")({
@@ -24,6 +24,7 @@ function TaxesPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const year = search.year ?? defaultTaxYear();
+  const [exportState, setExportState] = useState<"idle" | "running" | "failed">("idle");
 
   const taxYearQuery = useQuery({
     queryKey: ["taxes", year],
@@ -73,6 +74,26 @@ function TaxesPage() {
           title={t("taxes.title").replace("{year}", String(year))}
           description={t("taxes.description")}
         />
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            disabled={exportState === "running" || data.documentCount === 0}
+            onClick={async () => {
+              setExportState("running");
+              try {
+                await downloadTaxYearExport(year);
+                setExportState("idle");
+              } catch {
+                setExportState("failed");
+              }
+            }}
+          >
+            <Download className="h-4 w-4" />
+            {exportState === "running" ? t("taxes.exporting") : t("taxes.export")}
+          </Button>
+          {exportState === "failed" ? (
+            <span className="text-sm text-destructive">{t("taxes.exportFailed")}</span>
+          ) : null}
         <label className="flex items-center gap-2 text-sm text-[color:var(--explorer-muted)]">
           {t("taxes.yearPicker")}
           <select
@@ -89,6 +110,7 @@ function TaxesPage() {
             ))}
           </select>
         </label>
+        </div>
       </div>
 
       <MetricRibbon items={buildMetrics(data, t)} />

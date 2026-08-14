@@ -2207,6 +2207,185 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ]);
     await databaseService.pool.query(`DELETE FROM users WHERE id = $1::uuid`, [otherUser.id]);
   });
+  it("exports a tax year as a ZIP with an honest index", async () => {
+    const AdmZip = (await import("adm-zip")).default;
+    const suffix = randomUUID().slice(0, 8);
+
+    const [taxType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Tax Document", slug: `tax-export-${suffix}` })
+      .returning();
+    const [insertedTaxTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: "tax", slug: "tax" })
+      .onConflictDoNothing()
+      .returning();
+    const taxTag =
+      insertedTaxTag ??
+      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Finanzamt Export",
+        slug: `finanzamt-export-${suffix}`,
+        normalizedName: "finanzamt export",
+      })
+      .returning();
+
+    const seedExportDocument = async (input: {
+      title: string;
+      issueDate: string;
+      amount?: string;
+      currency?: string;
+      typed?: boolean;
+      tagged?: boolean;
+      uploadOriginal: boolean;
+      searchable?: boolean;
+    }) => {
+      const storageKey = `fixtures/${randomUUID()}/original.pdf`;
+      const searchableKey = input.searchable ? `fixtures/${randomUUID()}/searchable.pdf` : null;
+      if (input.uploadOriginal) {
+        await storageService.uploadBuffer(
+          storageKey,
+          Buffer.from(`%PDF-original-${input.title}`, "utf8"),
+          "application/pdf",
+        );
+      }
+      if (searchableKey) {
+        await storageService.uploadBuffer(
+          searchableKey,
+          Buffer.from(`%PDF-searchable-${input.title}`, "utf8"),
+          "application/pdf",
+        );
+      }
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "f").slice(0, 64),
+          storageKey,
+          originalFilename: "original.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 64,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: input.title,
+          mimeType: "application/pdf",
+          status: "ready",
+          issueDate: new Date(input.issueDate),
+          amount: input.amount,
+          currency: input.currency,
+          correspondentId: correspondent.id,
+          documentTypeId: input.typed ? taxType.id : undefined,
+          searchablePdfStorageKey: searchableKey,
+          fullText: input.title,
+        } as never)
+        .returning();
+      if (input.tagged) {
+        await databaseService.db
+          .insert(documentTagLinks)
+          .values({ documentId: document.id, tagId: taxTag.id });
+      }
+      return { document, file };
+    };
+
+    const reserved = await seedExportDocument({
+      title: "CON",
+      issueDate: "2023-03-01",
+      amount: "10.00",
+      currency: "EUR",
+      typed: true,
+      uploadOriginal: true,
+    });
+    const searchable = await seedExportDocument({
+      title: "Bescheid/2023: Nachzahlung?",
+      issueDate: "2023-05-01",
+      amount: "20.00",
+      currency: "EUR",
+      tagged: true,
+      uploadOriginal: true,
+      searchable: true,
+    });
+    const missing = await seedExportDocument({
+      title: "Verschollener Beleg",
+      issueDate: "2023-08-01",
+      typed: true,
+      uploadOriginal: false,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/api/taxes/2023/export")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/zip");
+    expect(response.headers["content-disposition"]).toContain("tax-year-2023.zip");
+
+    const zip = new AdmZip(response.body as Buffer);
+    const entryNames = zip.getEntries().map((entry) => entry.entryName);
+
+    // Two files (the missing one is absent) plus the index.
+    expect(entryNames).toHaveLength(3);
+    expect(entryNames).toContain("index.csv");
+
+    // Windows-reserved title gets escaped, the slashed title gets flattened.
+    const reservedEntry = entryNames.find((name) => name.startsWith("Tax Document/"));
+    expect(reservedEntry).toBe("Tax Document/2023-03-01_Finanzamt Export__CON.pdf");
+    const searchableEntry = entryNames.find((name) => name.startsWith("Unfiled/"));
+    expect(searchableEntry).toContain("Bescheid_2023_ Nachzahlung");
+    expect(searchableEntry?.endsWith(".pdf")).toBe(true);
+
+    // The searchable variant is preferred over the original bytes.
+    const searchableContent = zip.readAsText(searchableEntry!);
+    expect(searchableContent).toContain("%PDF-searchable");
+
+    const csv = zip.readAsText("index.csv");
+    const csvLines = csv.trim().split("\n");
+    expect(csvLines).toHaveLength(4);
+    expect(csvLines[0]).toBe("date,correspondent,type,title,amount,currency,filename,status");
+    // Every member appears; the missing file is reported, not omitted.
+    expect(csv).toContain("Verschollener Beleg");
+    expect(csv).toContain("missing-file");
+    const missingLine = csvLines.find((line) => line.includes("Verschollener Beleg"));
+    expect(missingLine).toContain(",,missing-file");
+
+    // The export landed in the audit history of the exported documents only.
+    const auditedRows = await databaseService.pool.query(
+      `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
+    );
+    const auditedIds = auditedRows.rows.map((row) => row.document_id);
+    expect(auditedIds).toContain(reserved.document.id);
+    expect(auditedIds).toContain(searchable.document.id);
+    expect(auditedIds).not.toContain(missing.document.id);
+
+    const documentIds = [reserved, searchable, missing].map((entry) => entry.document.id);
+    const fileIds = [reserved, searchable, missing].map((entry) => entry.file.id);
+    await databaseService.pool.query(`DELETE FROM audit_events WHERE document_id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      fileIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1::uuid`, [
+      taxType.id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1::uuid`, [
+      correspondent.id,
+    ]);
+  });
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(

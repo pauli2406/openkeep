@@ -877,6 +877,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/taxes/{year}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxesController_exportTaxYear"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/taxonomies/tags": {
         parameters: {
             query?: never;
@@ -7466,6 +7482,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaxYearResponse"];
                 };
+            };
+        };
+    };
+    TaxesController_exportTaxYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tax year as a ZIP: documents plus index.csv */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

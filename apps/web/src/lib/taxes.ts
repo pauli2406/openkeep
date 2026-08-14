@@ -9,6 +9,19 @@ export async function fetchTaxYear(year: number): Promise<TaxYearResponse> {
   return (await response.json()) as TaxYearResponse;
 }
 
+export async function downloadTaxYearExport(year: number): Promise<void> {
+  const response = await authFetch(`/api/taxes/${year}/export`);
+  if (!response.ok) {
+    throw new Error("Failed to export the tax year");
+  }
+  const blob = await response.blob();
+  const anchor = window.document.createElement("a");
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = `tax-year-${year}.zip`;
+  anchor.click();
+  URL.revokeObjectURL(anchor.href);
+}
+
 /** The default view: the last complete calendar year. */
 export function defaultTaxYear(now = new Date()): number {
   return now.getFullYear() - 1;

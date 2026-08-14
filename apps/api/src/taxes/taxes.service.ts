@@ -1,7 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { TaxYearDocument, TaxYearResponse, TaxYearTotal } from "@openkeep/types";
+import { auditEvents } from "@openkeep/db";
+import { ZipArchive, type Archiver } from "archiver";
 
 import { DatabaseService } from "../common/db/database.service";
+import { ObjectStorageService } from "../common/storage/storage.service";
 
 // Membership matches the canonical names DocumentTypePolicyService resolves to;
 // user-created types with other names participate via the `tax` tag instead.
@@ -54,9 +57,64 @@ class TotalsAccumulator {
   }
 }
 
+interface TaxExportRow extends TaxYearRow {
+  storage_key: string;
+  original_filename: string;
+  searchable_pdf_storage_key: string | null;
+}
+
+const WINDOWS_RESERVED_NAMES = new Set([
+  "CON", "PRN", "AUX", "NUL",
+  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+]);
+
+/** Safe on Windows and in a ZIP: no separators, no reserved names, bounded length. */
+function sanitizeFilenamePart(value: string, fallback: string): string {
+  const cleaned = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[/\\:*?"<>|;\r\n]+/g, "_")
+    .replace(/[^\x20-\x7E]+/g, "_")
+    .replace(/\s+/g, " ")
+    .replace(/^[\s._]+|[\s._]+$/g, "")
+    .slice(0, 80)
+    .trim();
+  if (!cleaned) {
+    return fallback;
+  }
+  return WINDOWS_RESERVED_NAMES.has(cleaned.toUpperCase()) ? `_${cleaned}` : cleaned;
+}
+
+function csvField(value: string | number | null): string {
+  if (value === null) {
+    return "";
+  }
+  const text = String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function extensionFor(row: TaxExportRow): string {
+  if (row.searchable_pdf_storage_key) {
+    return "pdf";
+  }
+  const fromName = /\.([A-Za-z0-9]{1,5})$/.exec(row.original_filename)?.[1]?.toLowerCase();
+  return fromName ?? "bin";
+}
+
+export interface TaxYearExportSummary {
+  exported: number;
+  missing: number;
+}
+
 @Injectable()
 export class TaxesService {
-  constructor(@Inject(DatabaseService) private readonly databaseService: DatabaseService) {}
+  private readonly logger = new Logger(TaxesService.name);
+
+  constructor(
+    @Inject(DatabaseService) private readonly databaseService: DatabaseService,
+    @Inject(ObjectStorageService) private readonly storageService: ObjectStorageService,
+  ) {}
 
   async getTaxYear(year: number, ownerUserId: string): Promise<TaxYearResponse> {
     const result = await this.databaseService.pool.query<TaxYearRow>(
@@ -161,5 +219,156 @@ export class TaxesService {
       totals: overall.toTotals(),
       groups,
     };
+  }
+
+  /**
+   * Build the tax-year ZIP: one folder per document type, the searchable PDF
+   * where one exists (original bytes otherwise), and an index.csv listing
+   * every member — including the ones whose file is missing from storage,
+   * which are reported in the CSV rather than silently omitted.
+   *
+   * The archive is a stream; entries are appended lazily so a year of
+   * hundreds of documents never sits in memory at once. The returned
+   * `completion` resolves after finalize and records the audit trail.
+   */
+  async exportTaxYear(
+    year: number,
+    ownerUserId: string,
+  ): Promise<{ archive: Archiver; completion: Promise<TaxYearExportSummary> }> {
+    const result = await this.databaseService.pool.query<TaxExportRow>(
+      `SELECT
+         d.id,
+         d.title,
+         d.issue_date::text AS issue_date,
+         d.amount::text AS amount,
+         d.currency,
+         dt.id AS type_id,
+         dt.name AS type_name,
+         c.name AS correspondent_name,
+         f.storage_key,
+         f.original_filename,
+         d.searchable_pdf_storage_key,
+         false AS via_tag,
+         false AS via_type
+       FROM documents d
+       INNER JOIN document_files f ON f.id = d.file_id
+       LEFT JOIN document_types dt ON dt.id = d.document_type_id
+       LEFT JOIN correspondents c ON c.id = d.correspondent_id
+       WHERE d.owner_user_id = $1
+         AND coalesce(d.issue_date, d.created_at::date) >= make_date($2, 1, 1)
+         AND coalesce(d.issue_date, d.created_at::date) <= make_date($2, 12, 31)
+         AND (
+           EXISTS(
+             SELECT 1 FROM document_tag_links l
+             INNER JOIN tags t ON t.id = l.tag_id
+             WHERE l.document_id = d.id AND t.slug = $4
+           )
+           OR coalesce(dt.name = ANY($3::text[]), false)
+         )
+       ORDER BY coalesce(d.issue_date, d.created_at::date) ASC, d.title ASC`,
+      [ownerUserId, year, [...TAX_RELEVANT_TYPE_NAMES], TAX_TAG_SLUG],
+    );
+
+    const archive = new ZipArchive({ zlib: { level: 6 } });
+
+    const completion = (async (): Promise<TaxYearExportSummary> => {
+      const usedNames = new Set<string>();
+      const csvLines = [
+        ["date", "correspondent", "type", "title", "amount", "currency", "filename", "status"].join(","),
+      ];
+      const exportedIds: string[] = [];
+      let missing = 0;
+
+      for (const row of result.rows) {
+        const folder = sanitizeFilenamePart(row.type_name ?? "Unfiled", "Unfiled");
+        const base = [
+          row.issue_date ?? "undated",
+          sanitizeFilenamePart(row.correspondent_name ?? "", "unknown"),
+          sanitizeFilenamePart(row.title, "document"),
+        ]
+          .filter(Boolean)
+          .join("_");
+        const extension = extensionFor(row);
+
+        let entryName = `${folder}/${base}.${extension}`;
+        for (let counter = 2; usedNames.has(entryName); counter += 1) {
+          entryName = `${folder}/${base}-${counter}.${extension}`;
+        }
+        usedNames.add(entryName);
+
+        const storageKey = row.searchable_pdf_storage_key ?? row.storage_key;
+        let stream: NodeJS.ReadableStream | null = null;
+        try {
+          stream = (await this.storageService.getObjectStream(
+            storageKey,
+          )) as NodeJS.ReadableStream | null;
+        } catch {
+          stream = null;
+        }
+
+        const status = stream ? "exported" : "missing-file";
+        if (stream) {
+          archive.append(stream as never, { name: entryName });
+          // Wait until the archive has consumed this entry before fetching
+          // the next object, so storage streams never idle in a long queue.
+          await new Promise<void>((resolveEntry, rejectEntry) => {
+            const onEntry = () => {
+              cleanup();
+              resolveEntry();
+            };
+            const onError = (error: Error) => {
+              cleanup();
+              rejectEntry(error);
+            };
+            const cleanup = () => {
+              archive.off("entry", onEntry);
+              archive.off("error", onError);
+            };
+            archive.once("entry", onEntry);
+            archive.once("error", onError);
+          });
+          exportedIds.push(row.id);
+        } else {
+          missing += 1;
+          this.logger.warn(`Tax export ${year}: file missing from storage for document ${row.id}`);
+        }
+
+        csvLines.push(
+          [
+            csvField(row.issue_date),
+            csvField(row.correspondent_name),
+            csvField(row.type_name ?? "Unfiled"),
+            csvField(row.title),
+            csvField(row.amount),
+            csvField(row.currency),
+            csvField(status === "exported" ? entryName : ""),
+            csvField(status),
+          ].join(","),
+        );
+      }
+
+      archive.append(csvLines.join("\n"), { name: "index.csv" });
+      await archive.finalize();
+
+      if (exportedIds.length > 0) {
+        await this.databaseService.db.insert(auditEvents).values(
+          exportedIds.map((documentId) => ({
+            actorUserId: ownerUserId,
+            documentId,
+            eventType: "document.tax_year_exported",
+            payload: { taxYear: year },
+          })),
+        );
+      }
+
+      return { exported: exportedIds.length, missing };
+    })();
+
+    completion.catch((error) => {
+      this.logger.error(`Tax export ${year} failed: ${String(error)}`);
+      archive.destroy(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    return { archive, completion };
   }
 }
