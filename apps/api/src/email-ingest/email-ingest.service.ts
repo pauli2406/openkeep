@@ -24,9 +24,50 @@ const SUPPORTED_MIME_TYPES = new Set([
 
 const MESSAGES_PER_POLL = 20;
 
+/**
+ * An inbox is an open port: whatever the declared Content-Type says, the
+ * bytes decide. Mirrors the desktop importer's disguised-file rejection.
+ * Returns the detected supported type, or null when the bytes are not a
+ * supported document format.
+ */
+export function sniffSupportedType(content: Buffer): string | null {
+  if (content.length < 12) return null;
+  if (content.subarray(0, 4).toString("latin1") === "%PDF") return "application/pdf";
+  if (content[0] === 0xff && content[1] === 0xd8 && content[2] === 0xff) return "image/jpeg";
+  if (content.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])))
+    return "image/png";
+  if (
+    (content[0] === 0x49 && content[1] === 0x49 && content[2] === 0x2a && content[3] === 0x00) ||
+    (content[0] === 0x4d && content[1] === 0x4d && content[2] === 0x00 && content[3] === 0x2a)
+  ) {
+    return "image/tiff";
+  }
+  // ISO-BMFF: size (4 bytes) + "ftyp" + brand.
+  if (content.subarray(4, 8).toString("latin1") === "ftyp") {
+    const brand = content.subarray(8, 12).toString("latin1").toLowerCase();
+    if (brand.startsWith("hei") || brand.startsWith("mif") || brand.startsWith("msf")) {
+      return "image/heic";
+    }
+  }
+  return null;
+}
+
+export function isSenderAllowed(from: string, allowlist: string[]): boolean {
+  if (allowlist.length === 0) return true;
+  const address = from.trim().toLowerCase();
+  if (!address) return false;
+  const domain = address.split("@")[1] ?? "";
+  return allowlist.some((entry) => {
+    const rule = entry.trim().toLowerCase();
+    if (!rule) return false;
+    return rule.includes("@") ? address === rule : domain === rule;
+  });
+}
+
 export interface EmailIngestSummary {
   imported: number;
   skipped: number;
+  rejected: number;
   failed: number;
   unconfigured?: boolean;
 }
@@ -73,7 +114,7 @@ export class EmailIngestService {
   async pollOnce(clientOverride?: MailboxClient): Promise<EmailIngestSummary> {
     if (!clientOverride && !this.configured) {
       this.logger.warn("Email ingestion skipped: IMAP is not configured");
-      return { imported: 0, skipped: 0, failed: 0, unconfigured: true };
+      return { imported: 0, skipped: 0, rejected: 0, failed: 0, unconfigured: true };
     }
 
     const [owner] = await this.databaseService.db
@@ -83,7 +124,7 @@ export class EmailIngestService {
       .limit(1);
     if (!owner) {
       this.logger.warn("Email ingestion skipped: no owner account exists yet");
-      return { imported: 0, skipped: 0, failed: 0 };
+      return { imported: 0, skipped: 0, rejected: 0, failed: 0 };
     }
     const principal: AuthenticatedPrincipal = {
       userId: owner.id,
@@ -92,19 +133,34 @@ export class EmailIngestService {
     };
 
     const client = clientOverride ?? this.createClient();
-    const summary: EmailIngestSummary = { imported: 0, skipped: 0, failed: 0 };
+    const summary: EmailIngestSummary = { imported: 0, skipped: 0, rejected: 0, failed: 0 };
 
     try {
       const messages = await client.fetchUnprocessed(MESSAGES_PER_POLL);
 
+      const allowlist = (this.configService.get("EMAIL_INGEST_ALLOWED_SENDERS") ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+
       for (const message of messages) {
         const [existing] = await this.databaseService.db
-          .select({ id: ingestedEmails.id })
+          .select({ id: ingestedEmails.id, status: ingestedEmails.status })
           .from(ingestedEmails)
           .where(eq(ingestedEmails.messageId, message.messageId))
           .limit(1);
         if (existing) {
           // Already recorded — a crash after record but before flagging.
+          await client.markProcessed(message.messageId);
+          continue;
+        }
+
+        if (!isSenderAllowed(message.from, allowlist)) {
+          // Rejected messages keep their bytes in the mailbox — flagged seen
+          // so they stop occupying the fetch window, never imported, and the
+          // ledger answers "why did my forward not arrive".
+          await this.recordMessage(message, "rejected", "sender-not-allowed", []);
+          summary.rejected += 1;
           await client.markProcessed(message.messageId);
           continue;
         }
@@ -122,6 +178,8 @@ export class EmailIngestService {
         }
         await client.markProcessed(message.messageId);
       }
+
+      await this.pruneLog();
     } finally {
       if (!clientOverride) {
         await client.close();
@@ -130,7 +188,7 @@ export class EmailIngestService {
 
     if (summary.imported > 0 || summary.failed > 0) {
       this.logger.log(
-        `Email ingestion: ${summary.imported} imported, ${summary.skipped} skipped, ${summary.failed} failed`,
+        `Email ingestion: ${summary.imported} imported, ${summary.skipped} skipped, ${summary.rejected} rejected, ${summary.failed} failed`,
       );
     }
     return summary;
@@ -139,10 +197,38 @@ export class EmailIngestService {
   private async ingestMessage(
     message: MailboxMessage,
     principal: AuthenticatedPrincipal,
-  ): Promise<"imported" | "skipped"> {
-    const supported = message.attachments.filter((attachment) =>
+  ): Promise<"imported" | "skipped" | "rejected"> {
+    const maxBytes = this.configService.get("MAX_UPLOAD_BYTES");
+    const declaredSupported = message.attachments.filter((attachment) =>
       SUPPORTED_MIME_TYPES.has(attachment.contentType.split(";")[0].trim().toLowerCase()),
     );
+
+    // The bytes decide, not the declared Content-Type: a renamed executable
+    // declaring application/pdf is rejected here the same way the desktop
+    // importer rejects it.
+    const rejectionReasons: string[] = [];
+    const supported: Array<{ filename: string; content: Buffer; detectedType: string }> = [];
+    for (const attachment of declaredSupported) {
+      if (attachment.content.length > maxBytes) {
+        rejectionReasons.push(`attachment-too-large:${attachment.filename}`);
+        continue;
+      }
+      const detectedType = sniffSupportedType(attachment.content);
+      if (!detectedType) {
+        rejectionReasons.push(`disguised-file:${attachment.filename}`);
+        continue;
+      }
+      supported.push({
+        filename: attachment.filename,
+        content: attachment.content,
+        detectedType,
+      });
+    }
+
+    if (supported.length === 0 && rejectionReasons.length > 0) {
+      await this.recordMessage(message, "rejected", rejectionReasons.join(", "), []);
+      return "rejected";
+    }
 
     if (supported.length === 0) {
       await this.recordMessage(message, "skipped", "no-supported-attachment", []);
@@ -155,7 +241,8 @@ export class EmailIngestService {
         principal,
         buffer: attachment.content,
         filename: attachment.filename,
-        mimeType: attachment.contentType.split(";")[0].trim().toLowerCase(),
+        // The sniffed type, not the declared one.
+        mimeType: attachment.detectedType,
         metadata: {
           // The subject names the document when it has one; a message with
           // several attachments falls back to each attachment's own name.
@@ -194,5 +281,25 @@ export class EmailIngestService {
         documentIds,
       })
       .onConflictDoNothing();
+  }
+
+  /**
+   * The rejection/skip log is capped: a leaked mailbox address cannot grow
+   * the table unboundedly. Imported rows are never pruned — they are the
+   * idempotency ledger, and dropping one would re-import its message.
+   */
+  private async pruneLog(): Promise<void> {
+    const limit = this.configService.get("EMAIL_INGEST_LOG_LIMIT");
+    await this.databaseService.pool.query(
+      `DELETE FROM ingested_emails
+       WHERE status <> 'imported'
+         AND id NOT IN (
+           SELECT id FROM ingested_emails
+           WHERE status <> 'imported'
+           ORDER BY created_at DESC
+           LIMIT $1
+         )`,
+      [limit],
+    );
   }
 }

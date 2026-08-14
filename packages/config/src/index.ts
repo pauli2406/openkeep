@@ -166,6 +166,13 @@ export const AppEnvSchema = z.object({
   IMAP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
   IMAP_FOLDER: z.string().min(1).default("INBOX"),
   EMAIL_INGEST_CRON: z.string().min(1).default("*/5 * * * *"),
+  // Comma-separated addresses or domains allowed to feed the archive mailbox.
+  // Empty means every sender is accepted — reasonable only while the mailbox
+  // address is private; the user docs say so.
+  EMAIL_INGEST_ALLOWED_SENDERS: EmptyStringToUndefined(z.string().optional()),
+  // Rejected/skipped ledger rows kept before the oldest are pruned; imported
+  // rows are never pruned. Bounds what a leaked address can grow.
+  EMAIL_INGEST_LOG_LIMIT: NumberFromEnv.default(500),
   // Absolute base URL of the web app, used for links in outbound email.
   PUBLIC_URL: EmptyStringToUndefined(z.string().url().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),

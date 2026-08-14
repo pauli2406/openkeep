@@ -173,6 +173,8 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     // instead of speaking real SMTP.
     process.env.SMTP_HOST = "smtp.test.invalid";
     process.env.SMTP_FROM = "archive@test.invalid";
+    process.env.EMAIL_INGEST_ALLOWED_SENDERS = "vendor.example,trusted@partner.example";
+    process.env.EMAIL_INGEST_LOG_LIMIT = "5";
     process.env.JWT_ACCESS_SECRET = "test-access-secret-test-access-secret";
     process.env.JWT_REFRESH_SECRET = "test-refresh-secret-test-refresh-secret";
     process.env.OWNER_EMAIL = "owner@test.local";
@@ -1806,6 +1808,126 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       `%${suffix}@example.com%`,
     ]);
     expect(cleanupIds.rows.length).toBeGreaterThan(0);
+  });
+
+  it("guards the mailbox: allowlist, disguised files, and a capped rejection log", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    type FakeMessage = {
+      messageId: string;
+      from: string;
+      subject: string | null;
+      receivedAt: Date | null;
+      attachments: Array<{ filename: string; contentType: string; content: Buffer }>;
+    };
+    const messages: FakeMessage[] = [
+      {
+        // Not on the allowlist: imports nothing, lands in the rejection log.
+        messageId: `<stranger-${suffix}@example.com>`,
+        from: "evil@stranger.example",
+        subject: "Totally an invoice",
+        receivedAt: new Date("2026-08-03T08:00:00Z"),
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-guard-${suffix}`, "utf8"),
+          },
+        ],
+      },
+      {
+        // Allowlisted sender, but the "PDF" is an executable.
+        messageId: `<disguised-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: "Invoice attached",
+        receivedAt: new Date("2026-08-03T09:00:00Z"),
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            contentType: "application/pdf",
+            content: Buffer.concat([Buffer.from("MZ\x90\x00"), Buffer.alloc(64)]),
+          },
+        ],
+      },
+      {
+        // Allowlisted and genuine: still imports.
+        messageId: `<genuine-${suffix}@example.com>`,
+        from: "trusted@partner.example",
+        subject: `Echte Rechnung ${suffix}`,
+        receivedAt: new Date("2026-08-03T10:00:00Z"),
+        attachments: [
+          {
+            filename: "real.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-guard-genuine-${suffix}`, "utf8"),
+          },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    const summary = await emailIngestService.pollOnce(fakeClient);
+    expect(summary.rejected).toBe(2);
+    expect(summary.imported).toBe(1);
+
+    const ledger = await databaseService.pool.query(
+      `SELECT message_id, status, reason, from_address FROM ingested_emails
+       WHERE message_id LIKE $1 ORDER BY message_id`,
+      [`%${suffix}@example.com%`],
+    );
+    const stranger = ledger.rows.find((row) => row.message_id.includes("stranger"));
+    expect(stranger?.status).toBe("rejected");
+    expect(stranger?.reason).toBe("sender-not-allowed");
+    expect(stranger?.from_address).toBe("evil@stranger.example");
+    const disguised = ledger.rows.find((row) => row.message_id.includes("disguised"));
+    expect(disguised?.status).toBe("rejected");
+    expect(disguised?.reason).toContain("disguised-file:invoice.pdf");
+
+    // Neither rejected message created a document.
+    const strayDocuments = await databaseService.pool.query(
+      `SELECT count(*)::int AS documents FROM documents
+       WHERE source = 'email' AND title IN ('Totally an invoice', 'Invoice attached')`,
+    );
+    expect(strayDocuments.rows[0].documents).toBe(0);
+
+    // The rejection log is capped (EMAIL_INGEST_LOG_LIMIT=5 in this suite):
+    // a flood of rejected messages cannot grow the table unboundedly, and
+    // imported rows survive the pruning.
+    for (let index = 0; index < 8; index += 1) {
+      messages.push({
+        messageId: `<flood-${index}-${suffix}@example.com>`,
+        from: "spam@flood.example",
+        subject: `Spam ${index}`,
+        receivedAt: new Date("2026-08-03T11:00:00Z"),
+        attachments: [],
+      });
+    }
+    await emailIngestService.pollOnce(fakeClient);
+    const counts = await databaseService.pool.query(
+      `SELECT
+         count(*) FILTER (WHERE status <> 'imported')::int AS non_imported,
+         count(*) FILTER (WHERE status = 'imported' AND message_id LIKE $1)::int AS imported
+       FROM ingested_emails`,
+      [`%${suffix}@example.com%`],
+    );
+    expect(counts.rows[0].non_imported).toBeLessThanOrEqual(5);
+    expect(counts.rows[0].imported).toBe(1);
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE source = 'email'`);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
   });
 
   it("scans the watch folder and exports and imports archive snapshots", async () => {
