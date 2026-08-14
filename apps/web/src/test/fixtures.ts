@@ -66,6 +66,7 @@ export function makeProviderConfig(
     hasAzureDocumentIntelligenceConfig: false,
     hasMistralOcrConfig: false,
     hasMistralEmbeddingConfig: false,
+    hasSmtpConfig: false,
     ...overrides,
   };
 }

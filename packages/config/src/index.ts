@@ -150,6 +150,16 @@ export const AppEnvSchema = z.object({
   // Unset means the server's own timezone.
   ARCHIVE_TIMEZONE: EmptyStringToUndefined(z.string().optional()),
   DEADLINE_UPCOMING_DAYS: NumberFromEnv.default(7),
+  // SMTP for the deadline digest. Unset host means the email channel is off.
+  SMTP_HOST: EmptyStringToUndefined(z.string().optional()),
+  SMTP_PORT: NumberFromEnv.default(587),
+  SMTP_SECURE: BooleanFromEnv.default(false),
+  SMTP_USER: EmptyStringToUndefined(z.string().optional()),
+  SMTP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
+  SMTP_FROM: EmptyStringToUndefined(z.string().optional()),
+  EMAIL_DIGEST_CRON: z.string().min(1).default("0 7 * * *"),
+  // Absolute base URL of the web app, used for links in outbound email.
+  PUBLIC_URL: EmptyStringToUndefined(z.string().url().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
   SEARCH_DEFAULT_PAGE_SIZE: NumberFromEnv.default(20),
   SEARCH_MAX_PAGE_SIZE: NumberFromEnv.default(100),
@@ -198,4 +208,5 @@ export const providerConfig = (config: AppConfig) => ({
   ),
   hasMistralOcrConfig: Boolean(config.MISTRAL_API_KEY),
   hasMistralEmbeddingConfig: Boolean(config.MISTRAL_API_KEY),
+  hasSmtpConfig: Boolean(config.SMTP_HOST && config.SMTP_FROM),
 });

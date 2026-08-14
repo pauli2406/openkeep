@@ -143,6 +143,9 @@ export const UserLanguagePreferencesSchema = z.object({
   uiLanguage: AppLanguageSchema,
   aiProcessingLanguage: AppLanguageSchema,
   aiChatLanguage: AppLanguageSchema,
+  // Optional so existing clients that PATCH only the languages stay valid;
+  // the server always includes it in responses.
+  emailDigestEnabled: z.boolean().optional(),
 });
 
 export const BoundingBoxSchema = z.object({
@@ -1082,6 +1085,7 @@ export const ProviderConfigSchema = z.object({
   hasAzureDocumentIntelligenceConfig: z.boolean().default(false),
   hasMistralOcrConfig: z.boolean().default(false),
   hasMistralEmbeddingConfig: z.boolean().default(false),
+  hasSmtpConfig: z.boolean().default(false),
 });
 
 export const HealthResponseSchema = z.object({

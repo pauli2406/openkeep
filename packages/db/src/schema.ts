@@ -53,6 +53,7 @@ export const users = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     uiLanguage: varchar("ui_language", { length: 8 }).notNull().default("en"),
+    emailDigestEnabled: boolean("email_digest_enabled").notNull().default(false),
     aiProcessingLanguage: varchar("ai_processing_language", { length: 8 })
       .notNull()
       .default("en"),

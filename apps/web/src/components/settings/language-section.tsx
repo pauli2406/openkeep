@@ -14,6 +14,7 @@ import type {
   ProviderConfig,
   ReadinessResponse,
   Tag,
+  UserLanguagePreferences,
   WatchFolderScanResponse,
 } from "@openkeep/types";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
@@ -51,7 +52,7 @@ import { useI18n } from "@/lib/i18n";
 export function LanguagePreferencesSection() {
   const auth = useAuth();
   const { t } = useI18n();
-  const [preferences, setPreferences] = useState(
+  const [preferences, setPreferences] = useState<UserLanguagePreferences>(
     auth.user?.preferences ?? {
       uiLanguage: "en" as const,
       aiProcessingLanguage: "en" as const,
@@ -149,6 +150,26 @@ export function LanguagePreferencesSection() {
             </Select>
           </div>
         </div>
+
+        <label className="flex items-start gap-3 rounded-[var(--r-md)] border border-input bg-card px-4 py-3">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4"
+            checked={preferences.emailDigestEnabled ?? false}
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                emailDigestEnabled: event.target.checked,
+              }))
+            }
+          />
+          <span>
+            <span className="block text-sm font-medium">{t("settings.emailDigest")}</span>
+            <span className="block text-sm text-muted-foreground">
+              {t("settings.emailDigestDescription")}
+            </span>
+          </span>
+        </label>
 
         <div className="flex items-center gap-3">
           <Button onClick={() => void handleSave()} disabled={isSaving}>

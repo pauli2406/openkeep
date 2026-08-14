@@ -245,6 +245,7 @@ export class AuthService implements OnModuleInit {
         uiLanguage: users.uiLanguage,
         aiProcessingLanguage: users.aiProcessingLanguage,
         aiChatLanguage: users.aiChatLanguage,
+        emailDigestEnabled: users.emailDigestEnabled,
         createdAt: users.createdAt,
       })
       .from(users)
@@ -265,6 +266,7 @@ export class AuthService implements OnModuleInit {
         uiLanguage: user.uiLanguage,
         aiProcessingLanguage: user.aiProcessingLanguage,
         aiChatLanguage: user.aiChatLanguage,
+        emailDigestEnabled: user.emailDigestEnabled,
       },
       createdAt: user.createdAt,
     };
@@ -280,6 +282,9 @@ export class AuthService implements OnModuleInit {
         uiLanguage: input.uiLanguage,
         aiProcessingLanguage: input.aiProcessingLanguage,
         aiChatLanguage: input.aiChatLanguage,
+        ...(input.emailDigestEnabled === undefined
+          ? {}
+          : { emailDigestEnabled: input.emailDigestEnabled }),
         updatedAt: new Date(),
       })
       .where(eq(users.id, principal.userId));

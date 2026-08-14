@@ -1483,6 +1483,7 @@ export interface components {
             aiProcessingLanguage: "en" | "de";
             /** @enum {string} */
             aiChatLanguage: "en" | "de";
+            emailDigestEnabled?: boolean;
         };
         EnableTwoFactorDto: {
             enrollmentToken: string;
@@ -1743,6 +1744,8 @@ export interface components {
                 hasMistralOcrConfig: boolean;
                 /** @default false */
                 hasMistralEmbeddingConfig: boolean;
+                /** @default false */
+                hasSmtpConfig: boolean;
             };
         };
         HealthProvidersResponse: {
@@ -1830,6 +1833,7 @@ export interface components {
                 aiProcessingLanguage: "en" | "de";
                 /** @enum {string} */
                 aiChatLanguage: "en" | "de";
+                emailDigestEnabled?: boolean;
             };
             createdAt: string;
         };

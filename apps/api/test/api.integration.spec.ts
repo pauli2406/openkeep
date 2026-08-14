@@ -169,6 +169,10 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     process.env.MINIO_ACCESS_KEY = "openkeep";
     process.env.MINIO_SECRET_KEY = "openkeep123";
     process.env.MINIO_BUCKET = "documents";
+    // SMTP configured so the digest path runs; the test spies on MailerService
+    // instead of speaking real SMTP.
+    process.env.SMTP_HOST = "smtp.test.invalid";
+    process.env.SMTP_FROM = "archive@test.invalid";
     process.env.JWT_ACCESS_SECRET = "test-access-secret-test-access-secret";
     process.env.JWT_REFRESH_SECRET = "test-refresh-secret-test-refresh-secret";
     process.env.OWNER_EMAIL = "owner@test.local";
@@ -272,6 +276,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       uiLanguage: "de",
       aiProcessingLanguage: "de",
       aiChatLanguage: "en",
+      emailDigestEnabled: false,
     });
 
     const meResponse = await request(app.getHttpServer())
@@ -283,6 +288,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       uiLanguage: "de",
       aiProcessingLanguage: "de",
       aiChatLanguage: "en",
+      emailDigestEnabled: false,
     });
   });
 
@@ -1537,6 +1543,122 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
       [upcoming, dueToday, overdue, farFuture].map((entry) => entry.file.id),
     ]);
+  });
+
+  it("sends one digest email per user with pending deadlines, exactly once", async () => {
+    const { NotificationsService } = await import("../src/notifications/notifications.service");
+    const { EmailDigestService } = await import("../src/notifications/email-digest.service");
+    const { MailerService } = await import("../src/notifications/mailer.service");
+    const notificationsService = app.get(NotificationsService);
+    const emailDigestService = app.get(EmailDigestService);
+    const mailerService = app.get(MailerService);
+    const today = "2026-09-10";
+    const suffix = randomUUID().slice(0, 8);
+
+    const sentMails: Array<{ to: string; subject: string; text: string; html: string }> = [];
+    const sendSpy = vi
+      .spyOn(mailerService, "send")
+      .mockImplementation(async (mail) => {
+        sentMails.push(mail);
+      });
+
+    const seedDue = async (title: string, dueDate: string, amount?: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "8").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/digest.pdf`,
+          originalFilename: "digest.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 16,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          dueDate: new Date(dueDate),
+          amount,
+          currency: amount ? "EUR" : undefined,
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const overdue = await seedDue("Mahnung Strom", "2026-09-01", "149.90");
+    const soon = await seedDue("Versicherung Beitrag", "2026-09-15");
+
+    try {
+      // Digest disabled: pending notifications exist, but nothing sends.
+      await notificationsService.scanDeadlines(today);
+      const disabledRun = await emailDigestService.runDigest(today);
+      expect(disabledRun.sent).toBe(0);
+      expect(sentMails).toHaveLength(0);
+
+      // Opt in via the preferences endpoint, keeping the languages.
+      const optIn = await request(app.getHttpServer())
+        .patch("/api/auth/me/preferences")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({
+          uiLanguage: "en",
+          aiProcessingLanguage: "en",
+          aiChatLanguage: "en",
+          emailDigestEnabled: true,
+        });
+      expect(optIn.status).toBe(200);
+      expect(optIn.body.preferences.emailDigestEnabled).toBe(true);
+
+      const firstRun = await emailDigestService.runDigest(today);
+      expect(firstRun.sent).toBe(1);
+      expect(sentMails).toHaveLength(1);
+      const mail = sentMails[0];
+      expect(mail.text).toContain(`Mahnung Strom ${suffix}`);
+      expect(mail.text).toContain(`Versicherung Beitrag ${suffix}`);
+      expect(mail.text).toContain("Overdue");
+      expect(mail.text).toContain("Due soon");
+      expect(mail.text).toContain("149.90 EUR");
+      expect(mail.html).toContain("<ul>");
+
+      // The second run has nothing undelivered: no email.
+      const secondRun = await emailDigestService.runDigest(today);
+      expect(secondRun.sent).toBe(0);
+      expect(sentMails).toHaveLength(1);
+
+      // Turning the preference off keeps records for other channels but stops mail.
+      await request(app.getHttpServer())
+        .patch("/api/auth/me/preferences")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({
+          uiLanguage: "en",
+          aiProcessingLanguage: "en",
+          aiChatLanguage: "en",
+          emailDigestEnabled: false,
+        });
+      const remaining = await databaseService.pool.query(
+        `SELECT count(*)::int AS records FROM notifications
+         WHERE document_id = ANY($1::uuid[]) AND invalidated_at IS NULL`,
+        [[overdue.document.id, soon.document.id]],
+      );
+      expect(remaining.rows[0].records).toBeGreaterThan(0);
+    } finally {
+      sendSpy.mockRestore();
+      const documentIds = [overdue, soon].map((entry) => entry.document.id);
+      await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+        documentIds,
+      ]);
+      await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+        [overdue, soon].map((entry) => entry.file.id),
+      ]);
+      await databaseService.pool.query(
+        `UPDATE users SET email_digest_enabled = false WHERE id = $1`,
+        [ownerUserId],
+      );
+    }
   });
 
   it("scans the watch folder and exports and imports archive snapshots", async () => {

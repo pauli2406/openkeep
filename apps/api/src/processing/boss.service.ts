@@ -9,6 +9,7 @@ import {
   DEADLINE_SCAN_QUEUE,
   DOCUMENT_EMBEDDING_QUEUE,
   DOCUMENT_PROCESSING_QUEUE,
+  EMAIL_DIGEST_QUEUE,
 } from "./constants";
 
 @Injectable()
@@ -45,11 +46,12 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     await this.boss.createQueue(CORRESPONDENT_SUMMARY_QUEUE);
     await this.boss.createQueue(CORRESPONDENT_INTELLIGENCE_QUEUE);
     await this.boss.createQueue(DEADLINE_SCAN_QUEUE);
+    await this.boss.createQueue(EMAIL_DIGEST_QUEUE);
     this.started = true;
   }
 
   /** Recurring jobs; pg-boss stores the schedule, so exactly one fires per tick across workers. */
-  async schedule(queueName: string, cron: string): Promise<void> {
+  async schedule(queueName: string, cron: string, options: { tz?: string } = {}): Promise<void> {
     if (this.skipExternalInit) {
       return;
     }
@@ -58,6 +60,7 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
       retryLimit: this.retryLimit,
       retryDelay: this.retryDelaySeconds,
       retryBackoff: true,
+      ...(options.tz ? { tz: options.tz } : {}),
     });
   }
 

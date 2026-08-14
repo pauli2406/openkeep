@@ -66,6 +66,8 @@ type TranslationKey =
   | "settings.german"
   | "settings.saving"
   | "settings.savePreferences"
+  | "settings.emailDigest"
+  | "settings.emailDigestDescription"
   | "settings.preferencesSaved"
   | "settings.preferencesSaveFailed"
   | "settings.unknown"
@@ -616,6 +618,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.german": "German",
     "settings.saving": "Saving...",
     "settings.savePreferences": "Save preferences",
+    "settings.emailDigest": "Daily deadline digest by email",
+    "settings.emailDigestDescription": "One email a day listing overdue, due-today, and upcoming deadlines. Requires the server to have SMTP configured.",
     "settings.preferencesSaved": "Preferences saved.",
     "settings.preferencesSaveFailed": "Failed to save preferences.",
     "settings.unknown": "Unknown",
@@ -1165,6 +1169,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.german": "Deutsch",
     "settings.saving": "Wird gespeichert...",
     "settings.savePreferences": "Einstellungen speichern",
+    "settings.emailDigest": "Täglicher Fristen-Digest per E-Mail",
+    "settings.emailDigestDescription": "Eine E-Mail pro Tag mit überfälligen, heute fälligen und anstehenden Fristen. Setzt konfiguriertes SMTP auf dem Server voraus.",
     "settings.preferencesSaved": "Einstellungen gespeichert.",
     "settings.preferencesSaveFailed": "Einstellungen konnten nicht gespeichert werden.",
     "settings.unknown": "Unbekannt",
