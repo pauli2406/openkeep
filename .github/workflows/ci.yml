@@ -96,7 +96,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          pnpm --filter @openkeep/desktop make -- --arch=x64
+          pnpm --filter @openkeep/desktop exec electron-forge make --arch=x64
           test -n "$(find apps/desktop/out/make -name '*.msi' | head -1)" || {
             echo "::error::no MSI was produced"; exit 1; }
           pnpm --filter @openkeep/desktop make:windows-setup
@@ -119,7 +119,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update && sudo apt-get install -y rpm fakeroot
-          pnpm --filter @openkeep/desktop make -- --arch=x64
+          pnpm --filter @openkeep/desktop exec electron-forge make --arch=x64
           test -n "$(find apps/desktop/out/make -name '*.deb' | head -1)" || {
             echo "::error::no deb was produced"; exit 1; }
           test -n "$(find apps/desktop/out/make -name '*.rpm' | head -1)" || {
