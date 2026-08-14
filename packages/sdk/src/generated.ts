@@ -716,6 +716,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationsController_listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/documents": {
         parameters: {
             query?: never;
@@ -1507,6 +1539,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1543,6 +1582,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1568,6 +1614,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1594,6 +1647,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1607,6 +1667,11 @@ export interface components {
                 amountMin?: number;
                 amountMax?: number;
             };
+            history?: {
+                /** @enum {string} */
+                role: "user" | "assistant";
+                content: string;
+            }[];
             /** @default 5 */
             maxDocuments: number;
             /** @default 6 */
@@ -2935,6 +3000,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -2983,6 +3055,27 @@ export interface components {
                     topTypes: string[];
                 }[];
             }[];
+        };
+        NotificationsResponse: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                documentTitle: string;
+                correspondentName: string | null;
+                kind: string;
+                /** @enum {string} */
+                window: "upcoming" | "due" | "overdue";
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                createdAt: string;
+                readAt: string | null;
+                emailDeliveredAt: string | null;
+                desktopDeliveredAt: string | null;
+            }[];
+            unreadCount: number;
         };
         UploadDocumentResponse: {
             /** Format: uuid */
@@ -3670,6 +3763,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -4027,6 +4127,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -4061,6 +4168,7 @@ export interface components {
                 quote: string;
                 score: number;
                 index?: number;
+                used?: boolean;
             }[];
             results: {
                 document: {
@@ -4415,7 +4523,7 @@ export interface components {
                 windowEnd: string | null;
             } | {
                 /** @enum {string} */
-                kind: "pending_review_documents" | "expiring_contracts";
+                kind: "pending_review_documents" | "expiring_contracts" | "document_table";
                 title: string;
                 description: string | null;
                 items: {
@@ -6995,6 +7103,48 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentsTimelineResponse"];
                 };
+            };
+        };
+    };
+    NotificationsController_listNotifications: {
+        parameters: {
+            query: {
+                undeliveredFor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending deadline notifications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsResponse"];
+                };
+            };
+        };
+    };
+    NotificationsController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one notification as read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

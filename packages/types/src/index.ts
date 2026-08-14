@@ -866,6 +866,29 @@ export const DocumentsTimelineResponseSchema = z.object({
   years: z.array(DocumentsTimelineYearSchema),
 });
 
+export const DeadlineWindowSchema = z.enum(["upcoming", "due", "overdue"]);
+
+export const NotificationItemSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  documentTitle: z.string(),
+  correspondentName: z.string().nullable(),
+  kind: z.string(),
+  window: DeadlineWindowSchema,
+  dueDate: z.string(),
+  amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  createdAt: z.string(),
+  readAt: z.string().nullable(),
+  emailDeliveredAt: z.string().nullable(),
+  desktopDeliveredAt: z.string().nullable(),
+});
+
+export const NotificationsResponseSchema = z.object({
+  items: z.array(NotificationItemSchema),
+  unreadCount: z.number().int().nonnegative(),
+});
+
 export const UploadDocumentMetadataSchema = z.object({
   title: z.string().trim().min(1).optional(),
   source: DocumentSourceSchema.default("upload"),
@@ -1615,6 +1638,9 @@ export type DocumentsProjectionResponse = z.infer<typeof DocumentsProjectionResp
 export type DocumentsTimelineMonth = z.infer<typeof DocumentsTimelineMonthSchema>;
 export type DocumentsTimelineYear = z.infer<typeof DocumentsTimelineYearSchema>;
 export type DocumentsTimelineResponse = z.infer<typeof DocumentsTimelineResponseSchema>;
+export type DeadlineWindow = z.infer<typeof DeadlineWindowSchema>;
+export type NotificationItem = z.infer<typeof NotificationItemSchema>;
+export type NotificationsResponse = z.infer<typeof NotificationsResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;

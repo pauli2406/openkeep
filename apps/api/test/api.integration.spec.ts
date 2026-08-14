@@ -1419,6 +1419,126 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     );
   });
 
+  it("arms deadline notifications exactly once, and invalidates them with their reason", async () => {
+    const { NotificationsService } = await import("../src/notifications/notifications.service");
+    const notificationsService = app.get(NotificationsService);
+    const suffix = randomUUID().slice(0, 8);
+    const today = "2026-06-15";
+
+    const seedDueDocument = async (title: string, dueDate: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "9").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/due.pdf`,
+          originalFilename: "due.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 32,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          dueDate: new Date(dueDate),
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const upcoming = await seedDueDocument("Due in a week", "2026-06-20");
+    const dueToday = await seedDueDocument("Due today", "2026-06-15");
+    const overdue = await seedDueDocument("Overdue invoice", "2026-06-01");
+    const farFuture = await seedDueDocument("Due in a month", "2026-07-20");
+
+    // Five runs must arm exactly one record per document+window.
+    for (let run = 0; run < 5; run += 1) {
+      await notificationsService.scanDeadlines(today);
+    }
+
+    const counted = await databaseService.pool.query(
+      `SELECT document_id, "window", count(*)::int AS records
+       FROM notifications
+       WHERE document_id = ANY($1::uuid[])
+       GROUP BY document_id, "window"`,
+      [[upcoming.document.id, dueToday.document.id, overdue.document.id, farFuture.document.id]],
+    );
+    const byDocument = new Map(
+      counted.rows.map((row) => [`${row.document_id}:${row.window}`, row.records]),
+    );
+    expect(byDocument.get(`${upcoming.document.id}:upcoming`)).toBe(1);
+    expect(byDocument.get(`${dueToday.document.id}:due`)).toBe(1);
+    expect(byDocument.get(`${overdue.document.id}:overdue`)).toBe(1);
+    expect(counted.rows).toHaveLength(3);
+
+    // The endpoint lists them for the owner, unread.
+    const listed = await request(app.getHttpServer())
+      .get("/api/notifications")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(listed.status).toBe(200);
+    const listedIds = listed.body.items.map((item: { documentId: string }) => item.documentId);
+    expect(listedIds).toContain(overdue.document.id);
+    expect(listed.body.unreadCount).toBeGreaterThanOrEqual(3);
+
+    // Completing the task before delivery leaves nothing pending.
+    await databaseService.pool.query(
+      `UPDATE documents SET task_completed_at = now() WHERE id = $1`,
+      [dueToday.document.id],
+    );
+    await notificationsService.scanDeadlines(today);
+    const pendingAfterComplete = await databaseService.pool.query(
+      `SELECT count(*)::int AS pending FROM notifications
+       WHERE document_id = $1 AND invalidated_at IS NULL`,
+      [dueToday.document.id],
+    );
+    expect(pendingAfterComplete.rows[0].pending).toBe(0);
+
+    // Moving the date re-arms the windows under the new date.
+    await databaseService.pool.query(
+      `UPDATE documents SET due_date = '2026-06-18' WHERE id = $1`,
+      [upcoming.document.id],
+    );
+    await notificationsService.scanDeadlines(today);
+    const rearmed = await databaseService.pool.query(
+      `SELECT due_date::text AS due_date, invalidated_at FROM notifications
+       WHERE document_id = $1 AND "window" = 'upcoming'
+       ORDER BY due_date`,
+      [upcoming.document.id],
+    );
+    expect(rearmed.rows).toHaveLength(2);
+    expect(rearmed.rows[0].due_date).toBe("2026-06-18");
+    expect(rearmed.rows[0].invalidated_at).toBeNull();
+    expect(rearmed.rows[1].due_date).toBe("2026-06-20");
+    expect(rearmed.rows[1].invalidated_at).not.toBeNull();
+
+    // Mark-read flips the unread count.
+    const firstId = listed.body.items[0].id;
+    const readResponse = await request(app.getHttpServer())
+      .post(`/api/notifications/${firstId}/read`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(readResponse.status).toBe(201);
+    const relisted = await request(app.getHttpServer())
+      .get("/api/notifications")
+      .set("Authorization", `Bearer ${accessToken}`);
+    const reread = relisted.body.items.find((item: { id: string }) => item.id === firstId);
+    expect(reread?.readAt).not.toBeNull();
+
+    const documentIds = [upcoming, dueToday, overdue, farFuture].map(
+      (entry) => entry.document.id,
+    );
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      [upcoming, dueToday, overdue, farFuture].map((entry) => entry.file.id),
+    ]);
+  });
+
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(

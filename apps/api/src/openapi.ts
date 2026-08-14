@@ -27,6 +27,7 @@ import {
   DocumentTypeSchema,
   HealthProvidersResponseSchema,
   HealthResponseSchema,
+  NotificationsResponseSchema,
   ProcessingStatusResponseSchema,
   ReadinessResponseSchema,
   RequeueDocumentProcessingResponseSchema,
@@ -529,6 +530,15 @@ function patchGeneratedDocument(document: Record<string, any>) {
     ...searchDocumentQueryParameters,
   ]);
   patchCsvTagsQuery(document, "/api/documents/timeline");
+  patchJsonResponse(
+    document,
+    "/api/notifications",
+    "get",
+    200,
+    "Pending deadline notifications",
+    "NotificationsResponse",
+    NotificationsResponseSchema,
+  );
   patchJsonResponse(
     document,
     "/api/documents/review",

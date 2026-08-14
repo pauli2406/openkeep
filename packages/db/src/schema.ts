@@ -412,6 +412,38 @@ export const processingJobs = pgTable(
   }),
 );
 
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 64 }).notNull().default("deadline"),
+    window: varchar("window", { length: 32 }).notNull(),
+    // The due date this record was armed for. A moved deadline arms new
+    // windows under the new date; the unique index makes reruns no-ops.
+    dueDate: date("due_date", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    emailDeliveredAt: timestamp("email_delivered_at", { withTimezone: true }),
+    desktopDeliveredAt: timestamp("desktop_delivered_at", { withTimezone: true }),
+  },
+  (table) => ({
+    documentWindowDueIdx: uniqueIndex("notifications_document_window_due_idx").on(
+      table.documentId,
+      table.window,
+      table.dueDate,
+    ),
+    userIdx: index("notifications_user_idx").on(table.userId),
+    createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
+  }),
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {

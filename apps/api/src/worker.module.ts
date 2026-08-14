@@ -6,6 +6,8 @@ import { MetricsModule } from "./common/metrics/metrics.module";
 import { StorageModule } from "./common/storage/storage.module";
 import { ExplorerModule } from "./explorer/explorer.module";
 import { ExplorerWorker } from "./explorer/explorer.worker";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { NotificationsWorker } from "./notifications/notifications.worker";
 import { ProcessingModule } from "./processing/processing.module";
 import { ProcessingWorker } from "./processing/processing.worker";
 
@@ -17,7 +19,8 @@ import { ProcessingWorker } from "./processing/processing.worker";
     StorageModule,
     ProcessingModule,
     ExplorerModule,
+    NotificationsModule,
   ],
-  providers: [ProcessingWorker, ExplorerWorker],
+  providers: [ProcessingWorker, ExplorerWorker, NotificationsWorker],
 })
 export class WorkerModule {}

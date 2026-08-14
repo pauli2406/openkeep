@@ -6,6 +6,7 @@ import { DatabaseService } from "../common/db/database.service";
 import {
   CORRESPONDENT_INTELLIGENCE_QUEUE,
   CORRESPONDENT_SUMMARY_QUEUE,
+  DEADLINE_SCAN_QUEUE,
   DOCUMENT_EMBEDDING_QUEUE,
   DOCUMENT_PROCESSING_QUEUE,
 } from "./constants";
@@ -43,7 +44,21 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     await this.boss.createQueue(DOCUMENT_EMBEDDING_QUEUE);
     await this.boss.createQueue(CORRESPONDENT_SUMMARY_QUEUE);
     await this.boss.createQueue(CORRESPONDENT_INTELLIGENCE_QUEUE);
+    await this.boss.createQueue(DEADLINE_SCAN_QUEUE);
     this.started = true;
+  }
+
+  /** Recurring jobs; pg-boss stores the schedule, so exactly one fires per tick across workers. */
+  async schedule(queueName: string, cron: string): Promise<void> {
+    if (this.skipExternalInit) {
+      return;
+    }
+
+    await this.boss.schedule(queueName, cron, undefined, {
+      retryLimit: this.retryLimit,
+      retryDelay: this.retryDelaySeconds,
+      retryBackoff: true,
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

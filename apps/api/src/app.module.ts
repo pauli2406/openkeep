@@ -11,6 +11,7 @@ import { StorageModule } from "./common/storage/storage.module";
 import { DocumentsModule } from "./documents/documents.module";
 import { ExplorerModule } from "./explorer/explorer.module";
 import { HealthController } from "./health/health.controller";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { ProcessingModule } from "./processing/processing.module";
 import { SearchModule } from "./search/search.module";
 import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
@@ -36,6 +37,7 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
     ProcessingModule,
     DocumentsModule,
     ExplorerModule,
+    NotificationsModule,
     SearchModule,
     TaxonomiesModule,
   ],

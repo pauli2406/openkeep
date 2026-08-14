@@ -146,6 +146,10 @@ export const AppEnvSchema = z.object({
   PROCESSING_RETRY_DELAY_SECONDS: NumberFromEnv.default(30),
   PROCESSING_STALE_MINUTES: NumberFromEnv.default(30),
   WATCH_FOLDER_PATH: EmptyStringToUndefined(z.string().optional()),
+  // IANA zone the archive's date-only deadlines are interpreted in.
+  // Unset means the server's own timezone.
+  ARCHIVE_TIMEZONE: EmptyStringToUndefined(z.string().optional()),
+  DEADLINE_UPCOMING_DAYS: NumberFromEnv.default(7),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
   SEARCH_DEFAULT_PAGE_SIZE: NumberFromEnv.default(20),
   SEARCH_MAX_PAGE_SIZE: NumberFromEnv.default(100),
