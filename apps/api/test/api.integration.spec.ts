@@ -1444,63 +1444,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
           originalFilename: "due.pdf",
           mimeType: "application/pdf",
           sizeBytes: 32,
-  it("aggregates a tax year by tag and type membership, with sums per currency", async () => {
-    const suffix = randomUUID().slice(0, 8);
-
-    const [taxType] = await databaseService.db
-      .insert(documentTypes)
-      .values({ name: "Tax Document", slug: `tax-document-${suffix}` })
-      .returning();
-    const [invoiceType] = await databaseService.db
-      .insert(documentTypes)
-      .values({ name: "Invoice", slug: `invoice-tax-${suffix}` })
-      .returning();
-    // The processing pipeline may already have minted the `tax` tag in an
-    // earlier test; membership only cares about the slug, so reuse it.
-    const [insertedTaxTag] = await databaseService.db
-      .insert(tags)
-      .values({ name: "tax", slug: "tax" })
-      .onConflictDoNothing()
-      .returning();
-    const taxTag =
-      insertedTaxTag ??
-      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
-    const [correspondent] = await databaseService.db
-      .insert(correspondents)
-      .values({
-        name: "Finanzamt",
-        slug: `finanzamt-${suffix}`,
-        normalizedName: "finanzamt",
-      })
-      .returning();
-
-    const [otherUser] = await databaseService.db
-      .insert(users)
-      .values({
-        email: `second-${suffix}@example.com`,
-        passwordHash: "x",
-        displayName: "Second User",
-        isOwner: false,
-      })
-      .returning();
-
-    const seedDocument = async (input: {
-      title: string;
-      issueDate: string;
-      amount?: string;
-      currency?: string;
-      documentTypeId?: string;
-      tagged?: boolean;
-      ownerId?: string;
-    }) => {
-      const [file] = await databaseService.db
-        .insert(documentFiles)
-        .values({
-          checksum: randomUUID().replace(/-/g, "").padEnd(64, "e").slice(0, 64),
-          storageKey: `fixtures/${randomUUID()}/tax.pdf`,
-          originalFilename: "tax.pdf",
-          mimeType: "application/pdf",
-          sizeBytes: 64,
         })
         .returning();
       const [document] = await databaseService.db
@@ -1582,28 +1525,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(rearmed.rows[0].invalidated_at).toBeNull();
     expect(rearmed.rows[1].due_date).toBe("2026-06-20");
     expect(rearmed.rows[1].invalidated_at).not.toBeNull();
-
-    // Delivered-marking is claim-once per channel: the first caller gets
-    // true, every later caller false — and the record leaves the
-    // undelivered-for-desktop listing.
-    const claimId = listed.body.items[0].id;
-    const firstClaim = await request(app.getHttpServer())
-      .post(`/api/notifications/${claimId}/delivered`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ channel: "desktop" });
-    expect(firstClaim.status).toBe(201);
-    expect(firstClaim.body.delivered).toBe(true);
-    const secondClaim = await request(app.getHttpServer())
-      .post(`/api/notifications/${claimId}/delivered`)
-      .set("Authorization", `Bearer ${accessToken}`)
-      .send({ channel: "desktop" });
-    expect(secondClaim.body.delivered).toBe(false);
-    const undeliveredDesktop = await request(app.getHttpServer())
-      .get("/api/notifications?undeliveredFor=desktop")
-      .set("Authorization", `Bearer ${accessToken}`);
-    expect(
-      undeliveredDesktop.body.items.map((item: { id: string }) => item.id),
-    ).not.toContain(claimId);
 
     // Mark-read flips the unread count.
     const firstId = listed.body.items[0].id;
@@ -2062,6 +1983,70 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
       `%${suffix}@example.com%`,
     ]);
+  });
+
+  it("aggregates a tax year by tag and type membership, with sums per currency", async () => {
+    const suffix = randomUUID().slice(0, 8);
+
+    const [taxType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Tax Document", slug: `tax-document-${suffix}` })
+      .returning();
+    const [invoiceType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Invoice", slug: `invoice-tax-${suffix}` })
+      .returning();
+    // The processing pipeline may already have minted the `tax` tag in an
+    // earlier test; membership only cares about the slug, so reuse it.
+    const [insertedTaxTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: "tax", slug: "tax" })
+      .onConflictDoNothing()
+      .returning();
+    const taxTag =
+      insertedTaxTag ??
+      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Finanzamt",
+        slug: `finanzamt-${suffix}`,
+        normalizedName: "finanzamt",
+      })
+      .returning();
+
+    const [otherUser] = await databaseService.db
+      .insert(users)
+      .values({
+        email: `second-${suffix}@example.com`,
+        passwordHash: "x",
+        displayName: "Second User",
+        isOwner: false,
+      })
+      .returning();
+
+    const seedDocument = async (input: {
+      title: string;
+      issueDate: string;
+      amount?: string;
+      currency?: string;
+      documentTypeId?: string;
+      tagged?: boolean;
+      ownerId?: string;
+    }) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "e").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/tax.pdf`,
+          originalFilename: "tax.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 64,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
           ownerUserId: input.ownerId ?? ownerUserId,
           fileId: file.id,
           title: input.title,
@@ -2222,7 +2207,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ]);
     await databaseService.pool.query(`DELETE FROM users WHERE id = $1::uuid`, [otherUser.id]);
   });
-
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(

@@ -534,7 +534,15 @@ function patchGeneratedDocument(document: Record<string, any>) {
   patchCsvTagsQuery(document, "/api/documents/timeline");
   patchJsonResponse(
     document,
-<<<<<<< HEAD
+    "/api/taxes/{year}",
+    "get",
+    200,
+    "Tax year aggregation response",
+    "TaxYearResponse",
+    TaxYearResponseSchema,
+  );
+  patchJsonResponse(
+    document,
     "/api/email-ingest/status",
     "get",
     200,
@@ -550,14 +558,6 @@ function patchGeneratedDocument(document: Record<string, any>) {
     "Pending deadline notifications",
     "NotificationsResponse",
     NotificationsResponseSchema,
-=======
-    "/api/taxes/{year}",
-    "get",
-    200,
-    "Tax year aggregation response",
-    "TaxYearResponse",
-    TaxYearResponseSchema,
->>>>>>> f83fb55 (feat(api): aggregate a tax year server-side)
   );
   patchJsonResponse(
     document,

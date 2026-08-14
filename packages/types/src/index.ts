@@ -916,6 +916,8 @@ export const EmailIngestStatusResponseSchema = z.object({
       createdAt: z.string(),
     }),
   ),
+});
+
 export const TaxYearMembershipSchema = z.enum(["tag", "type", "both"]);
 
 export const TaxYearDocumentSchema = z.object({

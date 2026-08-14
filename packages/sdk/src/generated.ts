@@ -716,6 +716,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/email-ingest/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EmailIngestController_getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/email-ingest/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailIngestController_pollNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationsController_listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markDelivered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/documents": {
         parameters: {
             query?: never;
@@ -1467,6 +1547,7 @@ export interface components {
             aiProcessingLanguage: "en" | "de";
             /** @enum {string} */
             aiChatLanguage: "en" | "de";
+            emailDigestEnabled?: boolean;
         };
         EnableTwoFactorDto: {
             enrollmentToken: string;
@@ -1727,6 +1808,10 @@ export interface components {
                 hasMistralOcrConfig: boolean;
                 /** @default false */
                 hasMistralEmbeddingConfig: boolean;
+                /** @default false */
+                hasSmtpConfig: boolean;
+                /** @default false */
+                hasImapConfig: boolean;
             };
         };
         HealthProvidersResponse: {
@@ -1814,6 +1899,7 @@ export interface components {
                 aiProcessingLanguage: "en" | "de";
                 /** @enum {string} */
                 aiChatLanguage: "en" | "de";
+                emailDigestEnabled?: boolean;
             };
             createdAt: string;
         };
@@ -3072,6 +3158,50 @@ export interface components {
                     memberVia: "tag" | "type" | "both";
                 }[];
             }[];
+        };
+        EmailIngestStatusResponse: {
+            configured: boolean;
+            mailbox: {
+                host: string;
+                folder: string;
+                user: string;
+            } | null;
+            lastPoll: {
+                [key: string]: unknown;
+            } | null;
+            counts: {
+                imported: number;
+                skipped: number;
+                rejected: number;
+            };
+            recentRejections: {
+                fromAddress: string;
+                subject: string | null;
+                status: string;
+                reason: string | null;
+                createdAt: string;
+            }[];
+        };
+        NotificationsResponse: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                documentTitle: string;
+                correspondentName: string | null;
+                kind: string;
+                /** @enum {string} */
+                window: "upcoming" | "due" | "overdue";
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                createdAt: string;
+                readAt: string | null;
+                emailDeliveredAt: string | null;
+                desktopDeliveredAt: string | null;
+            }[];
+            unreadCount: number;
         };
         UploadDocumentResponse: {
             /** Format: uuid */
@@ -7099,6 +7229,106 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentsTimelineResponse"];
                 };
+            };
+        };
+    };
+    EmailIngestController_getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mailbox ingestion status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailIngestStatusResponse"];
+                };
+            };
+        };
+    };
+    EmailIngestController_pollNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queues one mailbox poll on the worker */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_listNotifications: {
+        parameters: {
+            query: {
+                undeliveredFor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending deadline notifications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsResponse"];
+                };
+            };
+        };
+    };
+    NotificationsController_markDelivered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one channel delivered; `delivered` is true only for the call that actually set it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one notification as read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
