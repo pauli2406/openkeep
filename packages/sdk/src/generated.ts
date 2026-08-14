@@ -3050,6 +3050,8 @@ export interface components {
                 count: number;
             }[];
             groups: {
+                /** Format: uuid */
+                documentTypeId: string | null;
                 documentType: string | null;
                 count: number;
                 unsummedCount: number;

@@ -935,6 +935,7 @@ export const TaxYearTotalSchema = z.object({
 });
 
 export const TaxYearGroupSchema = z.object({
+  documentTypeId: z.string().uuid().nullable(),
   documentType: z.string().nullable(),
   count: z.number().int().nonnegative(),
   unsummedCount: z.number().int().nonnegative(),

@@ -15,6 +15,7 @@ interface TaxYearRow {
   issue_date: string | null;
   amount: string | null;
   currency: string | null;
+  type_id: string | null;
   type_name: string | null;
   correspondent_name: string | null;
   via_tag: boolean;
@@ -65,6 +66,7 @@ export class TaxesService {
          d.issue_date::text AS issue_date,
          d.amount::text AS amount,
          d.currency,
+         dt.id AS type_id,
          dt.name AS type_name,
          c.name AS correspondent_name,
          EXISTS(
@@ -93,9 +95,11 @@ export class TaxesService {
 
     const overall = new TotalsAccumulator();
     let unsummedCount = 0;
+    // Keyed by type id, not name: names are not unique across types.
     const groupMap = new Map<
       string | null,
       {
+        documentType: string | null;
         documents: TaxYearDocument[];
         totals: TotalsAccumulator;
         unsummedCount: number;
@@ -116,7 +120,8 @@ export class TaxesService {
         memberVia: row.via_tag && row.via_type ? "both" : row.via_tag ? "tag" : "type",
       };
 
-      const group = groupMap.get(row.type_name) ?? {
+      const group = groupMap.get(row.type_id) ?? {
+        documentType: row.type_name,
         documents: [],
         totals: new TotalsAccumulator(),
         unsummedCount: 0,
@@ -129,21 +134,24 @@ export class TaxesService {
         group.totals.add(row.currency as string, cents);
         overall.add(row.currency as string, cents);
       }
-      groupMap.set(row.type_name, group);
+      groupMap.set(row.type_id, group);
     }
 
     const groups = [...groupMap.entries()]
-      .map(([documentType, group]) => ({
-        documentType,
+      .map(([documentTypeId, group]) => ({
+        documentTypeId,
+        documentType: group.documentType,
         count: group.documents.length,
         unsummedCount: group.unsummedCount,
         totals: group.totals.toTotals(),
         documents: group.documents,
       }))
       .sort((a, b) => {
-        if (a.documentType === null) return 1;
-        if (b.documentType === null) return -1;
-        return b.count - a.count || a.documentType.localeCompare(b.documentType);
+        if (a.documentTypeId === null) return 1;
+        if (b.documentTypeId === null) return -1;
+        return (
+          b.count - a.count || (a.documentType ?? "").localeCompare(b.documentType ?? "")
+        );
       });
 
     return {
