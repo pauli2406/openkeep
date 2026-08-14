@@ -16,7 +16,7 @@ Linux clients link to the release page.
 
 | Platform | Architectures | Artifact | Updates |
 | --- | --- | --- | --- |
-| macOS 13+ | arm64, x64 | DMG (install), ZIP (update feed) | Automatic in-app (Squirrel.Mac) |
+| macOS 13+ | arm64, x64 (cross-built on arm64 — GitHub retired the Intel image) | DMG (install), ZIP (update feed) | Automatic in-app (Squirrel.Mac) |
 | Windows 10+ | x64 | WiX MSI, plus `OpenKeep-Setup.exe` (the MSI in a Burn bundle) | Manual: in-app link to the release page; installing either is the update |
 | Linux | x64 | deb, rpm | Manual — in-app link to the release page |
 

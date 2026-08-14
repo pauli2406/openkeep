@@ -122,9 +122,17 @@ jobs:
             arch: arm64
             smoke: true
           - name: macOS x64
-            os: macos-13
+            # Cross-built on Apple Silicon rather than on an Intel runner:
+            # GitHub retired the macos-13 image, so that label never gets picked
+            # up and the job queues until the run is cancelled. Electron ships
+            # per-architecture binaries and codesign signs a foreign-arch binary
+            # happily, so the artifact is the same.
+            os: macos-latest
             arch: x64
-            smoke: true
+            # The one thing a cross build cannot do is run: an x64 binary needs
+            # Rosetta, which an arm64 runner does not guarantee. arm64 covers the
+            # startup check for macOS.
+            smoke: false
           - name: Windows x64
             # Pinned to an image that ships WiX 3; `windows-latest` (2025) does
             # not carry the toolset the MSI maker needs.
