@@ -4,13 +4,11 @@ import type {
   CorrespondentSummaryStatus,
   DashboardDeadlineItem,
   DashboardInsightsResponse,
-  DocumentsProjectionResponse,
   DocumentsTimelineResponse,
   SearchDocumentsRequest,
 } from "@openkeep/types";
 import { correspondents } from "@openkeep/db";
 import { eq } from "drizzle-orm";
-import { UMAP } from "umap-js";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
@@ -25,7 +23,6 @@ type SummaryProvider =
 @Injectable()
 export class ExplorerService {
   private readonly logger = new Logger(ExplorerService.name);
-  private readonly projectionCache = new Map<string, DocumentsProjectionResponse>();
 
   constructor(
     @Inject(DatabaseService) private readonly databaseService: DatabaseService,
@@ -396,176 +393,6 @@ export class ExplorerService {
     };
   }
 
-  async getDocumentsProjection(
-    filters: SearchDocumentsRequest["filters"] = {},
-  ): Promise<DocumentsProjectionResponse> {
-    const embeddingConfig = this.processingService.getActiveEmbeddingConfiguration();
-    if (!embeddingConfig.provider || !embeddingConfig.model) {
-      return { points: [], clusters: [] };
-    }
-
-    const cacheKey = await this.buildProjectionCacheKey(
-      filters,
-      embeddingConfig.provider,
-      embeddingConfig.model,
-    );
-    const cached = this.projectionCache.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const { whereSql, params } = this.documentsService.buildDocumentFilterQuery(filters);
-    const metadataResult = await this.databaseService.pool.query<{
-      document_id: string;
-      title: string;
-      status: string;
-      issue_date: string | null;
-      year: string | null;
-      correspondent_name: string | null;
-      correspondent_slug: string | null;
-      type_name: string | null;
-    }>(
-      `SELECT
-         d.id AS document_id,
-         d.title,
-         d.status::text AS status,
-         d.issue_date::text AS issue_date,
-         extract(year from coalesce(d.issue_date, d.created_at::date))::int::text AS year,
-         c.name AS correspondent_name,
-         c.slug AS correspondent_slug,
-         dt.name AS type_name
-       FROM documents d
-       LEFT JOIN correspondents c ON c.id = d.correspondent_id
-       LEFT JOIN document_types dt ON dt.id = d.document_type_id
-       WHERE ${whereSql}
-       ORDER BY d.id ASC`,
-      params,
-    );
-
-    const documentIds = metadataResult.rows.map((row) => row.document_id);
-    if (documentIds.length === 0) {
-      return { points: [], clusters: [] };
-    }
-
-    const tagResult = await this.databaseService.pool.query<{
-      document_id: string;
-      name: string;
-    }>(
-      `SELECT dtl.document_id, t.name
-       FROM document_tag_links dtl
-       INNER JOIN tags t ON t.id = dtl.tag_id
-       WHERE dtl.document_id = ANY($1::uuid[])
-       ORDER BY dtl.document_id ASC, t.name ASC`,
-      [documentIds],
-    );
-
-    const tagsByDocument = new Map<string, string[]>();
-    for (const row of tagResult.rows) {
-      const existing = tagsByDocument.get(row.document_id) ?? [];
-      existing.push(row.name);
-      tagsByDocument.set(row.document_id, existing);
-    }
-
-    const embeddingResult = await this.databaseService.pool.query<{
-      document_id: string;
-      embedding_text: string;
-    }>(
-      `SELECT
-         e.document_id,
-         e.embedding::text AS embedding_text
-       FROM document_chunk_embeddings e
-       INNER JOIN documents d ON d.id = e.document_id
-       WHERE ${whereSql}
-         AND e.provider = $${params.length + 1}::embedding_provider
-         AND e.model = $${params.length + 2}
-       ORDER BY e.document_id ASC, e.chunk_index ASC`,
-      [...params, embeddingConfig.provider, embeddingConfig.model],
-    );
-
-    const embeddingsByDocument = new Map<string, number[][]>();
-    for (const row of embeddingResult.rows) {
-      const existing = embeddingsByDocument.get(row.document_id) ?? [];
-      existing.push(parseHalfVec(row.embedding_text));
-      embeddingsByDocument.set(row.document_id, existing);
-    }
-
-    const vectorMetadata: Array<{
-      documentId: string;
-      title: string;
-      status: string;
-      issueDate: string | null;
-      year: number | null;
-      correspondentName: string | null;
-      correspondentSlug: string | null;
-      typeName: string | null;
-      tags: string[];
-    }> = [];
-    const vectors: number[][] = [];
-
-    for (const row of metadataResult.rows) {
-      const documentEmbeddings = embeddingsByDocument.get(row.document_id);
-      if (!documentEmbeddings || documentEmbeddings.length === 0) {
-        continue;
-      }
-
-      vectorMetadata.push({
-        documentId: row.document_id,
-        title: row.title,
-        status: row.status,
-        issueDate: row.issue_date,
-        year: row.year === null ? null : Number(row.year),
-        correspondentName: row.correspondent_name,
-        correspondentSlug: row.correspondent_slug,
-        typeName: row.type_name,
-        tags: tagsByDocument.get(row.document_id) ?? [],
-      });
-      vectors.push(averageVectors(documentEmbeddings));
-    }
-
-    if (vectors.length === 0) {
-      return { points: [], clusters: [] };
-    }
-
-    const coordinates =
-      vectors.length === 1
-        ? [[0.5, 0.5]]
-        : vectors.length === 2
-          ? [
-              [0.25, 0.5],
-              [0.75, 0.5],
-            ]
-          : new UMAP({
-              nComponents: 2,
-              nNeighbors: Math.max(2, Math.min(15, vectors.length - 1)),
-              minDist: 0.18,
-              spread: 1.1,
-            }).fit(vectors);
-
-    const normalizedCoordinates = normalizeCoordinates(coordinates);
-    const points = vectorMetadata.map((metadata, index) => ({
-      documentId: metadata.documentId,
-      x: normalizedCoordinates[index]?.[0] ?? 0.5,
-      y: normalizedCoordinates[index]?.[1] ?? 0.5,
-      title: metadata.title,
-      correspondentName: metadata.correspondentName,
-      correspondentSlug: metadata.correspondentSlug,
-      typeName: metadata.typeName,
-      tags: metadata.tags,
-      issueDate: metadata.issueDate,
-      year: metadata.year,
-      status: metadata.status as
-        | "pending"
-        | "processing"
-        | "ready"
-        | "failed",
-    }));
-
-    const clusters = buildProjectionClusters(points);
-    const response = { points, clusters };
-    this.projectionCache.set(cacheKey, response);
-    return response;
-  }
-
   async getDocumentsTimeline(
     filters: SearchDocumentsRequest["filters"] = {},
   ): Promise<DocumentsTimelineResponse> {
@@ -860,44 +687,6 @@ export class ExplorerService {
     return normalizeSummary(text ?? null);
   }
 
-  private async buildProjectionCacheKey(
-    filters: SearchDocumentsRequest["filters"],
-    provider: string,
-    model: string,
-  ): Promise<string> {
-    const { whereSql, params } = this.documentsService.buildDocumentFilterQuery(filters);
-    const result = await this.databaseService.pool.query<{
-      document_count: string;
-      watermark: string | null;
-    }>(
-      `SELECT
-         count(DISTINCT d.id)::int AS document_count,
-         max(
-           greatest(
-             d.updated_at,
-             coalesce(d.processed_at, d.updated_at),
-             coalesce(e.updated_at, d.updated_at)
-           )
-         )::text AS watermark
-       FROM documents d
-       LEFT JOIN document_chunk_embeddings e
-         ON e.document_id = d.id
-        AND e.provider = $${params.length + 1}::embedding_provider
-        AND e.model = $${params.length + 2}
-       WHERE ${whereSql}`,
-      [...params, provider, model],
-    );
-
-    const row = result.rows[0];
-    return JSON.stringify({
-      filters,
-      provider,
-      model,
-      documentCount: Number(row?.document_count ?? 0),
-      watermark: row?.watermark ?? null,
-    });
-  }
-
   private async loadDeadlineItems(
     overdue: boolean,
     correspondentId?: string,
@@ -962,42 +751,6 @@ function normalizeCoordinates(coordinates: number[][]): number[][] {
     rangeX === 0 ? 0.5 : (x - minX) / rangeX,
     rangeY === 0 ? 0.5 : (y - minY) / rangeY,
   ]);
-}
-
-function buildProjectionClusters(
-  points: DocumentsProjectionResponse["points"],
-): DocumentsProjectionResponse["clusters"] {
-  const grouped = new Map<
-    string,
-    {
-      totalX: number;
-      totalY: number;
-      documentIds: string[];
-    }
-  >();
-
-  for (const point of points) {
-    const label = point.correspondentName ?? point.typeName ?? "Unfiled";
-    const existing = grouped.get(label) ?? {
-      totalX: 0,
-      totalY: 0,
-      documentIds: [],
-    };
-    existing.totalX += point.x;
-    existing.totalY += point.y;
-    existing.documentIds.push(point.documentId);
-    grouped.set(label, existing);
-  }
-
-  return [...grouped.entries()]
-    .filter(([, entry]) => entry.documentIds.length > 1)
-    .map(([label, entry]) => ({
-      centroidX: entry.totalX / entry.documentIds.length,
-      centroidY: entry.totalY / entry.documentIds.length,
-      label,
-      documentIds: entry.documentIds,
-    }))
-    .sort((left, right) => right.documentIds.length - left.documentIds.length);
 }
 
 function topMapKeys(map: Map<string, number>, limit: number): string[] {

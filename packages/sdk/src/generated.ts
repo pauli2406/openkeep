@@ -718,22 +718,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/documents/projection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExplorerController_getDocumentsProjection"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/documents/timeline": {
         parameters: {
             query?: never;
@@ -3152,29 +3136,6 @@ export interface components {
                 amountMin?: number;
                 amountMax?: number;
             };
-        };
-        DocumentsProjectionResponse: {
-            points: {
-                /** Format: uuid */
-                documentId: string;
-                x: number;
-                y: number;
-                title: string;
-                correspondentName: string | null;
-                correspondentSlug?: string | null;
-                typeName: string | null;
-                tags: string[];
-                issueDate: string | null;
-                year: number | null;
-                /** @enum {string} */
-                status: "pending" | "processing" | "ready" | "failed";
-            }[];
-            clusters: {
-                centroidX: number;
-                centroidY: number;
-                label: string;
-                documentIds: string[];
-            }[];
         };
         DocumentsTimelineResponse: {
             years: {
@@ -7268,51 +7229,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CorrespondentInsightsResponse"];
-                };
-            };
-        };
-    };
-    ExplorerController_getDocumentsProjection: {
-        parameters: {
-            query?: {
-                /** @description Full-text search query */
-                query?: string;
-                /** @description Filter by issue year */
-                year?: number;
-                /** @description Lower issue date bound */
-                dateFrom?: string;
-                /** @description Upper issue date bound */
-                dateTo?: string;
-                /** @description Filter by correspondent */
-                correspondentId?: string;
-                /** @description Filter by document type */
-                documentTypeId?: string;
-                /** @description Filter by processing status */
-                status?: "pending" | "processing" | "ready" | "failed";
-                /** @description Filter by tag IDs */
-                tags?: string;
-                /** @description Sort field */
-                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
-                /** @description Sort direction */
-                direction?: "asc" | "desc";
-                /** @description Page number */
-                page?: number;
-                /** @description Page size */
-                pageSize?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Projection response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentsProjectionResponse"];
                 };
             };
         };

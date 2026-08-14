@@ -23,7 +23,6 @@ import {
   DocumentStatusSchema,
   DeleteTaxonomyResponseSchema,
   DocumentHistoryResponseSchema,
-  DocumentsProjectionResponseSchema,
   DocumentSchema,
   DocumentTextResponseSchema,
   DocumentsTimelineResponseSchema,
@@ -509,19 +508,6 @@ function patchGeneratedDocument(document: Record<string, any>) {
     ...searchDocumentQueryParameters,
   ]);
   patchCsvTagsQuery(document, "/api/documents/facets");
-  patchJsonResponse(
-    document,
-    "/api/documents/projection",
-    "get",
-    200,
-    "Projection response",
-    "DocumentsProjectionResponse",
-    DocumentsProjectionResponseSchema,
-  );
-  patchQueryParameters(document, "/api/documents/projection", "get", [
-    ...searchDocumentQueryParameters,
-  ]);
-  patchCsvTagsQuery(document, "/api/documents/projection");
   patchJsonResponse(
     document,
     "/api/documents/timeline",

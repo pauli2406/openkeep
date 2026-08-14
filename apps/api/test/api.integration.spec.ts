@@ -1231,7 +1231,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(deletedSource).toHaveLength(0);
   });
 
-  it("serves explorer dashboard, correspondent insights, timeline, and projection", async () => {
+  it("serves explorer dashboard, correspondent insights, and timeline", async () => {
     const [correspondent] = await databaseService.db
       .insert(correspondents)
       .values({
@@ -1389,19 +1389,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(timelineResponse.status).toBe(200);
     expect(timelineResponse.body.years.length).toBeGreaterThan(0);
     expect(timelineResponse.body.years[0].months.length).toBeGreaterThan(0);
-
-    const projectionResponse = await request(app.getHttpServer())
-      .get(`/api/documents/projection?correspondentIds=${correspondent.id}`)
-      .set("Authorization", `Bearer ${accessToken}`);
-
-    expect(projectionResponse.status).toBe(200);
-    expect(projectionResponse.body.points.length).toBeGreaterThanOrEqual(2);
-    expect(
-      projectionResponse.body.points.every(
-        (point: { x: number; y: number }) =>
-          point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1,
-      ),
-    ).toBe(true);
 
     await databaseService.pool.query(
       `DELETE FROM document_chunk_embeddings WHERE document_id = ANY($1::uuid[])`,

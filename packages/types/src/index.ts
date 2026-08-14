@@ -826,32 +826,6 @@ export const CorrespondentInsightsResponseSchema = z.object({
   upcomingDeadlines: z.array(DashboardDeadlineItemSchema),
 });
 
-export const DocumentProjectionPointSchema = z.object({
-  documentId: z.string().uuid(),
-  x: z.number(),
-  y: z.number(),
-  title: z.string().min(1),
-  correspondentName: z.string().nullable(),
-  correspondentSlug: z.string().nullable().optional(),
-  typeName: z.string().nullable(),
-  tags: z.array(z.string()),
-  issueDate: z.string().nullable(),
-  year: z.number().int().nullable(),
-  status: DocumentStatusSchema,
-});
-
-export const DocumentProjectionClusterSchema = z.object({
-  centroidX: z.number(),
-  centroidY: z.number(),
-  label: z.string().min(1),
-  documentIds: z.array(z.string().uuid()),
-});
-
-export const DocumentsProjectionResponseSchema = z.object({
-  points: z.array(DocumentProjectionPointSchema),
-  clusters: z.array(DocumentProjectionClusterSchema),
-});
-
 export const DocumentsTimelineMonthSchema = z.object({
   month: z.number().int().min(1).max(12),
   count: z.number().int().nonnegative(),
@@ -1719,9 +1693,6 @@ export type CorrespondentTimelinePoint = z.infer<typeof CorrespondentTimelinePoi
 export type CorrespondentInsightsResponse = z.infer<
   typeof CorrespondentInsightsResponseSchema
 >;
-export type DocumentProjectionPoint = z.infer<typeof DocumentProjectionPointSchema>;
-export type DocumentProjectionCluster = z.infer<typeof DocumentProjectionClusterSchema>;
-export type DocumentsProjectionResponse = z.infer<typeof DocumentsProjectionResponseSchema>;
 export type DocumentsTimelineMonth = z.infer<typeof DocumentsTimelineMonthSchema>;
 export type DocumentsTimelineYear = z.infer<typeof DocumentsTimelineYearSchema>;
 export type DocumentsTimelineResponse = z.infer<typeof DocumentsTimelineResponseSchema>;

@@ -75,12 +75,6 @@ export class ExplorerController {
     return this.explorerService.getCorrespondentInsightsBySlug(slug);
   }
 
-  @Get("documents/projection")
-  @ApiOkResponse({ description: "Semantic projection for filtered documents" })
-  async getDocumentsProjection(@ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto) {
-    return this.explorerService.getDocumentsProjection(toFilters(query));
-  }
-
   @Get("documents/timeline")
   @ApiOkResponse({ description: "Timeline buckets for filtered documents" })
   async getDocumentsTimeline(@ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto) {
