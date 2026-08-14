@@ -445,6 +445,30 @@ export const notifications = pgTable(
   }),
 );
 
+export const ingestedEmails = pgTable(
+  "ingested_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // RFC 5322 Message-ID — the idempotency key: a message is processed at
+    // most once, no matter how often the poller sees it.
+    messageId: text("message_id").notNull(),
+    fromAddress: text("from_address").notNull().default(""),
+    subject: text("subject"),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: text("reason"),
+    documentIds: jsonb("document_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    messageIdIdx: uniqueIndex("ingested_emails_message_id_idx").on(table.messageId),
+    createdAtIdx: index("ingested_emails_created_at_idx").on(table.createdAt),
+  }),
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {

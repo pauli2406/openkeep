@@ -4,6 +4,7 @@ export const CORRESPONDENT_SUMMARY_QUEUE = "correspondent.summary";
 export const CORRESPONDENT_INTELLIGENCE_QUEUE = "correspondent.intelligence";
 export const DEADLINE_SCAN_QUEUE = "deadline.scan";
 export const EMAIL_DIGEST_QUEUE = "deadline.digest";
+export const EMAIL_INGEST_QUEUE = "email.ingest";
 export const DOCUMENT_PARSE_PROVIDER = Symbol("DOCUMENT_PARSE_PROVIDER");
 export const METADATA_EXTRACTOR = Symbol("METADATA_EXTRACTOR");
 export const CHUNKER = Symbol("CHUNKER");

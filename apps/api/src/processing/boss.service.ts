@@ -10,6 +10,7 @@ import {
   DOCUMENT_EMBEDDING_QUEUE,
   DOCUMENT_PROCESSING_QUEUE,
   EMAIL_DIGEST_QUEUE,
+  EMAIL_INGEST_QUEUE,
 } from "./constants";
 
 @Injectable()
@@ -47,6 +48,7 @@ export class BossService implements OnModuleInit, OnModuleDestroy {
     await this.boss.createQueue(CORRESPONDENT_INTELLIGENCE_QUEUE);
     await this.boss.createQueue(DEADLINE_SCAN_QUEUE);
     await this.boss.createQueue(EMAIL_DIGEST_QUEUE);
+    await this.boss.createQueue(EMAIL_INGEST_QUEUE);
     this.started = true;
   }
 

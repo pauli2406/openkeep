@@ -1086,6 +1086,7 @@ export const ProviderConfigSchema = z.object({
   hasMistralOcrConfig: z.boolean().default(false),
   hasMistralEmbeddingConfig: z.boolean().default(false),
   hasSmtpConfig: z.boolean().default(false),
+  hasImapConfig: z.boolean().default(false),
 });
 
 export const HealthResponseSchema = z.object({

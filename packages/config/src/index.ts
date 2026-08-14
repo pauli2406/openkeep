@@ -158,6 +158,14 @@ export const AppEnvSchema = z.object({
   SMTP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
   SMTP_FROM: EmptyStringToUndefined(z.string().optional()),
   EMAIL_DIGEST_CRON: z.string().min(1).default("0 7 * * *"),
+  // IMAP for the archive mailbox. Unset host means email ingestion is off.
+  IMAP_HOST: EmptyStringToUndefined(z.string().optional()),
+  IMAP_PORT: NumberFromEnv.default(993),
+  IMAP_SECURE: BooleanFromEnv.default(true),
+  IMAP_USER: EmptyStringToUndefined(z.string().optional()),
+  IMAP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
+  IMAP_FOLDER: z.string().min(1).default("INBOX"),
+  EMAIL_INGEST_CRON: z.string().min(1).default("*/5 * * * *"),
   // Absolute base URL of the web app, used for links in outbound email.
   PUBLIC_URL: EmptyStringToUndefined(z.string().url().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
@@ -209,4 +217,5 @@ export const providerConfig = (config: AppConfig) => ({
   hasMistralOcrConfig: Boolean(config.MISTRAL_API_KEY),
   hasMistralEmbeddingConfig: Boolean(config.MISTRAL_API_KEY),
   hasSmtpConfig: Boolean(config.SMTP_HOST && config.SMTP_FROM),
+  hasImapConfig: Boolean(config.IMAP_HOST && config.IMAP_USER && config.IMAP_PASSWORD),
 });

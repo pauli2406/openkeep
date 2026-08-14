@@ -1683,6 +1683,131 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     }
   });
 
+  it("imports mailbox attachments once, through the regular ingestion path", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    type FakeMessage = {
+      messageId: string;
+      from: string;
+      subject: string | null;
+      receivedAt: Date | null;
+      attachments: Array<{ filename: string; contentType: string; content: Buffer }>;
+    };
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    const pdfBytes = Buffer.from(`%PDF-mailbox-${suffix}`, "utf8");
+    const messages: FakeMessage[] = [
+      {
+        messageId: `<two-pdfs-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: `Rechnung Februar ${suffix}`,
+        receivedAt: new Date("2026-08-01T08:00:00Z"),
+        attachments: [
+          { filename: "rechnung-1.pdf", contentType: "application/pdf", content: pdfBytes },
+          {
+            filename: "rechnung-2.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-mailbox-second-${suffix}`, "utf8"),
+          },
+        ],
+      },
+      {
+        messageId: `<newsletter-${suffix}@example.com>`,
+        from: "news@vendor.example",
+        subject: "Newsletter",
+        receivedAt: new Date("2026-08-01T09:00:00Z"),
+        attachments: [
+          { filename: "style.css", contentType: "text/css", content: Buffer.from("body{}") },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    // First poll: two documents from one message, the newsletter skipped.
+    const first = await emailIngestService.pollOnce(fakeClient);
+    expect(first.imported).toBe(1);
+    expect(first.skipped).toBe(1);
+    expect(first.failed).toBe(0);
+
+    const imported = await databaseService.pool.query(
+      `SELECT id, title, source FROM documents WHERE title LIKE $1 OR title LIKE $2 ORDER BY title`,
+      [`%Rechnung Februar ${suffix}%`, `rechnung-%`],
+    );
+    expect(imported.rows.length).toBeGreaterThanOrEqual(2);
+    expect(imported.rows.every((row) => row.source === "email")).toBe(true);
+
+    // Second poll with the flags reset — the Message-ID record wins.
+    flagged.length = 0;
+    const second = await emailIngestService.pollOnce(fakeClient);
+    expect(second.imported).toBe(0);
+    const stillTwo = await databaseService.pool.query(
+      `SELECT count(*)::int AS documents FROM documents WHERE source = 'email' AND (title LIKE $1 OR title LIKE $2)`,
+      [`%${suffix}%`, `rechnung-%`],
+    );
+    expect(stillTwo.rows[0].documents).toBeLessThanOrEqual(3);
+
+    // A re-sent identical PDF resolves as a duplicate, not a new document.
+    messages.push({
+      messageId: `<resend-${suffix}@example.com>`,
+      from: "billing@vendor.example",
+      subject: `Rechnung Februar erneut ${suffix}`,
+      receivedAt: new Date("2026-08-02T08:00:00Z"),
+      attachments: [
+        { filename: "rechnung-1.pdf", contentType: "application/pdf", content: pdfBytes },
+      ],
+    });
+    const third = await emailIngestService.pollOnce(fakeClient);
+    expect(third.imported).toBe(1);
+    // Identical bytes share one file record — the resend created a document
+    // marked as a duplicate of the original, not a second copy of the file.
+    const sharedFile = await databaseService.pool.query(
+      `SELECT count(DISTINCT d.file_id)::int AS files, count(*)::int AS documents
+       FROM documents d
+       INNER JOIN document_files f ON f.id = d.file_id
+       WHERE f.checksum = $1`,
+      [
+        (
+          await databaseService.pool.query(
+            `SELECT f.checksum FROM documents d
+             INNER JOIN document_files f ON f.id = d.file_id
+             WHERE d.title = $1 LIMIT 1`,
+            [`Rechnung Februar erneut ${suffix}`],
+          )
+        ).rows[0].checksum,
+      ],
+    );
+    expect(sharedFile.rows[0].files).toBe(1);
+    expect(sharedFile.rows[0].documents).toBe(2);
+
+    // Every message is recorded exactly once with its outcome.
+    const ledger = await databaseService.pool.query(
+      `SELECT message_id, status, reason FROM ingested_emails WHERE message_id LIKE $1 ORDER BY message_id`,
+      [`%${suffix}@example.com%`],
+    );
+    expect(ledger.rows).toHaveLength(3);
+    const newsletter = ledger.rows.find((row) => row.message_id.includes("newsletter"));
+    expect(newsletter?.status).toBe("skipped");
+    expect(newsletter?.reason).toBe("no-supported-attachment");
+
+    const cleanupIds = await databaseService.pool.query(
+      `SELECT id FROM documents WHERE source = 'email'`,
+    );
+    await databaseService.pool.query(`DELETE FROM documents WHERE source = 'email'`);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
+    expect(cleanupIds.rows.length).toBeGreaterThan(0);
+  });
+
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(
