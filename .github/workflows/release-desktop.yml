@@ -193,14 +193,33 @@ jobs:
 
       # notarytool takes the App Store Connect key as a file, so the secret is
       # written to one for the length of the job.
+      #
+      # The secret may hold the PEM itself or a base64 copy of it — the other
+      # Apple secrets here are base64, so both are plausible and only one is
+      # readable by notarytool. Writing the wrong one gets `invalidPEMDocument`
+      # from deep inside notarization, which says nothing about the cause.
       - name: Write the notarization key
         if: runner.os == 'macOS' && env.APPLE_NOTARY_KEY_P8 != ''
         env:
           APPLE_NOTARY_KEY_P8: ${{ secrets.APPLE_NOTARY_KEY_P8 }}
         run: |
           path="$RUNNER_TEMP/notary-key.p8"
-          printf '%s' "$APPLE_NOTARY_KEY_P8" > "$path"
+          if printf '%s' "$APPLE_NOTARY_KEY_P8" | grep -q "BEGIN PRIVATE KEY"; then
+            printf '%s\n' "$APPLE_NOTARY_KEY_P8" > "$path"
+          else
+            printf '%s' "$APPLE_NOTARY_KEY_P8" | base64 --decode > "$path"
+          fi
           chmod 600 "$path"
+
+          # Fail here, where the cause is obvious, rather than inside notarytool.
+          if ! grep -q "BEGIN PRIVATE KEY" "$path"; then
+            echo "::error::APPLE_NOTARY_KEY_P8 is neither a PEM private key nor base64 of one"
+            exit 1
+          fi
+          openssl pkey -in "$path" -noout || {
+            echo "::error::APPLE_NOTARY_KEY_P8 decoded, but openssl cannot read it as a private key"
+            exit 1
+          }
           echo "APPLE_API_KEY_PATH=$path" >> "$GITHUB_ENV"
 
       - name: Enable Windows signing
