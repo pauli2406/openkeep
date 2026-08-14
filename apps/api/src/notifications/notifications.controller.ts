@@ -1,4 +1,14 @@
-import { Controller, Get, Inject, Param, Post, Query, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 
 import { AccessAuthGuard } from "../auth/access-auth.guard";
@@ -25,6 +35,22 @@ export class NotificationsController {
       undeliveredFor:
         undeliveredFor === "email" || undeliveredFor === "desktop" ? undeliveredFor : undefined,
     });
+  }
+
+  @Post(":id/delivered")
+  @ApiOkResponse({
+    description:
+      "Marks one channel delivered; `delivered` is true only for the call that actually set it",
+  })
+  async markDelivered(
+    @Param("id") id: string,
+    @Body() body: { channel?: string },
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    if (body?.channel !== "email" && body?.channel !== "desktop") {
+      throw new BadRequestException("channel must be 'email' or 'desktop'");
+    }
+    return this.notificationsService.markDelivered(id, principal.userId, body.channel);
   }
 
   @Post(":id/read")

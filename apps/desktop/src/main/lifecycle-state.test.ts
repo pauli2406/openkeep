@@ -37,7 +37,7 @@ describe("desktop lifecycle state", () => {
     expect(store.snapshot()).toEqual({
       closeBehavior: "tray",
       profileRoutes: {},
-      notifications: { completed: true, failed: true, review: true },
+      notifications: { completed: true, failed: true, review: true, deadlines: false },
     });
 
     await store.setCloseBehavior("quit");
@@ -50,7 +50,7 @@ describe("desktop lifecycle state", () => {
       closeBehavior: "quit",
       windowBounds: { x: 40, y: 50, width: 1280, height: 820 },
       profileRoutes: { "profile-one": "openkeep://app/documents/1" },
-      notifications: { completed: false, failed: true, review: true },
+      notifications: { completed: false, failed: true, review: true, deadlines: false },
     });
   });
 
@@ -73,7 +73,7 @@ describe("desktop lifecycle state", () => {
     expect(store.snapshot()).toEqual({
       closeBehavior: "tray",
       profileRoutes: {},
-      notifications: { completed: true, failed: true, review: true },
+      notifications: { completed: true, failed: true, review: true, deadlines: false },
     });
   });
 

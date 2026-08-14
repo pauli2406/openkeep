@@ -165,6 +165,36 @@ export class NotificationsService {
     };
   }
 
+  /**
+   * Marks one channel delivered and reports whether *this call* did it.
+   * The WHERE ... IS NULL makes concurrent pollers race safely: the first
+   * caller gets `true` and announces, everyone else gets `false` and stays
+   * quiet — announce-once across app restarts and installations.
+   */
+  async markDelivered(
+    id: string,
+    userId: string,
+    channel: "email" | "desktop",
+  ): Promise<{ delivered: boolean }> {
+    const column = channel === "email" ? "email_delivered_at" : "desktop_delivered_at";
+    const result = await this.databaseService.pool.query(
+      `UPDATE notifications SET ${column} = now()
+       WHERE id = $1 AND user_id = $2 AND ${column} IS NULL`,
+      [id, userId],
+    );
+    if ((result.rowCount ?? 0) > 0) {
+      return { delivered: true };
+    }
+    const exists = await this.databaseService.pool.query(
+      `SELECT 1 FROM notifications WHERE id = $1 AND user_id = $2`,
+      [id, userId],
+    );
+    if ((exists.rowCount ?? 0) === 0) {
+      throw new NotFoundException("Notification not found");
+    }
+    return { delivered: false };
+  }
+
   async markRead(id: string, userId: string): Promise<void> {
     const result = await this.databaseService.pool.query(
       `UPDATE notifications SET read_at = now()

@@ -732,6 +732,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications/{id}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markDelivered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/{id}/read": {
         parameters: {
             query?: never;
@@ -7129,6 +7145,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NotificationsResponse"];
                 };
+            };
+        };
+    };
+    NotificationsController_markDelivered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one channel delivered; `delivered` is true only for the call that actually set it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

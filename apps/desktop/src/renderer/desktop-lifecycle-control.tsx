@@ -39,6 +39,11 @@ const NOTIFICATION_LABELS: Array<{
     detail: "A document was filed but wants your confirmation.",
   },
   {
+    kind: "deadlines",
+    title: "Deadline reminders",
+    detail: "A document's due date is approaching, due, or overdue.",
+  },
+  {
     kind: "failed",
     title: "Failed imports",
     detail: "A document could not be processed.",

@@ -84,6 +84,7 @@ import {
   type DesktopImportOutcomeTracker,
 } from "./main/import-outcomes";
 import { createArchiveDocumentStatusReader } from "./main/document-status";
+import { createDesktopDeadlineRelay } from "./main/deadline-relay";
 import { createDesktopImportNotifier } from "./main/import-notifications";
 import { createElectronNotifier } from "./main/electron-notifier";
 import {
@@ -858,6 +859,15 @@ void app.whenReady().then(async () => {
     open: (target) => void notificationRouter?.open(target),
   });
 
+  const deadlineRelay = createDesktopDeadlineRelay({
+    fetchRequest: (input, init) => net.fetch(input, init),
+    activeArchive: () => archiveSession.getActiveSession(),
+    notifier: createElectronNotifier(),
+    enabled: () => lifecycleState.snapshot().notifications.deadlines,
+    open: (target) => void notificationRouter?.open(target),
+    reportError: (message, error) => console.error(message, error),
+  });
+
   const watchFolderStore = createDesktopWatchFolderStore({
     filePath: path.join(app.getPath("userData"), "desktop-watch-folders.json"),
   });
@@ -1372,6 +1382,7 @@ void app.whenReady().then(async () => {
   );
   watchFolders.start();
   outcomes.start();
+  deadlineRelay.start();
   await createMainWindow(null);
   await launchLifecycle.connect(async (paths) => {
     await importCoordinator.receivePaths(paths);

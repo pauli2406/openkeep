@@ -1522,6 +1522,28 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(rearmed.rows[1].due_date).toBe("2026-06-20");
     expect(rearmed.rows[1].invalidated_at).not.toBeNull();
 
+    // Delivered-marking is claim-once per channel: the first caller gets
+    // true, every later caller false — and the record leaves the
+    // undelivered-for-desktop listing.
+    const claimId = listed.body.items[0].id;
+    const firstClaim = await request(app.getHttpServer())
+      .post(`/api/notifications/${claimId}/delivered`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ channel: "desktop" });
+    expect(firstClaim.status).toBe(201);
+    expect(firstClaim.body.delivered).toBe(true);
+    const secondClaim = await request(app.getHttpServer())
+      .post(`/api/notifications/${claimId}/delivered`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ channel: "desktop" });
+    expect(secondClaim.body.delivered).toBe(false);
+    const undeliveredDesktop = await request(app.getHttpServer())
+      .get("/api/notifications?undeliveredFor=desktop")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(
+      undeliveredDesktop.body.items.map((item: { id: string }) => item.id),
+    ).not.toContain(claimId);
+
     // Mark-read flips the unread count.
     const firstId = listed.body.items[0].id;
     const readResponse = await request(app.getHttpServer())

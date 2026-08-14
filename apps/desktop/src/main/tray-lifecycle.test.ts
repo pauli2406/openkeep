@@ -51,7 +51,7 @@ function createHarness(options: {
     snapshot: vi.fn(() => ({
       closeBehavior,
       profileRoutes: {},
-      notifications: { completed: true, failed: true, review: true },
+      notifications: { completed: true, failed: true, review: true, deadlines: false },
     })),
     setCloseBehavior: vi.fn(async (next: "tray" | "quit") => { closeBehavior = next; }),
     setWindowBounds: vi.fn(async () => undefined),
