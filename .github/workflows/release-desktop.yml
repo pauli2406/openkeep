@@ -280,6 +280,37 @@ jobs:
           test -n "$(find apps/desktop/out/make -name 'OpenKeep-Setup.exe' | head -1)" || {
             echo "::error::no setup bundle was produced"; exit 1; }
 
+      # Every leg used to check that *a* distributable existed, never that it was
+      # the one this leg was asked to build. On Windows and Linux host and target
+      # agree, so only the cross-built macOS leg could be wrong — and it was:
+      # both macOS legs produced arm64, the names collided, and the release
+      # simply had one of them twice. This is the check that would have said so.
+      - name: Verify the build is for the requested architecture
+        shell: bash
+        run: |
+          packaged=$(find apps/desktop/out -maxdepth 1 -type d -name 'OpenKeep-*-*')
+          count=$(printf '%s\n' "$packaged" | grep -c . || true)
+          echo "packaged runtimes: $packaged"
+          [ "$count" = "1" ] || {
+            echo "::error::expected exactly one packaged runtime, found $count — a stale build would hide the wrong architecture"
+            exit 1
+          }
+          case "$packaged" in
+            *-${{ matrix.arch }}) ;;
+            *)
+              echo "::error::packaged runtime is $packaged, not ${{ matrix.arch }} — the architecture flag did not reach the packager"
+              exit 1
+              ;;
+          esac
+          # The DMG is the artifact that collided, so its name has to carry the
+          # architecture too.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            find apps/desktop/out/make -name "*-${{ matrix.arch }}.dmg" | grep -q . || {
+              echo "::error::no DMG named for ${{ matrix.arch }}"
+              exit 1
+            }
+          fi
+
       - name: Smoke-test the packaged application
         if: matrix.smoke && runner.os != 'Linux'
         run: pnpm --filter @openkeep/desktop test:smoke
