@@ -1930,6 +1930,81 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ]);
   });
 
+  it("reports mailbox status with counts, poll time, and per-document provenance", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    const receivedAt = new Date("2026-08-05T10:30:00Z");
+    const messages = [
+      {
+        messageId: `<status-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: `Status Rechnung ${suffix}`,
+        receivedAt,
+        attachments: [
+          {
+            filename: "status.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-status-${suffix}`, "utf8"),
+          },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    await emailIngestService.pollOnce(fakeClient);
+
+    // The status card sees the poll and the counts without any restart.
+    const status = await request(app.getHttpServer())
+      .get("/api/email-ingest/status")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(status.status).toBe(200);
+    expect(typeof status.body.lastPoll?.at).toBe("string");
+    expect(status.body.counts.imported).toBeGreaterThanOrEqual(1);
+
+    // The imported document answers "where did this come from".
+    const document = await databaseService.pool.query(
+      `SELECT id, metadata FROM documents WHERE title = $1`,
+      [`Status Rechnung ${suffix}`],
+    );
+    expect(document.rows).toHaveLength(1);
+    const provenance = document.rows[0].metadata.email;
+    expect(provenance.from).toBe("billing@vendor.example");
+    expect(provenance.subject).toBe(`Status Rechnung ${suffix}`);
+    expect(provenance.receivedAt).toBe(receivedAt.toISOString());
+
+    // An uploaded document carries no email provenance.
+    const uploaded = await databaseService.pool.query(
+      `SELECT count(*)::int AS with_email FROM documents
+       WHERE source <> 'email' AND metadata ? 'email'`,
+    );
+    expect(uploaded.rows[0].with_email).toBe(0);
+
+    // Poll-now queues a job on the worker queue.
+    const pollNow = await request(app.getHttpServer())
+      .post("/api/email-ingest/poll")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pollNow.status).toBe(201);
+    expect(pollNow.body.queued).toBe(true);
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = $1`, [
+      document.rows[0].id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
+  });
+
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(

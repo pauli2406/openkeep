@@ -153,6 +153,17 @@ type TranslationKey =
   | "settings.watchFolderServer"
   | "settings.watchFolderServerDescription"
   | "settings.watchFolderStatusFailed"
+  | "settings.emailInbox"
+  | "settings.emailInboxDescription"
+  | "settings.emailInboxStatusFailed"
+  | "settings.emailInboxPollFailed"
+  | "settings.pollNow"
+  | "settings.lastPoll"
+  | "settings.neverPolled"
+  | "settings.emailImported"
+  | "settings.emailSkipped"
+  | "settings.emailRejected"
+  | "settings.recentRejections"
   | "settings.lastScan"
   | "settings.lastImport"
   | "settings.neverScanned"
@@ -436,6 +447,7 @@ type TranslationKey =
   | "documentDetail.typeSpecificFields"
   | "documentDetail.noExtractedFields"
   | "documentDetail.source"
+  | "documentDetail.arrivedByEmail"
   | "documentDetail.location"
   | "documentDetail.pageWord"
   | "documentDetail.lineWord"
@@ -705,6 +717,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.watchFolderServer": "Server Watch Folder",
     "settings.watchFolderServerDescription": "This is the archive server's configured ingestion folder, not a folder on this desktop.",
     "settings.watchFolderStatusFailed": "Failed to load the server watch-folder status.",
+    "settings.emailInbox": "Email inbox",
+    "settings.emailInboxDescription": "A dedicated mailbox the server polls; attachments become documents. Distinct from the watch folders, which read directories.",
+    "settings.emailInboxStatusFailed": "The email inbox status could not be loaded.",
+    "settings.emailInboxPollFailed": "The poll could not be queued.",
+    "settings.pollNow": "Poll now",
+    "settings.lastPoll": "Last poll",
+    "settings.neverPolled": "never",
+    "settings.emailImported": "Imported",
+    "settings.emailSkipped": "Skipped",
+    "settings.emailRejected": "Rejected",
+    "settings.recentRejections": "Recent rejections",
     "settings.lastScan": "Last scan",
     "settings.lastImport": "Last import",
     "settings.neverScanned": "Never",
@@ -988,6 +1011,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.typeSpecificFields": "Type-specific Fields",
     "documentDetail.noExtractedFields": "No extracted fields available.",
     "documentDetail.source": "Source:",
+    "documentDetail.arrivedByEmail": "Arrived by email",
     "documentDetail.location": "Location:",
     "documentDetail.pageWord": "Page",
     "documentDetail.lineWord": "line",
@@ -1256,6 +1280,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.watchFolderServer": "Server-Watch-Folder",
     "settings.watchFolderServerDescription": "Dies ist der konfigurierte Importordner des Archivservers, nicht ein Ordner auf diesem Desktop.",
     "settings.watchFolderStatusFailed": "Der Status des Server-Watch-Folders konnte nicht geladen werden.",
+    "settings.emailInbox": "E-Mail-Postfach",
+    "settings.emailInboxDescription": "Ein dediziertes Postfach, das der Server abruft; Anhänge werden Dokumente. Nicht zu verwechseln mit den überwachten Ordnern, die Verzeichnisse lesen.",
+    "settings.emailInboxStatusFailed": "Der Postfach-Status konnte nicht geladen werden.",
+    "settings.emailInboxPollFailed": "Der Abruf konnte nicht eingeplant werden.",
+    "settings.pollNow": "Jetzt abrufen",
+    "settings.lastPoll": "Letzter Abruf",
+    "settings.neverPolled": "nie",
+    "settings.emailImported": "Importiert",
+    "settings.emailSkipped": "Übersprungen",
+    "settings.emailRejected": "Abgelehnt",
+    "settings.recentRejections": "Zuletzt abgelehnt",
     "settings.lastScan": "Letzter Scan",
     "settings.lastImport": "Letzter Import",
     "settings.neverScanned": "Nie",
@@ -1539,6 +1574,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.typeSpecificFields": "Typspezifische Felder",
     "documentDetail.noExtractedFields": "Keine extrahierten Felder verfügbar.",
     "documentDetail.source": "Quelle:",
+    "documentDetail.arrivedByEmail": "Per E-Mail eingegangen",
     "documentDetail.location": "Position:",
     "documentDetail.pageWord": "Seite",
     "documentDetail.lineWord": "Zeile",

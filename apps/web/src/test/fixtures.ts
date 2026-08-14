@@ -67,6 +67,7 @@ export function makeProviderConfig(
     hasMistralOcrConfig: false,
     hasMistralEmbeddingConfig: false,
     hasSmtpConfig: false,
+    hasImapConfig: false,
     ...overrides,
   };
 }

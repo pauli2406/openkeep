@@ -120,6 +120,13 @@
       "when": 1786752120000,
       "tag": "0017_email_ingestion",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786752180000,
+      "tag": "0018_app_state",
+      "breakpoints": true
     }
   ]
 }

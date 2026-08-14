@@ -892,6 +892,32 @@ export const NotificationsResponseSchema = z.object({
   unreadCount: z.number().int().nonnegative(),
 });
 
+export const EmailIngestStatusResponseSchema = z.object({
+  configured: z.boolean(),
+  mailbox: z
+    .object({
+      host: z.string(),
+      folder: z.string(),
+      user: z.string(),
+    })
+    .nullable(),
+  lastPoll: z.record(z.unknown()).nullable(),
+  counts: z.object({
+    imported: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+  }),
+  recentRejections: z.array(
+    z.object({
+      fromAddress: z.string(),
+      subject: z.string().nullable(),
+      status: z.string(),
+      reason: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
 export const UploadDocumentMetadataSchema = z.object({
   title: z.string().trim().min(1).optional(),
   source: DocumentSourceSchema.default("upload"),
@@ -1646,6 +1672,7 @@ export type DocumentsTimelineResponse = z.infer<typeof DocumentsTimelineResponse
 export type DeadlineWindow = z.infer<typeof DeadlineWindowSchema>;
 export type NotificationItem = z.infer<typeof NotificationItemSchema>;
 export type NotificationsResponse = z.infer<typeof NotificationsResponseSchema>;
+export type EmailIngestStatusResponse = z.infer<typeof EmailIngestStatusResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;

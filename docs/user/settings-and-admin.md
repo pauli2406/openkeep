@@ -133,6 +133,32 @@ The page can show:
 
 Dry-run mode is useful when you want to inspect what would happen without importing anything yet.
 
+### Email Inbox
+
+The email inbox is the third ingestion channel, distinct from the other two:
+
+- **Upload** — you hand the app a file.
+- **Watch folders** — the server (or the desktop app) reads a *directory*.
+- **Email inbox** — the server polls a dedicated *mailbox* over IMAP and imports
+  supported attachments (PDF, JPEG, PNG, TIFF, HEIC) as documents.
+
+Configure it with the `IMAP_*` environment variables on the server. Use a
+dedicated mailbox (or a dedicated folder within one) and point your real mail
+account's forwarding rules at it — the poller flags handled messages as read,
+so a human reading the same mailbox by hand would hide messages from it.
+
+`EMAIL_INGEST_ALLOWED_SENDERS` restricts which senders may feed the archive
+(addresses or whole domains, comma-separated). Leaving it empty accepts every
+sender, which is reasonable only while the mailbox address is private. Rejected
+messages stay in the mailbox and appear in the card's rejection log with the
+sender and reason; attachments whose bytes do not match a supported format are
+rejected even when their name and declared type look right.
+
+The settings card shows the configured mailbox (redacted), the last poll, the
+imported/skipped/rejected counts, and the recent rejections. `Poll now` queues
+one immediate poll on the worker. Each imported document records where it came
+from — sender, date, and subject appear on the document's Details tab.
+
 ## AI Providers
 
 `Settings -> AI providers` is the detailed place to see both what is configured

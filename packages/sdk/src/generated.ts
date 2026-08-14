@@ -716,6 +716,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/email-ingest/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EmailIngestController_getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/email-ingest/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailIngestController_pollNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications": {
         parameters: {
             query?: never;
@@ -1762,6 +1794,8 @@ export interface components {
                 hasMistralEmbeddingConfig: boolean;
                 /** @default false */
                 hasSmtpConfig: boolean;
+                /** @default false */
+                hasImapConfig: boolean;
             };
         };
         HealthProvidersResponse: {
@@ -3074,6 +3108,29 @@ export interface components {
                     topCorrespondents: string[];
                     topTypes: string[];
                 }[];
+            }[];
+        };
+        EmailIngestStatusResponse: {
+            configured: boolean;
+            mailbox: {
+                host: string;
+                folder: string;
+                user: string;
+            } | null;
+            lastPoll: {
+                [key: string]: unknown;
+            } | null;
+            counts: {
+                imported: number;
+                skipped: number;
+                rejected: number;
+            };
+            recentRejections: {
+                fromAddress: string;
+                subject: string | null;
+                status: string;
+                reason: string | null;
+                createdAt: string;
             }[];
         };
         NotificationsResponse: {
@@ -7123,6 +7180,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentsTimelineResponse"];
                 };
+            };
+        };
+    };
+    EmailIngestController_getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mailbox ingestion status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailIngestStatusResponse"];
+                };
+            };
+        };
+    };
+    EmailIngestController_pollNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queues one mailbox poll on the worker */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

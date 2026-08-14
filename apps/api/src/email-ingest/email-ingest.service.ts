@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { ingestedEmails, users } from "@openkeep/db";
-import { eq } from "drizzle-orm";
+import { appState, ingestedEmails, users } from "@openkeep/db";
+import { desc, eq, ne, sql } from "drizzle-orm";
 
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { AppConfigService } from "../common/config/app-config.service";
@@ -180,6 +180,22 @@ export class EmailIngestService {
       }
 
       await this.pruneLog();
+
+      // The API process serves the status card for polls this worker ran.
+      await this.databaseService.db
+        .insert(appState)
+        .values({
+          key: "email-ingest.last-poll",
+          value: { ...summary, at: new Date().toISOString() },
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: appState.key,
+          set: {
+            value: { ...summary, at: new Date().toISOString() },
+            updatedAt: new Date(),
+          },
+        });
     } finally {
       if (!clientOverride) {
         await client.close();
@@ -257,6 +273,21 @@ export class EmailIngestService {
       // its normal duplicate semantics: same bytes share one file record, and
       // the response's duplicateOf points at the earlier document.
       documentIds.push(uploaded.id);
+
+      // Provenance: the detail view answers "where did this come from".
+      await this.databaseService.pool.query(
+        `UPDATE documents SET metadata = metadata || $2::jsonb WHERE id = $1`,
+        [
+          uploaded.id,
+          JSON.stringify({
+            email: {
+              from: message.from,
+              subject: message.subject,
+              receivedAt: message.receivedAt?.toISOString() ?? null,
+            },
+          }),
+        ],
+      );
     }
 
     await this.recordMessage(message, "imported", null, documentIds);
@@ -281,6 +312,72 @@ export class EmailIngestService {
         documentIds,
       })
       .onConflictDoNothing();
+  }
+
+  async getStatus(): Promise<{
+    configured: boolean;
+    mailbox: { host: string; folder: string; user: string } | null;
+    lastPoll: Record<string, unknown> | null;
+    counts: { imported: number; skipped: number; rejected: number };
+    recentRejections: Array<{
+      fromAddress: string;
+      subject: string | null;
+      status: string;
+      reason: string | null;
+      createdAt: string;
+    }>;
+  }> {
+    const [state] = await this.databaseService.db
+      .select({ value: appState.value })
+      .from(appState)
+      .where(eq(appState.key, "email-ingest.last-poll"))
+      .limit(1);
+
+    const totals = await this.databaseService.pool.query<{
+      status: string;
+      total: string;
+    }>(`SELECT status, count(*)::int AS total FROM ingested_emails GROUP BY status`);
+    const counts = { imported: 0, skipped: 0, rejected: 0 };
+    for (const row of totals.rows) {
+      if (row.status in counts) {
+        counts[row.status as keyof typeof counts] = Number(row.total);
+      }
+    }
+
+    const rejections = await this.databaseService.db
+      .select({
+        fromAddress: ingestedEmails.fromAddress,
+        subject: ingestedEmails.subject,
+        status: ingestedEmails.status,
+        reason: ingestedEmails.reason,
+        createdAt: ingestedEmails.createdAt,
+      })
+      .from(ingestedEmails)
+      .where(ne(ingestedEmails.status, "imported"))
+      .orderBy(desc(ingestedEmails.createdAt))
+      .limit(20);
+
+    const user = this.configService.get("IMAP_USER") ?? "";
+    return {
+      configured: this.configured,
+      mailbox: this.configured
+        ? {
+            host: this.configService.get("IMAP_HOST") as string,
+            folder: this.configService.get("IMAP_FOLDER"),
+            // Redacted: enough to recognize the account, not to address it.
+            user: user.length > 3 ? `${user.slice(0, 2)}…${user.slice(-1)}` : "…",
+          }
+        : null,
+      lastPoll: state?.value ?? null,
+      counts,
+      recentRejections: rejections.map((row) => ({
+        fromAddress: row.fromAddress,
+        subject: row.subject,
+        status: row.status,
+        reason: row.reason,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
   }
 
   /**

@@ -24,6 +24,7 @@ import {
   DocumentSchema,
   DocumentTextResponseSchema,
   DocumentsTimelineResponseSchema,
+  EmailIngestStatusResponseSchema,
   DocumentTypeSchema,
   HealthProvidersResponseSchema,
   HealthResponseSchema,
@@ -530,6 +531,15 @@ function patchGeneratedDocument(document: Record<string, any>) {
     ...searchDocumentQueryParameters,
   ]);
   patchCsvTagsQuery(document, "/api/documents/timeline");
+  patchJsonResponse(
+    document,
+    "/api/email-ingest/status",
+    "get",
+    200,
+    "Mailbox ingestion status",
+    "EmailIngestStatusResponse",
+    EmailIngestStatusResponseSchema,
+  );
   patchJsonResponse(
     document,
     "/api/notifications",

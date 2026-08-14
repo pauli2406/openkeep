@@ -445,6 +445,16 @@ export const notifications = pgTable(
   }),
 );
 
+/**
+ * Tiny cross-process state: the API serves status pages for work the worker
+ * process did (last mailbox poll, for instance). One row per key.
+ */
+export const appState = pgTable("app_state", {
+  key: varchar("key", { length: 128 }).primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const ingestedEmails = pgTable(
   "ingested_emails",
   {
