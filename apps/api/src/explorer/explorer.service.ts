@@ -363,6 +363,9 @@ export class ExplorerService {
         name: correspondent.name,
         slug: correspondent.slug,
         summary: correspondent.summary ?? null,
+        categoryId: correspondent.categoryId ?? null,
+        categoryName: await this.resolveCategoryName(correspondent.categoryId ?? null),
+        categorySource: correspondent.categorySource ?? null,
         summaryGeneratedAt: correspondent.summaryGeneratedAt?.toISOString() ?? null,
         intelligenceGeneratedAt: correspondent.intelligenceGeneratedAt?.toISOString() ?? null,
       },
@@ -685,6 +688,17 @@ export class ExplorerService {
       ?.map((part) => part.text ?? "")
       .join(" ");
     return normalizeSummary(text ?? null);
+  }
+
+  private async resolveCategoryName(categoryId: string | null): Promise<string | null> {
+    if (!categoryId) {
+      return null;
+    }
+    const result = await this.databaseService.pool.query<{ name: string }>(
+      `SELECT name FROM categories WHERE id = $1`,
+      [categoryId],
+    );
+    return result.rows[0]?.name ?? null;
   }
 
   private async loadDeadlineItems(

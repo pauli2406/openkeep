@@ -134,6 +134,16 @@ export type TranslationKey =
   | "settings.documentTypes"
   | "settings.documentTypesDescription"
   | "settings.failedToLoadTags"
+  | "settings.failedToLoadCategories"
+  | "settings.failedToCreateCategory"
+  | "settings.failedToRenameCategory"
+  | "settings.failedToDeleteCategory"
+  | "settings.categoriesNoMerge"
+  | "dossier.category"
+  | "dossier.categoryNone"
+  | "dossier.categorySetByYou"
+  | "dossier.categoryAutomatic"
+  | "dossier.categoryFailed"
   | "settings.failedToLoadCorrespondents"
   | "settings.failedToLoadDocumentTypes"
   | "settings.failedToCreateTag"
@@ -738,6 +748,16 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.documentTypes": "Document Types",
     "settings.documentTypesDescription": "Stable type labels such as invoice, contract, or statement.",
     "settings.failedToLoadTags": "Failed to load tags",
+    "settings.failedToLoadCategories": "Failed to load categories.",
+    "settings.failedToCreateCategory": "Failed to create the category.",
+    "settings.failedToRenameCategory": "Failed to rename the category.",
+    "settings.failedToDeleteCategory": "Failed to delete the category.",
+    "settings.categoriesNoMerge": "Categories cannot be merged.",
+    "dossier.category": "Category",
+    "dossier.categoryNone": "No category",
+    "dossier.categorySetByYou": "set by you",
+    "dossier.categoryAutomatic": "assigned automatically",
+    "dossier.categoryFailed": "The category could not be changed.",
     "settings.failedToLoadCorrespondents": "Failed to load correspondents",
     "settings.failedToLoadDocumentTypes": "Failed to load document types",
     "settings.failedToCreateTag": "Failed to create tag",
@@ -1342,6 +1362,16 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.documentTypes": "Dokumenttypen",
     "settings.documentTypesDescription": "Stabile Typbezeichnungen wie Rechnung, Vertrag oder Abrechnung.",
     "settings.failedToLoadTags": "Tags konnten nicht geladen werden",
+    "settings.failedToLoadCategories": "Kategorien konnten nicht geladen werden.",
+    "settings.failedToCreateCategory": "Die Kategorie konnte nicht angelegt werden.",
+    "settings.failedToRenameCategory": "Die Kategorie konnte nicht umbenannt werden.",
+    "settings.failedToDeleteCategory": "Die Kategorie konnte nicht gelöscht werden.",
+    "settings.categoriesNoMerge": "Kategorien lassen sich nicht zusammenführen.",
+    "dossier.category": "Kategorie",
+    "dossier.categoryNone": "Keine Kategorie",
+    "dossier.categorySetByYou": "von dir gesetzt",
+    "dossier.categoryAutomatic": "automatisch zugeordnet",
+    "dossier.categoryFailed": "Die Kategorie konnte nicht geändert werden.",
     "settings.failedToLoadCorrespondents": "Korrespondenzen konnten nicht geladen werden",
     "settings.failedToLoadDocumentTypes": "Dokumenttypen konnten nicht geladen werden",
     "settings.failedToCreateTag": "Tag konnte nicht erstellt werden",
