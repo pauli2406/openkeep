@@ -1,175 +1,168 @@
 <p align="center">
-  <img src="apps/docs/static/img/logo-wordmark.svg" alt="OpenKeep" width="360" />
+  <img src="apps/web/public/brand/logo-wordmark.svg" alt="OpenKeep" width="300" />
 </p>
 
 <p align="center">
-  <strong>Self-hosted archive intelligence for structured documents, review workflows, and search.</strong>
+  <strong>Your paperwork, answered.</strong><br>
+  A self-hosted document archive that reads your mail, tracks what is due, and answers questions with citations.
 </p>
 
 <p align="center">
-  <img src="apps/web/public/brand/openkeep-social-card.svg" alt="OpenKeep brand preview" width="760" />
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#private-by-design">Privacy</a> ·
+  <a href="#openkeep-vs-paperless-ngx">vs. paperless-ngx</a> ·
+  <a href="docs/technical/architecture-overview.md">Architecture</a> ·
+  <a href="docs/user/getting-started.md">Docs</a>
 </p>
 
-## Overview
+<p align="center">
+  <img src="docs/images/chat.png" alt="Asking the archive a question and getting an answer with citations back to the source invoice" width="900" />
+</p>
 
-OpenKeep is a self-hosted, AI-assisted document archive built as a TypeScript monorepo. The current implementation includes a NestJS API, async processing worker, PostgreSQL plus pgvector, object storage integration, a provider-driven document parsing platform, deterministic archive extraction, chunk persistence, chunk-level embeddings, grounded document Q&A, archive governance flows, and a connected web client on top of the backend APIs.
+---
 
-## License
+Drop a scan in. OpenKeep OCRs it, works out who it is from, what type of document it
+is, what it costs and when it is due, files it, and puts it on a deadline list. Then you
+can ask the archive questions in plain language and get answers that cite the page they
+came from.
 
-OpenKeep is licensed under `PolyForm Noncommercial 1.0.0`.
+It runs on your own machine. With the default configuration, no document ever leaves it.
 
-- personal and other noncommercial use is allowed for free
-- commercial use requires a separate commercial license
-- see `LICENSE` for the full terms
+## What you get
 
-For commercial licensing, contact the project owner before using OpenKeep in a commercial product, service, or internal business offering.
+### A deadline queue instead of a folder tree
+
+Today is a working list, not a dashboard: everything with an open deadline, soonest
+first, with the extracted fields and the scan side by side so you can confirm and file
+in one keystroke.
+
+<img src="docs/images/today.png" alt="The Today queue: open deadlines sorted by due date, with the scan and its extracted fields beside them" width="900" />
+
+### Extraction you can correct — and a queue that asks
+
+Every extracted field carries a confidence. Anything the pipeline is unsure about lands
+in the review queue rather than quietly becoming wrong data. Corrections are stored as
+manual overrides, so they survive reprocessing.
+
+<img src="docs/images/review.png" alt="The review queue showing low-confidence documents with editable extracted fields" width="900" />
+
+### Search that understands the archive
+
+Full-text search, structured filters (year, correspondent, type, amount, tag, status)
+and vector similarity run as one hybrid query. Facets are computed from the archive
+itself, so browsing is a set of live filters rather than a folder hierarchy you have to
+maintain.
+
+<img src="docs/images/documents.png" alt="The document list with faceted filters for status, year, type, correspondent and tag" width="900" />
+
+### Answers with receipts
+
+Ask across the whole archive. Answers are grounded in retrieved passages and every claim
+links back to the document and page it came from — and when the evidence is not there,
+OpenKeep says so instead of guessing.
+
+### Everywhere you file paper
+
+A web app, an Electron desktop client with workstation watch folders, and a React Native
+mobile app that scans with the camera and keeps an encrypted offline copy of the archive.
+All three follow the system theme.
+
+<img src="docs/images/today-dark.png" alt="The same Today queue in dark mode" width="900" />
+
+## Private by design
+
+Self-hosting is the starting point, not the whole story. The parts that matter:
+
+| | |
+| --- | --- |
+| **Local OCR by default** | `ACTIVE_PARSE_PROVIDER=local-ocr` ships as the default: OCRmyPDF, Tesseract and Poppler run in your own worker container. Cloud parsing is opt-in per provider, and the settings screen labels every provider with whether documents leave the machine. |
+| **AI is opt-in and text-only** | No embedding or chat provider is configured out of the box. When you do enable one, only extracted text is sent — never the original file — and the UI says so at the point of use. |
+| **Single-owner auth** | Bcrypt password hashing, short-lived JWT access tokens, refresh tokens that are stored hashed, rotated on use and revoked as a family when a used one is replayed, optional TOTP two-factor with recovery codes, and request throttling in front of all of it. |
+| **Owner-scoped queries** | Every document row carries an owner, and all user-facing query surfaces are scoped through a single filter builder. (See the [ownership model](docs/technical/architecture-overview.md#ownership-and-trust-boundaries) for what this does *not* yet cover.) |
+| **A hardened desktop client** | Sandboxed renderer, context isolation, no node integration, a strict CSP, an allowlisted navigation policy and permission requests denied by default. An archive server can never hand the desktop client executable code. |
+| **An encrypted mobile cache** | The offline copy on your phone is a SQLCipher database. The app verifies SQLCipher is actually compiled in before it opens anything, and refuses to run if it is not. |
+| **Secrets kept out of the repo and the images** | `pnpm secrets:scan` runs gitleaks over the tracked tree and history, and the Docker build context excludes `.env*` by default. |
+
+<img src="docs/images/settings-providers.png" alt="The AI providers settings screen, labelling each provider with whether it runs locally or sends documents to the cloud" width="900" />
+
+## OpenKeep vs. paperless-ngx
+
+[paperless-ngx](https://github.com/paperless-ngx/paperless-ngx) is the reference
+implementation of the self-hosted document archive, and OpenKeep starts from the same
+premise: your paperwork belongs on your hardware. The difference is what happens after
+a document is filed.
+
+| | OpenKeep | paperless-ngx |
+| --- | --- | --- |
+| **Filing** | LLM-assisted extraction of correspondent, type, dates, amounts and references, with a deterministic fallback when no provider is configured | Rule-based matching plus a statistical auto-classifier, trained on your own corrections |
+| **Confidence** | Per-field confidence; low-confidence documents are routed to a review queue before they are trusted | Matches are applied directly; your corrections retrain the classifier |
+| **Asking questions** | Grounded Q&A across the archive with per-passage citations, built into the core product | Full-text and index-based search at the core; AI-assisted features are newer and optional |
+| **Deadlines** | Due dates are a first-class field with a queue built on them | Custom fields and saved views |
+| **OCR** | Local by default, with optional Google Document AI, AWS Textract, Azure Document Intelligence or Mistral OCR | Local (OCRmyPDF / Tesseract) |
+| **Clients** | Web, Electron desktop, and a first-party mobile app with an encrypted offline archive | Web; mobile through community apps |
+| **Stack** | One TypeScript monorepo — NestJS, React, React Native, Drizzle, PostgreSQL + pgvector | Python / Django with an Angular frontend |
+| **License** | PolyForm Noncommercial 1.0.0 | GPLv3 |
+
+**Where paperless-ngx is still the better choice.** It is years older, far more widely
+deployed, and has an ecosystem of integrations and community mobile apps that OpenKeep
+does not. Its GPLv3 license is more permissive than OpenKeep's, which is free for
+personal and other noncommercial use but requires a commercial license for business use.
+If you want the most proven option, take paperless-ngx. If you want the archive to do
+the filing and answer questions about it, take OpenKeep.
+
+## Quick start
+
+Requires Docker and Node 22+ with pnpm.
+
+```bash
+git clone https://github.com/pauli2406/openkeep.git
+cd openkeep
+cp .env.example .env         # then replace the JWT secrets
+pnpm install
+pnpm docker:up               # postgres, minio, migrations, api, worker, docs
+```
+
+Open <http://localhost:3000> and complete the setup wizard — it creates the single owner
+account. The stack is ready when `GET /api/health/ready` reports every check green.
+
+That gets you a fully local archive: local OCR, no AI provider, nothing leaving the
+machine. To turn on semantic search and answers, set `ACTIVE_EMBEDDING_PROVIDER` and
+`ACTIVE_CHAT_PROVIDER` in `.env` — see the
+[configuration reference](docs/operations/configuration-reference.md).
+
+To run the API, worker and web app as separate processes instead, see
+[running it locally](docs/technical/architecture-overview.md#running-it-locally).
 
 ## Documentation
 
-- User documentation: `docs/user/getting-started.md`
-- Technical documentation: `docs/technical/README.md`
-- Operational documentation: `docs/operations/README.md`
-- Documentation hub: `docs/README.md`
-- Docusaurus site app: `apps/docs`
-- Current backend notes: `docs/backend.md`
+| | |
+| --- | --- |
+| [Getting started](docs/user/getting-started.md) | Setup wizard, the main screens, day-to-day use |
+| [Architecture overview](docs/technical/architecture-overview.md) | The whole system, layer by layer, with diagrams |
+| [API and data flows](docs/technical/api-and-data-flows.md) | Endpoint surface and request lifecycles |
+| [Deployment guide](docs/operations/deployment-guide.md) | Production hosting, backups, monitoring |
+| [Documentation hub](docs/README.md) | Everything else |
 
-The canonical markdown source remains in the root `docs/` directory. `apps/docs` is the site renderer layer.
+The docs also render as a site: `pnpm docs:dev`.
 
-## Workspace Layout
+## Contributing
 
-- `apps/api`: NestJS REST API with auth, document upload, search, and archive metadata APIs.
-- `apps/worker`: background processing worker for OCR and metadata extraction jobs.
-- `apps/web`: TanStack Router web client for search, review, document detail, admin settings, and archive operations.
-- `apps/mobile`: React Native mobile client.
-- `apps/desktop`: Electron Forge desktop client that reuses the web application.
-- `packages/config`: shared environment parsing and provider configuration.
-- `packages/db`: Drizzle schema and migrations.
-- `packages/types`: shared Zod schemas and public API types.
-- `packages/sdk`: generated API client package consumed by the web app.
+```bash
+pnpm typecheck            # all packages
+pnpm test                 # unit tests
+pnpm test:api:integration # requires Docker (Testcontainers)
+pnpm secrets:scan         # gitleaks over tree and history
+```
 
-## Backend Capabilities
+The full command list, including the OCR and live-provider suites, is in
+[testing and validation](docs/technical/testing-and-validation.md).
 
-- Single-user owner auth with JWT access/refresh tokens and long-lived API tokens.
-- `POST /api/documents` multipart upload with content-hash deduplication for stored binaries.
-- Async processing via `pg-boss`.
-- Provider-driven parsing pipeline with one globally active parse provider and optional fallback provider.
-- Local-first OCR pipeline with normalization for scanned PDFs, TIFF, HEIC/HEIF, and direct raster uploads.
-- Cloud parse adapters for Google Cloud Document AI Enterprise OCR, Google Cloud Document AI Gemini layout parser, Amazon Textract, Azure AI Document Intelligence, and Mistral OCR.
-- Deterministic metadata extraction with shared normalization for correspondents, invoice dates, due dates, amounts, currencies, reference numbers, document types, and tags.
-- Persisted document chunks generated from normalized parse output.
-- Embedding-provider registry with OpenAI, Gemini, Voyage, and Mistral adapters.
-- Chunk-level embedding storage in PostgreSQL via pgvector-compatible `halfvec`.
-- `POST /api/search/semantic` hybrid search combining structured filters, PostgreSQL full-text search, and vector similarity.
-- `POST /api/search/answer` grounded archive Q&A with chunk-level citations and insufficient-evidence fallback.
-- Manual embedding reindex flows through `POST /api/embeddings/reindex` and `POST /api/documents/:id/reembed`.
-- Explicit review workflow with `reviewStatus`, `reviewReasons`, structured review evidence, resolve/requeue endpoints, and latest processing-job summaries on documents.
-- Manual override persistence for key metadata fields so user corrections survive reprocessing.
-- Document history and audit APIs for upload, review, reprocess, reembed, and metadata changes.
-- Taxonomy CRUD and merge flows for tags, correspondents, and document types.
-- Archive export/import plus watch-folder scan ingestion endpoints.
-- Retry-aware processing with bounded `pg-boss` backoff, structured JSON worker logs, and searchable-PDF artifact storage.
-- PostgreSQL full-text search plus structured filters for year, dates, status, correspondent, document type, and tags.
-- Virtual archive browsing via facet endpoints instead of a real nested folder tree.
-- Ops endpoints for liveness, readiness, Prometheus-style metrics, and a dedicated searchable-PDF download route.
-- Web admin surfaces for answer search, document history, manual overrides, taxonomies, and archive operations.
+The screenshots above are real renders of the production web bundle against a fixed demo
+archive; regenerate them with `pnpm readme:shots`.
 
-## Local Development
+## License
 
-1. Copy `.env.example` to `.env` and replace the JWT secrets and owner password.
-2. Install dependencies with `pnpm install`.
-3. Start infrastructure with `docker compose up -d postgres minio`.
-4. Apply database migrations with `pnpm db:migrate`.
-5. Run the API with `pnpm --filter @openkeep/api dev`.
-6. Run the worker with `pnpm --filter @openkeep/worker dev`.
-7. Run the web app with `pnpm --filter @openkeep/web dev`.
-8. Run the docs site with `pnpm docs:dev` if you want the Docusaurus experience locally.
-9. Wait for `GET /api/health/ready` to report all checks green before using the stack.
-
-If you want the full containerized stack, use `pnpm docker:up` or `pnpm docker:up:build`. Those wrappers auto-build the shared `worker-base` OCR image if it is missing locally, then start the usual compose stack on `http://localhost:3000`, docs on `http://localhost:3001`, and Typesense on `http://localhost:8108`.
-
-Local secret hygiene:
-
-- keep real credentials only in untracked local env files such as `.env`
-- the Docker build context excludes `.env*` by default, while still allowing tracked `*.example` templates into images where needed
-- if real credentials were ever present in local `.env` before this protection was added, rotate them before publishing images or the repository
-
-Optional docs-site search:
-
-- set `TYPESENSE_COLLECTION_NAME` and `TYPESENSE_ADMIN_API_KEY` in `.env`
-- replace the default `TYPESENSE_ADMIN_API_KEY` before exposing the stack beyond local development
-- set `TYPESENSE_PUBLIC_HOST`, `TYPESENSE_PUBLIC_PORT`, and `TYPESENSE_PUBLIC_PROTOCOL` to the browser-reachable Typesense address that the docs UI should query
-- start the docs search stack with `pnpm docs:search:up`
-- index the docs content with `pnpm docs:search:index`
-- repeated `pnpm docs:search:index` runs automatically clear the current alias first to avoid a known synonym-transfer bug in `typesense/docsearch-scraper`
-- the bootstrap step creates a search-only API key automatically and injects it into the docs container before Docusaurus builds
-- override `DOCSEARCH_START_URL`, `DOCSEARCH_SITEMAP_URL`, and `DOCSEARCH_STOP_URL` if you want the scraper to target a different docs URL than the compose-hosted site
-
-For local-only parsing, keep `ACTIVE_PARSE_PROVIDER=local-ocr`. To switch to a cloud adapter, set `ACTIVE_PARSE_PROVIDER` to one of the supported provider ids and provide the matching credentials in `.env`. To pin chat to a specific LLM, set `ACTIVE_CHAT_PROVIDER`. To enable semantic indexing, also set `ACTIVE_EMBEDDING_PROVIDER` and the matching embedding model/key values.
-
-## Verification Commands
-
-- `pnpm docs:build`
-- `pnpm docker:up`
-- `pnpm docker:up:build`
-- `pnpm docs:search:up`
-- `pnpm docs:search:index`
-- `pnpm secrets:scan`
-- `pnpm secrets:scan:history`
-- `pnpm secrets:scan:local`
-
-## Secret Scanning
-
-Run secret checks before publishing the repository or any images:
-
-- `pnpm secrets:scan` scans the tracked repository state and history
-- `pnpm secrets:scan:history` is an explicit history scan alias
-- `pnpm secrets:scan:local` scans the full local working tree, including untracked files such as local `.env`
-
-The helper uses a local `gitleaks` binary when available and otherwise falls back to the official Docker image. Repo-specific allowlists live in `.gitleaks.toml`.
-- `pnpm typecheck`
-- `pnpm test:api:unit`
-- `pnpm test:api:integration`
-- `pnpm test:api:ocr`
-- `pnpm test:e2e:google`
-- `pnpm test:e2e:google:gemini`
-- `pnpm test:e2e:aws`
-- `pnpm test:e2e:azure`
-- `pnpm test:e2e:mistral`
-- `pnpm test:e2e:openai-embeddings`
-- `pnpm test:e2e:gemini-embeddings`
-- `pnpm test:e2e:voyage`
-- `pnpm test:e2e:mistral-embeddings`
-- `pnpm build`
-
-`test:integration` requires a Docker-capable environment for Testcontainers. `test:ocr` requires a worker-capable environment with `ocrmypdf`, `tesseract`, German and English Tesseract language data, Poppler, and ImageMagick available, or an equivalent container image based on the worker runtime.
-The provider-specific `test:e2e:*` commands perform live cloud parse or embedding calls and require matching credentials in `.env`. Start from `.env.google.example`, `.env.aws.example`, `.env.azure.example`, `.env.mistral.example`, `.env.openai.example`, or `.env.voyage.example` and copy the needed values into `.env`.
-
-## Docker Compose
-
-`docker-compose.yml` defines a single-host stack with:
-
-- PostgreSQL
-- pgvector extension enabled through migrations
-- MinIO
-- One-shot migration service
-- OpenKeep API
-- OpenKeep worker
-- OpenKeep docs site
-
-The worker image includes OCR dependencies for `ocrmypdf`, `tesseract`, the required language data, Poppler, and ImageMagick so scanned PDFs and phone-native raster formats can be processed without extra host setup. The docs service builds `apps/docs`, serves the generated Docusaurus site on port `3001`, and exposes a container healthcheck. The compose boot path is `postgres -> migrate -> api/worker`, while docs can start independently.
-
-## Parse Provider IDs
-
-- `local-ocr`
-- `google-document-ai-enterprise-ocr`
-- `google-document-ai-gemini-layout-parser`
-- `amazon-textract`
-- `azure-ai-document-intelligence`
-- `mistral-ocr`
-
-## Embedding Provider IDs
-
-- `openai`
-- `google-gemini`
-- `voyage`
-- `mistral`
+OpenKeep is licensed under [PolyForm Noncommercial 1.0.0](LICENSE). Personal and other
+noncommercial use is free. Commercial use — in a product, a service, or an internal
+business offering — requires a separate commercial license; contact the project owner
+before deploying it that way.
