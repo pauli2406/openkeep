@@ -384,7 +384,7 @@ export class ChatAgentService {
 
   private buildSystemPrompt(
     language: "en" | "de",
-    taxonomy: { documentTypes: string[]; tags: string[] },
+    taxonomy: { documentTypes: string[]; tags: string[]; categories: string[] },
   ): string {
     const today = new Date().toISOString().slice(0, 10);
     const languageInstruction =
@@ -411,6 +411,7 @@ export class ChatAgentService {
       "Archive overview:",
       `- Document types: ${taxonomy.documentTypes.join(", ") || "none yet"}`,
       `- Common tags: ${taxonomy.tags.join(", ") || "none yet"}`,
+      `- Life-domain categories (filter with the categories parameter): ${taxonomy.categories.join(", ") || "none yet"}`,
     ].join("\n");
   }
 

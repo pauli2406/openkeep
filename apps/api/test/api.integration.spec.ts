@@ -2702,6 +2702,102 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1`, [utilityType.id]);
   });
 
+  it("answers spend-by-category through the chat tools", async () => {
+    const { ChatToolsService } = await import("../src/search/chat-tools.service");
+    const { CategoryAssignmentService } = await import(
+      "../src/taxonomies/category-assignment.service"
+    );
+    const chatTools = app.get(ChatToolsService);
+    const categoryAssignment = app.get(CategoryAssignmentService);
+    const suffix = randomUUID().slice(0, 8);
+    const principal = { userId: ownerUserId, email: "owner@test", type: "api-token" as const };
+
+    const [insuranceType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Insurance", slug: `insurance-${suffix}` })
+      .returning();
+    const [huk] = await databaseService.db
+      .insert(correspondents)
+      .values({ name: `HUK ${suffix}`, slug: `huk-${suffix}`, normalizedName: `huk ${suffix}` })
+      .returning();
+    const seed = async (amount: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "4").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/chat.pdf`,
+          originalFilename: "chat.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `Beitrag ${randomUUID().slice(0, 6)}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          amount,
+          currency: "EUR",
+          correspondentId: huk.id,
+          documentTypeId: insuranceType.id,
+          fullText: "beitrag",
+        } as never)
+        .returning();
+      return { document, file };
+    };
+    const docs = [await seed("100.00"), await seed("50.00")];
+    await categoryAssignment.assignDeterministic(huk.id);
+
+    // The model resolves the domain via list_taxonomies…
+    const listed = await chatTools.execute(
+      { id: "1", name: "list_taxonomies", arguments: { kind: "categories" } },
+      principal,
+    );
+    const entries = (listed.resultForModel as { entries: Array<{ name: string; count: number }> })
+      .entries;
+    const insuranceEntry = entries.find((entry) => entry.name === "Insurance");
+    expect(insuranceEntry?.count).toBeGreaterThanOrEqual(2);
+
+    // …then aggregates spend with the category filter, composed with a year-less sum.
+    const aggregated = await chatTools.execute(
+      {
+        id: "2",
+        name: "aggregate_documents",
+        arguments: { groupBy: "category", metric: "sum_amount", categories: ["Insurance"] },
+      },
+      principal,
+    );
+    const payload = aggregated.resultForModel as {
+      groups: Array<{ group_key?: string; groupKey?: string; count: number; total_amount?: number; totalAmount?: number }>;
+    } & Record<string, unknown>;
+    const flat = JSON.stringify(payload);
+    expect(flat).toContain("Insurance");
+    expect(flat).toContain("150");
+
+    // A category the archive does not have is reported, not invented.
+    const unmatched = await chatTools.execute(
+      {
+        id: "3",
+        name: "search_documents",
+        arguments: { categories: ["Krypto-Sammelkarten"] },
+      },
+      principal,
+    );
+    expect(JSON.stringify(unmatched.resultForModel)).toContain("Krypto-Sammelkarten");
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.document.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1`, [huk.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1`, [insuranceType.id]);
+  });
+
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(
