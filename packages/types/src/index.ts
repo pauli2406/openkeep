@@ -284,11 +284,23 @@ export const TagSchema = z.object({
   slug: z.string().min(1),
 });
 
+export const CategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  builtin: z.boolean(),
+});
+
+export const CategorySourceSchema = z.enum(["deterministic", "llm", "manual"]);
+
 export const CorrespondentSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   slug: z.string().min(1),
   summary: z.string().nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  categoryName: z.string().nullable().optional(),
+  categorySource: CategorySourceSchema.nullable().optional(),
 });
 
 export const CorrespondentIntelligenceProfileSchema = z.object({
@@ -1266,6 +1278,16 @@ export const CreateCorrespondentSchema = z.object({
 
 export const UpdateCorrespondentSchema = z.object({
   name: z.string().trim().min(1).max(255),
+  // Optional: setting it stamps the manual source; null clears the category.
+  categoryId: z.string().uuid().nullable().optional(),
+});
+
+export const CreateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const UpdateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(255),
 });
 
 export const CreateDocumentTypeSchema = z.object({
@@ -1768,6 +1790,10 @@ export type CreateTagInput = z.infer<typeof CreateTagSchema>;
 export type UpdateTagInput = z.infer<typeof UpdateTagSchema>;
 export type CreateCorrespondentInput = z.infer<typeof CreateCorrespondentSchema>;
 export type UpdateCorrespondentInput = z.infer<typeof UpdateCorrespondentSchema>;
+export type Category = z.infer<typeof CategorySchema>;
+export type CategorySource = z.infer<typeof CategorySourceSchema>;
+export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof UpdateCategorySchema>;
 export type CreateDocumentTypeInput = z.infer<typeof CreateDocumentTypeSchema>;
 export type UpdateDocumentTypeInput = z.infer<typeof UpdateDocumentTypeSchema>;
 export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;

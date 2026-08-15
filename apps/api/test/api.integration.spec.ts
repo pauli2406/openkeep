@@ -2517,6 +2517,168 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       bulkType.id,
     ]);
   });
+  it("categorizes correspondents: deterministic, llm-constrained, and manual wins", async () => {
+    const { CategoryAssignmentService } = await import(
+      "../src/taxonomies/category-assignment.service"
+    );
+    const categoryAssignment = app.get(CategoryAssignmentService);
+    const suffix = randomUUID().slice(0, 8);
+
+    // The seed put the builtin vocabulary in place.
+    const listed = await request(app.getHttpServer())
+      .get("/api/taxonomies/categories")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(listed.status).toBe(200);
+    const bySlug = new Map<string, { slug: string; id: string; builtin: boolean }>(
+      listed.body.map(
+        (category: { slug: string; id: string; builtin: boolean }) =>
+          [category.slug, category] as const,
+      ),
+    );
+    expect(bySlug.get("housing")?.builtin).toBe(true);
+    expect(bySlug.get("insurance")?.builtin).toBe(true);
+
+    // A correspondent whose documents are mostly Utility Bills → Housing.
+    const [utilityType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Utility Bill", slug: `utility-${suffix}` })
+      .returning();
+    const [stadtwerke] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: `Stadtwerke ${suffix}`,
+        slug: `stadtwerke-${suffix}`,
+        normalizedName: `stadtwerke ${suffix}`,
+      })
+      .returning();
+    const seedDoc = async () => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "5").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/cat.pdf`,
+          originalFilename: "cat.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `Abrechnung ${randomUUID().slice(0, 6)}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          correspondentId: stadtwerke.id,
+          documentTypeId: utilityType.id,
+          fullText: "abrechnung",
+        } as never)
+        .returning();
+      return { document, file };
+    };
+    const docs = [await seedDoc(), await seedDoc()];
+
+    await categoryAssignment.backfillMissing();
+    const afterBackfill = await databaseService.pool.query(
+      `SELECT c.category_source, cat.slug FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterBackfill.rows[0].slug).toBe("housing");
+    expect(afterBackfill.rows[0].category_source).toBe("deterministic");
+
+    // An in-vocabulary LLM suggestion upgrades the deterministic guess.
+    const applied = await categoryAssignment.applyIntelligenceCategory(
+      stadtwerke.id,
+      "insurance",
+    );
+    expect(applied).toBe("Insurance");
+    // An out-of-vocabulary suggestion is discarded, not written.
+    const discarded = await categoryAssignment.applyIntelligenceCategory(
+      stadtwerke.id,
+      "Telekommunikationsanbieter",
+    );
+    expect(discarded).toBeNull();
+    const afterLlm = await databaseService.pool.query(
+      `SELECT cat.slug, c.category_source FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterLlm.rows[0].slug).toBe("insurance");
+    expect(afterLlm.rows[0].category_source).toBe("llm");
+
+    // Manual wins: PATCH sets it, and neither pass overwrites it afterwards.
+    const housingId = (bySlug.get("housing") as { id: string }).id;
+    const patched = await request(app.getHttpServer())
+      .patch(`/api/taxonomies/correspondents/${stadtwerke.id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Stadtwerke ${suffix}`, categoryId: housingId });
+    expect(patched.status).toBe(200);
+    await categoryAssignment.assignDeterministic(stadtwerke.id);
+    await categoryAssignment.applyIntelligenceCategory(stadtwerke.id, "Finance");
+    const afterManual = await databaseService.pool.query(
+      `SELECT cat.slug, c.category_source FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterManual.rows[0].slug).toBe("housing");
+    expect(afterManual.rows[0].category_source).toBe("manual");
+
+    // Custom categories are pickable; deleting one set-nulls and reassigns.
+    const created = await request(app.getHttpServer())
+      .post("/api/taxonomies/categories")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Hobby ${suffix}` });
+    expect(created.status).toBe(201);
+    expect(created.body.builtin).toBe(false);
+    await request(app.getHttpServer())
+      .patch(`/api/taxonomies/correspondents/${stadtwerke.id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Stadtwerke ${suffix}`, categoryId: created.body.id });
+    const deleteCustom = await request(app.getHttpServer())
+      .delete(`/api/taxonomies/categories/${created.body.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(deleteCustom.status).toBe(200);
+    const afterDelete = await databaseService.pool.query(
+      `SELECT category_id FROM correspondents WHERE id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterDelete.rows[0].category_id).toBeNull();
+    await categoryAssignment.backfillMissing();
+    const reassigned = await databaseService.pool.query(
+      `SELECT cat.slug FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(reassigned.rows[0].slug).toBe("housing");
+
+    // Builtins cannot be deleted, but can be renamed keeping the slug.
+    const deleteBuiltin = await request(app.getHttpServer())
+      .delete(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(deleteBuiltin.status).toBe(400);
+    const renamed = await request(app.getHttpServer())
+      .patch(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Wohnen ${suffix}` });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.slug).toBe("housing");
+    await request(app.getHttpServer())
+      .patch(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: "Housing" });
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.document.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1`, [stadtwerke.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1`, [utilityType.id]);
+  });
+
   it("scans the watch folder and exports and imports archive snapshots", async () => {
     const watchedFile = resolve(watchFolderPath, "watch-invoice.txt");
     await writeFile(

@@ -127,6 +127,13 @@
       "when": 1786752180000,
       "tag": "0018_app_state",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786752240000,
+      "tag": "0019_categories",
+      "breakpoints": true
     }
   ]
 }

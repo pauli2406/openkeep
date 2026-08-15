@@ -5,6 +5,7 @@ import {
   CORRESPONDENT_INTELLIGENCE_QUEUE,
   CORRESPONDENT_SUMMARY_QUEUE,
 } from "../processing/constants";
+import { CategoryAssignmentService } from "../taxonomies/category-assignment.service";
 import { CorrespondentIntelligenceService } from "./correspondent-intelligence.service";
 import { ExplorerService } from "./explorer.service";
 
@@ -15,9 +16,15 @@ export class ExplorerWorker implements OnModuleInit {
     @Inject(ExplorerService) private readonly explorerService: ExplorerService,
     @Inject(CorrespondentIntelligenceService)
     private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
+    @Inject(CategoryAssignmentService)
+    private readonly categoryAssignmentService: CategoryAssignmentService,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Idempotent: only correspondents without a category are touched, so a
+    // fresh deploy categorizes the existing archive once and restarts are free.
+    void this.categoryAssignmentService.backfillMissing().catch(() => undefined);
+
     await this.bossService.work<{ correspondentId: string }>(
       CORRESPONDENT_SUMMARY_QUEUE,
       async (payload) => {

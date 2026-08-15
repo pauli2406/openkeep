@@ -7,7 +7,8 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
-import { apiTokens, documentTypes, refreshSessions, users } from "@openkeep/db";
+import {
+  categories, apiTokens, documentTypes, refreshSessions, users } from "@openkeep/db";
 import type {
   AuthTokens,
   CreateApiTokenInput,
@@ -29,6 +30,7 @@ import * as QRCode from "qrcode";
 
 import { AppConfigService } from "../common/config/app-config.service";
 import { DatabaseService } from "../common/db/database.service";
+import { createDefaultCategoryValues } from "../taxonomies/default-categories";
 import { createDefaultDocumentTypeValues } from "../taxonomies/default-document-types";
 import type { AuthenticatedPrincipal } from "./auth.types";
 
@@ -566,6 +568,13 @@ export class AuthService implements OnModuleInit {
           requiredFields: sql`excluded.required_fields`,
         },
       });
+
+    // DoNothing, not DoUpdate: a renamed builtin category keeps its name
+    // across restarts; only genuinely missing rows are inserted.
+    await this.databaseService.db
+      .insert(categories)
+      .values(createDefaultCategoryValues())
+      .onConflictDoNothing();
   }
 
   private async ownerCount(): Promise<number> {

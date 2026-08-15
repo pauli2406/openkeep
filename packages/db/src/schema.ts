@@ -107,6 +107,22 @@ export const refreshSessions = pgTable(
   }),
 );
 
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull(),
+    // Builtins seed the canonical life domains; they can be renamed but not
+    // deleted, so the intelligence prompt always has a stable vocabulary.
+    builtin: boolean("builtin").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("categories_slug_idx").on(table.slug),
+  }),
+);
+
 export const correspondents = pgTable(
   "correspondents",
   {
@@ -118,6 +134,11 @@ export const correspondents = pgTable(
     summaryGeneratedAt: timestamp("summary_generated_at", { withTimezone: true }),
     intelligence: jsonb("intelligence").$type<Record<string, unknown>>(),
     intelligenceGeneratedAt: timestamp("intelligence_generated_at", { withTimezone: true }),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    // Who assigned the category: deterministic | llm | manual. Manual wins.
+    categorySource: varchar("category_source", { length: 16 }).$type<
+      "deterministic" | "llm" | "manual"
+    >(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({

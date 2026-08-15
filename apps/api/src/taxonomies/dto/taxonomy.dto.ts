@@ -1,4 +1,6 @@
 import {
+  CreateCategorySchema,
+  UpdateCategorySchema,
   CreateCorrespondentSchema,
   CreateDocumentTypeSchema,
   CreateTagSchema,
@@ -16,6 +18,8 @@ import { z } from "zod";
 
 export class CreateTagDto extends createZodDto(CreateTagSchema) {}
 export class UpdateTagDto extends createZodDto(UpdateTagSchema) {}
+export class CreateCategoryDto extends createZodDto(CreateCategorySchema) {}
+export class UpdateCategoryDto extends createZodDto(UpdateCategorySchema) {}
 export class CreateCorrespondentDto extends createZodDto(CreateCorrespondentSchema) {}
 export class UpdateCorrespondentDto extends createZodDto(UpdateCorrespondentSchema) {}
 export class CreateDocumentTypeDto extends createZodDto(CreateDocumentTypeSchema) {}

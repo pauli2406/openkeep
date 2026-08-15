@@ -734,6 +734,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/taxonomies/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxonomiesController_listTags"];
+        put?: never;
+        post: operations["TaxonomiesController_createTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/tags/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TaxonomiesController_deleteTag"];
+        options?: never;
+        head?: never;
+        patch: operations["TaxonomiesController_updateTag"];
+        trace?: never;
+    };
+    "/api/taxonomies/tags/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaxonomiesController_mergeTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxonomiesController_listCategories"];
+        put?: never;
+        post: operations["TaxonomiesController_createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TaxonomiesController_deleteCategory"];
+        options?: never;
+        head?: never;
+        patch: operations["TaxonomiesController_updateCategory"];
+        trace?: never;
+    };
+    "/api/taxonomies/correspondents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxonomiesController_listCorrespondents"];
+        put?: never;
+        post: operations["TaxonomiesController_createCorrespondent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/correspondents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TaxonomiesController_deleteCorrespondent"];
+        options?: never;
+        head?: never;
+        patch: operations["TaxonomiesController_updateCorrespondent"];
+        trace?: never;
+    };
+    "/api/taxonomies/correspondents/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaxonomiesController_mergeCorrespondent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/document-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxonomiesController_listDocumentTypes"];
+        put?: never;
+        post: operations["TaxonomiesController_createDocumentType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/document-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TaxonomiesController_deleteDocumentType"];
+        options?: never;
+        head?: never;
+        patch: operations["TaxonomiesController_updateDocumentType"];
+        trace?: never;
+    };
+    "/api/taxonomies/document-types/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TaxonomiesController_mergeDocumentType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/email-ingest/status": {
         parameters: {
             query?: never;
@@ -911,150 +1087,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/taxonomies/tags": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["TaxonomiesController_listTags"];
-        put?: never;
-        post: operations["TaxonomiesController_createTag"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/taxonomies/tags/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["TaxonomiesController_deleteTag"];
-        options?: never;
-        head?: never;
-        patch: operations["TaxonomiesController_updateTag"];
-        trace?: never;
-    };
-    "/api/taxonomies/tags/{id}/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["TaxonomiesController_mergeTag"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/taxonomies/correspondents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["TaxonomiesController_listCorrespondents"];
-        put?: never;
-        post: operations["TaxonomiesController_createCorrespondent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/taxonomies/correspondents/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["TaxonomiesController_deleteCorrespondent"];
-        options?: never;
-        head?: never;
-        patch: operations["TaxonomiesController_updateCorrespondent"];
-        trace?: never;
-    };
-    "/api/taxonomies/correspondents/{id}/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["TaxonomiesController_mergeCorrespondent"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/taxonomies/document-types": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["TaxonomiesController_listDocumentTypes"];
-        put?: never;
-        post: operations["TaxonomiesController_createDocumentType"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/taxonomies/document-types/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["TaxonomiesController_deleteDocumentType"];
-        options?: never;
-        head?: never;
-        patch: operations["TaxonomiesController_updateDocumentType"];
-        trace?: never;
-    };
-    "/api/taxonomies/document-types/{id}/merge": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["TaxonomiesController_mergeDocumentType"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1083,6 +1115,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                     normalizedName: string;
                     /** Format: date-time */
                     createdAt: string;
@@ -1719,6 +1756,40 @@ export interface components {
              */
             scope: "stale" | "all";
         };
+        CreateTagDto: {
+            name: string;
+        };
+        UpdateTagDto: {
+            name: string;
+        };
+        MergeTaxonomyDto: {
+            /** Format: uuid */
+            targetId: string;
+        };
+        CreateCategoryDto: {
+            name: string;
+        };
+        UpdateCategoryDto: {
+            name: string;
+        };
+        CreateCorrespondentDto: {
+            name: string;
+        };
+        UpdateCorrespondentDto: {
+            name: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+        };
+        CreateDocumentTypeDto: {
+            name: string;
+            description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+        };
+        UpdateDocumentTypeDto: {
+            name?: string;
+            description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+        };
         SemanticSearchDto: {
             query: string;
             filters?: {
@@ -1789,32 +1860,6 @@ export interface components {
             maxCitations: number;
             /** @default 6 */
             maxChunkMatches: number;
-        };
-        CreateTagDto: {
-            name: string;
-        };
-        UpdateTagDto: {
-            name: string;
-        };
-        MergeTaxonomyDto: {
-            /** Format: uuid */
-            targetId: string;
-        };
-        CreateCorrespondentDto: {
-            name: string;
-        };
-        UpdateCorrespondentDto: {
-            name: string;
-        };
-        CreateDocumentTypeDto: {
-            name: string;
-            description?: string | null;
-            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
-        };
-        UpdateDocumentTypeDto: {
-            name?: string;
-            description?: string | null;
-            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         };
         HealthResponse: {
             status: string;
@@ -2049,6 +2094,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -2344,6 +2394,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
                 summaryGeneratedAt?: string | null;
                 intelligenceGeneratedAt?: string | null;
             };
@@ -2462,6 +2517,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -2825,6 +2885,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -3274,6 +3339,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
             } | null;
             documentType: {
                 /** Format: uuid */
@@ -3591,6 +3661,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
             } | null;
             documentType: {
                 /** Format: uuid */
@@ -3992,6 +4067,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -4368,6 +4448,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -4723,6 +4808,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -5011,6 +5101,20 @@ export interface components {
                 windowEnd?: string | null;
             }) | null;
         };
+        CategoryList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            builtin: boolean;
+        }[];
+        Category: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            builtin: boolean;
+        };
         TagList: {
             /** Format: uuid */
             id: string;
@@ -5032,6 +5136,11 @@ export interface components {
             name: string;
             slug: string;
             summary?: string | null;
+            /** Format: uuid */
+            categoryId?: string | null;
+            categoryName?: string | null;
+            /** @enum {string|null} */
+            categorySource?: "deterministic" | "llm" | "manual" | null;
         }[];
         Correspondent: {
             /** Format: uuid */
@@ -5039,6 +5148,11 @@ export interface components {
             name: string;
             slug: string;
             summary?: string | null;
+            /** Format: uuid */
+            categoryId?: string | null;
+            categoryName?: string | null;
+            /** @enum {string|null} */
+            categorySource?: "deterministic" | "llm" | "manual" | null;
         };
         DocumentTypeList: {
             /** Format: uuid */
@@ -5076,6 +5190,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
                 normalizedName: string;
                 /** Format: date-time */
                 createdAt: string;
@@ -5568,6 +5687,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                     normalizedName: string;
                     /** Format: date-time */
                     createdAt: string;
@@ -7278,6 +7402,450 @@ export interface operations {
             };
         };
     };
+    TaxonomiesController_listTags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of tags */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagList"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_createTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTagDto"];
+            };
+        };
+        responses: {
+            /** @description Created tag */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_deleteTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted tag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_updateTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTagDto"];
+            };
+        };
+        responses: {
+            /** @description Updated tag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_mergeTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeTaxonomyDto"];
+            };
+        };
+        responses: {
+            /** @description Merged tag */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_listCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of categories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryList"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCategoryDto"];
+            };
+        };
+        responses: {
+            /** @description Created category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_deleteCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted category (custom only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TaxonomiesController_updateCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCategoryDto"];
+            };
+        };
+        responses: {
+            /** @description Renamed category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_listCorrespondents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of correspondents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CorrespondentList"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_createCorrespondent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCorrespondentDto"];
+            };
+        };
+        responses: {
+            /** @description Created correspondent */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Correspondent"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_deleteCorrespondent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted correspondent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_updateCorrespondent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCorrespondentDto"];
+            };
+        };
+        responses: {
+            /** @description Updated correspondent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Correspondent"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_mergeCorrespondent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeTaxonomyDto"];
+            };
+        };
+        responses: {
+            /** @description Merged correspondent */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Correspondent"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_listDocumentTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of document types */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypeList"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_createDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDocumentTypeDto"];
+            };
+        };
+        responses: {
+            /** @description Created document type */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_deleteDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted document type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_updateDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDocumentTypeDto"];
+            };
+        };
+        responses: {
+            /** @description Updated document type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_mergeDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeTaxonomyDto"];
+            };
+        };
+        responses: {
+            /** @description Merged document type */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+        };
+    };
     EmailIngestController_getStatus: {
         parameters: {
             query?: never;
@@ -7532,360 +8100,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    TaxonomiesController_listTags: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of tags */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TagList"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_createTag: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateTagDto"];
-            };
-        };
-        responses: {
-            /** @description Created tag */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Tag"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_deleteTag: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted tag */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_updateTag: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateTagDto"];
-            };
-        };
-        responses: {
-            /** @description Updated tag */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Tag"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_mergeTag: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MergeTaxonomyDto"];
-            };
-        };
-        responses: {
-            /** @description Merged tag */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Tag"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_listCorrespondents: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of correspondents */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CorrespondentList"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_createCorrespondent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCorrespondentDto"];
-            };
-        };
-        responses: {
-            /** @description Created correspondent */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Correspondent"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_deleteCorrespondent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted correspondent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_updateCorrespondent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCorrespondentDto"];
-            };
-        };
-        responses: {
-            /** @description Updated correspondent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Correspondent"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_mergeCorrespondent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MergeTaxonomyDto"];
-            };
-        };
-        responses: {
-            /** @description Merged correspondent */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Correspondent"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_listDocumentTypes: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description List of document types */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentTypeList"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_createDocumentType: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateDocumentTypeDto"];
-            };
-        };
-        responses: {
-            /** @description Created document type */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentType"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_deleteDocumentType: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted document type */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteTaxonomyResponse"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_updateDocumentType: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateDocumentTypeDto"];
-            };
-        };
-        responses: {
-            /** @description Updated document type */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentType"];
-                };
-            };
-        };
-    };
-    TaxonomiesController_mergeDocumentType: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MergeTaxonomyDto"];
-            };
-        };
-        responses: {
-            /** @description Merged document type */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentType"];
-                };
             };
         };
     };

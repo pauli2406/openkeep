@@ -14,6 +14,7 @@ import {
   BulkSetDocumentTypeRequestSchema,
   BulkTagDocumentsRequestSchema,
   BatchReprocessDocumentsResponseSchema,
+  CategorySchema,
   CorrespondentSchema,
   CorrespondentInsightsResponseSchema,
   CreateApiTokenResponseSchema,
@@ -750,6 +751,9 @@ function patchGeneratedDocument(document: Record<string, any>) {
     AnswerQueryResponseSchema,
   );
 
+  patchJsonResponse(document, "/api/taxonomies/categories", "get", 200, "List of categories", "CategoryList", z.array(CategorySchema));
+  patchJsonResponse(document, "/api/taxonomies/categories", "post", 201, "Created category", "Category", CategorySchema);
+  patchJsonResponse(document, "/api/taxonomies/categories/{id}", "patch", 200, "Renamed category", "Category", CategorySchema);
   patchJsonResponse(document, "/api/taxonomies/tags", "get", 200, "List of tags", "TagList", z.array(TagSchema));
   patchJsonResponse(document, "/api/taxonomies/tags", "post", 201, "Created tag", "Tag", TagSchema);
   patchJsonResponse(document, "/api/taxonomies/tags/{id}", "patch", 200, "Updated tag", "Tag", TagSchema);
