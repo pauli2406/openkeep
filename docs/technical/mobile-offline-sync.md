@@ -232,3 +232,11 @@ During startup, the mobile app removes legacy full-snapshot files under `openkee
 - [Architecture Overview](./architecture-overview.md)
 - [API and Data Flows](./api-and-data-flows.md)
 - [Mobile App](../user/mobile-app.md)
+
+## Category filter is online-only
+
+The Documents screen's category chip filters through the correspondent
+assignment on the server. The offline mirror stores documents, not
+correspondent categories, so offline the chip disables and an active
+category filter is dropped rather than silently misapplied — pretending
+the cached list were category-filtered would lie about what is shown.

@@ -16,6 +16,7 @@ import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
 import {
+  buildDocumentsSearchParams,
   fetchTaxonomy,
   formatCurrency,
   formatShortDate,
@@ -128,6 +129,9 @@ export function DocumentsScreen() {
    */
   const [selected, setSelected] = useState<Map<string, ArchiveDocument>>(new Map());
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  /** Server-side only: the offline mirror knows no correspondent categories. */
+  const [categoryFilter, setCategoryFilter] = useState<{ id: string; name: string } | null>(null);
   const [tagSearch, setTagSearch] = useState("");
   const selecting = selected.size > 0;
 
@@ -155,25 +159,20 @@ export function DocumentsScreen() {
   const insights = useDashboardInsights();
   const reviewCount = insights.data?.stats.pendingReview ?? 0;
 
-  const params = useMemo(() => {
-    const search = new URLSearchParams();
-    search.set("page", "1");
-    search.set("pageSize", String(PAGE_SIZE));
-    if (query.trim()) {
-      search.set("query", query.trim());
-    }
-    if (filter === "year") {
-      search.set("year", String(currentYear));
-    }
-    if (filter === "due") {
-      search.set("sort", "dueDate");
-      search.set("direction", "asc");
-    } else {
-      search.set("sort", "createdAt");
-      search.set("direction", oldestFirst ? "asc" : "desc");
-    }
-    return search.toString();
-  }, [query, filter, oldestFirst, currentYear]);
+  const params = useMemo(
+    () =>
+      buildDocumentsSearchParams({
+        query,
+        filter,
+        oldestFirst,
+        currentYear,
+        pageSize: PAGE_SIZE,
+        // Dropped offline rather than silently misapplied: the cached mirror
+        // stores documents, not correspondent categories.
+        categoryId: shouldUseCache ? null : categoryFilter?.id ?? null,
+      }),
+    [query, filter, oldestFirst, currentYear, categoryFilter, shouldUseCache],
+  );
 
   const documentsQuery = useQuery({
     queryKey: [
@@ -220,6 +219,12 @@ export function DocumentsScreen() {
     queryKey: taxonomyQueryKey(auth.apiUrl, "tags"),
     enabled: tagSheetOpen && !shouldUseCache,
     queryFn: () => fetchTaxonomy(auth.authFetch, "tags", t("documents.loadError")),
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: taxonomyQueryKey(auth.apiUrl, "categories"),
+    enabled: categorySheetOpen && !shouldUseCache,
+    queryFn: () => fetchTaxonomy(auth.authFetch, "categories", t("documents.loadError")),
   });
 
   /**
@@ -348,6 +353,9 @@ export function DocumentsScreen() {
 
   // The offline mirror carries issue and due dates as queryable columns, so
   // every chip means the same thing offline as online.
+  // Offline the category filter is inert, and the chip says so by disabling.
+  const activeCategory = shouldUseCache ? null : categoryFilter;
+
   const chips: Array<{ key: DocFilter; label: string; count?: number }> = [
     { key: "all", label: t("documents.filter.all") },
     { key: "review", label: t("documents.filter.review"), count: reviewCount },
@@ -362,7 +370,7 @@ export function DocumentsScreen() {
         ? t("documents.sortOldest")
         : t("documents.sortNewest");
 
-  const isFiltered = filter !== "all" || query.trim().length > 0;
+  const isFiltered = filter !== "all" || query.trim().length > 0 || activeCategory !== null;
 
   /**
    * `/api/documents/review` takes no `query`, so a search while the Review chip
@@ -499,13 +507,39 @@ export function DocumentsScreen() {
               </Pressable>
             );
           })}
+          <Pressable
+            accessibilityLabel={t("documents.filter.category")}
+            disabled={shouldUseCache}
+            onPress={() =>
+              activeCategory ? setCategoryFilter(null) : setCategorySheetOpen(true)
+            }
+            style={[
+              styles.chip,
+              activeCategory ? styles.chipActive : styles.chipIdle,
+              shouldUseCache ? styles.chipDisabled : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                activeCategory ? styles.chipTextActive : null,
+                shouldUseCache ? styles.chipTextDisabled : null,
+              ]}
+            >
+              {activeCategory
+                ? `${activeCategory.name} ×`
+                : t("documents.filter.category")}
+            </Text>
+          </Pressable>
         </ScrollView>
       </View>
 
       {documentsQuery.data ? (
         <View style={styles.countStrip}>
           <Text style={styles.countText}>
-            {`${visibleTotal.toLocaleString()} ${t("documents.count")}`}
+            {`${visibleTotal.toLocaleString()} ${t("documents.count")}${
+              activeCategory ? ` · ${activeCategory.name}` : ""
+            }`}
           </Text>
           <Text style={styles.orderText}>{orderLabel}</Text>
         </View>
@@ -590,6 +624,35 @@ export function DocumentsScreen() {
           <ErrorCard message={t("documents.bulkFailed")} />
         </View>
       ) : null}
+
+      <FullScreenModal
+        visible={categorySheetOpen}
+        onRequestClose={() => setCategorySheetOpen(false)}
+        style={styles.sheetRoot}
+      >
+          <View style={styles.sheetBar}>
+            <Text style={styles.sheetTitle}>{t("documents.categorySheetTitle")}</Text>
+            <Pressable onPress={() => setCategorySheetOpen(false)} hitSlop={10}>
+              <Text style={styles.barAction}>{t("documents.cancel")}</Text>
+            </Pressable>
+          </View>
+          <ScrollView>
+            {(categoriesQuery.data ?? []).map((category) => (
+              <Row
+                key={category.id}
+                title={category.name}
+                chevron
+                onPress={() => {
+                  setCategoryFilter({ id: category.id, name: category.name });
+                  setCategorySheetOpen(false);
+                }}
+              />
+            ))}
+            {categoriesQuery.isSuccess && (categoriesQuery.data ?? []).length === 0 ? (
+              <EmptyState title={t("documents.noCategories")} />
+            ) : null}
+          </ScrollView>
+      </FullScreenModal>
 
       <FullScreenModal
         visible={tagSheetOpen}
@@ -689,6 +752,12 @@ const useStyles = createThemedStyles((c) => ({
     minWidth: 0,
     color: c.ink,
     padding: 0,
+  },
+  chipDisabled: {
+    opacity: 0.4,
+  },
+  chipTextDisabled: {
+    color: c.dim,
   },
   chipRow: {
     flexDirection: "row",
