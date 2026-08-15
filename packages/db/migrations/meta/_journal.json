@@ -99,6 +99,41 @@
       "when": 1785456000000,
       "tag": "0014_nullable_text_block_bounding_box",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786752000000,
+      "tag": "0015_deadline_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786752060000,
+      "tag": "0016_email_digest_preference",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786752120000,
+      "tag": "0017_email_ingestion",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786752180000,
+      "tag": "0018_app_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786752240000,
+      "tag": "0019_categories",
+      "breakpoints": true
     }
   ]
 }

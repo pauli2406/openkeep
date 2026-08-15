@@ -148,6 +148,11 @@ function RootComponent() {
               active={path.startsWith("/review")}
             />
             <NavTab
+              to="/taxes"
+              label={t("root.nav.taxes")}
+              active={path.startsWith("/taxes")}
+            />
+            <NavTab
               to="/search"
               label={t("root.nav.chat")}
               active={path.startsWith("/search")}

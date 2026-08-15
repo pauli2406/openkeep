@@ -22,7 +22,7 @@ function makeChatTools(overrides: Record<string, unknown> = {}) {
     getToolDefinitions: vi.fn(() => [
       { name: "search_documents", description: "Search", parameters: { type: "object" } },
     ]),
-    getTaxonomySummary: vi.fn(async () => ({ documentTypes: ["Invoice"], tags: ["tax"] })),
+    getTaxonomySummary: vi.fn(async () => ({ documentTypes: ["Invoice"], tags: ["tax"], categories: ["Insurance"] })),
     describeCall: vi.fn(() => "Searching documents"),
     execute: vi.fn(async () => ({ resultForModel: { totalCount: 0, documents: [] } })),
     ...overrides,

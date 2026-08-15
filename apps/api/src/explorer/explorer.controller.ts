@@ -51,6 +51,8 @@ function toFilters(query: SearchDocumentsQueryDto): DocumentFilters {
     status: query.status,
     statuses: normalizeStatusArray(query.statuses),
     tags: normalizeQueryArray(query.tags),
+    categoryIds: normalizeQueryArray(query.categoryIds),
+    uncategorized: query.uncategorized,
     amountMin: query.amountMin,
     amountMax: query.amountMax,
   };
@@ -73,12 +75,6 @@ export class ExplorerController {
   @ApiOkResponse({ description: "Single correspondent insights" })
   async getCorrespondentInsights(@Param("slug") slug: string) {
     return this.explorerService.getCorrespondentInsightsBySlug(slug);
-  }
-
-  @Get("documents/projection")
-  @ApiOkResponse({ description: "Semantic projection for filtered documents" })
-  async getDocumentsProjection(@ValidatedQuery(SearchDocumentsQueryDto) query: SearchDocumentsQueryDto) {
-    return this.explorerService.getDocumentsProjection(toFilters(query));
   }
 
   @Get("documents/timeline")

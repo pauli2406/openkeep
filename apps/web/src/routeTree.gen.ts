@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UploadRouteImport } from './routes/upload'
+import { Route as TaxesRouteImport } from './routes/taxes'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ReviewRouteImport } from './routes/review'
@@ -27,6 +28,11 @@ import { Route as CorrespondentsSlugRouteImport } from './routes/correspondents/
 const UploadRoute = UploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TaxesRoute = TaxesRouteImport.update({
+  id: '/taxes',
+  path: '/taxes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/setup': typeof SetupRoute
+  '/taxes': typeof TaxesRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/setup': typeof SetupRoute
+  '/taxes': typeof TaxesRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/review': typeof ReviewRoute
   '/search': typeof SearchRoute
   '/setup': typeof SetupRoute
+  '/taxes': typeof TaxesRoute
   '/upload': typeof UploadRoute
   '/correspondents/$slug': typeof CorrespondentsSlugRoute
   '/documents/$documentId': typeof DocumentsDocumentIdRoute
@@ -153,6 +162,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/search'
     | '/setup'
+    | '/taxes'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/search'
     | '/setup'
+    | '/taxes'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/search'
     | '/setup'
+    | '/taxes'
     | '/upload'
     | '/correspondents/$slug'
     | '/documents/$documentId'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ReviewRoute: typeof ReviewRoute
   SearchRoute: typeof SearchRoute
   SetupRoute: typeof SetupRoute
+  TaxesRoute: typeof TaxesRoute
   UploadRoute: typeof UploadRoute
   CorrespondentsSlugRoute: typeof CorrespondentsSlugRoute
   DocumentsDocumentIdRoute: typeof DocumentsDocumentIdRoute
@@ -214,6 +227,13 @@ declare module '@tanstack/react-router' {
       path: '/upload'
       fullPath: '/upload'
       preLoaderRoute: typeof UploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/taxes': {
+      id: '/taxes'
+      path: '/taxes'
+      fullPath: '/taxes'
+      preLoaderRoute: typeof TaxesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -334,6 +354,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewRoute: ReviewRoute,
   SearchRoute: SearchRoute,
   SetupRoute: SetupRoute,
+  TaxesRoute: TaxesRoute,
   UploadRoute: UploadRoute,
   CorrespondentsSlugRoute: CorrespondentsSlugRoute,
   DocumentsDocumentIdRoute: DocumentsDocumentIdRoute,

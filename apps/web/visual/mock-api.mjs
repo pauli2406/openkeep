@@ -176,6 +176,11 @@ const ROUTES = [
   ["GET", /^\/api\/taxonomies\/tags$/, () => TAGS],
   ["GET", /^\/api\/taxonomies\/correspondents$/, () => CORRESPONDENTS],
   ["GET", /^\/api\/taxonomies\/document-types$/, () => TYPES],
+  ["GET", /^\/api\/taxonomies\/categories$/, () => [
+    { id: "b0000000-0000-4000-8000-000000000001", name: "Housing", slug: "housing", builtin: true },
+    { id: "b0000000-0000-4000-8000-000000000002", name: "Insurance", slug: "insurance", builtin: true },
+    { id: "b0000000-0000-4000-8000-000000000003", name: "Taxes & Authorities", slug: "taxes-and-authorities", builtin: true },
+  ]],
   ["GET", /^\/api\/documents\/facets$/, () => ({
     years: [{ year: 2026, count: 12 }, { year: 2025, count: 4 }],
     correspondents: CORRESPONDENTS.map((entry, index) => ({
@@ -185,8 +190,87 @@ const ROUTES = [
     })),
     documentTypes: TYPES.map((entry, index) => ({ ...entry, count: 6 - index })),
     tags: TAGS.map((entry, index) => ({ ...entry, count: 5 - index })),
+    categories: [
+      { id: "b0000000-0000-4000-8000-000000000001", name: "Housing", slug: "housing", count: 6, topCorrespondents: ["Stadtwerke München", "Telekom Deutschland"] },
+      { id: "b0000000-0000-4000-8000-000000000002", name: "Insurance", slug: "insurance", count: 4, topCorrespondents: ["HUK-Coburg"] },
+      { id: "b0000000-0000-4000-8000-000000000003", name: "Taxes & Authorities", slug: "taxes-and-authorities", count: 2, topCorrespondents: ["Finanzamt München"] },
+    ],
+    uncategorizedCount: 0,
     amountRange: { min: 12, max: 980 },
     statuses: [{ status: "ready", count: 11 }, { status: "processing", count: 1 }],
+  })],
+  ["GET", /^\/api\/taxes\/\d+$/, () => ({
+    year: 2025,
+    documentCount: 4,
+    unsummedCount: 1,
+    totals: [
+      { currency: "EUR", sum: 1874.4, count: 3 },
+    ],
+    groups: [
+      {
+        documentTypeId: TYPES[1].id,
+        documentType: TYPES[1].name,
+        count: 2,
+        unsummedCount: 1,
+        totals: [{ currency: "EUR", sum: 1650.4, count: 1 }],
+        documents: [
+          {
+            id: "d0000000-0000-4000-8000-000000000101",
+            title: "Einkommensteuerbescheid 2025",
+            issueDate: "2025-11-20",
+            correspondentName: "Finanzamt München",
+            amount: 1650.4,
+            currency: "EUR",
+            memberVia: "both",
+          },
+          {
+            id: "d0000000-0000-4000-8000-000000000102",
+            title: "Belegsammlung Werbungskosten",
+            issueDate: "2025-12-30",
+            correspondentName: "Finanzamt München",
+            amount: null,
+            currency: null,
+            memberVia: "type",
+          },
+        ],
+      },
+      {
+        documentTypeId: TYPES[2].id,
+        documentType: TYPES[2].name,
+        count: 1,
+        unsummedCount: 0,
+        totals: [{ currency: "EUR", sum: 189, count: 1 }],
+        documents: [
+          {
+            id: "d0000000-0000-4000-8000-000000000103",
+            title: "Haftpflicht Beitragsrechnung 2025",
+            issueDate: "2025-01-05",
+            correspondentName: "HUK-Coburg",
+            amount: 189,
+            currency: "EUR",
+            memberVia: "tag",
+          },
+        ],
+      },
+      {
+        documentTypeId: null,
+        documentType: null,
+        count: 1,
+        unsummedCount: 0,
+        totals: [{ currency: "EUR", sum: 35, count: 1 }],
+        documents: [
+          {
+            id: "d0000000-0000-4000-8000-000000000104",
+            title: "Spendenquittung Rotes Kreuz",
+            issueDate: "2025-06-14",
+            correspondentName: "Rotes Kreuz",
+            amount: 35,
+            currency: "EUR",
+            memberVia: "tag",
+          },
+        ],
+      },
+    ],
   })],
   ["GET", /^\/api\/documents\/review$/, () => ({
     items: DOCUMENTS.filter((doc) => doc.reviewStatus === "pending"),

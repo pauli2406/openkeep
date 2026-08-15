@@ -260,6 +260,7 @@ export function Omnibar() {
         run: go("/review"),
         newTab: tab("/review"),
       },
+      { id: "go-taxes", section: "jump", label: t("omnibar.goTaxes"), run: go("/taxes"), newTab: tab("/taxes") },
       { id: "go-import", section: "jump", label: t("omnibar.goImport"), hint: "U", run: go("/upload"), newTab: tab("/upload") },
       { id: "go-settings", section: "jump", label: t("omnibar.goSettings"), run: go("/settings"), newTab: tab("/settings") },
     ];

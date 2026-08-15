@@ -9,10 +9,13 @@ import { DatabaseModule } from "./common/db/database.module";
 import { MetricsModule } from "./common/metrics/metrics.module";
 import { StorageModule } from "./common/storage/storage.module";
 import { DocumentsModule } from "./documents/documents.module";
+import { EmailIngestModule } from "./email-ingest/email-ingest.module";
 import { ExplorerModule } from "./explorer/explorer.module";
 import { HealthController } from "./health/health.controller";
+import { NotificationsModule } from "./notifications/notifications.module";
 import { ProcessingModule } from "./processing/processing.module";
 import { SearchModule } from "./search/search.module";
+import { TaxesModule } from "./taxes/taxes.module";
 import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
 
 @Module({
@@ -35,8 +38,11 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
     AuthModule,
     ProcessingModule,
     DocumentsModule,
+    EmailIngestModule,
     ExplorerModule,
+    NotificationsModule,
     SearchModule,
+    TaxesModule,
     TaxonomiesModule,
   ],
   controllers: [HealthController],

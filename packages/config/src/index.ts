@@ -146,6 +146,35 @@ export const AppEnvSchema = z.object({
   PROCESSING_RETRY_DELAY_SECONDS: NumberFromEnv.default(30),
   PROCESSING_STALE_MINUTES: NumberFromEnv.default(30),
   WATCH_FOLDER_PATH: EmptyStringToUndefined(z.string().optional()),
+  // IANA zone the archive's date-only deadlines are interpreted in.
+  // Unset means the server's own timezone.
+  ARCHIVE_TIMEZONE: EmptyStringToUndefined(z.string().optional()),
+  DEADLINE_UPCOMING_DAYS: NumberFromEnv.default(7),
+  // SMTP for the deadline digest. Unset host means the email channel is off.
+  SMTP_HOST: EmptyStringToUndefined(z.string().optional()),
+  SMTP_PORT: NumberFromEnv.default(587),
+  SMTP_SECURE: BooleanFromEnv.default(false),
+  SMTP_USER: EmptyStringToUndefined(z.string().optional()),
+  SMTP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
+  SMTP_FROM: EmptyStringToUndefined(z.string().optional()),
+  EMAIL_DIGEST_CRON: z.string().min(1).default("0 7 * * *"),
+  // IMAP for the archive mailbox. Unset host means email ingestion is off.
+  IMAP_HOST: EmptyStringToUndefined(z.string().optional()),
+  IMAP_PORT: NumberFromEnv.default(993),
+  IMAP_SECURE: BooleanFromEnv.default(true),
+  IMAP_USER: EmptyStringToUndefined(z.string().optional()),
+  IMAP_PASSWORD: EmptyStringToUndefined(z.string().optional()),
+  IMAP_FOLDER: z.string().min(1).default("INBOX"),
+  EMAIL_INGEST_CRON: z.string().min(1).default("*/5 * * * *"),
+  // Comma-separated addresses or domains allowed to feed the archive mailbox.
+  // Empty means every sender is accepted — reasonable only while the mailbox
+  // address is private; the user docs say so.
+  EMAIL_INGEST_ALLOWED_SENDERS: EmptyStringToUndefined(z.string().optional()),
+  // Rejected/skipped ledger rows kept before the oldest are pruned; imported
+  // rows are never pruned. Bounds what a leaked address can grow.
+  EMAIL_INGEST_LOG_LIMIT: NumberFromEnv.default(500),
+  // Absolute base URL of the web app, used for links in outbound email.
+  PUBLIC_URL: EmptyStringToUndefined(z.string().url().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
   SEARCH_DEFAULT_PAGE_SIZE: NumberFromEnv.default(20),
   SEARCH_MAX_PAGE_SIZE: NumberFromEnv.default(100),
@@ -194,4 +223,6 @@ export const providerConfig = (config: AppConfig) => ({
   ),
   hasMistralOcrConfig: Boolean(config.MISTRAL_API_KEY),
   hasMistralEmbeddingConfig: Boolean(config.MISTRAL_API_KEY),
+  hasSmtpConfig: Boolean(config.SMTP_HOST && config.SMTP_FROM),
+  hasImapConfig: Boolean(config.IMAP_HOST && config.IMAP_USER && config.IMAP_PASSWORD),
 });

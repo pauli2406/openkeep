@@ -52,6 +52,9 @@ import type {
   SearchDocumentsResponse,
   UpdateDocumentInput,
   UploadDocumentMetadata,
+  BulkDocumentsResponse,
+  BulkSetDocumentTypeRequest,
+  BulkTagDocumentsRequest,
 } from "@openkeep/types";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { createHash } from "crypto";
@@ -528,6 +531,9 @@ export class DocumentsService {
         delete applied.status;
       } else if (omit === "tags") {
         delete applied.tags;
+      } else if (omit === "categoryIds") {
+        delete applied.categoryIds;
+        delete applied.uncategorized;
       } else if (omit === "year") {
         delete applied.year;
       }
@@ -538,10 +544,20 @@ export class DocumentsService {
     const correspondentScope = scope("correspondentIds");
     const typeScope = scope("documentTypeIds");
     const tagScope = scope("tags");
+    const categoryScope = scope("categoryIds");
     const statusScope = scope("statuses");
     const amountScope = scope();
 
-    const [years, correspondentFacets, typeFacets, tagFacets, amountRange, statusFacets] =
+    const [
+      years,
+      correspondentFacets,
+      typeFacets,
+      tagFacets,
+      categoryFacets,
+      uncategorizedCount,
+      amountRange,
+      statusFacets,
+    ] =
       await Promise.all([
         this.databaseService.pool.query<{ year: string; count: string }>(
           `SELECT extract(year from coalesce(d.issue_date, d.created_at::date))::int AS year,
@@ -617,6 +633,31 @@ export class DocumentsService {
           tagScope.params,
         ),
         this.databaseService.pool.query<{
+          id: string;
+          name: string;
+          slug: string;
+          count: string;
+          top_correspondents: string[] | null;
+        }>(
+          `SELECT cat.id, cat.name, cat.slug, count(*)::int AS count,
+                  (array_agg(DISTINCT c.name))[1:3] AS top_correspondents
+           FROM documents d
+           INNER JOIN correspondents c ON c.id = d.correspondent_id
+           INNER JOIN categories cat ON cat.id = c.category_id
+           WHERE ${categoryScope.whereSql}
+           GROUP BY cat.id, cat.name, cat.slug
+           ORDER BY count(*) DESC, cat.name ASC`,
+          categoryScope.params,
+        ),
+        this.databaseService.pool.query<{ count: string }>(
+          `SELECT count(*)::int AS count
+           FROM documents d
+           LEFT JOIN correspondents c ON c.id = d.correspondent_id
+           WHERE ${categoryScope.whereSql}
+             AND (d.correspondent_id IS NULL OR c.category_id IS NULL)`,
+          categoryScope.params,
+        ),
+        this.databaseService.pool.query<{
           min_amount: string | null;
           max_amount: string | null;
         }>(
@@ -660,6 +701,14 @@ export class DocumentsService {
         slug: row.slug,
         count: Number(row.count),
       })),
+      categories: categoryFacets.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        count: Number(row.count),
+        topCorrespondents: row.top_correspondents ?? [],
+      })),
+      uncategorizedCount: Number(uncategorizedCount.rows[0]?.count ?? 0),
       amountRange: {
         min:
           amountRange.rows[0]?.min_amount === null
@@ -2257,6 +2306,23 @@ export class DocumentsService {
       );
     }
 
+    if (filters?.categoryIds && filters.categoryIds.length > 0) {
+      const placeholder = push(filters.categoryIds);
+      clauses.push(
+        `d.correspondent_id IN (
+          SELECT id FROM correspondents WHERE category_id = ANY(${placeholder}::uuid[])
+        )`,
+      );
+    }
+
+    if (filters?.uncategorized) {
+      clauses.push(
+        `(d.correspondent_id IS NULL OR d.correspondent_id IN (
+          SELECT id FROM correspondents WHERE category_id IS NULL
+        ))`,
+      );
+    }
+
     if (filters?.amountMin !== undefined) {
       const placeholder = push(filters.amountMin);
       clauses.push(`d.amount IS NOT NULL AND d.amount >= ${placeholder}::numeric`);
@@ -2836,6 +2902,122 @@ export class DocumentsService {
     }
 
     return nextMetadata;
+  }
+
+  /**
+   * Resolves a bulk request's ids into the owner's existing documents and the
+   * rest. Partial-failure semantics: the rest is reported, never silently
+   * dropped, and the existing ones are still applied.
+   */
+  private async partitionOwnedDocuments(
+    documentIds: string[],
+    ownerUserId: string,
+  ): Promise<{ owned: string[]; failed: Array<{ id: string; reason: string }> }> {
+    const unique = [...new Set(documentIds)];
+    const rows = await this.databaseService.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(and(inArray(documents.id, unique), eq(documents.ownerUserId, ownerUserId)));
+    const owned = new Set(rows.map((row) => row.id));
+    return {
+      owned: unique.filter((id) => owned.has(id)),
+      failed: unique
+        .filter((id) => !owned.has(id))
+        .map((id) => ({ id, reason: "not-found" })),
+    };
+  }
+
+  async bulkTagDocuments(
+    principal: AuthenticatedPrincipal,
+    input: BulkTagDocumentsRequest,
+  ): Promise<BulkDocumentsResponse> {
+    const [tag] = await this.databaseService.db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(eq(tags.id, input.tagId))
+      .limit(1);
+    if (!tag) {
+      throw new NotFoundException("Tag not found");
+    }
+
+    const { owned, failed } = await this.partitionOwnedDocuments(
+      input.documentIds,
+      principal.userId,
+    );
+
+    if (owned.length > 0) {
+      if (input.action === "add") {
+        await this.databaseService.db
+          .insert(documentTagLinks)
+          .values(owned.map((documentId) => ({ documentId, tagId: input.tagId })))
+          .onConflictDoNothing();
+      } else {
+        await this.databaseService.db
+          .delete(documentTagLinks)
+          .where(
+            and(
+              inArray(documentTagLinks.documentId, owned),
+              eq(documentTagLinks.tagId, input.tagId),
+            ),
+          );
+      }
+
+      await this.databaseService.db.insert(auditEvents).values(
+        owned.map((documentId) => ({
+          actorUserId: principal.userId,
+          documentId,
+          eventType: "document.metadata_updated",
+          payload: {
+            changedFields: ["tagIds"],
+            bulk: { tagId: input.tagId, action: input.action },
+          },
+        })),
+      );
+    }
+
+    return { updated: owned, failed };
+  }
+
+  async bulkSetDocumentType(
+    principal: AuthenticatedPrincipal,
+    input: BulkSetDocumentTypeRequest,
+  ): Promise<BulkDocumentsResponse> {
+    if (input.documentTypeId !== null) {
+      const [documentType] = await this.databaseService.db
+        .select({ id: documentTypes.id })
+        .from(documentTypes)
+        .where(eq(documentTypes.id, input.documentTypeId))
+        .limit(1);
+      if (!documentType) {
+        throw new NotFoundException("Document type not found");
+      }
+    }
+
+    const { owned, failed } = await this.partitionOwnedDocuments(
+      input.documentIds,
+      principal.userId,
+    );
+
+    if (owned.length > 0) {
+      await this.databaseService.db
+        .update(documents)
+        .set({ documentTypeId: input.documentTypeId, updatedAt: new Date() })
+        .where(inArray(documents.id, owned));
+
+      await this.databaseService.db.insert(auditEvents).values(
+        owned.map((documentId) => ({
+          actorUserId: principal.userId,
+          documentId,
+          eventType: "document.metadata_updated",
+          payload: {
+            changedFields: ["documentTypeId"],
+            bulk: { documentTypeId: input.documentTypeId },
+          },
+        })),
+      );
+    }
+
+    return { updated: owned, failed };
   }
 
   private async recordAuditEvent(input: {

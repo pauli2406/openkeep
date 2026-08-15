@@ -39,6 +39,7 @@ interface SearchDocumentsArgs {
   dueDateTo?: string;
   expiryDateFrom?: string;
   expiryDateTo?: string;
+  categories?: string[];
   openTasksOnly?: boolean;
   amountMin?: number;
   amountMax?: number;
@@ -48,7 +49,7 @@ interface SearchDocumentsArgs {
 }
 
 interface AggregateDocumentsArgs extends Omit<SearchDocumentsArgs, "sort" | "sortDirection" | "limit" | "query"> {
-  groupBy: "documentType" | "correspondent" | "year" | "currency";
+  groupBy: "documentType" | "correspondent" | "year" | "currency" | "category";
   metric?: "count" | "sum_amount";
 }
 
@@ -84,6 +85,10 @@ export class ChatToolsService {
       documentTypes: nameListProperty('Document type names, e.g. ["Invoice", "Tax Statement"]'),
       tags: nameListProperty('Tag names, e.g. ["tax", "insurance"]'),
       correspondents: nameListProperty("Correspondent (sender) names"),
+      categories: nameListProperty(
+        'Life-domain category names, e.g. ["Insurance", "Housing"]. Prefer a category over ' +
+          "listing correspondents when the question names a life domain (spend on insurance, everything about housing).",
+      ),
       year: { type: "integer", description: "Filter by issue year" },
       dateFrom: dateProperty("Earliest issue date"),
       dateTo: dateProperty("Latest issue date"),
@@ -138,7 +143,7 @@ export class ChatToolsService {
           properties: {
             groupBy: {
               type: "string",
-              enum: ["documentType", "correspondent", "year", "currency"],
+              enum: ["documentType", "correspondent", "year", "currency", "category"],
             },
             metric: {
               type: "string",
@@ -173,14 +178,14 @@ export class ChatToolsService {
       {
         name: "list_taxonomies",
         description:
-          "List the archive's document types, tags, or correspondents with document counts. " +
+          "List the archive's document types, tags, correspondents, or life-domain categories with document counts. " +
           "Use to resolve exact names when a filter value did not match anything.",
         parameters: {
           type: "object",
           properties: {
             kind: {
               type: "string",
-              enum: ["document_types", "tags", "correspondents"],
+              enum: ["document_types", "tags", "correspondents", "categories"],
             },
             query: { type: "string", description: "Optional name fragment to narrow the list" },
           },
@@ -318,6 +323,11 @@ export class ChatToolsService {
         select: `coalesce(d.currency, 'none')`,
         join: "",
       },
+      category: {
+        select: `coalesce(cat.name, 'Uncategorized')`,
+        join: `LEFT JOIN correspondents c2 ON c2.id = d.correspondent_id
+               LEFT JOIN categories cat ON cat.id = c2.category_id`,
+      },
     };
     const group = groupExpressions[args.groupBy];
     if (!group) {
@@ -430,12 +440,20 @@ export class ChatToolsService {
               WHERE ($2 = '' OR c.name ILIKE '%' || $2 || '%')
               GROUP BY c.name ORDER BY count DESC, c.name ASC LIMIT ${TAXONOMY_LOOKUP_LIMIT}`,
       },
+      categories: {
+        sql: `SELECT cat.name, count(d.id)::int AS count
+              FROM categories cat
+              LEFT JOIN correspondents c ON c.category_id = cat.id
+              LEFT JOIN documents d ON d.correspondent_id = c.id AND d.owner_user_id = $1
+              WHERE ($2 = '' OR cat.name ILIKE '%' || $2 || '%')
+              GROUP BY cat.name ORDER BY count DESC, cat.name ASC LIMIT ${TAXONOMY_LOOKUP_LIMIT}`,
+      },
     };
 
     const entry = queries[kind];
     if (!entry) {
       return {
-        resultForModel: { error: `Unknown taxonomy kind: ${kind}. Use document_types, tags, or correspondents.` },
+        resultForModel: { error: `Unknown taxonomy kind: ${kind}. Use document_types, tags, correspondents, or categories.` },
       };
     }
 
@@ -452,8 +470,10 @@ export class ChatToolsService {
   // ---------------------------------------------------------------------------
 
   /** Compact archive overview injected into the system prompt (types are few; tags capped). */
-  async getTaxonomySummary(userId: string): Promise<{ documentTypes: string[]; tags: string[] }> {
-    const [typesResult, tagsResult] = await Promise.all([
+  async getTaxonomySummary(
+    userId: string,
+  ): Promise<{ documentTypes: string[]; tags: string[]; categories: string[] }> {
+    const [typesResult, tagsResult, categoriesResult] = await Promise.all([
       this.databaseService.pool.query<{ name: string }>(
         `SELECT dt.name
          FROM document_types dt
@@ -469,11 +489,20 @@ export class ChatToolsService {
          GROUP BY t.name ORDER BY count(d.id) DESC, t.name ASC LIMIT 30`,
         [userId],
       ),
+      this.databaseService.pool.query<{ name: string }>(
+        `SELECT cat.name
+         FROM categories cat
+         LEFT JOIN correspondents c ON c.category_id = cat.id
+         LEFT JOIN documents d ON d.correspondent_id = c.id AND d.owner_user_id = $1
+         GROUP BY cat.name ORDER BY count(d.id) DESC, cat.name ASC LIMIT 20`,
+        [userId],
+      ),
     ]);
 
     return {
       documentTypes: typesResult.rows.map((row) => row.name),
       tags: tagsResult.rows.map((row) => row.name),
+      categories: categoriesResult.rows.map((row) => row.name),
     };
   }
 
@@ -486,10 +515,11 @@ export class ChatToolsService {
   ): Promise<{ filters: SearchDocumentsFilters; unmatched: string[] }> {
     const unmatched: string[] = [];
 
-    const [documentTypeIds, tagIds, correspondentIds] = await Promise.all([
+    const [documentTypeIds, tagIds, correspondentIds, categoryIds] = await Promise.all([
       this.resolveNames("document_types", args.documentTypes, unmatched),
       this.resolveNames("tags", args.tags, unmatched),
       this.resolveNames("correspondents", args.correspondents, unmatched),
+      this.resolveNames("categories", args.categories, unmatched),
     ]);
 
     const filters: SearchDocumentsFilters = {
@@ -506,6 +536,7 @@ export class ChatToolsService {
       documentTypeIds: documentTypeIds.length > 0 ? documentTypeIds : undefined,
       tags: tagIds.length > 0 ? tagIds : undefined,
       correspondentIds: correspondentIds.length > 0 ? correspondentIds : undefined,
+      categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
     };
 
     return { filters, unmatched };
@@ -518,7 +549,7 @@ export class ChatToolsService {
    * unmatched type would otherwise widen the query and return wrong results.
    */
   private async resolveNames(
-    table: "document_types" | "tags" | "correspondents",
+    table: "document_types" | "tags" | "correspondents" | "categories",
     names: string[] | undefined,
     unmatched: string[],
   ): Promise<string[]> {

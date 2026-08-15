@@ -7,7 +7,7 @@ import {
 
 export type AppLanguage = "en" | "de";
 
-type TranslationKey =
+export type TranslationKey =
   | "root.loading"
   | "root.nav.today"
   | "root.nav.chat"
@@ -21,6 +21,31 @@ type TranslationKey =
   | "root.nav.dashboard"
   | "root.nav.documents"
   | "root.nav.review"
+  | "root.nav.taxes"
+  | "taxes.eyebrow"
+  | "taxes.title"
+  | "taxes.description"
+  | "taxes.yearPicker"
+  | "taxes.loading"
+  | "taxes.error"
+  | "taxes.retry"
+  | "taxes.empty"
+  | "taxes.unfiled"
+  | "taxes.metricDocuments"
+  | "taxes.metricTotal"
+  | "taxes.metricUnsummed"
+  | "taxes.groupUnsummed"
+  | "taxes.openInExplorer"
+  | "taxes.noAmount"
+  | "taxes.viaTag"
+  | "taxes.viaType"
+  | "taxes.viaBoth"
+  | "taxes.viaTagHint"
+  | "taxes.viaTypeHint"
+  | "taxes.export"
+  | "taxes.exporting"
+  | "taxes.exportFailed"
+  | "omnibar.goTaxes"
   | "root.nav.search"
   | "root.nav.upload"
   | "root.nav.settings"
@@ -66,6 +91,8 @@ type TranslationKey =
   | "settings.german"
   | "settings.saving"
   | "settings.savePreferences"
+  | "settings.emailDigest"
+  | "settings.emailDigestDescription"
   | "settings.preferencesSaved"
   | "settings.preferencesSaveFailed"
   | "settings.unknown"
@@ -107,6 +134,16 @@ type TranslationKey =
   | "settings.documentTypes"
   | "settings.documentTypesDescription"
   | "settings.failedToLoadTags"
+  | "settings.failedToLoadCategories"
+  | "settings.failedToCreateCategory"
+  | "settings.failedToRenameCategory"
+  | "settings.failedToDeleteCategory"
+  | "settings.categoriesNoMerge"
+  | "dossier.category"
+  | "dossier.categoryNone"
+  | "dossier.categorySetByYou"
+  | "dossier.categoryAutomatic"
+  | "dossier.categoryFailed"
   | "settings.failedToLoadCorrespondents"
   | "settings.failedToLoadDocumentTypes"
   | "settings.failedToCreateTag"
@@ -151,6 +188,17 @@ type TranslationKey =
   | "settings.watchFolderServer"
   | "settings.watchFolderServerDescription"
   | "settings.watchFolderStatusFailed"
+  | "settings.emailInbox"
+  | "settings.emailInboxDescription"
+  | "settings.emailInboxStatusFailed"
+  | "settings.emailInboxPollFailed"
+  | "settings.pollNow"
+  | "settings.lastPoll"
+  | "settings.neverPolled"
+  | "settings.emailImported"
+  | "settings.emailSkipped"
+  | "settings.emailRejected"
+  | "settings.recentRejections"
   | "settings.lastScan"
   | "settings.lastImport"
   | "settings.neverScanned"
@@ -294,7 +342,6 @@ type TranslationKey =
   | "today.reference"
   | "today.documentType"
   | "today.previewUnavailable"
-  | "documents.bulkUnavailable"
   | "timeline.monthError"
   | "filters.title"
   | "filters.clear"
@@ -304,6 +351,11 @@ type TranslationKey =
   | "filters.type"
   | "filters.correspondent"
   | "filters.tag"
+  | "filters.category"
+  | "filters.uncategorized"
+  | "groups.byCorrespondents"
+  | "groups.byCategories"
+  | "groups.categoriesCaption"
   | "filters.date"
   | "filters.dateFrom"
   | "filters.dateTo"
@@ -372,6 +424,17 @@ type TranslationKey =
   | "documents.selected"
   | "documents.bulkTag"
   | "documents.bulkSetType"
+  | "documents.bulkTagTitle"
+  | "documents.bulkTagDescription"
+  | "documents.bulkTagAdd"
+  | "documents.bulkTagRemove"
+  | "documents.bulkPickTag"
+  | "documents.bulkTypeTitle"
+  | "documents.bulkTypeDescription"
+  | "documents.bulkTypeNone"
+  | "documents.bulkApply"
+  | "documents.bulkCancel"
+  | "documents.bulkPartialFailure"
   | "documents.bulkExport"
   | "documents.bulkDelete"
   | "documents.clearSelection"
@@ -434,6 +497,7 @@ type TranslationKey =
   | "documentDetail.typeSpecificFields"
   | "documentDetail.noExtractedFields"
   | "documentDetail.source"
+  | "documentDetail.arrivedByEmail"
   | "documentDetail.location"
   | "documentDetail.pageWord"
   | "documentDetail.lineWord"
@@ -571,6 +635,31 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Documents",
     "root.nav.review": "Review",
+    "root.nav.taxes": "Taxes",
+    "taxes.eyebrow": "Tax Year",
+    "taxes.title": "Tax year {year}",
+    "taxes.description":
+      "Everything that belongs to this tax year, grouped the way an accountant thinks. Membership follows the tax tag and the tax document types — remove the tag on a document to take it out.",
+    "taxes.yearPicker": "Year",
+    "taxes.loading": "Loading the tax year",
+    "taxes.error": "Failed to load the tax year.",
+    "taxes.retry": "Retry",
+    "taxes.empty": "Nothing is filed under tax year {year} yet. Documents join it via the tax tag or a tax document type.",
+    "taxes.unfiled": "Unfiled",
+    "taxes.metricDocuments": "Documents",
+    "taxes.metricTotal": "Total ({currency})",
+    "taxes.metricUnsummed": "Without amount",
+    "taxes.groupUnsummed": "{count} without amount",
+    "taxes.openInExplorer": "Open in explorer",
+    "taxes.noAmount": "No amount",
+    "taxes.viaTag": "Tag",
+    "taxes.viaType": "Type",
+    "taxes.viaBoth": "Tag + Type",
+    "taxes.viaTagHint": "Included because it carries the tax tag. Remove the tag on the document to take it out of the year.",
+    "taxes.viaTypeHint": "Included because its document type is tax-relevant.",
+    "taxes.export": "Export year",
+    "taxes.exporting": "Exporting…",
+    "taxes.exportFailed": "Export failed. Try again.",
     "root.nav.search": "Search",
     "root.nav.upload": "Upload",
     "root.nav.settings": "Settings",
@@ -616,6 +705,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.german": "German",
     "settings.saving": "Saving...",
     "settings.savePreferences": "Save preferences",
+    "settings.emailDigest": "Daily deadline digest by email",
+    "settings.emailDigestDescription": "One email a day listing overdue, due-today, and upcoming deadlines. Requires the server to have SMTP configured.",
     "settings.preferencesSaved": "Preferences saved.",
     "settings.preferencesSaveFailed": "Failed to save preferences.",
     "settings.unknown": "Unknown",
@@ -657,6 +748,16 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.documentTypes": "Document Types",
     "settings.documentTypesDescription": "Stable type labels such as invoice, contract, or statement.",
     "settings.failedToLoadTags": "Failed to load tags",
+    "settings.failedToLoadCategories": "Failed to load categories.",
+    "settings.failedToCreateCategory": "Failed to create the category.",
+    "settings.failedToRenameCategory": "Failed to rename the category.",
+    "settings.failedToDeleteCategory": "Failed to delete the category.",
+    "settings.categoriesNoMerge": "Categories cannot be merged.",
+    "dossier.category": "Category",
+    "dossier.categoryNone": "No category",
+    "dossier.categorySetByYou": "set by you",
+    "dossier.categoryAutomatic": "assigned automatically",
+    "dossier.categoryFailed": "The category could not be changed.",
     "settings.failedToLoadCorrespondents": "Failed to load correspondents",
     "settings.failedToLoadDocumentTypes": "Failed to load document types",
     "settings.failedToCreateTag": "Failed to create tag",
@@ -701,6 +802,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.watchFolderServer": "Server Watch Folder",
     "settings.watchFolderServerDescription": "This is the archive server's configured ingestion folder, not a folder on this desktop.",
     "settings.watchFolderStatusFailed": "Failed to load the server watch-folder status.",
+    "settings.emailInbox": "Email inbox",
+    "settings.emailInboxDescription": "A dedicated mailbox the server polls; attachments become documents. Distinct from the watch folders, which read directories.",
+    "settings.emailInboxStatusFailed": "The email inbox status could not be loaded.",
+    "settings.emailInboxPollFailed": "The poll could not be queued.",
+    "settings.pollNow": "Poll now",
+    "settings.lastPoll": "Last poll",
+    "settings.neverPolled": "never",
+    "settings.emailImported": "Imported",
+    "settings.emailSkipped": "Skipped",
+    "settings.emailRejected": "Rejected",
+    "settings.recentRejections": "Recent rejections",
     "settings.lastScan": "Last scan",
     "settings.lastImport": "Last import",
     "settings.neverScanned": "Never",
@@ -844,7 +956,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Reference",
     "today.documentType": "Document type",
     "today.previewUnavailable": "No preview available",
-    "documents.bulkUnavailable": "Not available yet",
     "timeline.monthError": "Could not load this month.",
     "filters.title": "Filters",
     "filters.clear": "Clear",
@@ -854,6 +965,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "filters.type": "Type",
     "filters.correspondent": "Correspondent",
     "filters.tag": "Tag",
+    "filters.category": "Category",
+    "filters.uncategorized": "Uncategorized",
+    "groups.byCorrespondents": "Correspondents",
+    "groups.byCategories": "Categories",
+    "groups.categoriesCaption": "Life domains, sized by document count. Click a block to open its documents.",
     "filters.date": "Date",
     "filters.dateFrom": "From",
     "filters.dateTo": "To",
@@ -900,6 +1016,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.sectionJump": "Jump to",
     "omnibar.goToday": "Today",
     "omnibar.goDocuments": "Documents",
+    "omnibar.goTaxes": "Taxes",
     "omnibar.goReview": "Review queue",
     "omnibar.goImport": "Import files",
     "omnibar.goSettings": "Settings",
@@ -922,6 +1039,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.selected": "selected",
     "documents.bulkTag": "Tag",
     "documents.bulkSetType": "Set type",
+    "documents.bulkTagTitle": "Tag {count} documents",
+    "documents.bulkTagDescription": "Add or remove one tag on every selected document. Other tags stay untouched.",
+    "documents.bulkTagAdd": "Add tag",
+    "documents.bulkTagRemove": "Remove tag",
+    "documents.bulkPickTag": "Pick a tag…",
+    "documents.bulkTypeTitle": "Set the type of {count} documents",
+    "documents.bulkTypeDescription": "Every selected document gets this document type.",
+    "documents.bulkTypeNone": "No type (unfiled)",
+    "documents.bulkApply": "Apply",
+    "documents.bulkCancel": "Cancel",
+    "documents.bulkPartialFailure": "{count} documents could not be updated and stay selected — retry applies to only those.",
     "documents.bulkExport": "Export",
     "documents.bulkDelete": "Delete",
     "documents.clearSelection": "Clear",
@@ -984,6 +1112,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.typeSpecificFields": "Type-specific Fields",
     "documentDetail.noExtractedFields": "No extracted fields available.",
     "documentDetail.source": "Source:",
+    "documentDetail.arrivedByEmail": "Arrived by email",
     "documentDetail.location": "Location:",
     "documentDetail.pageWord": "Page",
     "documentDetail.lineWord": "line",
@@ -1120,6 +1249,31 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "root.nav.dashboard": "Dashboard",
     "root.nav.documents": "Dokumente",
     "root.nav.review": "Prüfung",
+    "root.nav.taxes": "Steuern",
+    "taxes.eyebrow": "Steuerjahr",
+    "taxes.title": "Steuerjahr {year}",
+    "taxes.description":
+      "Alles, was zu diesem Steuerjahr gehört, gruppiert wie ein Steuerberater denkt. Die Zugehörigkeit folgt dem Steuer-Tag und den Steuer-Dokumenttypen — entferne das Tag an einem Dokument, um es herauszunehmen.",
+    "taxes.yearPicker": "Jahr",
+    "taxes.loading": "Steuerjahr wird geladen",
+    "taxes.error": "Das Steuerjahr konnte nicht geladen werden.",
+    "taxes.retry": "Erneut versuchen",
+    "taxes.empty": "Im Steuerjahr {year} ist noch nichts abgelegt. Dokumente gehören über das Steuer-Tag oder einen Steuer-Dokumenttyp dazu.",
+    "taxes.unfiled": "Ohne Typ",
+    "taxes.metricDocuments": "Dokumente",
+    "taxes.metricTotal": "Summe ({currency})",
+    "taxes.metricUnsummed": "Ohne Betrag",
+    "taxes.groupUnsummed": "{count} ohne Betrag",
+    "taxes.openInExplorer": "Im Explorer öffnen",
+    "taxes.noAmount": "Kein Betrag",
+    "taxes.viaTag": "Tag",
+    "taxes.viaType": "Typ",
+    "taxes.viaBoth": "Tag + Typ",
+    "taxes.viaTagHint": "Enthalten, weil es das Steuer-Tag trägt. Entferne das Tag am Dokument, um es aus dem Jahr zu nehmen.",
+    "taxes.viaTypeHint": "Enthalten, weil der Dokumenttyp steuerrelevant ist.",
+    "taxes.export": "Jahr exportieren",
+    "taxes.exporting": "Exportiere…",
+    "taxes.exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
     "root.nav.search": "Suche",
     "root.nav.upload": "Hochladen",
     "root.nav.settings": "Einstellungen",
@@ -1165,6 +1319,8 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.german": "Deutsch",
     "settings.saving": "Wird gespeichert...",
     "settings.savePreferences": "Einstellungen speichern",
+    "settings.emailDigest": "Täglicher Fristen-Digest per E-Mail",
+    "settings.emailDigestDescription": "Eine E-Mail pro Tag mit überfälligen, heute fälligen und anstehenden Fristen. Setzt konfiguriertes SMTP auf dem Server voraus.",
     "settings.preferencesSaved": "Einstellungen gespeichert.",
     "settings.preferencesSaveFailed": "Einstellungen konnten nicht gespeichert werden.",
     "settings.unknown": "Unbekannt",
@@ -1206,6 +1362,16 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.documentTypes": "Dokumenttypen",
     "settings.documentTypesDescription": "Stabile Typbezeichnungen wie Rechnung, Vertrag oder Abrechnung.",
     "settings.failedToLoadTags": "Tags konnten nicht geladen werden",
+    "settings.failedToLoadCategories": "Kategorien konnten nicht geladen werden.",
+    "settings.failedToCreateCategory": "Die Kategorie konnte nicht angelegt werden.",
+    "settings.failedToRenameCategory": "Die Kategorie konnte nicht umbenannt werden.",
+    "settings.failedToDeleteCategory": "Die Kategorie konnte nicht gelöscht werden.",
+    "settings.categoriesNoMerge": "Kategorien lassen sich nicht zusammenführen.",
+    "dossier.category": "Kategorie",
+    "dossier.categoryNone": "Keine Kategorie",
+    "dossier.categorySetByYou": "von dir gesetzt",
+    "dossier.categoryAutomatic": "automatisch zugeordnet",
+    "dossier.categoryFailed": "Die Kategorie konnte nicht geändert werden.",
     "settings.failedToLoadCorrespondents": "Korrespondenzen konnten nicht geladen werden",
     "settings.failedToLoadDocumentTypes": "Dokumenttypen konnten nicht geladen werden",
     "settings.failedToCreateTag": "Tag konnte nicht erstellt werden",
@@ -1250,6 +1416,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "settings.watchFolderServer": "Server-Watch-Folder",
     "settings.watchFolderServerDescription": "Dies ist der konfigurierte Importordner des Archivservers, nicht ein Ordner auf diesem Desktop.",
     "settings.watchFolderStatusFailed": "Der Status des Server-Watch-Folders konnte nicht geladen werden.",
+    "settings.emailInbox": "E-Mail-Postfach",
+    "settings.emailInboxDescription": "Ein dediziertes Postfach, das der Server abruft; Anhänge werden Dokumente. Nicht zu verwechseln mit den überwachten Ordnern, die Verzeichnisse lesen.",
+    "settings.emailInboxStatusFailed": "Der Postfach-Status konnte nicht geladen werden.",
+    "settings.emailInboxPollFailed": "Der Abruf konnte nicht eingeplant werden.",
+    "settings.pollNow": "Jetzt abrufen",
+    "settings.lastPoll": "Letzter Abruf",
+    "settings.neverPolled": "nie",
+    "settings.emailImported": "Importiert",
+    "settings.emailSkipped": "Übersprungen",
+    "settings.emailRejected": "Abgelehnt",
+    "settings.recentRejections": "Zuletzt abgelehnt",
     "settings.lastScan": "Letzter Scan",
     "settings.lastImport": "Letzter Import",
     "settings.neverScanned": "Nie",
@@ -1393,7 +1570,6 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "today.reference": "Referenz",
     "today.documentType": "Dokumententyp",
     "today.previewUnavailable": "Keine Vorschau verfügbar",
-    "documents.bulkUnavailable": "Noch nicht verfügbar",
     "timeline.monthError": "Dieser Monat konnte nicht geladen werden.",
     "filters.title": "Filter",
     "filters.clear": "Zurücksetzen",
@@ -1403,6 +1579,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "filters.type": "Typ",
     "filters.correspondent": "Korrespondent",
     "filters.tag": "Schlagwort",
+    "filters.category": "Kategorie",
+    "filters.uncategorized": "Ohne Kategorie",
+    "groups.byCorrespondents": "Absender",
+    "groups.byCategories": "Kategorien",
+    "groups.categoriesCaption": "Lebensbereiche, skaliert nach Dokumentanzahl. Ein Klick öffnet die Dokumente.",
     "filters.date": "Datum",
     "filters.dateFrom": "Von",
     "filters.dateTo": "Bis",
@@ -1449,6 +1630,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "omnibar.sectionJump": "Springen zu",
     "omnibar.goToday": "Heute",
     "omnibar.goDocuments": "Dokumente",
+    "omnibar.goTaxes": "Steuern",
     "omnibar.goReview": "Prüfungswarteschlange",
     "omnibar.goImport": "Dateien importieren",
     "omnibar.goSettings": "Einstellungen",
@@ -1471,6 +1653,17 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documents.selected": "ausgewählt",
     "documents.bulkTag": "Schlagwort",
     "documents.bulkSetType": "Typ setzen",
+    "documents.bulkTagTitle": "{count} Dokumente taggen",
+    "documents.bulkTagDescription": "Ein Schlagwort auf allen ausgewählten Dokumenten hinzufügen oder entfernen. Andere Schlagworte bleiben unberührt.",
+    "documents.bulkTagAdd": "Schlagwort hinzufügen",
+    "documents.bulkTagRemove": "Schlagwort entfernen",
+    "documents.bulkPickTag": "Schlagwort wählen…",
+    "documents.bulkTypeTitle": "Typ von {count} Dokumenten setzen",
+    "documents.bulkTypeDescription": "Jedes ausgewählte Dokument erhält diesen Dokumenttyp.",
+    "documents.bulkTypeNone": "Kein Typ (unsortiert)",
+    "documents.bulkApply": "Anwenden",
+    "documents.bulkCancel": "Abbrechen",
+    "documents.bulkPartialFailure": "{count} Dokumente konnten nicht aktualisiert werden und bleiben ausgewählt — ein erneuter Versuch trifft nur diese.",
     "documents.bulkExport": "Exportieren",
     "documents.bulkDelete": "Löschen",
     "documents.clearSelection": "Aufheben",
@@ -1533,6 +1726,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.typeSpecificFields": "Typspezifische Felder",
     "documentDetail.noExtractedFields": "Keine extrahierten Felder verfügbar.",
     "documentDetail.source": "Quelle:",
+    "documentDetail.arrivedByEmail": "Per E-Mail eingegangen",
     "documentDetail.location": "Position:",
     "documentDetail.pageWord": "Seite",
     "documentDetail.lineWord": "Zeile",

@@ -22,6 +22,7 @@ function createNotifierHarness(
     completed: true,
     failed: true,
     review: true,
+    deadlines: false,
     ...options.preferences,
   };
   const notifier = createDesktopImportNotifier({

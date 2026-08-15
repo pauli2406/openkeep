@@ -30,6 +30,8 @@ const DEFAULT_NOTIFICATIONS: DesktopNotificationPreferences = {
   completed: true,
   failed: true,
   review: true,
+  // Deadline reminders are opt-in, matching the rule of epic #249.
+  deadlines: false,
 };
 
 const DEFAULT_STATE: DesktopLifecycleState = {

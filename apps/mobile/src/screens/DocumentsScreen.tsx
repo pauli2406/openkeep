@@ -16,6 +16,7 @@ import type { AppStackParamList } from "../../App";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { text } from "../typography";
 import {
+  buildDocumentsSearchParams,
   fetchTaxonomy,
   formatCurrency,
   formatShortDate,
@@ -128,6 +129,9 @@ export function DocumentsScreen() {
    */
   const [selected, setSelected] = useState<Map<string, ArchiveDocument>>(new Map());
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  /** Server-side only: the offline mirror knows no correspondent categories. */
+  const [categoryFilter, setCategoryFilter] = useState<{ id: string; name: string } | null>(null);
   const [tagSearch, setTagSearch] = useState("");
   const selecting = selected.size > 0;
 
@@ -155,25 +159,20 @@ export function DocumentsScreen() {
   const insights = useDashboardInsights();
   const reviewCount = insights.data?.stats.pendingReview ?? 0;
 
-  const params = useMemo(() => {
-    const search = new URLSearchParams();
-    search.set("page", "1");
-    search.set("pageSize", String(PAGE_SIZE));
-    if (query.trim()) {
-      search.set("query", query.trim());
-    }
-    if (filter === "year") {
-      search.set("year", String(currentYear));
-    }
-    if (filter === "due") {
-      search.set("sort", "dueDate");
-      search.set("direction", "asc");
-    } else {
-      search.set("sort", "createdAt");
-      search.set("direction", oldestFirst ? "asc" : "desc");
-    }
-    return search.toString();
-  }, [query, filter, oldestFirst, currentYear]);
+  const params = useMemo(
+    () =>
+      buildDocumentsSearchParams({
+        query,
+        filter,
+        oldestFirst,
+        currentYear,
+        pageSize: PAGE_SIZE,
+        // Dropped offline rather than silently misapplied: the cached mirror
+        // stores documents, not correspondent categories.
+        categoryId: shouldUseCache ? null : categoryFilter?.id ?? null,
+      }),
+    [query, filter, oldestFirst, currentYear, categoryFilter, shouldUseCache],
+  );
 
   const documentsQuery = useQuery({
     queryKey: [
@@ -222,16 +221,45 @@ export function DocumentsScreen() {
     queryFn: () => fetchTaxonomy(auth.authFetch, "tags", t("documents.loadError")),
   });
 
+  const categoriesQuery = useQuery({
+    queryKey: taxonomyQueryKey(auth.apiUrl, "categories"),
+    enabled: categorySheetOpen && !shouldUseCache,
+    queryFn: () => fetchTaxonomy(auth.authFetch, "categories", t("documents.loadError")),
+  });
+
   /**
-   * There is no bulk endpoint, so a bulk action is N calls to the per-document
-   * one. `PATCH` replaces `tagIds` wholesale, which is why adding a tag reads
-   * each document's current tags first.
+   * Tagging goes through the bulk endpoint — one request, one audit entry per
+   * document, no read-modify-write of each document's tag list. Done and
+   * delete stay per-document calls; either way, one failure must not hide the
+   * requests that already landed, so failures are reported back.
    */
   const bulkMutation = useMutation({
     mutationFn: async (action: { kind: "tag"; tagId: string } | { kind: "done" } | { kind: "delete" }) => {
       const documents = Array.from(selected.values());
-      // One failure must not hide the requests that already landed, so each
-      // document is tracked and the outcome reported back.
+
+      if (action.kind === "tag") {
+        try {
+          const response = await auth.authFetch("/api/documents/bulk/tags", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              documentIds: documents.map((document) => document.id),
+              tagId: action.tagId,
+              action: "add",
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(await responseToMessage(response));
+          }
+          const result = (await response.json()) as {
+            failed: Array<{ id: string; reason: string }>;
+          };
+          return { failed: result.failed.map((entry) => entry.id) };
+        } catch {
+          return { failed: documents.map((document) => document.id) };
+        }
+      }
+
       const failed: string[] = [];
       for (const document of documents) {
         const init: RequestInit =
@@ -240,15 +268,7 @@ export function DocumentsScreen() {
             : {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(
-                  action.kind === "tag"
-                    ? {
-                        tagIds: Array.from(
-                          new Set([...document.tags.map((tag) => tag.id), action.tagId]),
-                        ),
-                      }
-                    : { taskCompletedAt: new Date().toISOString() },
-                ),
+                body: JSON.stringify({ taskCompletedAt: new Date().toISOString() }),
               };
         try {
           const response = await auth.authFetch(`/api/documents/${document.id}`, init);
@@ -333,6 +353,9 @@ export function DocumentsScreen() {
 
   // The offline mirror carries issue and due dates as queryable columns, so
   // every chip means the same thing offline as online.
+  // Offline the category filter is inert, and the chip says so by disabling.
+  const activeCategory = shouldUseCache ? null : categoryFilter;
+
   const chips: Array<{ key: DocFilter; label: string; count?: number }> = [
     { key: "all", label: t("documents.filter.all") },
     { key: "review", label: t("documents.filter.review"), count: reviewCount },
@@ -347,7 +370,7 @@ export function DocumentsScreen() {
         ? t("documents.sortOldest")
         : t("documents.sortNewest");
 
-  const isFiltered = filter !== "all" || query.trim().length > 0;
+  const isFiltered = filter !== "all" || query.trim().length > 0 || activeCategory !== null;
 
   /**
    * `/api/documents/review` takes no `query`, so a search while the Review chip
@@ -484,13 +507,39 @@ export function DocumentsScreen() {
               </Pressable>
             );
           })}
+          <Pressable
+            accessibilityLabel={t("documents.filter.category")}
+            disabled={shouldUseCache}
+            onPress={() =>
+              activeCategory ? setCategoryFilter(null) : setCategorySheetOpen(true)
+            }
+            style={[
+              styles.chip,
+              activeCategory ? styles.chipActive : styles.chipIdle,
+              shouldUseCache ? styles.chipDisabled : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                activeCategory ? styles.chipTextActive : null,
+                shouldUseCache ? styles.chipTextDisabled : null,
+              ]}
+            >
+              {activeCategory
+                ? `${activeCategory.name} ×`
+                : t("documents.filter.category")}
+            </Text>
+          </Pressable>
         </ScrollView>
       </View>
 
       {documentsQuery.data ? (
         <View style={styles.countStrip}>
           <Text style={styles.countText}>
-            {`${visibleTotal.toLocaleString()} ${t("documents.count")}`}
+            {`${visibleTotal.toLocaleString()} ${t("documents.count")}${
+              activeCategory ? ` · ${activeCategory.name}` : ""
+            }`}
           </Text>
           <Text style={styles.orderText}>{orderLabel}</Text>
         </View>
@@ -575,6 +624,35 @@ export function DocumentsScreen() {
           <ErrorCard message={t("documents.bulkFailed")} />
         </View>
       ) : null}
+
+      <FullScreenModal
+        visible={categorySheetOpen}
+        onRequestClose={() => setCategorySheetOpen(false)}
+        style={styles.sheetRoot}
+      >
+          <View style={styles.sheetBar}>
+            <Text style={styles.sheetTitle}>{t("documents.categorySheetTitle")}</Text>
+            <Pressable onPress={() => setCategorySheetOpen(false)} hitSlop={10}>
+              <Text style={styles.barAction}>{t("documents.cancel")}</Text>
+            </Pressable>
+          </View>
+          <ScrollView>
+            {(categoriesQuery.data ?? []).map((category) => (
+              <Row
+                key={category.id}
+                title={category.name}
+                chevron
+                onPress={() => {
+                  setCategoryFilter({ id: category.id, name: category.name });
+                  setCategorySheetOpen(false);
+                }}
+              />
+            ))}
+            {categoriesQuery.isSuccess && (categoriesQuery.data ?? []).length === 0 ? (
+              <EmptyState title={t("documents.noCategories")} />
+            ) : null}
+          </ScrollView>
+      </FullScreenModal>
 
       <FullScreenModal
         visible={tagSheetOpen}
@@ -674,6 +752,12 @@ const useStyles = createThemedStyles((c) => ({
     minWidth: 0,
     color: c.ink,
     padding: 0,
+  },
+  chipDisabled: {
+    opacity: 0.4,
+  },
+  chipTextDisabled: {
+    color: c.dim,
   },
   chipRow: {
     flexDirection: "row",

@@ -10,6 +10,8 @@ import { AccessAuthGuard } from "../auth/access-auth.guard";
 import { CurrentPrincipal } from "../auth/current-principal.decorator";
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import {
+  CreateCategoryDto,
+  UpdateCategoryDto,
   CreateCorrespondentDto,
   CreateDocumentTypeDto,
   CreateTagDto,
@@ -70,6 +72,40 @@ export class TaxonomiesController {
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ) {
     return this.taxonomiesService.mergeTag(id, body, principal);
+  }
+
+  @Get("categories")
+  @ApiOkResponse({ description: "All categories, builtin and custom" })
+  async listCategories() {
+    return this.taxonomiesService.listCategories();
+  }
+
+  @Post("categories")
+  @ApiCreatedResponse({ description: "Created category" })
+  async createCategory(
+    @ValidatedBody(CreateCategoryDto) body: CreateCategoryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.taxonomiesService.createCategory(body, principal);
+  }
+
+  @Patch("categories/:id")
+  @ApiOkResponse({ description: "Renamed category (the slug stays)" })
+  async updateCategory(
+    @Param("id") id: string,
+    @ValidatedBody(UpdateCategoryDto) body: UpdateCategoryDto,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.taxonomiesService.updateCategory(id, body, principal);
+  }
+
+  @Delete("categories/:id")
+  @ApiOkResponse({ description: "Deleted category (custom only)" })
+  async deleteCategory(
+    @Param("id") id: string,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ) {
+    return this.taxonomiesService.deleteCategory(id, principal);
   }
 
   @Get("correspondents")

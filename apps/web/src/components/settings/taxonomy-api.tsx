@@ -2,6 +2,7 @@ import type {
   ArchiveImportResult,
   ArchiveSnapshot,
   ArchiveSnapshot as ArchiveSnapshotType,
+  Category,
   Correspondent,
   Document,
   DocumentType,
@@ -16,8 +17,8 @@ import type {
 import { api, getApiErrorMessage } from "@/lib/api";
 import { useI18n, type AppLanguage } from "@/lib/i18n";
 
-export type TaxonomyEntity = Tag | Correspondent | DocumentType;
-export type TaxonomyKind = "tags" | "correspondents" | "document-types";
+export type TaxonomyEntity = Tag | Correspondent | DocumentType | Category;
+export type TaxonomyKind = "tags" | "correspondents" | "document-types" | "categories";
 export type Translate = ReturnType<typeof useI18n>["t"];
 
 export async function listTaxonomy(kind: TaxonomyKind, t: Translate): Promise<TaxonomyEntity[]> {
@@ -42,6 +43,13 @@ export async function listTaxonomy(kind: TaxonomyKind, t: Translate): Promise<Ta
         throw new Error(getApiErrorMessage(error, t("settings.failedToLoadDocumentTypes")));
       }
       return (data ?? []) as DocumentType[];
+    }
+    case "categories": {
+      const { data, error } = await api.GET("/api/taxonomies/categories", {});
+      if (error) {
+        throw new Error(getApiErrorMessage(error, t("settings.failedToLoadCategories")));
+      }
+      return (data ?? []) as Category[];
     }
   }
 }
@@ -94,6 +102,16 @@ export async function updateTaxonomy(kind: TaxonomyKind, id: string, name: strin
       }
       return;
     }
+    case "categories": {
+      const { error } = await api.PATCH("/api/taxonomies/categories/{id}", {
+        params: { path: { id } },
+        body: { name },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, t("settings.failedToRenameCategory")));
+      }
+      return;
+    }
     case "document-types": {
       const { error } = await api.PATCH("/api/taxonomies/document-types/{id}", {
         params: { path: { id } },
@@ -124,6 +142,15 @@ export async function deleteTaxonomy(kind: TaxonomyKind, id: string, t: Translat
       });
       if (error) {
         throw new Error(getApiErrorMessage(error, t("settings.failedToDeleteCorrespondent")));
+      }
+      return;
+    }
+    case "categories": {
+      const { error } = await api.DELETE("/api/taxonomies/categories/{id}", {
+        params: { path: { id } },
+      });
+      if (error) {
+        throw new Error(getApiErrorMessage(error, t("settings.failedToDeleteCategory")));
       }
       return;
     }
@@ -160,6 +187,11 @@ export async function mergeTaxonomy(kind: TaxonomyKind, id: string, targetId: st
         throw new Error(getApiErrorMessage(error, t("settings.failedToMergeCorrespondent")));
       }
       return;
+    }
+    case "categories": {
+      // Categories have no merge: reassignments are one manual click each,
+      // and merging builtins would break the canonical vocabulary.
+      throw new Error(t("settings.categoriesNoMerge"));
     }
     case "document-types": {
       const { error } = await api.POST("/api/taxonomies/document-types/{id}/merge", {

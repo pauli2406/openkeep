@@ -10,7 +10,11 @@ import {
   ArchiveSnapshotSchema,
   AuthTokensSchema,
   BatchReprocessDocumentsRequestSchema,
+  BulkDocumentsResponseSchema,
+  BulkSetDocumentTypeRequestSchema,
+  BulkTagDocumentsRequestSchema,
   BatchReprocessDocumentsResponseSchema,
+  CategorySchema,
   CorrespondentSchema,
   CorrespondentInsightsResponseSchema,
   CreateApiTokenResponseSchema,
@@ -20,13 +24,14 @@ import {
   DocumentStatusSchema,
   DeleteTaxonomyResponseSchema,
   DocumentHistoryResponseSchema,
-  DocumentsProjectionResponseSchema,
   DocumentSchema,
   DocumentTextResponseSchema,
   DocumentsTimelineResponseSchema,
+  EmailIngestStatusResponseSchema,
   DocumentTypeSchema,
   HealthProvidersResponseSchema,
   HealthResponseSchema,
+  NotificationsResponseSchema,
   ProcessingStatusResponseSchema,
   ReadinessResponseSchema,
   RequeueDocumentProcessingResponseSchema,
@@ -37,6 +42,7 @@ import {
   SemanticSearchResponseSchema,
   SuccessResponseSchema,
   TagSchema,
+  TaxYearResponseSchema,
   WatchFolderScanRequestSchema,
   WatchFolderScanResponseSchema,
   WatchFolderStatusResponseSchema,
@@ -505,19 +511,6 @@ function patchGeneratedDocument(document: Record<string, any>) {
   patchCsvTagsQuery(document, "/api/documents/facets");
   patchJsonResponse(
     document,
-    "/api/documents/projection",
-    "get",
-    200,
-    "Projection response",
-    "DocumentsProjectionResponse",
-    DocumentsProjectionResponseSchema,
-  );
-  patchQueryParameters(document, "/api/documents/projection", "get", [
-    ...searchDocumentQueryParameters,
-  ]);
-  patchCsvTagsQuery(document, "/api/documents/projection");
-  patchJsonResponse(
-    document,
     "/api/documents/timeline",
     "get",
     200,
@@ -529,6 +522,65 @@ function patchGeneratedDocument(document: Record<string, any>) {
     ...searchDocumentQueryParameters,
   ]);
   patchCsvTagsQuery(document, "/api/documents/timeline");
+  patchJsonResponse(
+    document,
+    "/api/email-ingest/status",
+    "get",
+    200,
+    "Mailbox ingestion status",
+    "EmailIngestStatusResponse",
+    EmailIngestStatusResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/notifications",
+    "get",
+    200,
+    "Pending deadline notifications",
+    "NotificationsResponse",
+    NotificationsResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/taxes/{year}",
+    "get",
+    200,
+    "Tax year aggregation response",
+    "TaxYearResponse",
+    TaxYearResponseSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/bulk/tags",
+    "post",
+    201,
+    "Bulk tag result",
+    "BulkDocumentsResponse",
+    BulkDocumentsResponseSchema,
+  );
+  patchJsonRequest(
+    document,
+    "/api/documents/bulk/tags",
+    "post",
+    "BulkTagDocumentsRequest",
+    BulkTagDocumentsRequestSchema,
+  );
+  patchJsonResponse(
+    document,
+    "/api/documents/bulk/type",
+    "post",
+    201,
+    "Bulk set-type result",
+    "BulkDocumentsResponse",
+    BulkDocumentsResponseSchema,
+  );
+  patchJsonRequest(
+    document,
+    "/api/documents/bulk/type",
+    "post",
+    "BulkSetDocumentTypeRequest",
+    BulkSetDocumentTypeRequestSchema,
+  );
   patchJsonResponse(
     document,
     "/api/documents/review",
@@ -699,6 +751,9 @@ function patchGeneratedDocument(document: Record<string, any>) {
     AnswerQueryResponseSchema,
   );
 
+  patchJsonResponse(document, "/api/taxonomies/categories", "get", 200, "List of categories", "CategoryList", z.array(CategorySchema));
+  patchJsonResponse(document, "/api/taxonomies/categories", "post", 201, "Created category", "Category", CategorySchema);
+  patchJsonResponse(document, "/api/taxonomies/categories/{id}", "patch", 200, "Renamed category", "Category", CategorySchema);
   patchJsonResponse(document, "/api/taxonomies/tags", "get", 200, "List of tags", "TagList", z.array(TagSchema));
   patchJsonResponse(document, "/api/taxonomies/tags", "post", 201, "Created tag", "Tag", TagSchema);
   patchJsonResponse(document, "/api/taxonomies/tags/{id}", "patch", 200, "Updated tag", "Tag", TagSchema);

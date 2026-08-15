@@ -171,7 +171,7 @@ export type DesktopCloseBehaviorInput = {
  */
 export type DesktopImportSource = "picker" | "open-with" | "watch-folder";
 
-export type DesktopNotificationKind = "completed" | "failed" | "review";
+export type DesktopNotificationKind = "completed" | "failed" | "review" | "deadlines";
 
 export type DesktopNotificationPreferences = Record<
   DesktopNotificationKind,

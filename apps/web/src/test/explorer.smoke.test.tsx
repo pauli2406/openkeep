@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
-import { makeDocument } from "./fixtures";
+import { makeDocument, makeSearchDocumentsResponse } from "./fixtures";
 import { server } from "./msw-server";
 
 describe("explorer smoke", () => {
@@ -370,6 +370,139 @@ describe("explorer smoke", () => {
       expect(screen.queryByText("Adidas Receipt February")).not.toBeInTheDocument();
     });
     expect(screen.getByText("Archive Export")).toBeInTheDocument();
+  });
+
+  it("lets the dossier fix the category, and the hint flips to set-by-you", async () => {
+    let categorySource: string | null = "deterministic";
+    let categoryId: string | null = "44444444-4444-4444-4444-444444444444";
+    const patches: Array<{ categoryId: string | null }> = [];
+
+    server.use(
+      http.get(apiUrl("/api/taxonomies/categories"), () =>
+        HttpResponse.json([
+          {
+            id: "44444444-4444-4444-4444-444444444444",
+            name: "Housing",
+            slug: "housing",
+            builtin: true,
+          },
+          {
+            id: "55555555-5555-5555-5555-555555555555",
+            name: "Insurance",
+            slug: "insurance",
+            builtin: true,
+          },
+        ]),
+      ),
+      http.patch(apiUrl("/api/taxonomies/correspondents/:id"), async ({ request }) => {
+        const body = (await request.json()) as { categoryId: string | null };
+        patches.push({ categoryId: body.categoryId });
+        categoryId = body.categoryId;
+        categorySource = "manual";
+        return HttpResponse.json({ id: "22222222-2222-2222-2222-222222222222" });
+      }),
+      http.get(apiUrl("/api/correspondents/adidas/insights"), () =>
+        HttpResponse.json({
+          correspondent: {
+            id: "22222222-2222-2222-2222-222222222222",
+            name: "Adidas",
+            slug: "adidas",
+            categoryId,
+            categoryName: categoryId === null ? null : "Housing",
+            categorySource,
+            summaryGeneratedAt: null,
+            intelligenceGeneratedAt: null,
+          },
+          summaryStatus: "ready",
+          summary: "Adidas is a recurring retailer in your archive.",
+          intelligenceStatus: "ready",
+          intelligence: null,
+          stats: {
+            documentCount: 2,
+            totalAmount: null,
+            currency: null,
+            dateRange: { from: "2026-01-01", to: "2026-03-01" },
+            avgConfidence: null,
+          },
+          documentTypeBreakdown: [],
+          timeline: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), () =>
+        HttpResponse.json(makeSearchDocumentsResponse([])),
+      ),
+    );
+
+    const { user } = renderAuthenticatedApp({ route: "/correspondents/adidas" });
+
+    // The automatic assignment is visible with its source.
+    const picker = await screen.findByLabelText(/category/i);
+    expect(screen.getByText("assigned automatically")).toBeInTheDocument();
+
+    // Fixing it stamps manual and the hint flips.
+    await user.selectOptions(picker, "55555555-5555-5555-5555-555555555555");
+    expect(await screen.findByText("set by you")).toBeInTheDocument();
+    expect(patches).toEqual([
+      { categoryId: "55555555-5555-5555-5555-555555555555" },
+    ]);
+  });
+
+  it("groups by category, and a block click filters the list", async () => {
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [{ year: 2026, count: 3 }],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          categories: [
+            {
+              id: "44444444-4444-4444-4444-444444444444",
+              name: "Housing",
+              slug: "housing",
+              count: 2,
+              topCorrespondents: ["Stadtwerke"],
+            },
+            {
+              id: "55555555-5555-5555-5555-555555555555",
+              name: "Insurance",
+              slug: "insurance",
+              count: 1,
+              topCorrespondents: ["HUK"],
+            },
+          ],
+          uncategorizedCount: 1,
+          amountRange: { min: null, max: null },
+          statuses: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), ({ request }) => {
+        const url = new URL(request.url);
+        return HttpResponse.json(
+          makeSearchDocumentsResponse(
+            url.searchParams.get("categoryIds")
+              ? [makeDocument({ title: "Stromabrechnung" })]
+              : [],
+          ),
+        );
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/documents?view=groups&groupBy=categories",
+    });
+
+    // Category blocks with counts and top correspondents. "Housing" also
+    // appears in the sidebar facet, so target the block by its full label.
+    const housingBlock = await screen.findByRole("button", { name: /Housing 2 Stadtwerke/ });
+    expect(housingBlock).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Insurance 1 HUK/ })).toBeInTheDocument();
+    // The uncategorized bucket is honest, not hidden.
+    expect(screen.getByRole("button", { name: /Uncategorized 1/ })).toBeInTheDocument();
+
+    // Clicking a block opens the filtered list.
+    await user.click(housingBlock);
+    expect(await screen.findByText("Stromabrechnung")).toBeInTheDocument();
   });
 
   it("sends the active filters to the facets endpoint and labels groups with the dominant type", async () => {

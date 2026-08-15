@@ -160,7 +160,6 @@ Relevant endpoints:
 
 - `GET /api/dashboard/insights`
 - `GET /api/correspondents/:slug/insights`
-- `GET /api/documents/projection`
 - `GET /api/documents/timeline`
 
 These power the higher-level archive browsing UI:

@@ -14,10 +14,11 @@ import type {
   ProviderConfig,
   ReadinessResponse,
   Tag,
+  EmailIngestStatusResponse,
   WatchFolderScanResponse,
   WatchFolderStatusResponse,
 } from "@openkeep/types";
-import { api, getApiErrorMessage } from "@/lib/api";
+import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -64,6 +65,30 @@ export function ArchiveOperationsSection() {
   const [watchDryRun, setWatchDryRun] = useState(true);
   const [lastImportResult, setLastImportResult] = useState<string | null>(null);
   const [watchResult, setWatchResult] = useState<WatchFolderScanResponse | null>(null);
+
+  const emailInboxQuery = useQuery({
+    queryKey: ["email-ingest", "status"],
+    queryFn: async () => {
+      const response = await authFetch("/api/email-ingest/status");
+      if (!response.ok) {
+        throw new Error(t("settings.emailInboxStatusFailed"));
+      }
+      return (await response.json()) as EmailIngestStatusResponse;
+    },
+    refetchInterval: 30_000,
+  });
+
+  const pollNowMutation = useMutation({
+    mutationFn: async () => {
+      const response = await authFetch("/api/email-ingest/poll", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(t("settings.emailInboxPollFailed"));
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["email-ingest", "status"] });
+    },
+  });
 
   const watchStatusQuery = useQuery({
     queryKey: ["archive", "watch-folder", "status"],
@@ -238,6 +263,81 @@ export function ArchiveOperationsSection() {
               ? watchStatusQuery.error.message
               : t("settings.watchFolderStatusFailed")}
           </p>
+        ) : null}
+
+        {emailInboxQuery.data ? (
+          <div className="rounded-md border bg-muted/20 px-3 py-2.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{t("settings.emailInbox")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("settings.emailInboxDescription")}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={emailInboxQuery.data.configured ? "success" : "secondary"}>
+                  {emailInboxQuery.data.configured
+                    ? t("settings.configured")
+                    : t("settings.notConfigured")}
+                </Badge>
+                {emailInboxQuery.data.configured ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => pollNowMutation.mutate()}
+                    disabled={pollNowMutation.isPending}
+                  >
+                    {pollNowMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {t("settings.pollNow")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {emailInboxQuery.data.mailbox ? (
+              <p className="ok-num mt-2 break-all text-xs text-muted-foreground">
+                {emailInboxQuery.data.mailbox.user}@{emailInboxQuery.data.mailbox.host} ·{" "}
+                {emailInboxQuery.data.mailbox.folder}
+              </p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                {t("settings.lastPoll")}:{" "}
+                {typeof emailInboxQuery.data.lastPoll?.at === "string"
+                  ? format(new Date(emailInboxQuery.data.lastPoll.at), "MMM d, yyyy HH:mm")
+                  : t("settings.neverPolled")}
+              </span>
+              <span>
+                {t("settings.emailImported")}:{" "}
+                <span className="ok-num">{emailInboxQuery.data.counts.imported}</span>
+              </span>
+              <span>
+                {t("settings.emailSkipped")}:{" "}
+                <span className="ok-num">{emailInboxQuery.data.counts.skipped}</span>
+              </span>
+              <span>
+                {t("settings.emailRejected")}:{" "}
+                <span className="ok-num">{emailInboxQuery.data.counts.rejected}</span>
+              </span>
+            </div>
+            {emailInboxQuery.data.recentRejections.length > 0 ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium">{t("settings.recentRejections")}</p>
+                {emailInboxQuery.data.recentRejections.slice(0, 5).map((rejection) => (
+                  <p
+                    key={`${rejection.fromAddress}-${rejection.createdAt}`}
+                    className="break-all text-xs text-muted-foreground"
+                  >
+                    {rejection.fromAddress || "?"} — {rejection.reason ?? rejection.status}
+                    {rejection.subject ? ` (${rejection.subject})` : ""}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="flex flex-wrap gap-2">

@@ -22,6 +22,8 @@ import {
   SemanticSearchRequestSchema,
   SearchDocumentsRequestSchema,
   UpdateDocumentSchema,
+  BulkTagDocumentsRequestSchema,
+  BulkSetDocumentTypeRequestSchema,
 } from "@openkeep/types";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
@@ -68,6 +70,13 @@ const SearchDocumentsQuerySchema = z.object({
   status: DocumentStatusSchema.optional(),
   statuses: CsvStatusArraySchema,
   tags: CsvUuidArraySchema,
+  categoryIds: CsvUuidArraySchema,
+  uncategorized: z
+    .preprocess((value) => {
+      if (typeof value === "string") return ["1", "true", "yes"].includes(value.toLowerCase());
+      return value;
+    }, z.boolean())
+    .optional(),
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
   sort: SearchDocumentsRequestSchema.shape.sort.default("createdAt"),
@@ -84,6 +93,8 @@ const ReviewDocumentsQuerySchema = z.object({
 });
 
 export class UpdateDocumentDto extends createZodDto(UpdateDocumentSchema) {}
+export class BulkTagDocumentsDto extends createZodDto(BulkTagDocumentsRequestSchema) {}
+export class BulkSetDocumentTypeDto extends createZodDto(BulkSetDocumentTypeRequestSchema) {}
 export class SearchDocumentsQueryDto extends createZodDto(SearchDocumentsQuerySchema) {}
 export class ReviewDocumentsQueryDto extends createZodDto(ReviewDocumentsQuerySchema) {}
 export class SearchDocumentsResponseDto extends createZodDto(SearchDocumentsResponseSchema) {}

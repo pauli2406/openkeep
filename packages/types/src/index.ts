@@ -143,6 +143,9 @@ export const UserLanguagePreferencesSchema = z.object({
   uiLanguage: AppLanguageSchema,
   aiProcessingLanguage: AppLanguageSchema,
   aiChatLanguage: AppLanguageSchema,
+  // Optional so existing clients that PATCH only the languages stay valid;
+  // the server always includes it in responses.
+  emailDigestEnabled: z.boolean().optional(),
 });
 
 export const BoundingBoxSchema = z.object({
@@ -281,11 +284,23 @@ export const TagSchema = z.object({
   slug: z.string().min(1),
 });
 
+export const CategorySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  builtin: z.boolean(),
+});
+
+export const CategorySourceSchema = z.enum(["deterministic", "llm", "manual"]);
+
 export const CorrespondentSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
   slug: z.string().min(1),
   summary: z.string().nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  categoryName: z.string().nullable().optional(),
+  categorySource: CategorySourceSchema.nullable().optional(),
 });
 
 export const CorrespondentIntelligenceProfileSchema = z.object({
@@ -680,6 +695,10 @@ export const SearchDocumentsFiltersSchema = z.object({
   status: DocumentStatusSchema.optional(),
   statuses: z.array(DocumentStatusSchema).optional(),
   tags: z.array(z.string().uuid()).optional(),
+  // Categories resolve through the correspondent assignment (#270).
+  categoryIds: z.array(z.string().uuid()).optional(),
+  /** Only documents whose correspondent has no category (or none at all). */
+  uncategorized: z.boolean().optional(),
   amountMin: z.number().optional(),
   amountMax: z.number().optional(),
 });
@@ -823,32 +842,6 @@ export const CorrespondentInsightsResponseSchema = z.object({
   upcomingDeadlines: z.array(DashboardDeadlineItemSchema),
 });
 
-export const DocumentProjectionPointSchema = z.object({
-  documentId: z.string().uuid(),
-  x: z.number(),
-  y: z.number(),
-  title: z.string().min(1),
-  correspondentName: z.string().nullable(),
-  correspondentSlug: z.string().nullable().optional(),
-  typeName: z.string().nullable(),
-  tags: z.array(z.string()),
-  issueDate: z.string().nullable(),
-  year: z.number().int().nullable(),
-  status: DocumentStatusSchema,
-});
-
-export const DocumentProjectionClusterSchema = z.object({
-  centroidX: z.number(),
-  centroidY: z.number(),
-  label: z.string().min(1),
-  documentIds: z.array(z.string().uuid()),
-});
-
-export const DocumentsProjectionResponseSchema = z.object({
-  points: z.array(DocumentProjectionPointSchema),
-  clusters: z.array(DocumentProjectionClusterSchema),
-});
-
 export const DocumentsTimelineMonthSchema = z.object({
   month: z.number().int().min(1).max(12),
   count: z.number().int().nonnegative(),
@@ -864,6 +857,111 @@ export const DocumentsTimelineYearSchema = z.object({
 
 export const DocumentsTimelineResponseSchema = z.object({
   years: z.array(DocumentsTimelineYearSchema),
+});
+
+export const DeadlineWindowSchema = z.enum(["upcoming", "due", "overdue"]);
+
+export const NotificationItemSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+  documentTitle: z.string(),
+  correspondentName: z.string().nullable(),
+  kind: z.string(),
+  window: DeadlineWindowSchema,
+  dueDate: z.string(),
+  amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  createdAt: z.string(),
+  readAt: z.string().nullable(),
+  emailDeliveredAt: z.string().nullable(),
+  desktopDeliveredAt: z.string().nullable(),
+});
+
+export const NotificationsResponseSchema = z.object({
+  items: z.array(NotificationItemSchema),
+  unreadCount: z.number().int().nonnegative(),
+});
+
+export const EmailIngestStatusResponseSchema = z.object({
+  configured: z.boolean(),
+  mailbox: z
+    .object({
+      host: z.string(),
+      folder: z.string(),
+      user: z.string(),
+    })
+    .nullable(),
+  lastPoll: z.record(z.unknown()).nullable(),
+  counts: z.object({
+    imported: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+  }),
+  recentRejections: z.array(
+    z.object({
+      fromAddress: z.string(),
+      subject: z.string().nullable(),
+      status: z.string(),
+      reason: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
+export const TaxYearMembershipSchema = z.enum(["tag", "type", "both"]);
+
+export const TaxYearDocumentSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  issueDate: z.string().nullable(),
+  correspondentName: z.string().nullable(),
+  amount: z.number().nullable(),
+  currency: z.string().nullable(),
+  memberVia: TaxYearMembershipSchema,
+});
+
+export const TaxYearTotalSchema = z.object({
+  currency: z.string(),
+  sum: z.number(),
+  count: z.number().int().nonnegative(),
+});
+
+export const TaxYearGroupSchema = z.object({
+  documentTypeId: z.string().uuid().nullable(),
+  documentType: z.string().nullable(),
+  count: z.number().int().nonnegative(),
+  unsummedCount: z.number().int().nonnegative(),
+  totals: z.array(TaxYearTotalSchema),
+  documents: z.array(TaxYearDocumentSchema),
+});
+
+export const TaxYearResponseSchema = z.object({
+  year: z.number().int().min(1970).max(2100),
+  documentCount: z.number().int().nonnegative(),
+  unsummedCount: z.number().int().nonnegative(),
+  totals: z.array(TaxYearTotalSchema),
+  groups: z.array(TaxYearGroupSchema),
+});
+
+export const BulkTagDocumentsRequestSchema = z.object({
+  documentIds: z.array(z.string().uuid()).min(1).max(200),
+  tagId: z.string().uuid(),
+  action: z.enum(["add", "remove"]),
+});
+
+export const BulkSetDocumentTypeRequestSchema = z.object({
+  documentIds: z.array(z.string().uuid()).min(1).max(200),
+  documentTypeId: z.string().uuid().nullable(),
+});
+
+export const BulkDocumentsResponseSchema = z.object({
+  updated: z.array(z.string().uuid()),
+  failed: z.array(
+    z.object({
+      id: z.string().uuid(),
+      reason: z.string(),
+    }),
+  ),
 });
 
 export const UploadDocumentMetadataSchema = z.object({
@@ -1059,6 +1157,8 @@ export const ProviderConfigSchema = z.object({
   hasAzureDocumentIntelligenceConfig: z.boolean().default(false),
   hasMistralOcrConfig: z.boolean().default(false),
   hasMistralEmbeddingConfig: z.boolean().default(false),
+  hasSmtpConfig: z.boolean().default(false),
+  hasImapConfig: z.boolean().default(false),
 });
 
 export const HealthResponseSchema = z.object({
@@ -1181,6 +1281,16 @@ export const CreateCorrespondentSchema = z.object({
 });
 
 export const UpdateCorrespondentSchema = z.object({
+  name: z.string().trim().min(1).max(255),
+  // Optional: setting it stamps the manual source; null clears the category.
+  categoryId: z.string().uuid().nullable().optional(),
+});
+
+export const CreateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(255),
+});
+
+export const UpdateCategorySchema = z.object({
   name: z.string().trim().min(1).max(255),
 });
 
@@ -1609,12 +1719,21 @@ export type CorrespondentTimelinePoint = z.infer<typeof CorrespondentTimelinePoi
 export type CorrespondentInsightsResponse = z.infer<
   typeof CorrespondentInsightsResponseSchema
 >;
-export type DocumentProjectionPoint = z.infer<typeof DocumentProjectionPointSchema>;
-export type DocumentProjectionCluster = z.infer<typeof DocumentProjectionClusterSchema>;
-export type DocumentsProjectionResponse = z.infer<typeof DocumentsProjectionResponseSchema>;
 export type DocumentsTimelineMonth = z.infer<typeof DocumentsTimelineMonthSchema>;
 export type DocumentsTimelineYear = z.infer<typeof DocumentsTimelineYearSchema>;
 export type DocumentsTimelineResponse = z.infer<typeof DocumentsTimelineResponseSchema>;
+export type DeadlineWindow = z.infer<typeof DeadlineWindowSchema>;
+export type NotificationItem = z.infer<typeof NotificationItemSchema>;
+export type NotificationsResponse = z.infer<typeof NotificationsResponseSchema>;
+export type EmailIngestStatusResponse = z.infer<typeof EmailIngestStatusResponseSchema>;
+export type TaxYearMembership = z.infer<typeof TaxYearMembershipSchema>;
+export type TaxYearDocument = z.infer<typeof TaxYearDocumentSchema>;
+export type TaxYearTotal = z.infer<typeof TaxYearTotalSchema>;
+export type TaxYearGroup = z.infer<typeof TaxYearGroupSchema>;
+export type TaxYearResponse = z.infer<typeof TaxYearResponseSchema>;
+export type BulkTagDocumentsRequest = z.infer<typeof BulkTagDocumentsRequestSchema>;
+export type BulkSetDocumentTypeRequest = z.infer<typeof BulkSetDocumentTypeRequestSchema>;
+export type BulkDocumentsResponse = z.infer<typeof BulkDocumentsResponseSchema>;
 export type UploadDocumentMetadata = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type ListReviewDocumentsRequest = z.infer<typeof ListReviewDocumentsRequestSchema>;
@@ -1675,6 +1794,10 @@ export type CreateTagInput = z.infer<typeof CreateTagSchema>;
 export type UpdateTagInput = z.infer<typeof UpdateTagSchema>;
 export type CreateCorrespondentInput = z.infer<typeof CreateCorrespondentSchema>;
 export type UpdateCorrespondentInput = z.infer<typeof UpdateCorrespondentSchema>;
+export type Category = z.infer<typeof CategorySchema>;
+export type CategorySource = z.infer<typeof CategorySourceSchema>;
+export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof UpdateCategorySchema>;
 export type CreateDocumentTypeInput = z.infer<typeof CreateDocumentTypeSchema>;
 export type UpdateDocumentTypeInput = z.infer<typeof UpdateDocumentTypeSchema>;
 export type MergeTaxonomyInput = z.infer<typeof MergeTaxonomySchema>;

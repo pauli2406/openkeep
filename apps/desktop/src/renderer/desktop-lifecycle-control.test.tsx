@@ -15,7 +15,7 @@ function createBridge(
   const trayAvailable = options.trayAvailable ?? true;
   const notificationSettings: DesktopNotificationSettings =
     options.notifications ?? {
-      preferences: { completed: true, failed: true, review: true },
+      preferences: { completed: true, failed: true, review: true, deadlines: false },
       supported: true,
     };
   const lifecycle = {
@@ -114,7 +114,7 @@ describe("desktop lifecycle control", () => {
     const user = userEvent.setup();
     const bridge = createBridge({
       notifications: {
-        preferences: { completed: true, failed: true, review: true },
+        preferences: { completed: true, failed: true, review: true, deadlines: false },
         supported: false,
       },
     });

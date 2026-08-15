@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import {
+  categories,
   auditEvents,
   correspondents,
   documentTagLinks,
@@ -14,6 +15,9 @@ import {
   tags,
 } from "@openkeep/db";
 import type {
+  Category,
+  CreateCategoryInput,
+  UpdateCategoryInput,
   Correspondent,
   CreateCorrespondentInput,
   CreateDocumentTypeInput,
@@ -30,6 +34,8 @@ import slugify from "slugify";
 
 import type { AuthenticatedPrincipal } from "../auth/auth.types";
 import { DatabaseService } from "../common/db/database.service";
+import { CategoryAssignmentService } from "./category-assignment.service";
+import { categorySlug } from "./default-categories";
 import { DocumentTypePolicyService } from "../processing/document-type-policy.service";
 import { normalizeCorrespondentName } from "../processing/normalization.util";
 import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
@@ -42,6 +48,8 @@ export class TaxonomiesService {
     private readonly documentTypePolicyService: DocumentTypePolicyService,
     @Inject(forwardRef(() => CorrespondentIntelligenceService))
     private readonly correspondentIntelligenceService: CorrespondentIntelligenceService,
+    @Inject(CategoryAssignmentService)
+    private readonly categoryAssignmentService: CategoryAssignmentService,
   ) {}
 
   async listTags(): Promise<Tag[]> {
@@ -131,8 +139,98 @@ export class TaxonomiesService {
     return target;
   }
 
+  async listCategories(): Promise<Category[]> {
+    return this.databaseService.db.select().from(categories).orderBy(asc(categories.name));
+  }
+
+  async createCategory(
+    input: CreateCategoryInput,
+    principal: AuthenticatedPrincipal,
+  ): Promise<Category> {
+    const name = input.name.trim();
+    const [created] = await this.databaseService.db
+      .insert(categories)
+      .values({ name, slug: categorySlug(name), builtin: false })
+      .returning();
+    await this.recordAudit(principal.userId, "taxonomy.category_created", {
+      categoryId: created.id,
+      name: created.name,
+    });
+    return created;
+  }
+
+  /** Renaming keeps the slug: builtins stay resolvable by the assignment map. */
+  async updateCategory(
+    id: string,
+    input: UpdateCategoryInput,
+    principal: AuthenticatedPrincipal,
+  ): Promise<Category> {
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(categories)
+      .where(eq(categories.id, id))
+      .limit(1);
+    if (!existing) {
+      throw new NotFoundException("Category not found");
+    }
+    const [updated] = await this.databaseService.db
+      .update(categories)
+      .set({ name: input.name.trim() })
+      .where(eq(categories.id, id))
+      .returning();
+    await this.recordAudit(principal.userId, "taxonomy.category_updated", {
+      categoryId: id,
+      name: updated!.name,
+    });
+    return updated!;
+  }
+
+  async deleteCategory(
+    id: string,
+    principal: AuthenticatedPrincipal,
+  ): Promise<{ deleted: true }> {
+    const [existing] = await this.databaseService.db
+      .select()
+      .from(categories)
+      .where(eq(categories.id, id))
+      .limit(1);
+    if (!existing) {
+      throw new NotFoundException("Category not found");
+    }
+    if (existing.builtin) {
+      throw new BadRequestException(
+        "Builtin categories cannot be deleted; rename it instead. The canonical vocabulary keeps automatic assignment working.",
+      );
+    }
+    // The FK set-nulls category_id; the stale source must go with it, or the
+    // orphaned 'manual' would block every future automatic assignment.
+    await this.databaseService.pool.query(
+      `UPDATE correspondents SET category_source = NULL WHERE category_id = $1`,
+      [id],
+    );
+    await this.databaseService.db.delete(categories).where(eq(categories.id, id));
+    await this.recordAudit(principal.userId, "taxonomy.category_deleted", {
+      categoryId: id,
+      name: existing.name,
+    });
+    return { deleted: true };
+  }
+
   async listCorrespondents(): Promise<Correspondent[]> {
-    return this.databaseService.db.select().from(correspondents).orderBy(asc(correspondents.name));
+    const rows = await this.databaseService.db
+      .select({
+        id: correspondents.id,
+        name: correspondents.name,
+        slug: correspondents.slug,
+        summary: correspondents.summary,
+        categoryId: correspondents.categoryId,
+        categorySource: correspondents.categorySource,
+        categoryName: categories.name,
+      })
+      .from(correspondents)
+      .leftJoin(categories, eq(correspondents.categoryId, categories.id))
+      .orderBy(asc(correspondents.name));
+    return rows;
   }
 
   async createCorrespondent(
@@ -205,9 +303,14 @@ export class TaxonomiesService {
       .where(eq(correspondents.id, id))
       .returning();
 
+    if (input.categoryId !== undefined) {
+      await this.categoryAssignmentService.setManualCategory(id, input.categoryId);
+    }
+
     await this.recordAudit(principal.userId, "taxonomy.correspondent_updated", {
       correspondentId: id,
       name: updated!.name,
+      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
     });
     return updated!;
   }

@@ -66,11 +66,11 @@ export function createDesktopBridgeStub(
     },
     notifications: {
       getSettings: vi.fn(async () => ({
-        preferences: { completed: true, failed: true, review: true },
+        preferences: { completed: true, failed: true, review: true, deadlines: false },
         supported: true,
       })),
       setPreference: vi.fn(async () => ({
-        preferences: { completed: true, failed: true, review: true },
+        preferences: { completed: true, failed: true, review: true, deadlines: false },
         supported: true,
       })),
       ...overrides.notifications,

@@ -4,8 +4,12 @@ import { AppConfigModule } from "./common/config/app-config.module";
 import { DatabaseModule } from "./common/db/database.module";
 import { MetricsModule } from "./common/metrics/metrics.module";
 import { StorageModule } from "./common/storage/storage.module";
+import { EmailIngestModule } from "./email-ingest/email-ingest.module";
+import { EmailIngestWorker } from "./email-ingest/email-ingest.worker";
 import { ExplorerModule } from "./explorer/explorer.module";
 import { ExplorerWorker } from "./explorer/explorer.worker";
+import { NotificationsModule } from "./notifications/notifications.module";
+import { NotificationsWorker } from "./notifications/notifications.worker";
 import { ProcessingModule } from "./processing/processing.module";
 import { ProcessingWorker } from "./processing/processing.worker";
 
@@ -17,7 +21,9 @@ import { ProcessingWorker } from "./processing/processing.worker";
     StorageModule,
     ProcessingModule,
     ExplorerModule,
+    EmailIngestModule,
+    NotificationsModule,
   ],
-  providers: [ProcessingWorker, ExplorerWorker],
+  providers: [ProcessingWorker, ExplorerWorker, NotificationsWorker, EmailIngestWorker],
 })
 export class WorkerModule {}

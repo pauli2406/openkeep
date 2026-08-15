@@ -1682,6 +1682,27 @@ function DocumentDetailPage() {
 
             {/* Details / Raw Metadata Tab */}
             <TabsContent value="details">
+              {(() => {
+                const emailProvenance = (doc.metadata as Record<string, unknown> | undefined)
+                  ?.email as
+                  | { from?: string; subject?: string | null; receivedAt?: string | null }
+                  | undefined;
+                if (!emailProvenance) return null;
+                return (
+                  <Card className="mb-4">
+                    <CardContent className="p-4 text-sm">
+                      <p className="font-medium">{t("documentDetail.arrivedByEmail")}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {emailProvenance.from ?? "?"}
+                        {emailProvenance.receivedAt
+                          ? ` · ${format(new Date(emailProvenance.receivedAt), "MMM d, yyyy HH:mm")}`
+                          : ""}
+                        {emailProvenance.subject ? ` · ${emailProvenance.subject}` : ""}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
               <Card>
                 <CardContent className="p-4">
                   <pre className="overflow-auto rounded-md border bg-muted/50 p-4 text-xs font-mono leading-relaxed max-h-[60vh]">

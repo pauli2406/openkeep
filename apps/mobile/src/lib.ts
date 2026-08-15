@@ -489,11 +489,47 @@ export type TaxonomyOption = {
   slug: string;
 };
 
-export type TaxonomyKind = "correspondents" | "document-types" | "tags";
+export type TaxonomyKind = "correspondents" | "document-types" | "tags" | "categories";
 
 /** Query key for a taxonomy list, shared by every screen that reads it. */
 export function taxonomyQueryKey(apiUrl: string, kind: TaxonomyKind) {
   return ["taxonomies", apiUrl, kind] as const;
+}
+
+/**
+ * The Documents screen's server query, as a pure function so the shape is
+ * testable without rendering. `categoryId` is only ever passed while online —
+ * the offline mirror stores documents, not correspondent categories, so the
+ * caller drops the filter there instead of silently misapplying it.
+ */
+export function buildDocumentsSearchParams(input: {
+  query: string;
+  filter: "all" | "review" | "due" | "year";
+  oldestFirst: boolean;
+  currentYear: number;
+  pageSize: number;
+  categoryId?: string | null;
+}): string {
+  const search = new URLSearchParams();
+  search.set("page", "1");
+  search.set("pageSize", String(input.pageSize));
+  if (input.query.trim()) {
+    search.set("query", input.query.trim());
+  }
+  if (input.filter === "year") {
+    search.set("year", String(input.currentYear));
+  }
+  if (input.categoryId) {
+    search.set("categoryIds", input.categoryId);
+  }
+  if (input.filter === "due") {
+    search.set("sort", "dueDate");
+    search.set("direction", "asc");
+  } else {
+    search.set("sort", "createdAt");
+    search.set("direction", input.oldestFirst ? "asc" : "desc");
+  }
+  return search.toString();
 }
 
 export async function fetchTaxonomy(

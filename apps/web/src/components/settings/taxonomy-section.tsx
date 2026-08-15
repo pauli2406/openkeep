@@ -25,7 +25,14 @@ import {
 } from "./taxonomy-api";
 
 /** `count` is null until the facets request lands — unknown, not zero. */
-type Row = { id: string; name: string; slug: string; count: number | null };
+type Row = {
+  id: string;
+  name: string;
+  slug: string;
+  count: number | null;
+  builtin?: boolean;
+  categoryName?: string | null;
+};
 type QuickFilter = "all" | "unused" | "duplicates";
 type SortKey = "count" | "name";
 
@@ -107,6 +114,11 @@ export function TaxonomyManagementSection() {
           tags: "Tags",
           correspondents: "Korrespondenten",
           types: "Typen",
+          categories: "Kategorien",
+          builtinBadge: "Standard",
+          builtinUndeletable:
+            "Standard-Kategorien lassen sich umbenennen, aber nicht löschen — das feste Vokabular hält die automatische Zuordnung stabil.",
+          correspondentsCount: "Absender",
           filter: "Filtern…",
           all: "Alle",
           unused: "Unbenutzt",
@@ -134,6 +146,11 @@ export function TaxonomyManagementSection() {
           tags: "Tags",
           correspondents: "Correspondents",
           types: "Types",
+          categories: "Categories",
+          builtinBadge: "Builtin",
+          builtinUndeletable:
+            "Builtin categories can be renamed but not deleted — the canonical vocabulary keeps automatic assignment stable.",
+          correspondentsCount: "Correspondents",
           filter: "Filter…",
           all: "All",
           unused: "Unused",
@@ -161,6 +178,14 @@ export function TaxonomyManagementSection() {
   const listQuery = useQuery({
     queryKey: ["taxonomies", kind],
     queryFn: () => listTaxonomy(kind, t),
+  });
+
+  // Category counts are correspondents, not documents — counted client-side
+  // from the correspondents list, which also carries each row's category.
+  const correspondentsQuery = useQuery({
+    queryKey: ["taxonomies", "correspondents"],
+    queryFn: () => listTaxonomy("correspondents", t),
+    enabled: kind === "categories",
   });
 
   const facetsQuery = useQuery({
@@ -208,6 +233,14 @@ export function TaxonomyManagementSection() {
   });
 
   const facetCounts = useMemo(() => {
+    if (kind === "categories") {
+      const counts = new Map<string, number>();
+      for (const entry of correspondentsQuery.data ?? []) {
+        const categoryId = (entry as { categoryId?: string | null }).categoryId;
+        if (categoryId) counts.set(categoryId, (counts.get(categoryId) ?? 0) + 1);
+      }
+      return counts;
+    }
     const facets = facetsQuery.data;
     const source =
       kind === "tags"
@@ -216,12 +249,12 @@ export function TaxonomyManagementSection() {
           ? facets?.correspondents
           : facets?.documentTypes;
     return new Map((source ?? []).map((entry) => [entry.id, entry.count]));
-  }, [facetsQuery.data, kind]);
+  }, [facetsQuery.data, correspondentsQuery.data, kind]);
 
   // Until the facets request succeeds we do not know how many documents use
   // an entry. Reporting that as 0 would make the Unused filter offer to
   // delete the entire taxonomy, attached entries included.
-  const countsKnown = facetsQuery.isSuccess;
+  const countsKnown = kind === "categories" ? correspondentsQuery.isSuccess : facetsQuery.isSuccess;
 
   const allRows = useMemo<Row[]>(
     () =>
@@ -230,11 +263,16 @@ export function TaxonomyManagementSection() {
         name: entry.name,
         slug: entry.slug,
         count: countsKnown ? (facetCounts.get(entry.id) ?? 0) : null,
+        builtin: (entry as { builtin?: boolean }).builtin,
+        categoryName: (entry as { categoryName?: string | null }).categoryName,
       })),
     [listQuery.data, facetCounts, countsKnown],
   );
 
-  const suggestions = useMemo(() => computeSuggestions(allRows), [allRows]);
+  const suggestions = useMemo(
+    () => (kind === "categories" ? new Map<string, Row>() : computeSuggestions(allRows)),
+    [allRows, kind],
+  );
 
   const rows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -323,6 +361,7 @@ export function TaxonomyManagementSection() {
             ["tags", copy.tags],
             ["correspondents", copy.correspondents],
             ["document-types", copy.types],
+            ["categories", copy.categories],
           ] as Array<[TaxonomyKind, string]>
         ).map(([value, label]) => (
           <Chip key={value} active={kind === value} onClick={() => switchKind(value)}>
@@ -385,6 +424,8 @@ export function TaxonomyManagementSection() {
             <span className="ok-num font-semibold">{selectedIds.length}</span>{" "}
             {copy.selected}
           </span>
+          {kind !== "categories" ? (
+          <>
           <Select value={bulkTargetId} onValueChange={setBulkTargetId}>
             <SelectTrigger className="h-[26px] w-52">
               <SelectValue placeholder={copy.bulkMerge} />
@@ -428,6 +469,8 @@ export function TaxonomyManagementSection() {
             {busy ? <Loader2 className="animate-spin" /> : <Check />}
             {copy.bulkMerge}
           </Button>
+          </>
+          ) : null}
           {selectedIds.length === 1 ? (
             <>
               <Input
@@ -452,12 +495,20 @@ export function TaxonomyManagementSection() {
             size="sm"
             variant="outline"
             className="text-[var(--ok-red)]"
-            disabled={busy}
+            disabled={busy || selectedRows.some((row) => row.builtin)}
+            title={
+              selectedRows.some((row) => row.builtin) ? copy.builtinUndeletable : undefined
+            }
             onClick={() => deleteMutation.mutate(selectedIds)}
           >
             <Trash2 />
             {copy.del}
           </Button>
+          {selectedRows.some((row) => row.builtin) ? (
+            <span className="max-w-72 text-xs text-muted-foreground">
+              {copy.builtinUndeletable}
+            </span>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"
@@ -516,7 +567,7 @@ export function TaxonomyManagementSection() {
             setSortAsc(sortKey === "count" ? !sortAsc : false);
           }}
         >
-          {copy.docs}
+          {kind === "categories" ? copy.correspondentsCount : copy.docs}
           {sortKey === "count" ? (
             sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
           ) : null}
@@ -595,7 +646,19 @@ export function TaxonomyManagementSection() {
                             : 0.3 + 0.7 * (row.count / maxCount),
                     }}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm">{row.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {row.name}
+                    {row.builtin ? (
+                      <span className="ml-2 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                        {copy.builtinBadge}
+                      </span>
+                    ) : null}
+                    {kind === "correspondents" && row.categoryName ? (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {row.categoryName}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="ok-num w-20 flex-shrink-0 text-right text-sm text-muted-foreground">
                     {row.count ?? "—"}
                   </span>

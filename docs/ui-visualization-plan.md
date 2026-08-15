@@ -5,6 +5,12 @@ description: Historical planning and visualization notes for the OpenKeep interf
 
 # UI Visualization Plan: Intelligent Document Dashboard + Explorer
 
+> **Historical note (2026-08):** the Semantic Galaxy view (Phase 4) and its
+> UMAP Projection API (Phase 1d) were deliberately superseded by the Groups
+> view (#48). The `GET /api/documents/projection` endpoint shipped without a
+> consumer and was removed again in #258; if a semantic map is ever wanted,
+> restore it from git history rather than re-deriving it from this plan.
+
 ## Current State
 
 The data model is rich. Each document carries:

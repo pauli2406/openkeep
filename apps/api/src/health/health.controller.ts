@@ -9,7 +9,11 @@ import { DatabaseService } from "../common/db/database.service";
 import { MetricsService } from "../common/metrics/metrics.service";
 import { ObjectStorageService } from "../common/storage/storage.service";
 import { DocumentsService } from "../documents/documents.service";
-import { DOCUMENT_EMBEDDING_QUEUE, DOCUMENT_PROCESSING_QUEUE } from "../processing/constants";
+import {
+  DEADLINE_SCAN_QUEUE,
+  DOCUMENT_EMBEDDING_QUEUE,
+  DOCUMENT_PROCESSING_QUEUE,
+} from "../processing/constants";
 import { BossService } from "../processing/boss.service";
 @ApiTags("health")
 @Controller()
@@ -131,12 +135,14 @@ export class HealthController {
     const [
       processingQueueDepth,
       embeddingQueueDepth,
+      deadlineQueueDepth,
       documentsByStatus,
       recentJobs,
       documentsPendingReview,
     ] = await Promise.all([
       this.bossService.getQueueDepth(DOCUMENT_PROCESSING_QUEUE),
       this.bossService.getQueueDepth(DOCUMENT_EMBEDDING_QUEUE),
+      this.bossService.getQueueDepth(DEADLINE_SCAN_QUEUE),
       this.databaseService.pool.query<{ status: string; count: string }>(
         `SELECT status, count(*)::int AS count FROM documents GROUP BY status ORDER BY status`,
       ),
@@ -163,6 +169,7 @@ export class HealthController {
       queues: {
         processing: { depth: processingQueueDepth },
         embedding: { depth: embeddingQueueDepth },
+        deadlineScan: { depth: deadlineQueueDepth },
       },
       documents: {
         byStatus: Object.fromEntries(

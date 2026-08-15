@@ -53,6 +53,7 @@ export const users = pgTable(
       .notNull()
       .default(sql`'[]'::jsonb`),
     uiLanguage: varchar("ui_language", { length: 8 }).notNull().default("en"),
+    emailDigestEnabled: boolean("email_digest_enabled").notNull().default(false),
     aiProcessingLanguage: varchar("ai_processing_language", { length: 8 })
       .notNull()
       .default("en"),
@@ -106,6 +107,22 @@ export const refreshSessions = pgTable(
   }),
 );
 
+export const categories = pgTable(
+  "categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: varchar("slug", { length: 255 }).notNull(),
+    // Builtins seed the canonical life domains; they can be renamed but not
+    // deleted, so the intelligence prompt always has a stable vocabulary.
+    builtin: boolean("builtin").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    slugIdx: uniqueIndex("categories_slug_idx").on(table.slug),
+  }),
+);
+
 export const correspondents = pgTable(
   "correspondents",
   {
@@ -117,6 +134,11 @@ export const correspondents = pgTable(
     summaryGeneratedAt: timestamp("summary_generated_at", { withTimezone: true }),
     intelligence: jsonb("intelligence").$type<Record<string, unknown>>(),
     intelligenceGeneratedAt: timestamp("intelligence_generated_at", { withTimezone: true }),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    // Who assigned the category: deterministic | llm | manual. Manual wins.
+    categorySource: varchar("category_source", { length: 16 }).$type<
+      "deterministic" | "llm" | "manual"
+    >(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
@@ -409,6 +431,72 @@ export const processingJobs = pgTable(
   (table) => ({
     documentIdx: index("processing_jobs_document_idx").on(table.documentId),
     statusIdx: index("processing_jobs_status_idx").on(table.status),
+  }),
+);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    kind: varchar("kind", { length: 64 }).notNull().default("deadline"),
+    window: varchar("window", { length: 32 }).notNull(),
+    // The due date this record was armed for. A moved deadline arms new
+    // windows under the new date; the unique index makes reruns no-ops.
+    dueDate: date("due_date", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    emailDeliveredAt: timestamp("email_delivered_at", { withTimezone: true }),
+    desktopDeliveredAt: timestamp("desktop_delivered_at", { withTimezone: true }),
+  },
+  (table) => ({
+    documentWindowDueIdx: uniqueIndex("notifications_document_window_due_idx").on(
+      table.documentId,
+      table.window,
+      table.dueDate,
+    ),
+    userIdx: index("notifications_user_idx").on(table.userId),
+    createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
+  }),
+);
+
+/**
+ * Tiny cross-process state: the API serves status pages for work the worker
+ * process did (last mailbox poll, for instance). One row per key.
+ */
+export const appState = pgTable("app_state", {
+  key: varchar("key", { length: 128 }).primaryKey(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const ingestedEmails = pgTable(
+  "ingested_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // RFC 5322 Message-ID — the idempotency key: a message is processed at
+    // most once, no matter how often the poller sees it.
+    messageId: text("message_id").notNull(),
+    fromAddress: text("from_address").notNull().default(""),
+    subject: text("subject"),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: text("reason"),
+    documentIds: jsonb("document_ids")
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    messageIdIdx: uniqueIndex("ingested_emails_message_id_idx").on(table.messageId),
+    createdAtIdx: index("ingested_emails_created_at_idx").on(table.createdAt),
   }),
 );
 

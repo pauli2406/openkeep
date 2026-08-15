@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Orbit } from "lucide-react";
 import type {
+  Category,
   CorrespondentInsightsResponse,
   CorrespondentIntelligence,
   Document,
@@ -20,6 +21,8 @@ import {
   fetchFilteredDocuments,
   formatCurrency,
 } from "@/lib/explorer";
+import { authFetch } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { processingRefetchInterval } from "@/lib/document-processing";
 
 export const Route = createFileRoute("/correspondents/$slug")({
@@ -29,6 +32,8 @@ export const Route = createFileRoute("/correspondents/$slug")({
 function CorrespondentDetailPage() {
   const { slug } = Route.useParams();
   const navigate = Route.useNavigate();
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
 
   const insightsQuery = useQuery({
     queryKey: ["correspondent", slug, "insights"],
@@ -55,6 +60,35 @@ function CorrespondentDetailPage() {
       }),
     enabled: Boolean(insightsQuery.data?.correspondent.id),
     refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: ["taxonomies", "categories"],
+    queryFn: async () => {
+      const response = await authFetch("/api/taxonomies/categories");
+      if (!response.ok) throw new Error("Failed to load categories");
+      return (await response.json()) as Category[];
+    },
+  });
+
+  const setCategoryMutation = useMutation({
+    mutationFn: async ({ categoryId }: { categoryId: string | null }) => {
+      const correspondent = insightsQuery.data?.correspondent;
+      if (!correspondent) throw new Error("No correspondent loaded");
+      const response = await authFetch(`/api/taxonomies/correspondents/${correspondent.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: correspondent.name, categoryId }),
+      });
+      if (!response.ok) throw new Error(t("dossier.categoryFailed"));
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["correspondent", slug] }),
+        queryClient.invalidateQueries({ queryKey: ["documents", "facets"] }),
+        queryClient.invalidateQueries({ queryKey: ["taxonomies"] }),
+      ]);
+    },
   });
 
   if (insightsQuery.isLoading) {
@@ -99,6 +133,39 @@ function CorrespondentDetailPage() {
         title={data.correspondent.name}
         description="A living dossier for one relationship: overview, detected changes, milestones, domain-specific signals, and the underlying document trail."
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-[color:var(--explorer-muted)]">
+          {t("dossier.category")}
+          <select
+            value={data.correspondent.categoryId ?? ""}
+            disabled={setCategoryMutation.isPending}
+            onChange={(event) =>
+              setCategoryMutation.mutate({
+                categoryId: event.target.value === "" ? null : event.target.value,
+              })
+            }
+            className="h-8 rounded-[var(--r-md)] border border-input bg-card px-2 text-sm text-[color:var(--explorer-ink)]"
+          >
+            <option value="">{t("dossier.categoryNone")}</option>
+            {(categoriesQuery.data ?? []).map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {data.correspondent.categoryId ? (
+          <span className="text-xs text-[color:var(--explorer-muted)]">
+            {data.correspondent.categorySource === "manual"
+              ? t("dossier.categorySetByYou")
+              : t("dossier.categoryAutomatic")}
+          </span>
+        ) : null}
+        {setCategoryMutation.isError ? (
+          <span className="text-xs text-destructive">{t("dossier.categoryFailed")}</span>
+        ) : null}
+      </div>
 
       <MetricRibbon
         items={[

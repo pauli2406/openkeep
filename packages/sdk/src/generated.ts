@@ -563,6 +563,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/documents/bulk/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add or remove one tag on a set of documents */
+        post: operations["DocumentsController_bulkTagDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/documents/bulk/type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set (or clear) the document type on a set of documents */
+        post: operations["DocumentsController_bulkSetDocumentType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents/{id}/reembed": {
         parameters: {
             query?: never;
@@ -684,22 +718,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/documents/projection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExplorerController_getDocumentsProjection"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/documents/timeline": {
         parameters: {
             query?: never;
@@ -710,71 +728,6 @@ export interface paths {
         get: operations["ExplorerController_getDocumentsTimeline"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search/documents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["SearchController_searchDocuments"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search/semantic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SearchController_semanticSearch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search/answer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SearchController_answerQuery"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/search/answer/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stream an LLM-generated answer for a search query via SSE */
-        post: operations["SearchController_streamAnswer"];
         delete?: never;
         options?: never;
         head?: never;
@@ -827,6 +780,38 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxonomiesController_listCategories"];
+        put?: never;
+        post: operations["TaxonomiesController_createCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxonomies/categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TaxonomiesController_deleteCategory"];
+        options?: never;
+        head?: never;
+        patch: operations["TaxonomiesController_updateCategory"];
         trace?: never;
     };
     "/api/taxonomies/correspondents": {
@@ -925,6 +910,183 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/email-ingest/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["EmailIngestController_getStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/email-ingest/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["EmailIngestController_pollNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NotificationsController_listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markDelivered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NotificationsController_markRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SearchController_searchDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/semantic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SearchController_semanticSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SearchController_answerQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/answer/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream an LLM-generated answer for a search query via SSE */
+        post: operations["SearchController_streamAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxes/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxesController_getTaxYear"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/taxes/{year}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TaxesController_exportTaxYear"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -953,6 +1115,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                     normalizedName: string;
                     /** Format: date-time */
                     createdAt: string;
@@ -1451,6 +1618,7 @@ export interface components {
             aiProcessingLanguage: "en" | "de";
             /** @enum {string} */
             aiChatLanguage: "en" | "de";
+            emailDigestEnabled?: boolean;
         };
         EnableTwoFactorDto: {
             enrollmentToken: string;
@@ -1507,6 +1675,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1522,6 +1697,18 @@ export interface components {
             };
             /** @enum {string} */
             parseProvider?: "local-ocr" | "google-document-ai-enterprise-ocr" | "google-document-ai-gemini-layout-parser" | "amazon-textract" | "azure-ai-document-intelligence" | "mistral-ocr";
+        };
+        BulkTagDocumentsDto: {
+            documentIds: string[];
+            /** Format: uuid */
+            tagId: string;
+            /** @enum {string} */
+            action: "add" | "remove";
+        };
+        BulkSetDocumentTypeDto: {
+            documentIds: string[];
+            /** Format: uuid */
+            documentTypeId: string | null;
         };
         DocumentAskDto: {
             question: string;
@@ -1543,6 +1730,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1562,12 +1756,53 @@ export interface components {
              */
             scope: "stale" | "all";
         };
+        CreateTagDto: {
+            name: string;
+        };
+        UpdateTagDto: {
+            name: string;
+        };
+        MergeTaxonomyDto: {
+            /** Format: uuid */
+            targetId: string;
+        };
+        CreateCategoryDto: {
+            name: string;
+        };
+        UpdateCategoryDto: {
+            name: string;
+        };
+        CreateCorrespondentDto: {
+            name: string;
+        };
+        UpdateCorrespondentDto: {
+            name: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+        };
+        CreateDocumentTypeDto: {
+            name: string;
+            description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+        };
+        UpdateDocumentTypeDto: {
+            name?: string;
+            description?: string | null;
+            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
+        };
         SemanticSearchDto: {
             query: string;
             filters?: {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1594,6 +1829,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -1607,38 +1849,17 @@ export interface components {
                 amountMin?: number;
                 amountMax?: number;
             };
+            history?: {
+                /** @enum {string} */
+                role: "user" | "assistant";
+                content: string;
+            }[];
             /** @default 5 */
             maxDocuments: number;
             /** @default 6 */
             maxCitations: number;
             /** @default 6 */
             maxChunkMatches: number;
-        };
-        CreateTagDto: {
-            name: string;
-        };
-        UpdateTagDto: {
-            name: string;
-        };
-        MergeTaxonomyDto: {
-            /** Format: uuid */
-            targetId: string;
-        };
-        CreateCorrespondentDto: {
-            name: string;
-        };
-        UpdateCorrespondentDto: {
-            name: string;
-        };
-        CreateDocumentTypeDto: {
-            name: string;
-            description?: string | null;
-            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
-        };
-        UpdateDocumentTypeDto: {
-            name?: string;
-            description?: string | null;
-            requiredFields?: ("correspondent" | "issueDate" | "dueDate" | "amount" | "currency" | "referenceNumber" | "expiryDate" | "holderName" | "issuingAuthority")[];
         };
         HealthResponse: {
             status: string;
@@ -1678,6 +1899,10 @@ export interface components {
                 hasMistralOcrConfig: boolean;
                 /** @default false */
                 hasMistralEmbeddingConfig: boolean;
+                /** @default false */
+                hasSmtpConfig: boolean;
+                /** @default false */
+                hasImapConfig: boolean;
             };
         };
         HealthProvidersResponse: {
@@ -1765,6 +1990,7 @@ export interface components {
                 aiProcessingLanguage: "en" | "de";
                 /** @enum {string} */
                 aiChatLanguage: "en" | "de";
+                emailDigestEnabled?: boolean;
             };
             createdAt: string;
         };
@@ -1868,6 +2094,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -2163,6 +2394,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
                 summaryGeneratedAt?: string | null;
                 intelligenceGeneratedAt?: string | null;
             };
@@ -2281,6 +2517,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -2644,6 +2885,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                 } | null;
                 documentType: {
                     /** Format: uuid */
@@ -2935,6 +3181,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -2949,29 +3202,6 @@ export interface components {
                 amountMax?: number;
             };
         };
-        DocumentsProjectionResponse: {
-            points: {
-                /** Format: uuid */
-                documentId: string;
-                x: number;
-                y: number;
-                title: string;
-                correspondentName: string | null;
-                correspondentSlug?: string | null;
-                typeName: string | null;
-                tags: string[];
-                issueDate: string | null;
-                year: number | null;
-                /** @enum {string} */
-                status: "pending" | "processing" | "ready" | "failed";
-            }[];
-            clusters: {
-                centroidX: number;
-                centroidY: number;
-                label: string;
-                documentIds: string[];
-            }[];
-        };
         DocumentsTimelineResponse: {
             years: {
                 year: number;
@@ -2983,6 +3213,103 @@ export interface components {
                     topTypes: string[];
                 }[];
             }[];
+        };
+        EmailIngestStatusResponse: {
+            configured: boolean;
+            mailbox: {
+                host: string;
+                folder: string;
+                user: string;
+            } | null;
+            lastPoll: {
+                [key: string]: unknown;
+            } | null;
+            counts: {
+                imported: number;
+                skipped: number;
+                rejected: number;
+            };
+            recentRejections: {
+                fromAddress: string;
+                subject: string | null;
+                status: string;
+                reason: string | null;
+                createdAt: string;
+            }[];
+        };
+        NotificationsResponse: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                documentId: string;
+                documentTitle: string;
+                correspondentName: string | null;
+                kind: string;
+                /** @enum {string} */
+                window: "upcoming" | "due" | "overdue";
+                dueDate: string;
+                amount: number | null;
+                currency: string | null;
+                createdAt: string;
+                readAt: string | null;
+                emailDeliveredAt: string | null;
+                desktopDeliveredAt: string | null;
+            }[];
+            unreadCount: number;
+        };
+        TaxYearResponse: {
+            year: number;
+            documentCount: number;
+            unsummedCount: number;
+            totals: {
+                currency: string;
+                sum: number;
+                count: number;
+            }[];
+            groups: {
+                /** Format: uuid */
+                documentTypeId: string | null;
+                documentType: string | null;
+                count: number;
+                unsummedCount: number;
+                totals: {
+                    currency: string;
+                    sum: number;
+                    count: number;
+                }[];
+                documents: {
+                    /** Format: uuid */
+                    id: string;
+                    title: string;
+                    issueDate: string | null;
+                    correspondentName: string | null;
+                    amount: number | null;
+                    currency: string | null;
+                    /** @enum {string} */
+                    memberVia: "tag" | "type" | "both";
+                }[];
+            }[];
+        };
+        BulkDocumentsResponse: {
+            updated: string[];
+            failed: {
+                /** Format: uuid */
+                id: string;
+                reason: string;
+            }[];
+        };
+        BulkTagDocumentsRequest: {
+            documentIds: string[];
+            /** Format: uuid */
+            tagId: string;
+            /** @enum {string} */
+            action: "add" | "remove";
+        };
+        BulkSetDocumentTypeRequest: {
+            documentIds: string[];
+            /** Format: uuid */
+            documentTypeId: string | null;
         };
         UploadDocumentResponse: {
             /** Format: uuid */
@@ -3012,6 +3339,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
             } | null;
             documentType: {
                 /** Format: uuid */
@@ -3329,6 +3661,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
             } | null;
             documentType: {
                 /** Format: uuid */
@@ -3670,6 +4007,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -3723,6 +4067,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -4027,6 +4376,13 @@ export interface components {
                 year?: number;
                 dateFrom?: string;
                 dateTo?: string;
+                dueDateFrom?: string;
+                dueDateTo?: string;
+                expiryDateFrom?: string;
+                expiryDateTo?: string;
+                openTasksOnly?: boolean;
+                /** @enum {string} */
+                reviewStatus?: "not_required" | "pending" | "resolved";
                 /** Format: uuid */
                 correspondentId?: string;
                 correspondentIds?: string[];
@@ -4061,6 +4417,7 @@ export interface components {
                 quote: string;
                 score: number;
                 index?: number;
+                used?: boolean;
             }[];
             results: {
                 document: {
@@ -4091,6 +4448,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -4415,7 +4777,7 @@ export interface components {
                 windowEnd: string | null;
             } | {
                 /** @enum {string} */
-                kind: "pending_review_documents" | "expiring_contracts";
+                kind: "pending_review_documents" | "expiring_contracts" | "document_table";
                 title: string;
                 description: string | null;
                 items: {
@@ -4446,6 +4808,11 @@ export interface components {
                         name: string;
                         slug: string;
                         summary?: string | null;
+                        /** Format: uuid */
+                        categoryId?: string | null;
+                        categoryName?: string | null;
+                        /** @enum {string|null} */
+                        categorySource?: "deterministic" | "llm" | "manual" | null;
                     } | null;
                     documentType: {
                         /** Format: uuid */
@@ -4734,6 +5101,20 @@ export interface components {
                 windowEnd?: string | null;
             }) | null;
         };
+        CategoryList: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            builtin: boolean;
+        }[];
+        Category: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            builtin: boolean;
+        };
         TagList: {
             /** Format: uuid */
             id: string;
@@ -4755,6 +5136,11 @@ export interface components {
             name: string;
             slug: string;
             summary?: string | null;
+            /** Format: uuid */
+            categoryId?: string | null;
+            categoryName?: string | null;
+            /** @enum {string|null} */
+            categorySource?: "deterministic" | "llm" | "manual" | null;
         }[];
         Correspondent: {
             /** Format: uuid */
@@ -4762,6 +5148,11 @@ export interface components {
             name: string;
             slug: string;
             summary?: string | null;
+            /** Format: uuid */
+            categoryId?: string | null;
+            categoryName?: string | null;
+            /** @enum {string|null} */
+            categorySource?: "deterministic" | "llm" | "manual" | null;
         };
         DocumentTypeList: {
             /** Format: uuid */
@@ -4799,6 +5190,11 @@ export interface components {
                 name: string;
                 slug: string;
                 summary?: string | null;
+                /** Format: uuid */
+                categoryId?: string | null;
+                categoryName?: string | null;
+                /** @enum {string|null} */
+                categorySource?: "deterministic" | "llm" | "manual" | null;
                 normalizedName: string;
                 /** Format: date-time */
                 createdAt: string;
@@ -5291,6 +5687,11 @@ export interface components {
                     name: string;
                     slug: string;
                     summary?: string | null;
+                    /** Format: uuid */
+                    categoryId?: string | null;
+                    categoryName?: string | null;
+                    /** @enum {string|null} */
+                    categorySource?: "deterministic" | "llm" | "manual" | null;
                     normalizedName: string;
                     /** Format: date-time */
                     createdAt: string;
@@ -6716,6 +7117,54 @@ export interface operations {
             };
         };
     };
+    DocumentsController_bulkTagDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkTagDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk tag result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDocumentsResponse"];
+                };
+            };
+        };
+    };
+    DocumentsController_bulkSetDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkSetDocumentTypeRequest"];
+            };
+        };
+        responses: {
+            /** @description Bulk set-type result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDocumentsResponse"];
+                };
+            };
+        };
+    };
     DocumentsController_reembedDocument: {
         parameters: {
             query?: never;
@@ -6908,51 +7357,6 @@ export interface operations {
             };
         };
     };
-    ExplorerController_getDocumentsProjection: {
-        parameters: {
-            query?: {
-                /** @description Full-text search query */
-                query?: string;
-                /** @description Filter by issue year */
-                year?: number;
-                /** @description Lower issue date bound */
-                dateFrom?: string;
-                /** @description Upper issue date bound */
-                dateTo?: string;
-                /** @description Filter by correspondent */
-                correspondentId?: string;
-                /** @description Filter by document type */
-                documentTypeId?: string;
-                /** @description Filter by processing status */
-                status?: "pending" | "processing" | "ready" | "failed";
-                /** @description Filter by tag IDs */
-                tags?: string;
-                /** @description Sort field */
-                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
-                /** @description Sort direction */
-                direction?: "asc" | "desc";
-                /** @description Page number */
-                page?: number;
-                /** @description Page size */
-                pageSize?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Projection response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentsProjectionResponse"];
-                };
-            };
-        };
-    };
     ExplorerController_getDocumentsTimeline: {
         parameters: {
             query?: {
@@ -6995,121 +7399,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentsTimelineResponse"];
                 };
-            };
-        };
-    };
-    SearchController_searchDocuments: {
-        parameters: {
-            query?: {
-                /** @description Full-text search query */
-                query?: string;
-                /** @description Filter by issue year */
-                year?: number;
-                /** @description Lower issue date bound */
-                dateFrom?: string;
-                /** @description Upper issue date bound */
-                dateTo?: string;
-                /** @description Filter by correspondent */
-                correspondentId?: string;
-                /** @description Filter by document type */
-                documentTypeId?: string;
-                /** @description Filter by processing status */
-                status?: "pending" | "processing" | "ready" | "failed";
-                /** @description Filter by tag IDs */
-                tags?: string;
-                /** @description Sort field */
-                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
-                /** @description Sort direction */
-                direction?: "asc" | "desc";
-                /** @description Page number */
-                page?: number;
-                /** @description Page size */
-                pageSize?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Paginated search results */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchDocumentsResponse"];
-                };
-            };
-        };
-    };
-    SearchController_semanticSearch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SemanticSearchDto"];
-            };
-        };
-        responses: {
-            /** @description Semantic search results */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SemanticSearchResponse"];
-                };
-            };
-        };
-    };
-    SearchController_answerQuery: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnswerQueryDto"];
-            };
-        };
-        responses: {
-            /** @description Extractive answer with citations */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnswerQueryResponse"];
-                };
-            };
-        };
-    };
-    SearchController_streamAnswer: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AnswerQueryDto"];
-            };
-        };
-        responses: {
-            /** @description SSE stream of answer tokens */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -7227,6 +7516,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_listCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of categories */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryList"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_createCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCategoryDto"];
+            };
+        };
+        responses: {
+            /** @description Created category */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
+                };
+            };
+        };
+    };
+    TaxonomiesController_deleteCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted category (custom only) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TaxonomiesController_updateCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCategoryDto"];
+            };
+        };
+        responses: {
+            /** @description Renamed category */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Category"];
                 };
             };
         };
@@ -7464,6 +7843,263 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DocumentType"];
                 };
+            };
+        };
+    };
+    EmailIngestController_getStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mailbox ingestion status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailIngestStatusResponse"];
+                };
+            };
+        };
+    };
+    EmailIngestController_pollNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queues one mailbox poll on the worker */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_listNotifications: {
+        parameters: {
+            query: {
+                undeliveredFor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending deadline notifications */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsResponse"];
+                };
+            };
+        };
+    };
+    NotificationsController_markDelivered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one channel delivered; `delivered` is true only for the call that actually set it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    NotificationsController_markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marks one notification as read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SearchController_searchDocuments: {
+        parameters: {
+            query?: {
+                /** @description Full-text search query */
+                query?: string;
+                /** @description Filter by issue year */
+                year?: number;
+                /** @description Lower issue date bound */
+                dateFrom?: string;
+                /** @description Upper issue date bound */
+                dateTo?: string;
+                /** @description Filter by correspondent */
+                correspondentId?: string;
+                /** @description Filter by document type */
+                documentTypeId?: string;
+                /** @description Filter by processing status */
+                status?: "pending" | "processing" | "ready" | "failed";
+                /** @description Filter by tag IDs */
+                tags?: string;
+                /** @description Sort field */
+                sort?: "createdAt" | "issueDate" | "dueDate" | "title";
+                /** @description Sort direction */
+                direction?: "asc" | "desc";
+                /** @description Page number */
+                page?: number;
+                /** @description Page size */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated search results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchDocumentsResponse"];
+                };
+            };
+        };
+    };
+    SearchController_semanticSearch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SemanticSearchDto"];
+            };
+        };
+        responses: {
+            /** @description Semantic search results */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SemanticSearchResponse"];
+                };
+            };
+        };
+    };
+    SearchController_answerQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQueryDto"];
+            };
+        };
+        responses: {
+            /** @description Extractive answer with citations */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnswerQueryResponse"];
+                };
+            };
+        };
+    };
+    SearchController_streamAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQueryDto"];
+            };
+        };
+        responses: {
+            /** @description SSE stream of answer tokens */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TaxesController_getTaxYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tax year aggregation response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxYearResponse"];
+                };
+            };
+        };
+    };
+    TaxesController_exportTaxYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tax year as a ZIP: documents plus index.csv */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

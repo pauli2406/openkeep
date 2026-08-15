@@ -736,8 +736,11 @@ plugin are pinned to one version to avoid incompatible minor updates.
 Desktop connects to one active profile at a time and requires a live server for all
 archive content. Persistent Chromium partitions isolate profiles but are not offline
 archives. The offline copy holds only opened documents. Disk limits, eviction, and
-deeper corruption recovery arrive with the last #172 story. There is no launch-at-login setting. Notifications report jobs this installation started;
-they are not a general subscription to server events. Watch folders run only while the
+deeper corruption recovery arrive with the last #172 story. There is no launch-at-login setting. Import notifications report jobs this installation
+started; deadline reminders are the one server-side subscription — an opt-in relay polls
+the archive's notification records for the active profile and announces each exactly once
+(the server's per-channel delivered mark is the claim). Other server events still have no
+subscription. Watch folders run only while the
 desktop process runs, and they never move or rewrite a source file, so any
 processed-folder workflow remains a separate feature.
 

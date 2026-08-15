@@ -16,11 +16,13 @@ import {
   documentChunkEmbeddings,
   documentFiles,
   documentPages,
+  documentTagLinks,
   documentTextBlocks,
   documentTypes,
   documents,
   processingJobs,
   tags,
+  users,
 } from "@openkeep/db";
 import { createApp } from "../src/bootstrap";
 import { DatabaseService } from "../src/common/db/database.service";
@@ -169,6 +171,12 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     process.env.MINIO_ACCESS_KEY = "openkeep";
     process.env.MINIO_SECRET_KEY = "openkeep123";
     process.env.MINIO_BUCKET = "documents";
+    // SMTP configured so the digest path runs; the test spies on MailerService
+    // instead of speaking real SMTP.
+    process.env.SMTP_HOST = "smtp.test.invalid";
+    process.env.SMTP_FROM = "archive@test.invalid";
+    process.env.EMAIL_INGEST_ALLOWED_SENDERS = "vendor.example,trusted@partner.example";
+    process.env.EMAIL_INGEST_LOG_LIMIT = "5";
     process.env.JWT_ACCESS_SECRET = "test-access-secret-test-access-secret";
     process.env.JWT_REFRESH_SECRET = "test-refresh-secret-test-refresh-secret";
     process.env.OWNER_EMAIL = "owner@test.local";
@@ -272,6 +280,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       uiLanguage: "de",
       aiProcessingLanguage: "de",
       aiChatLanguage: "en",
+      emailDigestEnabled: false,
     });
 
     const meResponse = await request(app.getHttpServer())
@@ -283,6 +292,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       uiLanguage: "de",
       aiProcessingLanguage: "de",
       aiChatLanguage: "en",
+      emailDigestEnabled: false,
     });
   });
 
@@ -1221,7 +1231,7 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(deletedSource).toHaveLength(0);
   });
 
-  it("serves explorer dashboard, correspondent insights, timeline, and projection", async () => {
+  it("serves explorer dashboard, correspondent insights, and timeline", async () => {
     const [correspondent] = await databaseService.db
       .insert(correspondents)
       .values({
@@ -1380,19 +1390,6 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(timelineResponse.body.years.length).toBeGreaterThan(0);
     expect(timelineResponse.body.years[0].months.length).toBeGreaterThan(0);
 
-    const projectionResponse = await request(app.getHttpServer())
-      .get(`/api/documents/projection?correspondentIds=${correspondent.id}`)
-      .set("Authorization", `Bearer ${accessToken}`);
-
-    expect(projectionResponse.status).toBe(200);
-    expect(projectionResponse.body.points.length).toBeGreaterThanOrEqual(2);
-    expect(
-      projectionResponse.body.points.every(
-        (point: { x: number; y: number }) =>
-          point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1,
-      ),
-    ).toBe(true);
-
     await databaseService.pool.query(
       `DELETE FROM document_chunk_embeddings WHERE document_id = ANY($1::uuid[])`,
       [[documentA.id, documentB.id]],
@@ -1417,6 +1414,1388 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       `DELETE FROM correspondents WHERE id = $1::uuid`,
       [correspondent.id],
     );
+  });
+
+  it("arms deadline notifications exactly once, and invalidates them with their reason", async () => {
+    const { NotificationsService } = await import("../src/notifications/notifications.service");
+    const notificationsService = app.get(NotificationsService);
+    const suffix = randomUUID().slice(0, 8);
+    const today = "2026-06-15";
+
+    const seedDueDocument = async (title: string, dueDate: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "9").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/due.pdf`,
+          originalFilename: "due.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 32,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          dueDate: new Date(dueDate),
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const upcoming = await seedDueDocument("Due in a week", "2026-06-20");
+    const dueToday = await seedDueDocument("Due today", "2026-06-15");
+    const overdue = await seedDueDocument("Overdue invoice", "2026-06-01");
+    const farFuture = await seedDueDocument("Due in a month", "2026-07-20");
+
+    // Five runs must arm exactly one record per document+window.
+    for (let run = 0; run < 5; run += 1) {
+      await notificationsService.scanDeadlines(today);
+    }
+
+    const counted = await databaseService.pool.query(
+      `SELECT document_id, "window", count(*)::int AS records
+       FROM notifications
+       WHERE document_id = ANY($1::uuid[])
+       GROUP BY document_id, "window"`,
+      [[upcoming.document.id, dueToday.document.id, overdue.document.id, farFuture.document.id]],
+    );
+    const byDocument = new Map(
+      counted.rows.map((row) => [`${row.document_id}:${row.window}`, row.records]),
+    );
+    expect(byDocument.get(`${upcoming.document.id}:upcoming`)).toBe(1);
+    expect(byDocument.get(`${dueToday.document.id}:due`)).toBe(1);
+    expect(byDocument.get(`${overdue.document.id}:overdue`)).toBe(1);
+    expect(counted.rows).toHaveLength(3);
+
+    // The endpoint lists them for the owner, unread.
+    const listed = await request(app.getHttpServer())
+      .get("/api/notifications")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(listed.status).toBe(200);
+    const listedIds = listed.body.items.map((item: { documentId: string }) => item.documentId);
+    expect(listedIds).toContain(overdue.document.id);
+    expect(listed.body.unreadCount).toBeGreaterThanOrEqual(3);
+
+    // Completing the task before delivery leaves nothing pending.
+    await databaseService.pool.query(
+      `UPDATE documents SET task_completed_at = now() WHERE id = $1`,
+      [dueToday.document.id],
+    );
+    await notificationsService.scanDeadlines(today);
+    const pendingAfterComplete = await databaseService.pool.query(
+      `SELECT count(*)::int AS pending FROM notifications
+       WHERE document_id = $1 AND invalidated_at IS NULL`,
+      [dueToday.document.id],
+    );
+    expect(pendingAfterComplete.rows[0].pending).toBe(0);
+
+    // Moving the date re-arms the windows under the new date.
+    await databaseService.pool.query(
+      `UPDATE documents SET due_date = '2026-06-18' WHERE id = $1`,
+      [upcoming.document.id],
+    );
+    await notificationsService.scanDeadlines(today);
+    const rearmed = await databaseService.pool.query(
+      `SELECT due_date::text AS due_date, invalidated_at FROM notifications
+       WHERE document_id = $1 AND "window" = 'upcoming'
+       ORDER BY due_date`,
+      [upcoming.document.id],
+    );
+    expect(rearmed.rows).toHaveLength(2);
+    expect(rearmed.rows[0].due_date).toBe("2026-06-18");
+    expect(rearmed.rows[0].invalidated_at).toBeNull();
+    expect(rearmed.rows[1].due_date).toBe("2026-06-20");
+    expect(rearmed.rows[1].invalidated_at).not.toBeNull();
+
+    // Mark-read flips the unread count.
+    const firstId = listed.body.items[0].id;
+    const readResponse = await request(app.getHttpServer())
+      .post(`/api/notifications/${firstId}/read`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(readResponse.status).toBe(201);
+    const relisted = await request(app.getHttpServer())
+      .get("/api/notifications")
+      .set("Authorization", `Bearer ${accessToken}`);
+    const reread = relisted.body.items.find((item: { id: string }) => item.id === firstId);
+    expect(reread?.readAt).not.toBeNull();
+
+    const documentIds = [upcoming, dueToday, overdue, farFuture].map(
+      (entry) => entry.document.id,
+    );
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      [upcoming, dueToday, overdue, farFuture].map((entry) => entry.file.id),
+    ]);
+  });
+
+  it("sends one digest email per user with pending deadlines, exactly once", async () => {
+    const { NotificationsService } = await import("../src/notifications/notifications.service");
+    const { EmailDigestService } = await import("../src/notifications/email-digest.service");
+    const { MailerService } = await import("../src/notifications/mailer.service");
+    const notificationsService = app.get(NotificationsService);
+    const emailDigestService = app.get(EmailDigestService);
+    const mailerService = app.get(MailerService);
+    const today = "2026-09-10";
+    const suffix = randomUUID().slice(0, 8);
+
+    const sentMails: Array<{ to: string; subject: string; text: string; html: string }> = [];
+    const sendSpy = vi
+      .spyOn(mailerService, "send")
+      .mockImplementation(async (mail) => {
+        sentMails.push(mail);
+      });
+
+    const seedDue = async (title: string, dueDate: string, amount?: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "8").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/digest.pdf`,
+          originalFilename: "digest.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 16,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          dueDate: new Date(dueDate),
+          amount,
+          currency: amount ? "EUR" : undefined,
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const overdue = await seedDue("Mahnung Strom", "2026-09-01", "149.90");
+    const soon = await seedDue("Versicherung Beitrag", "2026-09-15");
+
+    try {
+      // Digest disabled: pending notifications exist, but nothing sends.
+      await notificationsService.scanDeadlines(today);
+      const disabledRun = await emailDigestService.runDigest(today);
+      expect(disabledRun.sent).toBe(0);
+      expect(sentMails).toHaveLength(0);
+
+      // Opt in via the preferences endpoint, keeping the languages.
+      const optIn = await request(app.getHttpServer())
+        .patch("/api/auth/me/preferences")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({
+          uiLanguage: "en",
+          aiProcessingLanguage: "en",
+          aiChatLanguage: "en",
+          emailDigestEnabled: true,
+        });
+      expect(optIn.status).toBe(200);
+      expect(optIn.body.preferences.emailDigestEnabled).toBe(true);
+
+      const firstRun = await emailDigestService.runDigest(today);
+      expect(firstRun.sent).toBe(1);
+      expect(sentMails).toHaveLength(1);
+      const mail = sentMails[0];
+      expect(mail.text).toContain(`Mahnung Strom ${suffix}`);
+      expect(mail.text).toContain(`Versicherung Beitrag ${suffix}`);
+      expect(mail.text).toContain("Overdue");
+      expect(mail.text).toContain("Due soon");
+      expect(mail.text).toContain("149.90 EUR");
+      expect(mail.html).toContain("<ul>");
+
+      // The second run has nothing undelivered: no email.
+      const secondRun = await emailDigestService.runDigest(today);
+      expect(secondRun.sent).toBe(0);
+      expect(sentMails).toHaveLength(1);
+
+      // Turning the preference off keeps records for other channels but stops mail.
+      await request(app.getHttpServer())
+        .patch("/api/auth/me/preferences")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({
+          uiLanguage: "en",
+          aiProcessingLanguage: "en",
+          aiChatLanguage: "en",
+          emailDigestEnabled: false,
+        });
+      const remaining = await databaseService.pool.query(
+        `SELECT count(*)::int AS records FROM notifications
+         WHERE document_id = ANY($1::uuid[]) AND invalidated_at IS NULL`,
+        [[overdue.document.id, soon.document.id]],
+      );
+      expect(remaining.rows[0].records).toBeGreaterThan(0);
+    } finally {
+      sendSpy.mockRestore();
+      const documentIds = [overdue, soon].map((entry) => entry.document.id);
+      await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+        documentIds,
+      ]);
+      await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+        [overdue, soon].map((entry) => entry.file.id),
+      ]);
+      await databaseService.pool.query(
+        `UPDATE users SET email_digest_enabled = false WHERE id = $1`,
+        [ownerUserId],
+      );
+    }
+  });
+
+  it("imports mailbox attachments once, through the regular ingestion path", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    type FakeMessage = {
+      messageId: string;
+      from: string;
+      subject: string | null;
+      receivedAt: Date | null;
+      attachments: Array<{ filename: string; contentType: string; content: Buffer }>;
+    };
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    const pdfBytes = Buffer.from(`%PDF-mailbox-${suffix}`, "utf8");
+    const messages: FakeMessage[] = [
+      {
+        messageId: `<two-pdfs-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: `Rechnung Februar ${suffix}`,
+        receivedAt: new Date("2026-08-01T08:00:00Z"),
+        attachments: [
+          { filename: "rechnung-1.pdf", contentType: "application/pdf", content: pdfBytes },
+          {
+            filename: "rechnung-2.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-mailbox-second-${suffix}`, "utf8"),
+          },
+        ],
+      },
+      {
+        messageId: `<newsletter-${suffix}@example.com>`,
+        from: "news@vendor.example",
+        subject: "Newsletter",
+        receivedAt: new Date("2026-08-01T09:00:00Z"),
+        attachments: [
+          { filename: "style.css", contentType: "text/css", content: Buffer.from("body{}") },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    // First poll: two documents from one message, the newsletter skipped.
+    const first = await emailIngestService.pollOnce(fakeClient);
+    expect(first.imported).toBe(1);
+    expect(first.skipped).toBe(1);
+    expect(first.failed).toBe(0);
+
+    const imported = await databaseService.pool.query(
+      `SELECT id, title, source FROM documents WHERE title LIKE $1 OR title LIKE $2 ORDER BY title`,
+      [`%Rechnung Februar ${suffix}%`, `rechnung-%`],
+    );
+    expect(imported.rows.length).toBeGreaterThanOrEqual(2);
+    expect(imported.rows.every((row) => row.source === "email")).toBe(true);
+
+    // Second poll with the flags reset — the Message-ID record wins.
+    flagged.length = 0;
+    const second = await emailIngestService.pollOnce(fakeClient);
+    expect(second.imported).toBe(0);
+    const stillTwo = await databaseService.pool.query(
+      `SELECT count(*)::int AS documents FROM documents WHERE source = 'email' AND (title LIKE $1 OR title LIKE $2)`,
+      [`%${suffix}%`, `rechnung-%`],
+    );
+    expect(stillTwo.rows[0].documents).toBeLessThanOrEqual(3);
+
+    // A re-sent identical PDF resolves as a duplicate, not a new document.
+    messages.push({
+      messageId: `<resend-${suffix}@example.com>`,
+      from: "billing@vendor.example",
+      subject: `Rechnung Februar erneut ${suffix}`,
+      receivedAt: new Date("2026-08-02T08:00:00Z"),
+      attachments: [
+        { filename: "rechnung-1.pdf", contentType: "application/pdf", content: pdfBytes },
+      ],
+    });
+    const third = await emailIngestService.pollOnce(fakeClient);
+    expect(third.imported).toBe(1);
+    // Identical bytes share one file record — the resend created a document
+    // marked as a duplicate of the original, not a second copy of the file.
+    const sharedFile = await databaseService.pool.query(
+      `SELECT count(DISTINCT d.file_id)::int AS files, count(*)::int AS documents
+       FROM documents d
+       INNER JOIN document_files f ON f.id = d.file_id
+       WHERE f.checksum = $1`,
+      [
+        (
+          await databaseService.pool.query(
+            `SELECT f.checksum FROM documents d
+             INNER JOIN document_files f ON f.id = d.file_id
+             WHERE d.title = $1 LIMIT 1`,
+            [`Rechnung Februar erneut ${suffix}`],
+          )
+        ).rows[0].checksum,
+      ],
+    );
+    expect(sharedFile.rows[0].files).toBe(1);
+    expect(sharedFile.rows[0].documents).toBe(2);
+
+    // Every message is recorded exactly once with its outcome.
+    const ledger = await databaseService.pool.query(
+      `SELECT message_id, status, reason FROM ingested_emails WHERE message_id LIKE $1 ORDER BY message_id`,
+      [`%${suffix}@example.com%`],
+    );
+    expect(ledger.rows).toHaveLength(3);
+    const newsletter = ledger.rows.find((row) => row.message_id.includes("newsletter"));
+    expect(newsletter?.status).toBe("skipped");
+    expect(newsletter?.reason).toBe("no-supported-attachment");
+
+    const cleanupIds = await databaseService.pool.query(
+      `SELECT id FROM documents WHERE source = 'email'`,
+    );
+    await databaseService.pool.query(`DELETE FROM documents WHERE source = 'email'`);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
+    expect(cleanupIds.rows.length).toBeGreaterThan(0);
+  });
+
+  it("guards the mailbox: allowlist, disguised files, and a capped rejection log", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    type FakeMessage = {
+      messageId: string;
+      from: string;
+      subject: string | null;
+      receivedAt: Date | null;
+      attachments: Array<{ filename: string; contentType: string; content: Buffer }>;
+    };
+    const messages: FakeMessage[] = [
+      {
+        // Not on the allowlist: imports nothing, lands in the rejection log.
+        messageId: `<stranger-${suffix}@example.com>`,
+        from: "evil@stranger.example",
+        subject: "Totally an invoice",
+        receivedAt: new Date("2026-08-03T08:00:00Z"),
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-guard-${suffix}`, "utf8"),
+          },
+        ],
+      },
+      {
+        // Allowlisted sender, but the "PDF" is an executable.
+        messageId: `<disguised-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: "Invoice attached",
+        receivedAt: new Date("2026-08-03T09:00:00Z"),
+        attachments: [
+          {
+            filename: "invoice.pdf",
+            contentType: "application/pdf",
+            content: Buffer.concat([Buffer.from("MZ\x90\x00"), Buffer.alloc(64)]),
+          },
+        ],
+      },
+      {
+        // Allowlisted and genuine: still imports.
+        messageId: `<genuine-${suffix}@example.com>`,
+        from: "trusted@partner.example",
+        subject: `Echte Rechnung ${suffix}`,
+        receivedAt: new Date("2026-08-03T10:00:00Z"),
+        attachments: [
+          {
+            filename: "real.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-guard-genuine-${suffix}`, "utf8"),
+          },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    const summary = await emailIngestService.pollOnce(fakeClient);
+    expect(summary.rejected).toBe(2);
+    expect(summary.imported).toBe(1);
+
+    const ledger = await databaseService.pool.query(
+      `SELECT message_id, status, reason, from_address FROM ingested_emails
+       WHERE message_id LIKE $1 ORDER BY message_id`,
+      [`%${suffix}@example.com%`],
+    );
+    const stranger = ledger.rows.find((row) => row.message_id.includes("stranger"));
+    expect(stranger?.status).toBe("rejected");
+    expect(stranger?.reason).toBe("sender-not-allowed");
+    expect(stranger?.from_address).toBe("evil@stranger.example");
+    const disguised = ledger.rows.find((row) => row.message_id.includes("disguised"));
+    expect(disguised?.status).toBe("rejected");
+    expect(disguised?.reason).toContain("disguised-file:invoice.pdf");
+
+    // Neither rejected message created a document.
+    const strayDocuments = await databaseService.pool.query(
+      `SELECT count(*)::int AS documents FROM documents
+       WHERE source = 'email' AND title IN ('Totally an invoice', 'Invoice attached')`,
+    );
+    expect(strayDocuments.rows[0].documents).toBe(0);
+
+    // The rejection log is capped (EMAIL_INGEST_LOG_LIMIT=5 in this suite):
+    // a flood of rejected messages cannot grow the table unboundedly, and
+    // imported rows survive the pruning.
+    for (let index = 0; index < 8; index += 1) {
+      messages.push({
+        messageId: `<flood-${index}-${suffix}@example.com>`,
+        from: "spam@flood.example",
+        subject: `Spam ${index}`,
+        receivedAt: new Date("2026-08-03T11:00:00Z"),
+        attachments: [],
+      });
+    }
+    await emailIngestService.pollOnce(fakeClient);
+    const counts = await databaseService.pool.query(
+      `SELECT
+         count(*) FILTER (WHERE status <> 'imported')::int AS non_imported,
+         count(*) FILTER (WHERE status = 'imported' AND message_id LIKE $1)::int AS imported
+       FROM ingested_emails`,
+      [`%${suffix}@example.com%`],
+    );
+    expect(counts.rows[0].non_imported).toBeLessThanOrEqual(5);
+    expect(counts.rows[0].imported).toBe(1);
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE source = 'email'`);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
+  });
+
+  it("reports mailbox status with counts, poll time, and per-document provenance", async () => {
+    const { EmailIngestService } = await import("../src/email-ingest/email-ingest.service");
+    const emailIngestService = app.get(EmailIngestService);
+    const suffix = randomUUID().slice(0, 8);
+
+    const receivedAt = new Date("2026-08-05T10:30:00Z");
+    const messages = [
+      {
+        messageId: `<status-${suffix}@example.com>`,
+        from: "billing@vendor.example",
+        subject: `Status Rechnung ${suffix}`,
+        receivedAt,
+        attachments: [
+          {
+            filename: "status.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from(`%PDF-status-${suffix}`, "utf8"),
+          },
+        ],
+      },
+    ];
+    const flagged: string[] = [];
+    const fakeClient = {
+      async fetchUnprocessed() {
+        return messages.filter((message) => !flagged.includes(message.messageId));
+      },
+      async markProcessed(messageId: string) {
+        flagged.push(messageId);
+      },
+      async close() {},
+    };
+
+    await emailIngestService.pollOnce(fakeClient);
+
+    // The status card sees the poll and the counts without any restart.
+    const status = await request(app.getHttpServer())
+      .get("/api/email-ingest/status")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(status.status).toBe(200);
+    expect(typeof status.body.lastPoll?.at).toBe("string");
+    expect(status.body.counts.imported).toBeGreaterThanOrEqual(1);
+
+    // The imported document answers "where did this come from".
+    const document = await databaseService.pool.query(
+      `SELECT id, metadata FROM documents WHERE title = $1`,
+      [`Status Rechnung ${suffix}`],
+    );
+    expect(document.rows).toHaveLength(1);
+    const provenance = document.rows[0].metadata.email;
+    expect(provenance.from).toBe("billing@vendor.example");
+    expect(provenance.subject).toBe(`Status Rechnung ${suffix}`);
+    expect(provenance.receivedAt).toBe(receivedAt.toISOString());
+
+    // An uploaded document carries no email provenance.
+    const uploaded = await databaseService.pool.query(
+      `SELECT count(*)::int AS with_email FROM documents
+       WHERE source <> 'email' AND metadata ? 'email'`,
+    );
+    expect(uploaded.rows[0].with_email).toBe(0);
+
+    // Poll-now queues a job on the worker queue.
+    const pollNow = await request(app.getHttpServer())
+      .post("/api/email-ingest/poll")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(pollNow.status).toBe(201);
+    expect(pollNow.body.queued).toBe(true);
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = $1`, [
+      document.rows[0].id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM ingested_emails WHERE message_id LIKE $1`, [
+      `%${suffix}@example.com%`,
+    ]);
+  });
+
+  it("aggregates a tax year by tag and type membership, with sums per currency", async () => {
+    const suffix = randomUUID().slice(0, 8);
+
+    const [taxType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Tax Document", slug: `tax-document-${suffix}` })
+      .returning();
+    const [invoiceType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Invoice", slug: `invoice-tax-${suffix}` })
+      .returning();
+    // The processing pipeline may already have minted the `tax` tag in an
+    // earlier test; membership only cares about the slug, so reuse it.
+    const [insertedTaxTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: "tax", slug: "tax" })
+      .onConflictDoNothing()
+      .returning();
+    const taxTag =
+      insertedTaxTag ??
+      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Finanzamt",
+        slug: `finanzamt-${suffix}`,
+        normalizedName: "finanzamt",
+      })
+      .returning();
+
+    const [otherUser] = await databaseService.db
+      .insert(users)
+      .values({
+        email: `second-${suffix}@example.com`,
+        passwordHash: "x",
+        displayName: "Second User",
+        isOwner: false,
+      })
+      .returning();
+
+    const seedDocument = async (input: {
+      title: string;
+      issueDate: string;
+      amount?: string;
+      currency?: string;
+      documentTypeId?: string;
+      tagged?: boolean;
+      ownerId?: string;
+    }) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "e").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/tax.pdf`,
+          originalFilename: "tax.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 64,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId: input.ownerId ?? ownerUserId,
+          fileId: file.id,
+          title: input.title,
+          mimeType: "application/pdf",
+          status: "ready",
+          issueDate: new Date(input.issueDate),
+          amount: input.amount,
+          currency: input.currency,
+          correspondentId: correspondent.id,
+          documentTypeId: input.documentTypeId,
+          fullText: input.title,
+        } as never)
+        .returning();
+      if (input.tagged) {
+        await databaseService.db
+          .insert(documentTagLinks)
+          .values({ documentId: document.id, tagId: taxTag.id });
+      }
+      return { document, file };
+    };
+
+    const seeded = [
+      // Member via type only, on the first day of the year.
+      await seedDocument({
+        title: "Steuerbescheid 2025",
+        issueDate: "2025-01-01",
+        amount: "100.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+      }),
+      // Member via tag only, filed under a non-tax type.
+      await seedDocument({
+        title: "Spendenquittung",
+        issueDate: "2025-06-15",
+        amount: "50.50",
+        currency: "EUR",
+        documentTypeId: invoiceType.id,
+        tagged: true,
+      }),
+      // Member via both, without an amount.
+      await seedDocument({
+        title: "Steuerunterlagen ohne Betrag",
+        issueDate: "2025-07-01",
+        documentTypeId: taxType.id,
+        tagged: true,
+      }),
+      // Member via tag, unfiled, second currency.
+      await seedDocument({
+        title: "US withholding statement",
+        issueDate: "2025-09-30",
+        amount: "20.00",
+        currency: "USD",
+        tagged: true,
+      }),
+      // Previous year, last day — must not leak into 2025.
+      await seedDocument({
+        title: "Steuerbescheid 2024",
+        issueDate: "2024-12-31",
+        amount: "999.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+      }),
+      // Same year, but neither tagged nor of a tax type.
+      await seedDocument({
+        title: "Ordinary invoice",
+        issueDate: "2025-03-03",
+        amount: "77.00",
+        currency: "EUR",
+        documentTypeId: invoiceType.id,
+      }),
+      // Another user's tax document must stay invisible.
+      await seedDocument({
+        title: "Foreign tax document",
+        issueDate: "2025-05-05",
+        amount: "500.00",
+        currency: "EUR",
+        documentTypeId: taxType.id,
+        ownerId: otherUser.id,
+      }),
+    ];
+
+    const response = await request(app.getHttpServer())
+      .get("/api/taxes/2025")
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.year).toBe(2025);
+    expect(response.body.documentCount).toBe(4);
+    expect(response.body.unsummedCount).toBe(1);
+    expect(response.body.totals).toEqual([
+      { currency: "EUR", sum: 150.5, count: 2 },
+      { currency: "USD", sum: 20, count: 1 },
+    ]);
+
+    const titles = response.body.groups.flatMap(
+      (group: { documents: Array<{ title: string }> }) =>
+        group.documents.map((document) => document.title),
+    );
+    expect(titles).not.toContain("Ordinary invoice");
+    expect(titles).not.toContain("Foreign tax document");
+    expect(titles).not.toContain("Steuerbescheid 2024");
+
+    const taxGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === "Tax Document",
+    );
+    expect(taxGroup.count).toBe(2);
+    expect(taxGroup.unsummedCount).toBe(1);
+    expect(taxGroup.totals).toEqual([{ currency: "EUR", sum: 100, count: 1 }]);
+    expect(
+      taxGroup.documents.map((document: { title: string; memberVia: string }) => document.memberVia),
+    ).toEqual(["type", "both"]);
+
+    const invoiceGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === "Invoice",
+    );
+    expect(invoiceGroup.count).toBe(1);
+    expect(invoiceGroup.documents[0].memberVia).toBe("tag");
+    expect(invoiceGroup.documents[0].correspondentName).toBe("Finanzamt");
+
+    const unfiledGroup = response.body.groups.find(
+      (group: { documentType: string | null }) => group.documentType === null,
+    );
+    expect(unfiledGroup.totals).toEqual([{ currency: "USD", sum: 20, count: 1 }]);
+    // The unfiled group sorts last regardless of size.
+    expect(response.body.groups[response.body.groups.length - 1].documentType).toBeNull();
+
+    const previousYear = await request(app.getHttpServer())
+      .get("/api/taxes/2024")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(previousYear.status).toBe(200);
+    expect(previousYear.body.documentCount).toBe(1);
+    expect(previousYear.body.groups[0].documents[0].title).toBe("Steuerbescheid 2024");
+    expect(previousYear.body.groups[0].documents[0].issueDate).toBe("2024-12-31");
+
+    const invalidYear = await request(app.getHttpServer())
+      .get("/api/taxes/20x5")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(invalidYear.status).toBe(400);
+
+    const unauthenticated = await request(app.getHttpServer()).get("/api/taxes/2025");
+    expect(unauthenticated.status).toBe(401);
+
+    const documentIds = seeded.map((entry) => entry.document.id);
+    const fileIds = seeded.map((entry) => entry.file.id);
+    await databaseService.pool.query(
+      `DELETE FROM documents WHERE id = ANY($1::uuid[])`,
+      [documentIds],
+    );
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      fileIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = ANY($1::uuid[])`, [
+      [taxType.id, invoiceType.id],
+    ]);
+    await databaseService.pool.query(`DELETE FROM tags WHERE id = $1::uuid`, [taxTag.id]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1::uuid`, [
+      correspondent.id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM users WHERE id = $1::uuid`, [otherUser.id]);
+  });
+  it("exports a tax year as a ZIP with an honest index", async () => {
+    const AdmZip = (await import("adm-zip")).default;
+    const suffix = randomUUID().slice(0, 8);
+
+    const [taxType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Tax Document", slug: `tax-export-${suffix}` })
+      .returning();
+    const [insertedTaxTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: "tax", slug: "tax" })
+      .onConflictDoNothing()
+      .returning();
+    const taxTag =
+      insertedTaxTag ??
+      (await databaseService.db.select().from(tags).where(eq(tags.slug, "tax")))[0];
+    const [correspondent] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: "Finanzamt Export",
+        slug: `finanzamt-export-${suffix}`,
+        normalizedName: "finanzamt export",
+      })
+      .returning();
+
+    const seedExportDocument = async (input: {
+      title: string;
+      issueDate: string;
+      amount?: string;
+      currency?: string;
+      typed?: boolean;
+      tagged?: boolean;
+      uploadOriginal: boolean;
+      searchable?: boolean;
+    }) => {
+      const storageKey = `fixtures/${randomUUID()}/original.pdf`;
+      const searchableKey = input.searchable ? `fixtures/${randomUUID()}/searchable.pdf` : null;
+      if (input.uploadOriginal) {
+        await storageService.uploadBuffer(
+          storageKey,
+          Buffer.from(`%PDF-original-${input.title}`, "utf8"),
+          "application/pdf",
+        );
+      }
+      if (searchableKey) {
+        await storageService.uploadBuffer(
+          searchableKey,
+          Buffer.from(`%PDF-searchable-${input.title}`, "utf8"),
+          "application/pdf",
+        );
+      }
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "f").slice(0, 64),
+          storageKey,
+          originalFilename: "original.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 64,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: input.title,
+          mimeType: "application/pdf",
+          status: "ready",
+          issueDate: new Date(input.issueDate),
+          amount: input.amount,
+          currency: input.currency,
+          correspondentId: correspondent.id,
+          documentTypeId: input.typed ? taxType.id : undefined,
+          searchablePdfStorageKey: searchableKey,
+          fullText: input.title,
+        } as never)
+        .returning();
+      if (input.tagged) {
+        await databaseService.db
+          .insert(documentTagLinks)
+          .values({ documentId: document.id, tagId: taxTag.id });
+      }
+      return { document, file };
+    };
+
+    const reserved = await seedExportDocument({
+      title: "CON",
+      issueDate: "2023-03-01",
+      amount: "10.00",
+      currency: "EUR",
+      typed: true,
+      uploadOriginal: true,
+    });
+    const searchable = await seedExportDocument({
+      title: "Bescheid/2023: Nachzahlung?",
+      issueDate: "2023-05-01",
+      amount: "20.00",
+      currency: "EUR",
+      tagged: true,
+      uploadOriginal: true,
+      searchable: true,
+    });
+    const missing = await seedExportDocument({
+      title: "Verschollener Beleg",
+      issueDate: "2023-08-01",
+      typed: true,
+      uploadOriginal: false,
+    });
+
+    const response = await request(app.getHttpServer())
+      .get("/api/taxes/2023/export")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/zip");
+    expect(response.headers["content-disposition"]).toContain("tax-year-2023.zip");
+
+    const zip = new AdmZip(response.body as Buffer);
+    const entryNames = zip.getEntries().map((entry) => entry.entryName);
+
+    // Two files (the missing one is absent) plus the index.
+    expect(entryNames).toHaveLength(3);
+    expect(entryNames).toContain("index.csv");
+
+    // Windows-reserved title gets escaped, the slashed title gets flattened.
+    const reservedEntry = entryNames.find((name) => name.startsWith("Tax Document/"));
+    expect(reservedEntry).toBe("Tax Document/2023-03-01_Finanzamt Export__CON.pdf");
+    const searchableEntry = entryNames.find((name) => name.startsWith("Unfiled/"));
+    expect(searchableEntry).toContain("Bescheid_2023_ Nachzahlung");
+    expect(searchableEntry?.endsWith(".pdf")).toBe(true);
+
+    // The searchable variant is preferred over the original bytes.
+    const searchableContent = zip.readAsText(searchableEntry!);
+    expect(searchableContent).toContain("%PDF-searchable");
+
+    const csv = zip.readAsText("index.csv");
+    const csvLines = csv.trim().split("\n");
+    expect(csvLines).toHaveLength(4);
+    expect(csvLines[0]).toBe("date,correspondent,type,title,amount,currency,filename,status");
+    // Every member appears; the missing file is reported, not omitted.
+    expect(csv).toContain("Verschollener Beleg");
+    expect(csv).toContain("missing-file");
+    const missingLine = csvLines.find((line) => line.includes("Verschollener Beleg"));
+    expect(missingLine).toContain(",,missing-file");
+
+    // The export landed in the audit history of the exported documents only.
+    const auditedRows = await databaseService.pool.query(
+      `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
+    );
+    const auditedIds = auditedRows.rows.map((row) => row.document_id);
+    expect(auditedIds).toContain(reserved.document.id);
+    expect(auditedIds).toContain(searchable.document.id);
+    expect(auditedIds).not.toContain(missing.document.id);
+
+    const documentIds = [reserved, searchable, missing].map((entry) => entry.document.id);
+    const fileIds = [reserved, searchable, missing].map((entry) => entry.file.id);
+    await databaseService.pool.query(`DELETE FROM audit_events WHERE document_id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      fileIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1::uuid`, [
+      taxType.id,
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1::uuid`, [
+      correspondent.id,
+    ]);
+  });
+  it("bulk-tags and bulk-types documents in one request with partial-failure reporting", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const [bulkTag] = await databaseService.db
+      .insert(tags)
+      .values({ name: `bulk-${suffix}`, slug: `bulk-${suffix}` })
+      .returning();
+    const [bulkType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: `Bulk Type ${suffix}`, slug: `bulk-type-${suffix}` })
+      .returning();
+
+    const seedDocument = async (title: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "7").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/bulk.pdf`,
+          originalFilename: "bulk.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `${title} ${suffix}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          fullText: title,
+        } as never)
+        .returning();
+      return { document, file };
+    };
+
+    const first = await seedDocument("Bulk A");
+    const second = await seedDocument("Bulk B");
+    const ghostId = randomUUID();
+
+    // One request tags all of them; the unknown id is reported, not fatal.
+    const tagResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id, ghostId],
+        tagId: bulkTag.id,
+        action: "add",
+      });
+    expect(tagResponse.status).toBe(201);
+    expect(tagResponse.body.updated).toEqual(
+      expect.arrayContaining([first.document.id, second.document.id]),
+    );
+    expect(tagResponse.body.failed).toEqual([{ id: ghostId, reason: "not-found" }]);
+
+    // Applying the same tag again is a no-op, not an error.
+    const repeat = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        tagId: bulkTag.id,
+        action: "add",
+      });
+    expect(repeat.status).toBe(201);
+
+    const links = await databaseService.pool.query(
+      `SELECT count(*)::int AS links FROM document_tag_links WHERE tag_id = $1`,
+      [bulkTag.id],
+    );
+    expect(links.rows[0].links).toBe(2);
+
+    // Each document's history shows the change.
+    const history = await request(app.getHttpServer())
+      .get(`/api/documents/${first.document.id}/history`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(history.status).toBe(200);
+    expect(JSON.stringify(history.body)).toContain("tagIds");
+
+    // Removing takes it off both.
+    await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id],
+        tagId: bulkTag.id,
+        action: "remove",
+      });
+    const afterRemove = await databaseService.pool.query(
+      `SELECT count(*)::int AS links FROM document_tag_links WHERE tag_id = $1`,
+      [bulkTag.id],
+    );
+    expect(afterRemove.rows[0].links).toBe(0);
+
+    // Bulk type set and clear.
+    const typeResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/type")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id, second.document.id],
+        documentTypeId: bulkType.id,
+      });
+    expect(typeResponse.status).toBe(201);
+    const typed = await databaseService.pool.query(
+      `SELECT count(*)::int AS typed FROM documents WHERE document_type_id = $1`,
+      [bulkType.id],
+    );
+    expect(typed.rows[0].typed).toBe(2);
+
+    const clearResponse = await request(app.getHttpServer())
+      .post("/api/documents/bulk/type")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        documentTypeId: null,
+      });
+    expect(clearResponse.status).toBe(201);
+
+    // An unknown tag is a request-level 404, not a partial failure.
+    const missingTag = await request(app.getHttpServer())
+      .post("/api/documents/bulk/tags")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        documentIds: [first.document.id],
+        tagId: randomUUID(),
+        action: "add",
+      });
+    expect(missingTag.status).toBe(404);
+
+    const documentIds = [first, second].map((entry) => entry.document.id);
+    await databaseService.pool.query(`DELETE FROM audit_events WHERE document_id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      documentIds,
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      [first, second].map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM tags WHERE id = $1::uuid`, [bulkTag.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1::uuid`, [
+      bulkType.id,
+    ]);
+  });
+  it("categorizes correspondents: deterministic, llm-constrained, and manual wins", async () => {
+    const { CategoryAssignmentService } = await import(
+      "../src/taxonomies/category-assignment.service"
+    );
+    const categoryAssignment = app.get(CategoryAssignmentService);
+    const suffix = randomUUID().slice(0, 8);
+
+    // The seed put the builtin vocabulary in place.
+    const listed = await request(app.getHttpServer())
+      .get("/api/taxonomies/categories")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(listed.status).toBe(200);
+    const bySlug = new Map<string, { slug: string; id: string; builtin: boolean }>(
+      listed.body.map(
+        (category: { slug: string; id: string; builtin: boolean }) =>
+          [category.slug, category] as const,
+      ),
+    );
+    expect(bySlug.get("housing")?.builtin).toBe(true);
+    expect(bySlug.get("insurance")?.builtin).toBe(true);
+
+    // A correspondent whose documents are mostly Utility Bills → Housing.
+    const [utilityType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Utility Bill", slug: `utility-${suffix}` })
+      .returning();
+    const [stadtwerke] = await databaseService.db
+      .insert(correspondents)
+      .values({
+        name: `Stadtwerke ${suffix}`,
+        slug: `stadtwerke-${suffix}`,
+        normalizedName: `stadtwerke ${suffix}`,
+      })
+      .returning();
+    const seedDoc = async () => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "5").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/cat.pdf`,
+          originalFilename: "cat.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `Abrechnung ${randomUUID().slice(0, 6)}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          correspondentId: stadtwerke.id,
+          documentTypeId: utilityType.id,
+          fullText: "abrechnung",
+        } as never)
+        .returning();
+      return { document, file };
+    };
+    const docs = [await seedDoc(), await seedDoc()];
+
+    await categoryAssignment.backfillMissing();
+    const afterBackfill = await databaseService.pool.query(
+      `SELECT c.category_source, cat.slug FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterBackfill.rows[0].slug).toBe("housing");
+    expect(afterBackfill.rows[0].category_source).toBe("deterministic");
+
+    // An in-vocabulary LLM suggestion upgrades the deterministic guess.
+    const applied = await categoryAssignment.applyIntelligenceCategory(
+      stadtwerke.id,
+      "insurance",
+    );
+    expect(applied).toBe("Insurance");
+    // An out-of-vocabulary suggestion is discarded, not written.
+    const discarded = await categoryAssignment.applyIntelligenceCategory(
+      stadtwerke.id,
+      "Telekommunikationsanbieter",
+    );
+    expect(discarded).toBeNull();
+    const afterLlm = await databaseService.pool.query(
+      `SELECT cat.slug, c.category_source FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterLlm.rows[0].slug).toBe("insurance");
+    expect(afterLlm.rows[0].category_source).toBe("llm");
+
+    // Manual wins: PATCH sets it, and neither pass overwrites it afterwards.
+    const housingId = (bySlug.get("housing") as { id: string }).id;
+    const patched = await request(app.getHttpServer())
+      .patch(`/api/taxonomies/correspondents/${stadtwerke.id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Stadtwerke ${suffix}`, categoryId: housingId });
+    expect(patched.status).toBe(200);
+    await categoryAssignment.assignDeterministic(stadtwerke.id);
+    await categoryAssignment.applyIntelligenceCategory(stadtwerke.id, "Finance");
+    const afterManual = await databaseService.pool.query(
+      `SELECT cat.slug, c.category_source FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterManual.rows[0].slug).toBe("housing");
+    expect(afterManual.rows[0].category_source).toBe("manual");
+
+    // The explorer answers by category: facets and the filtered list.
+    const facets = await request(app.getHttpServer())
+      .get("/api/documents/facets")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(facets.status).toBe(200);
+    const housingFacet = facets.body.categories.find(
+      (entry: { slug: string }) => entry.slug === "housing",
+    );
+    expect(housingFacet?.count).toBeGreaterThanOrEqual(2);
+    expect(typeof facets.body.uncategorizedCount).toBe("number");
+
+    const filtered = await request(app.getHttpServer())
+      .get(`/api/documents?categoryIds=${housingFacet.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(filtered.status).toBe(200);
+    expect(
+      filtered.body.items.every(
+        (item: { correspondent: { id: string } | null }) =>
+          item.correspondent?.id === stadtwerke.id,
+      ),
+    ).toBe(true);
+    expect(filtered.body.items.length).toBeGreaterThanOrEqual(2);
+
+    // Custom categories are pickable; deleting one set-nulls and reassigns.
+    const created = await request(app.getHttpServer())
+      .post("/api/taxonomies/categories")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Hobby ${suffix}` });
+    expect(created.status).toBe(201);
+    expect(created.body.builtin).toBe(false);
+    await request(app.getHttpServer())
+      .patch(`/api/taxonomies/correspondents/${stadtwerke.id}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Stadtwerke ${suffix}`, categoryId: created.body.id });
+    const deleteCustom = await request(app.getHttpServer())
+      .delete(`/api/taxonomies/categories/${created.body.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(deleteCustom.status).toBe(200);
+    const afterDelete = await databaseService.pool.query(
+      `SELECT category_id FROM correspondents WHERE id = $1`,
+      [stadtwerke.id],
+    );
+    expect(afterDelete.rows[0].category_id).toBeNull();
+    await categoryAssignment.backfillMissing();
+    const reassigned = await databaseService.pool.query(
+      `SELECT cat.slug FROM correspondents c
+       LEFT JOIN categories cat ON cat.id = c.category_id WHERE c.id = $1`,
+      [stadtwerke.id],
+    );
+    expect(reassigned.rows[0].slug).toBe("housing");
+
+    // Builtins cannot be deleted, but can be renamed keeping the slug.
+    const deleteBuiltin = await request(app.getHttpServer())
+      .delete(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(deleteBuiltin.status).toBe(400);
+    const renamed = await request(app.getHttpServer())
+      .patch(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: `Wohnen ${suffix}` });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.slug).toBe("housing");
+    await request(app.getHttpServer())
+      .patch(`/api/taxonomies/categories/${housingId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ name: "Housing" });
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.document.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1`, [stadtwerke.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1`, [utilityType.id]);
+  });
+
+  it("answers spend-by-category through the chat tools", async () => {
+    const { ChatToolsService } = await import("../src/search/chat-tools.service");
+    const { CategoryAssignmentService } = await import(
+      "../src/taxonomies/category-assignment.service"
+    );
+    const chatTools = app.get(ChatToolsService);
+    const categoryAssignment = app.get(CategoryAssignmentService);
+    const suffix = randomUUID().slice(0, 8);
+    const principal = { userId: ownerUserId, email: "owner@test", type: "api-token" as const };
+
+    const [insuranceType] = await databaseService.db
+      .insert(documentTypes)
+      .values({ name: "Insurance", slug: `insurance-${suffix}` })
+      .returning();
+    const [huk] = await databaseService.db
+      .insert(correspondents)
+      .values({ name: `HUK ${suffix}`, slug: `huk-${suffix}`, normalizedName: `huk ${suffix}` })
+      .returning();
+    const seed = async (amount: string) => {
+      const [file] = await databaseService.db
+        .insert(documentFiles)
+        .values({
+          checksum: randomUUID().replace(/-/g, "").padEnd(64, "4").slice(0, 64),
+          storageKey: `fixtures/${randomUUID()}/chat.pdf`,
+          originalFilename: "chat.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 8,
+        })
+        .returning();
+      const [document] = await databaseService.db
+        .insert(documents)
+        .values({
+          ownerUserId,
+          fileId: file.id,
+          title: `Beitrag ${randomUUID().slice(0, 6)}`,
+          mimeType: "application/pdf",
+          status: "ready",
+          amount,
+          currency: "EUR",
+          correspondentId: huk.id,
+          documentTypeId: insuranceType.id,
+          fullText: "beitrag",
+        } as never)
+        .returning();
+      return { document, file };
+    };
+    const docs = [await seed("100.00"), await seed("50.00")];
+    await categoryAssignment.assignDeterministic(huk.id);
+
+    // The model resolves the domain via list_taxonomies…
+    const listed = await chatTools.execute(
+      { id: "1", name: "list_taxonomies", arguments: { kind: "categories" } },
+      principal,
+    );
+    const entries = (listed.resultForModel as { entries: Array<{ name: string; count: number }> })
+      .entries;
+    const insuranceEntry = entries.find((entry) => entry.name === "Insurance");
+    expect(insuranceEntry?.count).toBeGreaterThanOrEqual(2);
+
+    // …then aggregates spend with the category filter, composed with a year-less sum.
+    const aggregated = await chatTools.execute(
+      {
+        id: "2",
+        name: "aggregate_documents",
+        arguments: { groupBy: "category", metric: "sum_amount", categories: ["Insurance"] },
+      },
+      principal,
+    );
+    const payload = aggregated.resultForModel as {
+      groups: Array<{ group_key?: string; groupKey?: string; count: number; total_amount?: number; totalAmount?: number }>;
+    } & Record<string, unknown>;
+    const flat = JSON.stringify(payload);
+    expect(flat).toContain("Insurance");
+    expect(flat).toContain("150");
+
+    // A category the archive does not have is reported, not invented.
+    const unmatched = await chatTools.execute(
+      {
+        id: "3",
+        name: "search_documents",
+        arguments: { categories: ["Krypto-Sammelkarten"] },
+      },
+      principal,
+    );
+    expect(JSON.stringify(unmatched.resultForModel)).toContain("Krypto-Sammelkarten");
+
+    await databaseService.pool.query(`DELETE FROM documents WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.document.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM document_files WHERE id = ANY($1::uuid[])`, [
+      docs.map((entry) => entry.file.id),
+    ]);
+    await databaseService.pool.query(`DELETE FROM correspondents WHERE id = $1`, [huk.id]);
+    await databaseService.pool.query(`DELETE FROM document_types WHERE id = $1`, [insuranceType.id]);
   });
 
   it("scans the watch folder and exports and imports archive snapshots", async () => {

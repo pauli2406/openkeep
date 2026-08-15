@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
 import {
   CorrespondentIntelligenceSchema,
   type CorrespondentIntelligence,
@@ -16,6 +16,7 @@ import {
 } from "../processing/constants";
 import { BossService } from "../processing/boss.service";
 import { LlmService, type LlmProviderId } from "../processing/llm.service";
+import { CategoryAssignmentService } from "../taxonomies/category-assignment.service";
 
 const ENQUEUE_COOLDOWN_MS = 5 * 60_000;
 const PROVIDER_ORDER: LlmProviderId[] = ["mistral", "gemini", "openai"];
@@ -45,6 +46,8 @@ export class CorrespondentIntelligenceService {
     // runtime cycle (documents -> correspondent-intelligence -> documents).
     @Inject(DOCUMENTS_SERVICE)
     private readonly documentsService: DocumentsService,
+    @Inject(forwardRef(() => CategoryAssignmentService))
+    private readonly categoryAssignmentService: CategoryAssignmentService,
   ) {}
 
   async resolveState(input: {
@@ -114,7 +117,15 @@ export class CorrespondentIntelligenceService {
       .where(eq(correspondents.id, correspondentId))
       .limit(1);
 
-    if (!correspondent || !this.llmService.isConfigured()) {
+    if (!correspondent) {
+      return;
+    }
+
+    // The deterministic pass runs regardless of an LLM being configured, so
+    // every archive categorizes its correspondents.
+    await this.categoryAssignmentService.assignDeterministic(correspondentId);
+
+    if (!this.llmService.isConfigured()) {
       return;
     }
 
@@ -124,8 +135,24 @@ export class CorrespondentIntelligenceService {
     }
 
     const seed = buildDeterministicIntelligence(correspondent.name, docs);
-    const generated = await this.generateIntelligence(correspondent.name, docs, seed);
+    const vocabulary = await this.categoryAssignmentService.listVocabulary();
+    const generated = await this.generateIntelligence(
+      correspondent.name,
+      docs,
+      seed,
+      vocabulary.map((entry) => entry.name),
+    );
     const intelligence = normalizeIntelligence(generated ?? seed, docs);
+
+    // The category must resolve inside the vocabulary; anything else is
+    // discarded and the profile keeps the applied canonical name (or none).
+    const appliedCategory = await this.categoryAssignmentService.applyIntelligenceCategory(
+      correspondentId,
+      intelligence.profile?.category ?? null,
+    );
+    if (intelligence.profile) {
+      intelligence.profile.category = appliedCategory;
+    }
     const now = new Date();
 
     await this.databaseService.db
@@ -165,6 +192,7 @@ export class CorrespondentIntelligenceService {
     correspondentName: string,
     docs: CorrespondentDocumentRow[],
     seed: CorrespondentIntelligence,
+    categoryVocabulary: string[] = [],
   ): Promise<CorrespondentIntelligence | null> {
     const completion = await this.llmService.completeWithFallback(
       {
@@ -179,7 +207,7 @@ export class CorrespondentIntelligenceService {
           },
           {
             role: "user",
-            content: buildIntelligencePrompt(correspondentName, docs, seed),
+            content: buildIntelligencePrompt(correspondentName, docs, seed, categoryVocabulary),
           },
         ],
       },
@@ -268,6 +296,7 @@ function buildIntelligencePrompt(
   correspondentName: string,
   docs: CorrespondentDocumentRow[],
   seed: CorrespondentIntelligence,
+  categoryVocabulary: string[] = [],
 ): string {
   const documentLines = docs.map((doc, index) => {
     const intelligence = readDocumentIntelligence(doc);
@@ -288,6 +317,9 @@ function buildIntelligencePrompt(
     `Build correspondent intelligence for \"${correspondentName}\".`,
     "Return JSON with keys: overview, profile, timeline, changes, currentState, domainInsights, sourceDocumentIds.",
     "For profile use category/subcategory/confidence/narrative/keySignals.",
+    categoryVocabulary.length > 0
+      ? `profile.category MUST be exactly one of: ${categoryVocabulary.join(", ")}. Pick the closest; anything outside this list is discarded.`
+      : "",
     "For timeline use up to 6 events with date, title, description, documentId, documentTitle.",
     "For changes capture notable price, contract, coverage, renewal, or administrative changes over time.",
     "For currentState capture latest known facts as label/value pairs.",
