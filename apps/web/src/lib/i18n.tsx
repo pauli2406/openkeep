@@ -341,6 +341,11 @@ export type TranslationKey =
   | "filters.type"
   | "filters.correspondent"
   | "filters.tag"
+  | "filters.category"
+  | "filters.uncategorized"
+  | "groups.byCorrespondents"
+  | "groups.byCategories"
+  | "groups.categoriesCaption"
   | "filters.date"
   | "filters.dateFrom"
   | "filters.dateTo"
@@ -940,6 +945,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "filters.type": "Type",
     "filters.correspondent": "Correspondent",
     "filters.tag": "Tag",
+    "filters.category": "Category",
+    "filters.uncategorized": "Uncategorized",
+    "groups.byCorrespondents": "Correspondents",
+    "groups.byCategories": "Categories",
+    "groups.categoriesCaption": "Life domains, sized by document count. Click a block to open its documents.",
     "filters.date": "Date",
     "filters.dateFrom": "From",
     "filters.dateTo": "To",
@@ -1539,6 +1549,11 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "filters.type": "Typ",
     "filters.correspondent": "Korrespondent",
     "filters.tag": "Schlagwort",
+    "filters.category": "Kategorie",
+    "filters.uncategorized": "Ohne Kategorie",
+    "groups.byCorrespondents": "Absender",
+    "groups.byCategories": "Kategorien",
+    "groups.categoriesCaption": "Lebensbereiche, skaliert nach Dokumentanzahl. Ein Klick öffnet die Dokumente.",
     "filters.date": "Datum",
     "filters.dateFrom": "Von",
     "filters.dateTo": "Bis",

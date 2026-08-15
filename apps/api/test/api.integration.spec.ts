@@ -2625,6 +2625,29 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(afterManual.rows[0].slug).toBe("housing");
     expect(afterManual.rows[0].category_source).toBe("manual");
 
+    // The explorer answers by category: facets and the filtered list.
+    const facets = await request(app.getHttpServer())
+      .get("/api/documents/facets")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(facets.status).toBe(200);
+    const housingFacet = facets.body.categories.find(
+      (entry: { slug: string }) => entry.slug === "housing",
+    );
+    expect(housingFacet?.count).toBeGreaterThanOrEqual(2);
+    expect(typeof facets.body.uncategorizedCount).toBe("number");
+
+    const filtered = await request(app.getHttpServer())
+      .get(`/api/documents?categoryIds=${housingFacet.id}`)
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(filtered.status).toBe(200);
+    expect(
+      filtered.body.items.every(
+        (item: { correspondent: { id: string } | null }) =>
+          item.correspondent?.id === stadtwerke.id,
+      ),
+    ).toBe(true);
+    expect(filtered.body.items.length).toBeGreaterThanOrEqual(2);
+
     // Custom categories are pickable; deleting one set-nulls and reassigns.
     const created = await request(app.getHttpServer())
       .post("/api/taxonomies/categories")

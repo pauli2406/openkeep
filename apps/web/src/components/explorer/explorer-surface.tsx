@@ -415,7 +415,11 @@ export function ExplorerSurface({
               <LoadingBlock label="Loading filtered documents" />
             ) : documentsQuery.isError ? (
               <ErrorBlock
-                label="Failed to load the filtered archive list."
+                label={`Failed to load the filtered archive list.${
+                  documentsQuery.error instanceof Error
+                    ? ` (${documentsQuery.error.message})`
+                    : ""
+                }`}
                 action={
                   <Button variant="outline" onClick={() => documentsQuery.refetch()}>
                     Retry
@@ -481,6 +485,30 @@ export function ExplorerSurface({
                 onSearchChange(
                   nextExplorerSearch(search, {
                     correspondentIds: [correspondentId],
+                    view: "list",
+                    page: undefined,
+                  }),
+                )
+              }
+              groupBy={search.groupBy ?? "correspondents"}
+              onGroupByChange={(groupBy) =>
+                onSearchChange(nextExplorerSearch(search, { groupBy }))
+              }
+              onSelectCategory={(categoryId) =>
+                onSearchChange(
+                  nextExplorerSearch(search, {
+                    categoryIds: [categoryId],
+                    uncategorized: undefined,
+                    view: "list",
+                    page: undefined,
+                  }),
+                )
+              }
+              onSelectUncategorized={() =>
+                onSearchChange(
+                  nextExplorerSearch(search, {
+                    uncategorized: true,
+                    categoryIds: undefined,
                     view: "list",
                     page: undefined,
                   }),

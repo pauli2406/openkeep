@@ -70,6 +70,13 @@ const SearchDocumentsQuerySchema = z.object({
   status: DocumentStatusSchema.optional(),
   statuses: CsvStatusArraySchema,
   tags: CsvUuidArraySchema,
+  categoryIds: CsvUuidArraySchema,
+  uncategorized: z
+    .preprocess((value) => {
+      if (typeof value === "string") return ["1", "true", "yes"].includes(value.toLowerCase());
+      return value;
+    }, z.boolean())
+    .optional(),
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
   sort: SearchDocumentsRequestSchema.shape.sort.default("createdAt"),

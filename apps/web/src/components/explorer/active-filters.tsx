@@ -55,6 +55,22 @@ export function ActiveFilters({
       },
     });
   }
+  for (const id of search.categoryIds ?? []) {
+    chips.push({
+      key: `category:${id}`,
+      label: nameFor(facets?.categories, id),
+      clear: {
+        categoryIds: (search.categoryIds ?? []).filter((v) => v !== id),
+      },
+    });
+  }
+  if (search.uncategorized) {
+    chips.push({
+      key: "uncategorized",
+      label: t("filters.uncategorized"),
+      clear: { uncategorized: undefined },
+    });
+  }
   for (const id of search.correspondentIds ?? []) {
     chips.push({
       key: `correspondent:${id}`,
@@ -112,6 +128,8 @@ export function ActiveFilters({
               statuses: undefined,
               documentTypeIds: undefined,
               correspondentIds: undefined,
+              categoryIds: undefined,
+              uncategorized: undefined,
               tags: undefined,
               dateFrom: undefined,
               dateTo: undefined,

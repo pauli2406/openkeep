@@ -531,6 +531,9 @@ export class DocumentsService {
         delete applied.status;
       } else if (omit === "tags") {
         delete applied.tags;
+      } else if (omit === "categoryIds") {
+        delete applied.categoryIds;
+        delete applied.uncategorized;
       } else if (omit === "year") {
         delete applied.year;
       }
@@ -541,10 +544,20 @@ export class DocumentsService {
     const correspondentScope = scope("correspondentIds");
     const typeScope = scope("documentTypeIds");
     const tagScope = scope("tags");
+    const categoryScope = scope("categoryIds");
     const statusScope = scope("statuses");
     const amountScope = scope();
 
-    const [years, correspondentFacets, typeFacets, tagFacets, amountRange, statusFacets] =
+    const [
+      years,
+      correspondentFacets,
+      typeFacets,
+      tagFacets,
+      categoryFacets,
+      uncategorizedCount,
+      amountRange,
+      statusFacets,
+    ] =
       await Promise.all([
         this.databaseService.pool.query<{ year: string; count: string }>(
           `SELECT extract(year from coalesce(d.issue_date, d.created_at::date))::int AS year,
@@ -620,6 +633,31 @@ export class DocumentsService {
           tagScope.params,
         ),
         this.databaseService.pool.query<{
+          id: string;
+          name: string;
+          slug: string;
+          count: string;
+          top_correspondents: string[] | null;
+        }>(
+          `SELECT cat.id, cat.name, cat.slug, count(*)::int AS count,
+                  (array_agg(DISTINCT c.name))[1:3] AS top_correspondents
+           FROM documents d
+           INNER JOIN correspondents c ON c.id = d.correspondent_id
+           INNER JOIN categories cat ON cat.id = c.category_id
+           WHERE ${categoryScope.whereSql}
+           GROUP BY cat.id, cat.name, cat.slug
+           ORDER BY count(*) DESC, cat.name ASC`,
+          categoryScope.params,
+        ),
+        this.databaseService.pool.query<{ count: string }>(
+          `SELECT count(*)::int AS count
+           FROM documents d
+           LEFT JOIN correspondents c ON c.id = d.correspondent_id
+           WHERE ${categoryScope.whereSql}
+             AND (d.correspondent_id IS NULL OR c.category_id IS NULL)`,
+          categoryScope.params,
+        ),
+        this.databaseService.pool.query<{
           min_amount: string | null;
           max_amount: string | null;
         }>(
@@ -663,6 +701,14 @@ export class DocumentsService {
         slug: row.slug,
         count: Number(row.count),
       })),
+      categories: categoryFacets.rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        count: Number(row.count),
+        topCorrespondents: row.top_correspondents ?? [],
+      })),
+      uncategorizedCount: Number(uncategorizedCount.rows[0]?.count ?? 0),
       amountRange: {
         min:
           amountRange.rows[0]?.min_amount === null
@@ -2257,6 +2303,23 @@ export class DocumentsService {
           from document_tag_links dtl
           where dtl.document_id = d.id and dtl.tag_id = any(${placeholder}::uuid[])
         )`,
+      );
+    }
+
+    if (filters?.categoryIds && filters.categoryIds.length > 0) {
+      const placeholder = push(filters.categoryIds);
+      clauses.push(
+        `d.correspondent_id IN (
+          SELECT id FROM correspondents WHERE category_id = ANY(${placeholder}::uuid[])
+        )`,
+      );
+    }
+
+    if (filters?.uncategorized) {
+      clauses.push(
+        `(d.correspondent_id IS NULL OR d.correspondent_id IN (
+          SELECT id FROM correspondents WHERE category_id IS NULL
+        ))`,
       );
     }
 

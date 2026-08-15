@@ -15,6 +15,10 @@ export type ExplorerSearch = {
   dateTo?: string;
   correspondentIds?: string[];
   documentTypeIds?: string[];
+  categoryIds?: string[];
+  uncategorized?: boolean;
+  /** Groups view: which dimension the blocks group by. */
+  groupBy?: "correspondents" | "categories";
   statuses?: string[];
   tags?: string[];
   amountMin?: number;
@@ -39,6 +43,14 @@ export type ExplorerFacets = {
   }>;
   documentTypes: Array<{ id: string; name: string; slug: string; count: number }>;
   tags: Array<{ id: string; name: string; slug: string; count: number }>;
+  categories: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    count: number;
+    topCorrespondents: string[];
+  }>;
+  uncategorizedCount: number;
   amountRange: { min: number | null; max: number | null };
   statuses: Array<{ status: string; count: number }>;
 };
@@ -93,6 +105,12 @@ export function parseExplorerSearch(search: Record<string, unknown>): ExplorerSe
     documentTypeIds,
     statuses,
     tags: parseCsvValue(search.tags),
+    categoryIds: parseCsvValue(search.categoryIds),
+    uncategorized: search.uncategorized === true || search.uncategorized === "true" || undefined,
+    groupBy:
+      search.groupBy === "categories" || search.groupBy === "correspondents"
+        ? search.groupBy
+        : undefined,
     amountMin: parseOptionalNumber(search.amountMin),
     amountMax: parseOptionalNumber(search.amountMax),
     page: parseOptionalNumber(search.page),
@@ -120,6 +138,8 @@ export function explorerSearchToParams(search: ExplorerSearch): URLSearchParams 
   setParam(params, "documentTypeIds", search.documentTypeIds);
   setParam(params, "statuses", search.statuses);
   setParam(params, "tags", search.tags);
+  setParam(params, "categoryIds", search.categoryIds);
+  setParam(params, "uncategorized", search.uncategorized ? "true" : undefined);
   setParam(params, "amountMin", search.amountMin);
   setParam(params, "amountMax", search.amountMax);
   setParam(params, "page", search.page);

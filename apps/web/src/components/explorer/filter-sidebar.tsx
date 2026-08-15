@@ -185,6 +185,8 @@ export function FilterSidebar({
     Boolean(search.documentTypeIds?.length),
     Boolean(search.statuses?.length),
     Boolean(search.tags?.length),
+    Boolean(search.categoryIds?.length),
+    Boolean(search.uncategorized),
     // != null, not truthiness: an amountMin of 0 is a real filter
     search.amountMin != null || search.amountMax != null,
     Boolean(search.dateFrom || search.dateTo),
@@ -197,6 +199,8 @@ export function FilterSidebar({
       documentTypeIds: undefined,
       statuses: undefined,
       tags: undefined,
+      categoryIds: undefined,
+      uncategorized: undefined,
       amountMin: undefined,
       amountMax: undefined,
       dateFrom: undefined,
@@ -281,6 +285,41 @@ export function FilterSidebar({
               correspondentIds: toggleArrayValue(search.correspondentIds, id),
               page: undefined,
             })
+          }
+        />
+
+        <FacetSection
+          title={t("filters.category")}
+          entries={[
+            ...(facets?.categories ?? []).map((entry) => ({
+              id: entry.id,
+              label: entry.name,
+              count: entry.count,
+            })),
+            ...((facets?.uncategorizedCount ?? 0) > 0
+              ? [
+                  {
+                    id: "__uncategorized__",
+                    label: t("filters.uncategorized"),
+                    count: facets?.uncategorizedCount ?? 0,
+                  },
+                ]
+              : []),
+          ]}
+          selectedIds={[
+            ...(search.categoryIds ?? []),
+            ...(search.uncategorized ? ["__uncategorized__"] : []),
+          ]}
+          onToggle={(id) =>
+            id === "__uncategorized__"
+              ? onSearchChange({
+                  uncategorized: search.uncategorized ? undefined : true,
+                  page: undefined,
+                })
+              : onSearchChange({
+                  categoryIds: toggleArrayValue(search.categoryIds, id),
+                  page: undefined,
+                })
           }
         />
 

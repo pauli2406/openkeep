@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { apiUrl } from "./api-url";
 import { renderAuthenticatedApp } from "./render-app";
-import { makeDocument } from "./fixtures";
+import { makeDocument, makeSearchDocumentsResponse } from "./fixtures";
 import { server } from "./msw-server";
 
 describe("explorer smoke", () => {
@@ -370,6 +370,64 @@ describe("explorer smoke", () => {
       expect(screen.queryByText("Adidas Receipt February")).not.toBeInTheDocument();
     });
     expect(screen.getByText("Archive Export")).toBeInTheDocument();
+  });
+
+  it("groups by category, and a block click filters the list", async () => {
+    server.use(
+      http.get(apiUrl("/api/documents/facets"), () =>
+        HttpResponse.json({
+          years: [{ year: 2026, count: 3 }],
+          correspondents: [],
+          documentTypes: [],
+          tags: [],
+          categories: [
+            {
+              id: "44444444-4444-4444-4444-444444444444",
+              name: "Housing",
+              slug: "housing",
+              count: 2,
+              topCorrespondents: ["Stadtwerke"],
+            },
+            {
+              id: "55555555-5555-5555-5555-555555555555",
+              name: "Insurance",
+              slug: "insurance",
+              count: 1,
+              topCorrespondents: ["HUK"],
+            },
+          ],
+          uncategorizedCount: 1,
+          amountRange: { min: null, max: null },
+          statuses: [],
+        }),
+      ),
+      http.get(apiUrl("/api/documents"), ({ request }) => {
+        const url = new URL(request.url);
+        return HttpResponse.json(
+          makeSearchDocumentsResponse(
+            url.searchParams.get("categoryIds")
+              ? [makeDocument({ title: "Stromabrechnung" })]
+              : [],
+          ),
+        );
+      }),
+    );
+
+    const { user } = renderAuthenticatedApp({
+      route: "/documents?view=groups&groupBy=categories",
+    });
+
+    // Category blocks with counts and top correspondents. "Housing" also
+    // appears in the sidebar facet, so target the block by its full label.
+    const housingBlock = await screen.findByRole("button", { name: /Housing 2 Stadtwerke/ });
+    expect(housingBlock).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Insurance 1 HUK/ })).toBeInTheDocument();
+    // The uncategorized bucket is honest, not hidden.
+    expect(screen.getByRole("button", { name: /Uncategorized 1/ })).toBeInTheDocument();
+
+    // Clicking a block opens the filtered list.
+    await user.click(housingBlock);
+    expect(await screen.findByText("Stromabrechnung")).toBeInTheDocument();
   });
 
   it("sends the active filters to the facets endpoint and labels groups with the dominant type", async () => {

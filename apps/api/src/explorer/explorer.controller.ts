@@ -51,6 +51,8 @@ function toFilters(query: SearchDocumentsQueryDto): DocumentFilters {
     status: query.status,
     statuses: normalizeStatusArray(query.statuses),
     tags: normalizeQueryArray(query.tags),
+    categoryIds: normalizeQueryArray(query.categoryIds),
+    uncategorized: query.uncategorized,
     amountMin: query.amountMin,
     amountMax: query.amountMax,
   };

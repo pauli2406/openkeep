@@ -695,6 +695,10 @@ export const SearchDocumentsFiltersSchema = z.object({
   status: DocumentStatusSchema.optional(),
   statuses: z.array(DocumentStatusSchema).optional(),
   tags: z.array(z.string().uuid()).optional(),
+  // Categories resolve through the correspondent assignment (#270).
+  categoryIds: z.array(z.string().uuid()).optional(),
+  /** Only documents whose correspondent has no category (or none at all). */
+  uncategorized: z.boolean().optional(),
   amountMin: z.number().optional(),
   amountMax: z.number().optional(),
 });
