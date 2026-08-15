@@ -38,6 +38,7 @@
     "typecheck": "turbo run typecheck",
     "openapi:generate": "pnpm --filter @openkeep/api openapi:generate",
     "db:migrate": "pnpm --filter @openkeep/db db:migrate",
+    "readme:shots": "pnpm --filter @openkeep/web build && node scripts/readme-screenshots.mjs",
     "tokens:generate": "node scripts/tokens/generate.mjs",
     "tokens:check": "node scripts/tokens/check.mjs"
   },

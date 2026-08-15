@@ -111,9 +111,15 @@ function makeDocument(index, overrides = {}) {
   };
 }
 
-const DOCUMENTS = Array.from({ length: 12 }, (_, index) => makeDocument(index));
+export const DOCUMENTS = Array.from({ length: 12 }, (_, index) => makeDocument(index));
 
-const ROUTES = [
+/**
+ * Exported so other tooling can compose this table rather than fork it — the
+ * README screenshot script (`scripts/readme-screenshots.mjs`) serves these
+ * routes plus a few of its own. Nothing here may depend on that; the visual
+ * baselines are the contract for this file.
+ */
+export const ROUTES = [
   ["GET", /^\/api\/health$/, () => ({
     status: "ok",
     provider: {

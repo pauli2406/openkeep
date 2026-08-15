@@ -49,6 +49,9 @@ const config = {
   projectName: "openkeep",
   trailingSlash: false,
   markdown: {
+    // The architecture documentation carries its diagrams as mermaid fences so
+    // they stay reviewable in a diff and render on GitHub as well as here.
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: "warn",
     },
@@ -79,10 +82,29 @@ const config = {
     ],
   ],
 
-  themes: hasTypesenseDocSearch ? ["docusaurus-theme-search-typesense"] : [],
+  themes: [
+    "@docusaurus/theme-mermaid",
+    ...(hasTypesenseDocSearch ? ["docusaurus-theme-search-typesense"] : []),
+  ],
 
   themeConfig: {
     image: "img/openkeep-docs-social-card.svg",
+    // Mermaid's stock palette is lavender on yellow, which reads as a foreign
+    // object on the page. `neutral` is the closest base to the docs surface;
+    // the overrides pull the accent onto the brand green.
+    mermaid: {
+      theme: { light: "neutral", dark: "dark" },
+      options: {
+        themeVariables: {
+          primaryColor: "#eef3f1",
+          primaryBorderColor: "#155b4a",
+          primaryTextColor: "#12211d",
+          lineColor: "#6b7f79",
+          fontFamily:
+            'Public Sans, system-ui, -apple-system, "Segoe UI", sans-serif',
+        },
+      },
+    },
     navbar: {
       title: "OpenKeep",
       logo: {
