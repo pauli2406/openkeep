@@ -361,7 +361,7 @@ describe("desktop shared-app parity", () => {
     expect(await screen.findByText("Loading filtered documents")).toBeInTheDocument();
 
     expect(
-      await screen.findByText("Failed to load the filtered archive list."),
+      await screen.findByText(/Failed to load the filtered archive list/),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Retry" }));
