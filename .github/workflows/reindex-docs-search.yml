@@ -26,22 +26,42 @@ jobs:
       TYPESENSE_PUBLIC_PROTOCOL: ${{ vars.TYPESENSE_PROTOCOL }}
 
     steps:
+      # The docs site and its search are provisioned independently: Pages can
+      # serve the docs long before a Typesense node exists. Without the
+      # configuration this job has nothing to do, and failing would leave a
+      # permanently red workflow that trains people to ignore it.
+      - name: Check whether docs search is configured
+        id: configured
+        run: |
+          if [ -n "${DOCS_SITE_URL}" ] && [ -n "${TYPESENSE_PUBLIC_HOST}" ] \
+             && [ -n "${{ secrets.TYPESENSE_ADMIN_API_KEY }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Docs search is not configured (DOCS_SITE_URL / TYPESENSE_HOST / TYPESENSE_ADMIN_API_KEY) — skipping the reindex."
+          fi
+
       - name: Check out repository
+        if: steps.configured.outputs.ready == 'true'
         uses: actions/checkout@v4
 
       - name: Set up pnpm
+        if: steps.configured.outputs.ready == 'true'
         uses: pnpm/action-setup@v4
 
       - name: Set up Node.js
+        if: steps.configured.outputs.ready == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.configured.outputs.ready == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Wait for docs deployment
+        if: steps.configured.outputs.ready == 'true'
         run: |
           for attempt in $(seq 1 36); do
             if curl --fail --silent --show-error "${DOCS_SITE_URL%/}/sitemap.xml" >/dev/null; then
@@ -54,6 +74,7 @@ jobs:
           exit 1
 
       - name: Reindex Typesense docs search
+        if: steps.configured.outputs.ready == 'true'
         env:
           TYPESENSE_ADMIN_API_KEY: ${{ secrets.TYPESENSE_ADMIN_API_KEY }}
           DOCSEARCH_START_URL: ${{ vars.DOCS_SITE_URL }}
