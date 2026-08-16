@@ -304,6 +304,20 @@ not ask for permission repeatedly and has no separate do-not-disturb setting:
   environment. Where none is available, the panel says so and import results stay
   visible in the app instead.
 
+### Deadline Reminders
+
+Beside the three import toggles sits `Deadline reminders`, off by default.
+When enabled, the app checks the active archive every few minutes for deadline
+notifications the server has recorded and shows each exactly once as a native
+notification — approaching, due today, or overdue, with the document and date.
+Clicking one opens the document, including the usual confirmation when it
+belongs to a different archive than the active one.
+
+The server keeps track of what has been announced, so restarting the app or
+running a second installation never repeats a reminder — the first
+installation to see it wins. While disconnected the check quietly pauses.
+
+
 ## Watch Folders on This Computer
 
 A watch folder is a folder on your own computer that OpenKeep imports new documents

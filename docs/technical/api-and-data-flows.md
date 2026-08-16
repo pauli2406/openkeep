@@ -71,12 +71,20 @@ Relevant endpoints:
 - `POST /api/documents/:id/review/requeue`
 - `GET /api/documents/:id/download`
 - `GET /api/documents/:id/download/searchable`
+- `POST /api/documents/bulk/tags`
+- `POST /api/documents/bulk/type`
 
 Important behavior:
 
 - user edits are persisted as manual overrides
 - locked override fields survive reprocessing
 - audit history is stored separately and exposed through the history endpoint
+- the bulk endpoints add/remove one tag or set/clear the document type on up
+  to 200 ids in one request, with partial-failure semantics: unknown ids are
+  reported while the rest applies, and every touched document gets its own
+  audit entry
+- list, facets, and timeline accept `categoryIds` and an `uncategorized`
+  flag; both resolve through the correspondent's category assignment
 
 ## Search Surface
 
@@ -168,6 +176,71 @@ These power the higher-level archive browsing UI:
 - correspondent dossier
 - timeline view
 - groups view (correspondent blocks)
+
+## Tax Year Surface
+
+Relevant endpoints:
+
+- `GET /api/taxes/:year`
+- `GET /api/taxes/:year/export`
+
+Membership lives server-side in one place: a document belongs to the year when
+it carries the `tax` tag or a canonical tax document type, and each returned
+document states why (`tag` | `type` | `both`). Year boundaries compare dates in
+SQL against the coalesced issue date, sums run in integer cents per currency,
+and documents without an amount are counted separately. The export streams a
+ZIP (searchable PDF preferred, Windows-safe filenames, `index.csv` including
+missing-file reporting) and writes audit events for the exported documents.
+
+## Deadline Notifications Flow
+
+Relevant endpoints:
+
+- `GET /api/notifications` (`undeliveredFor=email|desktop` filters)
+- `POST /api/notifications/:id/read`
+- `POST /api/notifications/:id/delivered`
+
+An hourly pg-boss job (`deadline.scan`) arms one record per document + window
+(`upcoming`/`due`/`overdue`) + due date; the unique index makes reruns and
+concurrent workers no-ops. Completing a task or moving the date invalidates
+pending undelivered records; delivered records are history and stay. "Today"
+is computed in `ARCHIVE_TIMEZONE`, never UTC midnight. Delivery is claim-once
+per channel: `:id/delivered` returns `delivered: true` only for the call that
+actually set the timestamp, which is what makes the desktop relay and the
+daily email digest (`deadline.digest` job, opt-in per user) announce exactly
+once.
+
+## Email Ingestion Flow
+
+Relevant endpoints:
+
+- `GET /api/email-ingest/status`
+- `POST /api/email-ingest/poll`
+
+A scheduled pg-boss job (`email.ingest`) polls the IMAP mailbox and hands
+supported attachments to the regular upload path (checksum dedup, review
+routing, audit, `source: "email"`). Idempotency is a ledger: every message is
+recorded once by RFC 5322 Message-ID with its outcome; `\Seen` flags are a
+filter, not the truth. The guard enforces the sender allowlist and decides by
+magic bytes, not the declared Content-Type — a renamed executable is rejected
+with a reason in the capped rejection log. Imported documents carry
+`metadata.email` provenance (sender, received date, subject).
+
+## Categories Surface
+
+Relevant endpoints:
+
+- `GET|POST /api/taxonomies/categories`
+- `PATCH|DELETE /api/taxonomies/categories/:id` (builtins refuse delete)
+- `PATCH /api/taxonomies/correspondents/:id` accepts `categoryId` (stamps the
+  manual source)
+
+Categories are assigned per correspondent with strict source precedence
+(`manual` > `llm` > `deterministic`); the intelligence prompt is constrained
+to the current vocabulary and out-of-vocabulary suggestions are discarded.
+Facets expose a categories dimension plus an `uncategorizedCount`, and the
+chat tools accept category names in `search_documents`,
+`aggregate_documents` (including `groupBy: category`), and `list_taxonomies`.
 
 ## Document AI Surface
 

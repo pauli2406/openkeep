@@ -269,3 +269,25 @@ This enables semantic search plus the full agentic extraction and AI assistance 
 - [Deployment Guide](./deployment-guide.md)
 - [Runbooks](./runbooks.md)
 - [Agentic Document Intelligence](../technical/agentic-document-intelligence.md)
+
+## Deadlines and Email Digest
+
+- `ARCHIVE_TIMEZONE`: IANA zone date-only deadlines are interpreted in; unset means the server's own zone
+- `DEADLINE_UPCOMING_DAYS`: how many days ahead the "upcoming" window arms (default 7)
+- `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM`: the email channel; without host and from-address the digest reports itself unconfigured instead of erroring
+- `EMAIL_DIGEST_CRON`: daily digest schedule (default `0 7 * * *`), evaluated in `ARCHIVE_TIMEZONE`
+- `PUBLIC_URL`: absolute web-app base URL used for links in outbound email
+
+## Email Ingestion (IMAP)
+
+- `IMAP_HOST` / `IMAP_PORT` / `IMAP_SECURE` / `IMAP_USER` / `IMAP_PASSWORD`: the archive mailbox; without host+user+password the channel is off
+- `IMAP_FOLDER`: mailbox folder to poll (default `INBOX`)
+- `EMAIL_INGEST_CRON`: poll schedule (default `*/5 * * * *`)
+- `EMAIL_INGEST_ALLOWED_SENDERS`: comma-separated addresses or whole domains allowed to feed the archive; empty accepts everyone, reasonable only while the address is private
+- `EMAIL_INGEST_LOG_LIMIT`: rejected/skipped ledger rows kept before pruning (default 500); imported rows are never pruned — they are the idempotency ledger
+
+Operational notes:
+
+- use a dedicated mailbox: the poller flags handled messages as read, so a
+  human reading the same mailbox hides messages from it
+- `MAX_UPLOAD_BYTES` bounds attachment size for email ingestion too

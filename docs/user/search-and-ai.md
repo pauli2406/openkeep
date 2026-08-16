@@ -221,3 +221,13 @@ You may see limited or missing AI output when:
 Continue with [Review and Corrections](./review-and-corrections.md) to handle uncertain extraction results and fix metadata safely.
 
 For admin and provider setup topics, continue with [Settings and Admin](./settings-and-admin.md) after that.
+
+## Ask by Life Domain
+
+The chat understands the archive's categories. Questions like "Was gebe ich
+für Versicherungen aus?" or "show everything around housing from 2025" filter
+and aggregate through the category assignment instead of guessing from
+document text — sums come back grounded, per currency, and a category the
+archive does not have is reported honestly rather than invented. Categories
+compose with every other filter (year, correspondent, type) in the same
+question.

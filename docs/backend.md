@@ -263,5 +263,5 @@ flowchart TD
 ## Remaining Backend Gaps
 
 - Retrieval evaluation is present in test coverage but not yet exposed as a dedicated operator-facing benchmark command.
-- Email ingestion, workflow automation, and richer custom fields are still future phases.
+- Workflow automation and richer custom fields are still future phases. (Email ingestion shipped with #253: IMAP poller, sender guard, and the status surface.)
 - The Electron desktop client, web app, and React Native mobile client share the backend contracts; desktop-specific native features are layered onto the Electron runtime boundary.

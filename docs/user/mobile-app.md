@@ -99,6 +99,18 @@ you picked, not to what the list happens to show. If part of a bulk action
 fails, the successful part is applied and the failures stay selected so a retry
 touches only those. Selection is cleared when you leave the tab.
 
+### Filter by Category
+
+The chip row ends with a `Category` chip. Tapping it opens a sheet with the
+archive's life-domain categories; picking one narrows the list to documents
+whose sender belongs to that domain, and the count strip names the active
+category. Tap the active chip to clear it.
+
+The chip is online-only: the offline mirror stores documents, not sender
+categories, so offline the chip disables and an active category filter is
+dropped rather than silently misapplied.
+
+
 ## Read a Document
 
 A document opens on four tabs:

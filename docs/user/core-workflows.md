@@ -226,3 +226,50 @@ Capture uses the phone's own document scanner rather than an in-app camera. See
 Continue with [Search and AI](./search-and-ai.md) for search, summaries, and AI-assisted answers.
 
 You can also jump back to [Getting Started](./getting-started.md) if you want the broader product orientation.
+
+## The Tax Year
+
+The `Taxes` tab assembles one calendar year the way an accountant thinks:
+documents grouped by type, with per-group and overall sums per currency.
+Documents without an amount are listed and counted separately, never silently
+summed or dropped.
+
+Membership is transparent: a document belongs to the year when it carries the
+`tax` tag (applied automatically when the pipeline detects tax content, or by
+you) **or** is filed under a tax document type (`Tax Document`, `Tax
+Statement`). Each row shows a chip explaining which rule included it — remove
+the tag on the document to take it out of the year; the view updates
+immediately.
+
+`Export year` downloads the whole year as a ZIP a tax advisor can use without
+OpenKeep: one folder per document type, the searchable PDF where one exists
+(original bytes otherwise), predictable Windows-safe filenames, and an
+`index.csv` listing every member with date, correspondent, type, title,
+amount, currency, and status. A document whose file is missing from storage is
+reported in the CSV instead of being silently omitted. Exports appear in each
+document's audit history.
+
+## Browse by Category
+
+Categories are life domains — Housing, Insurance, Finance, Health, Taxes &
+Authorities, Work, and so on — assigned per correspondent, so every document
+from a sender inherits its domain. Twelve builtin categories ship with the
+archive; you can add your own under `Settings → Tags & taxonomy → Categories`.
+
+A category has one of three sources, with strict precedence:
+
+1. **manual** — you picked it (in the correspondent dossier or taxonomy page).
+   Nothing automatic ever overwrites a manual choice.
+2. **llm** — the correspondent intelligence suggested it. Suggestions are
+   constrained to your current vocabulary; anything outside it is discarded.
+3. **deterministic** — derived from the correspondent's dominant document type
+   (Utility Bill → Housing, Payslip → Work, Tax Document → Taxes &
+   Authorities…). This runs without any AI provider configured, so every
+   archive categorizes itself.
+
+In the explorer's Groups view, switch `Grouped by` to `Categories` to see the
+archive as life domains, sized by document count with the top correspondents
+named inside each block. Correspondents without a category appear in an
+honest `Uncategorized` block rather than disappearing. The filter sidebar has
+a matching Categories section, and category filters combine with every other
+filter and survive in the URL.

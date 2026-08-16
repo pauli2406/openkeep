@@ -87,6 +87,21 @@ If an action fails, the reason is shown above the list.
 
 Use this to keep the archive consistent when AI-generated labels drift or duplicate.
 
+### Categories
+
+Categories are the fourth kind in the same list. The twelve builtin life
+domains carry a `Builtin` badge: they can be renamed (the internal identifier
+stays, so automatic assignment keeps working) but not deleted — the action bar
+explains this when a builtin is selected. Custom categories support the full
+add/rename/delete cycle; deleting one clears it from its correspondents, and
+the next automatic pass reassigns them deterministically. Categories have no
+merge — reassignments are one click each in the correspondent dossier.
+
+Counts in this list are correspondents, not documents. Each correspondent row
+also shows its current category inline, so misclassifications are visible in
+bulk; fix one in the correspondent dossier, where the picker shows whether the
+category was assigned automatically or set by you.
+
 ## Mobile Offline Copy
 
 On the phone app, `Settings` -> `Offline` shows how many documents are cached,
@@ -97,6 +112,20 @@ main settings list. Deleting the local copy never changes the server archive.
 There is nothing to enable: the app caches each document you open while
 connected and reads from those copies when the archive is unreachable. See
 [Mobile App](./mobile-app.md).
+
+## Deadline Reminders
+
+The server records every deadline that enters a warning window — approaching
+(default seven days ahead), due today, and overdue — exactly once, and
+completing a task or moving its date clears pending reminders. Two delivery
+channels exist, both opt-in:
+
+- **Email digest**: one email per day listing overdue, due-today, and upcoming
+  deadlines with links into the archive. Enable it with the checkbox in the
+  language-preferences card; it requires the server to have SMTP configured
+  (the AI-providers page shows whether it is).
+- **Desktop notifications**: the desktop app can relay the same reminders as
+  native notifications — see the desktop guide's Notifications section.
 
 ## Archive Portability
 
