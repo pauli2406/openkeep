@@ -27,6 +27,7 @@ import {
   SemanticSearchResult,
 } from "@openkeep/types";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { createHash } from "crypto";
 import { readFile } from "fs/promises";
 import slugify from "slugify";
 
@@ -1444,8 +1445,8 @@ export class ProcessingService {
     const seenSlugs = new Set<string>();
 
     for (const name of tagNames.map((tag) => tag.trim()).filter(Boolean)) {
-      const slug = this.createSlug(name);
-      if (!slug || seenSlugs.has(slug)) {
+      const slug = this.createSlug(name) || this.fallbackTagSlug(name);
+      if (seenSlugs.has(slug)) {
         continue;
       }
       seenSlugs.add(slug);
@@ -1621,6 +1622,14 @@ export class ProcessingService {
     }
 
     return new Date(`${value}T00:00:00.000Z`);
+  }
+
+  // slugify drops scripts it cannot transliterate (CJK, emoji), which would
+  // collapse every such tag onto one empty slug; hash the normalized name so
+  // these tags stay distinct and resolve stably across runs.
+  private fallbackTagSlug(name: string): string {
+    const normalized = name.toLowerCase().replace(/\s+/g, " ");
+    return `tag-${createHash("sha256").update(normalized).digest("hex").slice(0, 16)}`;
   }
 
   private createSlug(input: string): string {

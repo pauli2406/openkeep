@@ -1140,6 +1140,14 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ).ensureTags(["Fahrzeug-Kosten", "fahrzeug kosten", "Rechnung283", " rechnung283 "]);
     expect(tagIds).toHaveLength(2);
 
+    // Names slugify cannot transliterate must stay distinct instead of being
+    // dropped or collapsed onto one shared empty slug.
+    const cjkTagIds = await (
+      processingService as unknown as { ensureTags(names: string[]): Promise<string[]> }
+    ).ensureTags(["領収書", "契約書", "領収書"]);
+    expect(cjkTagIds).toHaveLength(2);
+    expect(new Set(cjkTagIds).size).toBe(2);
+
     const patchResponse = await request(app.getHttpServer())
       .patch(`/api/documents/${documentId}`)
       .set("Authorization", `Bearer ${accessToken}`)
