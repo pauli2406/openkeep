@@ -1115,6 +1115,45 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     ).toBe(true);
   });
 
+  it("stores one tag link when extracted or submitted tags collide (#283)", async () => {
+    const uploadResponse = await request(app.getHttpServer())
+      .post("/api/documents")
+      .set("Authorization", `Bearer ${accessToken}`)
+      .field("title", "Duplicate tag invoice")
+      .attach(
+        "file",
+        Buffer.from("Invoice Number: TXT-283\nAmount Due: EUR 10,00\n", "utf8"),
+        {
+          filename: "duplicate-tags.txt",
+          contentType: "text/plain",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+    const documentId = uploadResponse.body.id as string;
+
+    // LLM extractors return free-form names; case and punctuation variants of
+    // one tag must resolve to a single id, or the document_tag_links PK insert
+    // in processDocument fails the whole processing transaction.
+    const tagIds = await (
+      processingService as unknown as { ensureTags(names: string[]): Promise<string[]> }
+    ).ensureTags(["Fahrzeug-Kosten", "fahrzeug kosten", "Rechnung283", " rechnung283 "]);
+    expect(tagIds).toHaveLength(2);
+
+    const patchResponse = await request(app.getHttpServer())
+      .patch(`/api/documents/${documentId}`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({ tagIds: [...tagIds, tagIds[0]] });
+
+    expect(patchResponse.status).toBe(200);
+
+    const links = await databaseService.db
+      .select()
+      .from(documentTagLinks)
+      .where(eq(documentTagLinks.documentId, documentId));
+    expect(links).toHaveLength(2);
+  });
+
   it("answers grounded questions with citations", async () => {
     const uploadResponse = await request(app.getHttpServer())
       .post("/api/documents")

@@ -890,12 +890,15 @@ export class DocumentsService {
       if (input.tagIds) {
         await tx.delete(documentTagLinks).where(eq(documentTagLinks.documentId, documentId));
         if (input.tagIds.length > 0) {
-          await tx.insert(documentTagLinks).values(
-            input.tagIds.map((tagId) => ({
-              documentId,
-              tagId,
-            })),
-          );
+          await tx
+            .insert(documentTagLinks)
+            .values(
+              [...new Set(input.tagIds)].map((tagId) => ({
+                documentId,
+                tagId,
+              })),
+            )
+            .onConflictDoNothing();
         }
       }
     });
