@@ -379,3 +379,121 @@
     justify-content: center;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Dark mode. Docusaurus flips the global text variables with [data-theme],
+   so every hardcoded light surface above needs a dark counterpart — otherwise
+   light headings land on the light hero gradient and vanish.
+   --------------------------------------------------------------------------- */
+
+[data-theme="dark"] .hero {
+  background:
+    radial-gradient(circle at top left, rgba(84, 189, 166, 0.14), transparent 30%),
+    radial-gradient(circle at 80% 10%, rgba(34, 136, 116, 0.16), transparent 26%),
+    linear-gradient(180deg, rgba(16, 26, 23, 0.6), rgba(13, 21, 18, 0.97));
+}
+
+[data-theme="dark"] .heroBackdrop {
+  background-image: linear-gradient(rgba(212, 241, 234, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212, 241, 234, 0.05) 1px, transparent 1px);
+}
+
+[data-theme="dark"] .eyebrow,
+[data-theme="dark"] .sectionEyebrow {
+  color: #7fd6c2;
+}
+
+[data-theme="dark"] .heroBrandName {
+  color: #d9efe9;
+}
+
+[data-theme="dark"] .subtitle {
+  color: rgba(222, 238, 233, 0.85);
+}
+
+[data-theme="dark"] .licenseNote {
+  color: rgba(222, 238, 233, 0.62);
+}
+
+[data-theme="dark"] .secondary {
+  border-color: rgba(212, 241, 234, 0.22);
+  background: rgba(22, 36, 31, 0.75);
+  color: #d9efe9;
+}
+
+[data-theme="dark"] .heroPanel {
+  border-color: rgba(212, 241, 234, 0.12);
+  background: rgba(22, 34, 29, 0.94);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .browserChrome {
+  background: linear-gradient(180deg, rgba(212, 241, 234, 0.08), rgba(212, 241, 234, 0.02));
+}
+
+[data-theme="dark"] .browserChrome span {
+  background: rgba(212, 241, 234, 0.2);
+}
+
+[data-theme="dark"] .panelBadge {
+  background: rgba(127, 214, 194, 0.14);
+  color: #9fe3d2;
+}
+
+[data-theme="dark"] .panelNote {
+  color: rgba(222, 238, 233, 0.7);
+}
+
+[data-theme="dark"] .highlightList li::marker {
+  color: #62c5af;
+}
+
+[data-theme="dark"] .quickCard {
+  border-color: rgba(212, 241, 234, 0.12);
+  background: linear-gradient(180deg, rgba(28, 42, 36, 0.92), rgba(20, 32, 27, 0.92));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .quickCard:hover {
+  border-color: rgba(127, 214, 194, 0.32);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .quickCard p {
+  color: rgba(222, 238, 233, 0.78);
+}
+
+[data-theme="dark"] .card {
+  border-color: rgba(212, 241, 234, 0.12);
+  background: rgba(24, 37, 32, 0.85);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .card:hover {
+  border-color: rgba(127, 214, 194, 0.32);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .card p {
+  color: rgba(222, 238, 233, 0.78);
+}
+
+[data-theme="dark"] .cardMarker {
+  background: #62c5af;
+}
+
+[data-theme="dark"] .technical .cardMarker {
+  background: #58b7c6;
+}
+
+[data-theme="dark"] .operations .cardMarker {
+  background: #d9a45b;
+}
+
+[data-theme="dark"] .cardCta {
+  color: #9fe3d2;
+}
+
+[data-theme="dark"] .codeBlock {
+  border-color: rgba(212, 241, 234, 0.12);
+}
