@@ -37,7 +37,7 @@ import { DatabaseService } from "../common/db/database.service";
 import { CategoryAssignmentService } from "./category-assignment.service";
 import { categorySlug } from "./default-categories";
 import { DocumentTypePolicyService } from "../processing/document-type-policy.service";
-import { normalizeCorrespondentName } from "../processing/normalization.util";
+import { normalizeCorrespondentName, tagSlug } from "../processing/normalization.util";
 import { CorrespondentIntelligenceService } from "../explorer/correspondent-intelligence.service";
 
 @Injectable()
@@ -61,7 +61,7 @@ export class TaxonomiesService {
       .insert(tags)
       .values({
         name: input.name.trim(),
-        slug: this.createSlug(input.name),
+        slug: tagSlug(input.name),
       })
       .returning();
 
@@ -82,7 +82,7 @@ export class TaxonomiesService {
       .update(tags)
       .set({
         name: input.name.trim(),
-        slug: this.createSlug(input.name),
+        slug: tagSlug(input.name),
       })
       .where(eq(tags.id, id))
       .returning();

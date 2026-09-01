@@ -1,3 +1,7 @@
+import { createHash } from "crypto";
+
+import slugify from "slugify";
+
 const currencyAliases: Record<string, string> = {
   "€": "EUR",
   eur: "EUR",
@@ -179,6 +183,26 @@ export const computeConfidence = (values: {
 
 export const stripDiacritics = (value: string): string =>
   value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+
+// The single slug strategy for tags: every writer (processing pipeline,
+// taxonomy CRUD, backfill migration 0020) must produce the same slug for the
+// same name, or lookups create duplicate tag rows. slugify drops scripts it
+// cannot transliterate (CJK, emoji), which would collapse every such tag onto
+// one empty slug — fall back to a hash of the normalized name instead.
+export const tagSlug = (name: string): string => {
+  const slug = slugify(name, {
+    lower: true,
+    strict: true,
+    trim: true,
+  }).slice(0, 255);
+
+  if (slug) {
+    return slug;
+  }
+
+  const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
+  return `tag-${createHash("sha256").update(normalized).digest("hex").slice(0, 16)}`;
+};
 
 export const normalizeCorrespondentName = (
   raw: string | null | undefined,
