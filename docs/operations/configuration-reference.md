@@ -291,3 +291,11 @@ Operational notes:
 - use a dedicated mailbox: the poller flags handled messages as read, so a
   human reading the same mailbox hides messages from it
 - `MAX_UPLOAD_BYTES` bounds attachment size for email ingestion too
+
+## Heartbeat Monitoring
+
+- `HEARTBEAT_URL_API`: dead-man's-switch ping URL the API process calls after each successful readiness probe (healthchecks.io style); unset means off
+- `HEARTBEAT_URL_WORKER`: the same for the worker process; keep the two URLs distinct so an alert names the container that stopped
+- `HEARTBEAT_INTERVAL_SECONDS`: seconds between heartbeats (default 60); match the monitor's period to it and give the monitor a grace period long enough to cover a deploy restart
+
+A failed probe is reported to `<url>/fail` with the failing checks as the body. See [Monitoring and Health](./monitoring-and-health.md#external-heartbeat-monitoring).

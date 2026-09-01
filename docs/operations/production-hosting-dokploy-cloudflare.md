@@ -295,6 +295,11 @@ restored MinIO tree back into the volume (stop the stack first). See
 - **Locked out of SSH:** use the provider's console (or the VPN) and adjust the firewall.
 - **Site down:** check `systemctl status cloudflared`, container health in Dokploy, and the
   Cloudflare/Access status.
+- **Know before your users do:** set `HEARTBEAT_URL_API` and `HEARTBEAT_URL_WORKER` to two
+  healthchecks.io checks (see [Monitoring and Health](./monitoring-and-health.md#external-heartbeat-monitoring)).
+  Dokploy restarts a crashed container but does not tell you; the backup monitor from
+  section 10 only proves the backup ran. The heartbeats are what surface a crash-looping
+  worker or a lost dependency.
 
 ---
 
@@ -307,3 +312,4 @@ restored MinIO tree back into the volume (stop the stack first). See
 - [ ] Dokploy admin has 2FA; registration is invitation-only
 - [ ] Cloudflare Access in front of both the app and the panel
 - [ ] Backups encrypted client-side, offsite, scheduled, monitored, and **restore-tested**
+- [ ] API and worker heartbeats configured and the alarm verified once by stopping a container
