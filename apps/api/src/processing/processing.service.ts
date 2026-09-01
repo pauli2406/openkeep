@@ -50,7 +50,7 @@ import { DocumentTypePolicyService } from "./document-type-policy.service";
 import { DocumentParseProviderRegistry } from "./document-parse.registry";
 import { EmbeddingProviderRegistry } from "./embedding-provider.registry";
 import { padEmbedding, serializeHalfVector } from "./embedding.util";
-import { normalizeCorrespondentName } from "./normalization.util";
+import { normalizeCorrespondentName, tagSlug } from "./normalization.util";
 import type {
   AnswerProvider,
   Chunker,
@@ -318,12 +318,18 @@ export class ProcessingService {
         }
 
         if (mergedArchiveFields.tagIds.length > 0) {
-          await tx.insert(documentTagLinks).values(
-            mergedArchiveFields.tagIds.map((tagId) => ({
-              documentId: payload.documentId,
-              tagId,
-            })),
-          );
+          // Dedup and onConflictDoNothing: manual-override tagIds may repeat,
+          // and a concurrent job for the same document can commit the same
+          // links after our delete above ran against the older snapshot.
+          await tx
+            .insert(documentTagLinks)
+            .values(
+              [...new Set(mergedArchiveFields.tagIds)].map((tagId) => ({
+                documentId: payload.documentId,
+                tagId,
+              })),
+            )
+            .onConflictDoNothing();
         }
 
         await tx
@@ -1431,10 +1437,19 @@ export class ProcessingService {
   }
 
   private async ensureTags(tagNames: string[]): Promise<string[]> {
-    const ids: string[] = [];
+    const ids = new Set<string>();
+    // Tags are unique by slug, so name-level dedup is not enough: case or
+    // punctuation variants of one tag ("Rechnung"/"rechnung") resolve to the
+    // same row and duplicate ids would violate the document_tag_links PK.
+    const seenSlugs = new Set<string>();
 
-    for (const name of [...new Set(tagNames.map((tag) => tag.trim()).filter(Boolean))]) {
-      const slug = this.createSlug(name);
+    for (const name of tagNames.map((tag) => tag.trim()).filter(Boolean)) {
+      const slug = tagSlug(name);
+      if (seenSlugs.has(slug)) {
+        continue;
+      }
+      seenSlugs.add(slug);
+
       const [existing] = await this.databaseService.db
         .select({ id: tags.id })
         .from(tags)
@@ -1442,21 +1457,40 @@ export class ProcessingService {
         .limit(1);
 
       if (existing) {
-        ids.push(existing.id);
+        ids.add(existing.id);
         continue;
       }
 
-      const [created] = await this.databaseService.db
-        .insert(tags)
-        .values({
-          name,
-          slug,
-        })
-        .returning({ id: tags.id });
-      ids.push(created.id);
+      try {
+        const [created] = await this.databaseService.db
+          .insert(tags)
+          .values({
+            name,
+            slug,
+          })
+          .returning({ id: tags.id });
+        ids.add(created.id);
+      } catch (error) {
+        if (!this.isUniqueViolation(error)) {
+          throw error;
+        }
+
+        // Another worker created the tag between the lookup and the insert —
+        // duplicate uploads extract identical tags and process concurrently.
+        const [concurrent] = await this.databaseService.db
+          .select({ id: tags.id })
+          .from(tags)
+          .where(eq(tags.slug, slug))
+          .limit(1);
+
+        if (!concurrent) {
+          throw error;
+        }
+        ids.add(concurrent.id);
+      }
     }
 
-    return ids;
+    return [...ids];
   }
 
   private applyManualOverrides(

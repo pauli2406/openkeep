@@ -888,14 +888,23 @@ export class DocumentsService {
         .where(eq(documents.id, documentId));
 
       if (input.tagIds) {
+        // The UPDATE on documents above already holds this document's row
+        // lock for the rest of the transaction, so two concurrent PATCHes
+        // run their delete-then-insert strictly one after the other: the
+        // second one's DELETE sees the first one's committed links and the
+        // last request's set wins, never the union. onConflictDoNothing
+        // below only covers duplicates within a single request.
         await tx.delete(documentTagLinks).where(eq(documentTagLinks.documentId, documentId));
         if (input.tagIds.length > 0) {
-          await tx.insert(documentTagLinks).values(
-            input.tagIds.map((tagId) => ({
-              documentId,
-              tagId,
-            })),
-          );
+          await tx
+            .insert(documentTagLinks)
+            .values(
+              [...new Set(input.tagIds)].map((tagId) => ({
+                documentId,
+                tagId,
+              })),
+            )
+            .onConflictDoNothing();
         }
       }
     });
