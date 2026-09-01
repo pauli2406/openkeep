@@ -15,6 +15,7 @@ import {
   DOCUMENT_PROCESSING_QUEUE,
 } from "../processing/constants";
 import { BossService } from "../processing/boss.service";
+import { ReadinessService } from "./readiness.service";
 @ApiTags("health")
 @Controller()
 export class HealthController {
@@ -25,6 +26,7 @@ export class HealthController {
     @Inject(BossService) private readonly bossService: BossService,
     @Inject(DocumentsService) private readonly documentsService: DocumentsService,
     @Inject(MetricsService) private readonly metricsService: MetricsService,
+    @Inject(ReadinessService) private readonly readinessService: ReadinessService,
   ) {}
 
   @Get("health")
@@ -95,37 +97,8 @@ export class HealthController {
   @ApiOperation({ summary: "Run readiness checks for database, object storage, and queue" })
   @ApiOkResponse({ description: "Readiness status response" })
   async ready() {
-    const checks = {
-      database: false,
-      objectStorage: false,
-      queue: false,
-    };
-
-    try {
-      await this.databaseService.pool.query("SELECT 1");
-      checks.database = true;
-    } catch {
-      checks.database = false;
-    }
-
-    try {
-      await this.storageService.ensureReady();
-      checks.objectStorage = true;
-    } catch {
-      checks.objectStorage = false;
-    }
-
-    try {
-      await this.bossService.ensureReady();
-      checks.queue = true;
-    } catch {
-      checks.queue = false;
-    }
-
-    return {
-      status: Object.values(checks).every(Boolean) ? "ok" : "degraded",
-      checks,
-    };
+    const { status, checks } = await this.readinessService.check();
+    return { status, checks };
   }
 
   @Get("health/status")

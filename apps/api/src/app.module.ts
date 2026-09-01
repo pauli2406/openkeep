@@ -12,6 +12,7 @@ import { DocumentsModule } from "./documents/documents.module";
 import { EmailIngestModule } from "./email-ingest/email-ingest.module";
 import { ExplorerModule } from "./explorer/explorer.module";
 import { HealthController } from "./health/health.controller";
+import { HealthModule } from "./health/health.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ProcessingModule } from "./processing/processing.module";
 import { SearchModule } from "./search/search.module";
@@ -40,6 +41,7 @@ import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
     DocumentsModule,
     EmailIngestModule,
     ExplorerModule,
+    HealthModule.forProcess("api"),
     NotificationsModule,
     SearchModule,
     TaxesModule,

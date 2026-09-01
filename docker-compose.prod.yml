@@ -52,6 +52,11 @@ x-app-env: &app-env
   # RAG answer relevance threshold (cosine similarity); tune per embedding provider.
   ANSWER_MIN_CHUNK_SCORE: ${ANSWER_MIN_CHUNK_SCORE:-0.4}
   LOG_LEVEL: ${LOG_LEVEL:-info}
+  # Dead-man's-switch heartbeats: healthchecks.io ping URLs, one per process.
+  # Empty = off. Setup in docs/operations/monitoring-and-health.md.
+  HEARTBEAT_URL_API: ${HEARTBEAT_URL_API:-}
+  HEARTBEAT_URL_WORKER: ${HEARTBEAT_URL_WORKER:-}
+  HEARTBEAT_INTERVAL_SECONDS: ${HEARTBEAT_INTERVAL_SECONDS:-60}
 
 services:
   postgres:
