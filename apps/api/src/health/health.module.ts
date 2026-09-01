@@ -1,21 +1,31 @@
 import { DynamicModule, Module } from "@nestjs/common";
 
 import { ProcessingModule } from "../processing/processing.module";
+import {
+  HEARTBEAT_PROCESS,
+  HEARTBEAT_TRANSPORT,
+  HeartbeatProcess,
+  HeartbeatService,
+  defaultHeartbeatTransport,
+} from "./heartbeat.service";
 import { ReadinessService } from "./readiness.service";
 
-export type HealthProcess = "api" | "worker";
-
 /**
- * Readiness probing. Both the API and the worker import it, each naming the
- * process so process-specific behaviour can hang off it.
+ * Readiness probing plus the outbound heartbeat. Both the API and the worker
+ * import it, each naming the process so the heartbeat picks its own URL.
  */
 @Module({})
 export class HealthModule {
-  static forProcess(_process: HealthProcess): DynamicModule {
+  static forProcess(process: HeartbeatProcess): DynamicModule {
     return {
       module: HealthModule,
       imports: [ProcessingModule],
-      providers: [ReadinessService],
+      providers: [
+        ReadinessService,
+        HeartbeatService,
+        { provide: HEARTBEAT_PROCESS, useValue: process },
+        { provide: HEARTBEAT_TRANSPORT, useValue: defaultHeartbeatTransport },
+      ],
       exports: [ReadinessService],
     };
   }

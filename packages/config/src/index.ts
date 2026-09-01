@@ -173,6 +173,12 @@ export const AppEnvSchema = z.object({
   // Rejected/skipped ledger rows kept before the oldest are pruned; imported
   // rows are never pruned. Bounds what a leaked address can grow.
   EMAIL_INGEST_LOG_LIMIT: NumberFromEnv.default(500),
+  // Dead-man's-switch heartbeats (e.g. healthchecks.io ping URLs), one per
+  // process. Each process pings its own URL after probing its dependencies;
+  // unset means that process sends nothing.
+  HEARTBEAT_URL_API: EmptyStringToUndefined(z.string().url().optional()),
+  HEARTBEAT_URL_WORKER: EmptyStringToUndefined(z.string().url().optional()),
+  HEARTBEAT_INTERVAL_SECONDS: NumberFromEnv.default(60),
   // Absolute base URL of the web app, used for links in outbound email.
   PUBLIC_URL: EmptyStringToUndefined(z.string().url().optional()),
   MAX_UPLOAD_BYTES: NumberFromEnv.default(67_108_864),
