@@ -12,6 +12,7 @@ import { NotificationsModule } from "./notifications/notifications.module";
 import { NotificationsWorker } from "./notifications/notifications.worker";
 import { ProcessingModule } from "./processing/processing.module";
 import { ProcessingWorker } from "./processing/processing.worker";
+import { TaxonomiesModule } from "./taxonomies/taxonomies.module";
 
 @Module({
   imports: [
@@ -21,6 +22,12 @@ import { ProcessingWorker } from "./processing/processing.worker";
     StorageModule,
     ProcessingModule,
     ExplorerModule,
+    // ExplorerWorker injects CategoryAssignmentService. Nest resolves a
+    // provider's dependencies in the module that declares it, and
+    // ExplorerModule does not re-export TaxonomiesModule, so the import has
+    // to be here. AppModule imports it directly, which is why the API booted
+    // while the worker crash-looped.
+    TaxonomiesModule,
     EmailIngestModule,
     NotificationsModule,
   ],
