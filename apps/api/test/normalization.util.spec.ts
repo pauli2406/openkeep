@@ -4,6 +4,7 @@ import {
   normalizeAmountValue,
   normalizeCurrencyCode,
   parseDateOnly,
+  tagSlug,
 } from "../src/processing/normalization.util";
 
 describe("normalization.util", () => {
@@ -29,5 +30,25 @@ describe("normalization.util", () => {
     expect(normalizeCurrencyCode("€")).toBe("EUR");
     expect(normalizeCurrencyCode("usd")).toBe("USD");
     expect(normalizeCurrencyCode("GBP")).toBe("GBP");
+  });
+
+  describe("tagSlug", () => {
+    it("collapses case and punctuation variants onto one slug", () => {
+      expect(tagSlug("Rechnung")).toBe("rechnung");
+      expect(tagSlug("rechnung")).toBe("rechnung");
+      expect(tagSlug("Rechnung!")).toBe("rechnung");
+      expect(tagSlug("Umsatz Steuer")).toBe(tagSlug("umsatz-steuer"));
+      expect(tagSlug("  Krankenkasse  ")).toBe("krankenkasse");
+    });
+
+    it("hashes names slugify cannot transliterate instead of returning an empty slug", () => {
+      // Pinned: migration 0020 rewrites stored empty slugs with the same
+      // sha256-over-normalized-name recipe in SQL, so this value must not
+      // drift without the migration changing too.
+      expect(tagSlug("日本語")).toBe("tag-77710aedc74ecfa3");
+      expect(tagSlug("  日本語  ")).toBe("tag-77710aedc74ecfa3");
+      expect(tagSlug("🎉")).toMatch(/^tag-[0-9a-f]{16}$/);
+      expect(tagSlug("🎉")).not.toBe(tagSlug("日本語"));
+    });
   });
 });

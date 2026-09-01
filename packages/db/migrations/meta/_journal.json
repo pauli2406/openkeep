@@ -134,6 +134,13 @@
       "when": 1786752240000,
       "tag": "0019_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786752300000,
+      "tag": "0020_tag_slug_fallback",
+      "breakpoints": true
     }
   ]
 }
