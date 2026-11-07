@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createFileRoute, Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Correspondent as TaxonomyCorrespondent,
@@ -11,11 +11,47 @@ import type {
   ParseProvider,
   Tag as TaxonomyTag,
 } from "@openkeep/types";
-import { DocumentProcessingIndicator } from "@/components/document-processing-indicator";
+import { DetailHeader } from "@/components/document-detail/detail-header";
+import {
+  ConfidenceMeter,
+  FieldsRail,
+  parseProviderLabel,
+} from "@/components/document-detail/fields-rail";
 import { DocumentQaSection } from "@/components/document-detail/qa-section";
 import { DocumentSummarySection } from "@/components/document-detail/summary-section";
-import { DetailHeader } from "@/components/document-detail/detail-header";
-import { FieldsRail } from "@/components/document-detail/fields-rail";
+import { IconTile } from "@/components/layout/page";
+import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import {
   evictDeletedArchiveDocument,
@@ -27,64 +63,25 @@ import {
   useArchiveRequestScope,
 } from "@/lib/archive-request-scope";
 import { processingRefetchInterval } from "@/lib/document-processing";
+import { useHostFileSaver, useOfflineReadOnly } from "@/lib/host-shell";
+import { useI18n } from "@/lib/i18n";
 import { createObjectUrlLease } from "@/lib/object-url";
 import { cn } from "@/lib/utils";
-import Markdown from "react-markdown";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { useI18n } from "@/lib/i18n";
-import { useOfflineReadOnly } from "@/lib/host-shell";
-import { useHostFileSaver } from "@/lib/host-shell";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ArrowLeft,
-  BrainCircuit,
-  Download,
-  FileText,
-  Eye,
-  Edit2,
-  Save,
-  X,
-  RotateCcw,
-  CheckCircle,
   AlertTriangle,
-  Loader2,
-  Calendar,
-  Building2,
-  Tag,
-  Hash,
-  DollarSign,
-  Clock,
-  Image,
+  BrainCircuit,
+  ChevronLeft,
+  ChevronRight,
+  Download,
   FileQuestion,
-  ScanText,
-  Braces,
+  FileSearch,
+  FileText,
   History,
-  Lock,
-  Quote,
-  Send,
-  Trash2,
-  Unlock,
-  Plus,
+  Loader2,
+  Mail,
+  ScanText,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -286,47 +283,6 @@ interface AuditEvent {
 
 // --- Helpers ---
 
-function statusVariant(
-  status: Document["status"],
-): "default" | "secondary" | "destructive" | "success" | "warning" {
-  switch (status) {
-    case "ready":
-      return "success";
-    case "processing":
-    case "pending":
-      return "warning";
-    case "failed":
-      return "destructive";
-    default:
-      return "secondary";
-  }
-}
-
-function reviewStatusVariant(
-  status: Document["reviewStatus"],
-): "default" | "secondary" | "destructive" | "success" | "warning" {
-  switch (status) {
-    case "pending":
-      return "warning";
-    case "resolved":
-      return "success";
-    default:
-      return "secondary";
-  }
-}
-
-function confidenceColor(confidence: number): string {
-  if (confidence >= 0.8) return "text-[var(--ok-green)]";
-  if (confidence >= 0.5) return "text-[var(--ok-amber)]";
-  return "text-[var(--ok-red)]";
-}
-
-function confidenceBg(confidence: number): string {
-  if (confidence >= 0.8) return "bg-[var(--ok-green-soft)]";
-  if (confidence >= 0.5) return "bg-[var(--ok-amber-soft)]";
-  return "bg-[var(--ok-red-soft)]";
-}
-
 function formatReviewReason(reason: string): string {
   return reason
     .split("_")
@@ -357,15 +313,6 @@ function formatAgentFieldValue(value: unknown): string {
 function formatDuration(durationMs: number): string {
   if (durationMs < 1000) return `${durationMs} ms`;
   return `${(durationMs / 1000).toFixed(2)} s`;
-}
-
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "-";
-  try {
-    return format(new Date(dateStr), "MMM d, yyyy");
-  } catch {
-    return dateStr;
-  }
 }
 
 function formatDateTime(dateStr: string | null | undefined): string {
@@ -463,74 +410,6 @@ function friendlyMimeLabel(mimeType: string): string {
   return map[mimeType] ?? mimeType;
 }
 
-// --- Provider config types & helpers ---
-
-const PARSE_PROVIDER_LABELS: Record<string, string> = {
-  "local-ocr": "Local OCR",
-  "google-document-ai-enterprise-ocr": "Google Doc AI Enterprise",
-  "google-document-ai-gemini-layout-parser": "Google Doc AI Gemini",
-  "amazon-textract": "Amazon Textract",
-  "azure-ai-document-intelligence": "Azure Document Intelligence",
-  "mistral-ocr": "Mistral OCR",
-};
-
-const EMBEDDING_PROVIDER_LABELS: Record<string, string> = {
-  openai: "OpenAI",
-  "google-gemini": "Google Gemini",
-  voyage: "Voyage AI",
-  mistral: "Mistral",
-};
-
-function parseProviderLabel(id: string | null | undefined): string {
-  if (!id) return "—";
-  return PARSE_PROVIDER_LABELS[id] ?? id;
-}
-
-function embeddingProviderLabel(id: string | null | undefined): string {
-  if (!id) return "—";
-  return EMBEDDING_PROVIDER_LABELS[id] ?? id;
-}
-
-function renderManualOverrideValue(
-  doc: Document,
-  field: ManualOverrideField,
-  t: ReturnType<typeof useI18n>["t"],
-): string {
-  switch (field) {
-    case "issueDate":
-      return formatDate(doc.issueDate);
-    case "dueDate":
-      return formatDate(doc.dueDate);
-    case "expiryDate":
-      return formatDate(doc.expiryDate);
-    case "amount":
-      return doc.amount !== null
-        ? `${doc.amount.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })} ${doc.currency ?? ""}`.trim()
-        : "-";
-    case "currency":
-      return doc.currency ?? "-";
-    case "referenceNumber":
-      return doc.referenceNumber ?? "-";
-    case "holderName":
-      return doc.holderName ?? "-";
-    case "issuingAuthority":
-      return doc.issuingAuthority ?? "-";
-    case "correspondentId":
-      return doc.correspondent?.name ?? t("documentDetail.removed");
-    case "documentTypeId":
-      return doc.documentType?.name ?? t("documentDetail.removed");
-    case "tagIds":
-      return doc.tags.length > 0
-        ? doc.tags.map((tag) => tag.name).join(", ")
-        : t("documentDetail.noTags");
-    default:
-      return "-";
-  }
-}
-
 function sameTagIds(left: string[], right: string[]): boolean {
   return [...left].sort().join(",") === [...right].sort().join(",");
 }
@@ -554,28 +433,13 @@ function DocumentDetailPage() {
     loadDoc: t("documentDetail.loadDoc"),
     loadText: t("documentDetail.loadText"),
     loadHistory: t("documentDetail.loadHistory"),
-    backToDocuments: t("documentDetail.backToDocuments"),
     notFound: t("documentDetail.notFound"),
     returnToDocuments: t("documentDetail.returnToDocuments"),
-    documents: t("documentDetail.documents"),
-    pendingReview: t("documentDetail.pendingReview"),
-    reviewResolved: t("documentDetail.reviewResolved"),
-    preview: t("documentDetail.preview"),
-    ocrText: t("documentDetail.ocrText"),
-    intelligence: t("documentDetail.intelligence"),
-    details: t("documentDetail.details"),
-    history: t("documentDetail.history"),
-    previewUnavailable: t("documentDetail.previewUnavailable"),
-    downloadFile: t("documentDetail.downloadFile"),
-    downloadOriginal: t("documentDetail.downloadOriginal"),
-    downloadSearchable: t("documentDetail.downloadSearchable"),
     downloadFailed: t("documentDetail.downloadFailed"),
-    loadPreviewFailed: t("documentDetail.loadPreviewFailed"),
-    loadDocumentTextFailed: t("documentDetail.loadDocumentTextFailed"),
-    noOcr: t("documentDetail.noOcr"),
-    page: (n: number) => `${t("documentDetail.pageWord")} ${n}`,
   };
 
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [textPreviewContent, setTextPreviewContent] = useState<string | null>(null);
@@ -1088,32 +952,56 @@ function DocumentDetailPage() {
     }
   }
 
+  function handleReprocess() {
+    const available =
+      providersQuery.data?.parseProviders.filter((entry) => entry.available) ?? [];
+    if (available.length > 1) {
+      setSelectedParseProvider(
+        providersQuery.data?.activeParseProvider ?? available[0]?.id ?? "",
+      );
+      setReprocessDialogOpen(true);
+    } else {
+      reprocessMutation.mutate(undefined);
+    }
+  }
+
+  // The menu item that opened a dialog is gone by the time it closes, so focus
+  // would otherwise fall back to the page body.
+  function returnFocusToMenu(event: Event) {
+    event.preventDefault();
+    menuTriggerRef.current?.focus();
+  }
+
+  /** Shows a cited page, scrolling up to the viewer when the panes are stacked. */
+  function openPage(page: number) {
+    setPreviewPage(page);
+    viewerRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   // --- Loading / Error states ---
 
   if (documentQuery.isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <DetailSkeleton />;
   }
 
   if (documentQuery.isError || !documentQuery.data) {
     return (
-      <div className="p-6">
-        <Link to="/documents" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="h-4 w-4" />
-          {copy.backToDocuments}
-        </Link>
-        <div className="mt-8 text-center">
-          <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            {documentQuery.error instanceof Error ? documentQuery.error.message : copy.notFound}
-          </p>
-          <Button variant="outline" className="mt-4" onClick={() => navigate({ to: "/documents" })}>
-            {copy.returnToDocuments}
-          </Button>
-        </div>
+      <div className="flex h-full items-center justify-center p-6">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon" className="bg-danger-soft text-danger">
+              <AlertTriangle />
+            </EmptyMedia>
+            <EmptyTitle>
+              {documentQuery.error instanceof Error ? documentQuery.error.message : copy.notFound}
+            </EmptyTitle>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button variant="outline" onClick={() => navigate({ to: "/documents" })}>
+              {copy.returnToDocuments}
+            </Button>
+          </EmptyContent>
+        </Empty>
       </div>
     );
   }
@@ -1121,7 +1009,7 @@ function DocumentDetailPage() {
   const doc = documentQuery.data;
   const manualOverrides = doc.metadata.manual;
   const lockedFields = manualOverrides?.lockedFields ?? [];
-  // The rail edits in place — there is no edit mode to gate this on, so the
+  // The rail edits in place, so there is no edit mode to gate this on: the
   // pending locks follow the form/document diff directly.
   const pendingLockedFields: ManualOverrideField[] = [];
   if ((doc.issueDate ?? "") !== editForm.issueDate) {
@@ -1176,19 +1064,15 @@ function DocumentDetailPage() {
   }
   const pendingNewLocks = pendingLockedFields.filter((field) => !lockedFields.includes(field));
   const intelligence = doc.metadata.intelligence;
-  const extractionFields = intelligence?.extraction?.fields ?? {};
-  const normalizedFields = intelligence?.validation?.normalizedFields ?? {};
-  const fieldConfidence = intelligence?.extraction?.fieldConfidence ?? {};
-  const fieldProvenance = intelligence?.extraction?.fieldProvenance ?? {};
-  const visibleIntelligenceFields = Object.entries({
-    ...extractionFields,
-    ...normalizedFields,
-  }).filter(([, value]) => {
-    if (value == null) return false;
-    if (typeof value === "string") return value.trim().length > 0;
-    if (Array.isArray(value)) return value.length > 0;
-    return true;
-  });
+
+  // Per-field certainty, keyed the way the rail keys its rows.
+  const fieldConfidence: Record<string, number | null | undefined> = {
+    ...intelligence?.extraction?.fieldConfidence,
+    title: intelligence?.title?.confidence,
+    correspondentId: intelligence?.correspondentResolution?.confidence,
+    documentTypeId: intelligence?.routing?.confidence,
+    tagIds: intelligence?.tagging?.confidence,
+  };
 
   // Group text blocks by page
   const textBlocksByPage: Record<number, TextBlock[]> = {};
@@ -1216,13 +1100,29 @@ function DocumentDetailPage() {
 
   const errorText = (error: unknown) =>
     error instanceof Error ? error.message : null;
-  const reviewActionError =
-    errorText(resolveReviewMutation.error) ?? errorText(requeueMutation.error);
+  // The actions live in the header, so their failures surface right below it,
+  // whichever tab is open. A failed reprocess shows inside its dialog instead
+  // when that is what started it.
+  const headerActionError =
+    errorText(resolveReviewMutation.error) ??
+    errorText(requeueMutation.error) ??
+    (reprocessDialogOpen ? null : errorText(reprocessMutation.error));
   const railActionError =
     errorText(createTagMutation.error) ??
     errorText(createCorrespondentMutation.error) ??
-    errorText(clearOverrideMutation.error) ??
-    errorText(reprocessMutation.error);
+    errorText(clearOverrideMutation.error);
+
+  const emailProvenance = (doc.metadata as Record<string, unknown> | undefined)?.email as
+    | { from?: string; subject?: string | null; receivedAt?: string | null }
+    | undefined;
+
+  const inspectorTabs = [
+    { value: "fields", label: t("documentDetail.fields") },
+    { value: "intelligence", label: t("documentDetail.intelligence") },
+    { value: "qa", label: t("documentDetail.qa") },
+    { value: "text", label: t("documentDetail.ocrText") },
+    { value: "history", label: t("documentDetail.history") },
+  ];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -1231,714 +1131,1033 @@ function DocumentDetailPage() {
         onDownload={handleDownload}
         onResolveReview={() => resolveReviewMutation.mutate()}
         onRequeueReview={() => requeueMutation.mutate()}
-        reviewPending={
-          resolveReviewMutation.isPending || requeueMutation.isPending
-        }
+        reviewPending={resolveReviewMutation.isPending || requeueMutation.isPending}
+        onReprocess={handleReprocess}
+        reprocessPending={reprocessMutation.isPending}
+        onDelete={() => setDeleteDialogOpen(true)}
+        deletePending={deleteDocumentMutation.isPending}
+        processing={doc.status === "processing"}
+        readOnly={offlineReadOnly}
+        menuTriggerRef={menuTriggerRef}
       />
-      {reviewActionError ? (
-        <div
-          className="border-b border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-4 py-2 text-xs text-[var(--ok-red)]"
-          role="alert"
-        >
-          {reviewActionError}
+      {headerActionError ? (
+        <div className="shrink-0 border-b bg-card px-3 py-2 md:px-4">
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertDescription>{headerActionError}</AlertDescription>
+          </Alert>
         </div>
       ) : null}
-      <DocumentProcessingIndicator document={doc} />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
-        {/* Left column: preview and the content tabs */}
-        <div className="flex min-h-0 flex-col overflow-auto">
-          <Tabs defaultValue="preview">
-            <div className="flex flex-shrink-0 items-center gap-2 border-b bg-[var(--ok-bar)] px-3 py-1.5">
-              <TabsList className="bg-transparent p-0">
-                <TabsTrigger value="preview">{copy.preview}</TabsTrigger>
-                <TabsTrigger value="text">{copy.ocrText}</TabsTrigger>
-                <TabsTrigger value="intelligence">{copy.intelligence}</TabsTrigger>
-                <TabsTrigger value="qa">{t("documentDetail.qa")}</TabsTrigger>
-                <TabsTrigger value="details">{copy.details}</TabsTrigger>
-                <TabsTrigger value="history">{copy.history}</TabsTrigger>
+      {/* The panes scroll on their own from lg up; below that they stack and
+          the column scrolls as one. */}
+      <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(350px,40%,480px)] lg:overflow-hidden">
+        <div ref={viewerRef} className="h-[62svh] min-h-80 min-w-0 lg:h-full lg:min-h-0">
+          <DocumentViewer
+            doc={doc}
+            category={previewCategory}
+            previewUrl={previewUrl}
+            previewLoading={previewQuery.isLoading}
+            previewFailed={previewQuery.isError}
+            onRetryPreview={() => void previewQuery.refetch()}
+            textContent={textPreviewContent}
+            zoom={previewZoom}
+            onZoomChange={setPreviewZoom}
+            page={previewPage}
+            onPageChange={setPreviewPage}
+            pageCount={pageCount}
+            onDownload={handleDownload}
+            downloadError={downloadError}
+          />
+        </div>
+
+        <aside className="flex min-h-0 min-w-0 flex-col border-t bg-card lg:h-full lg:border-t-0 lg:border-l">
+          <Tabs defaultValue="fields" className="min-h-0 flex-1 gap-0">
+            <div className="sticky top-0 z-20 shrink-0 overflow-x-auto border-b bg-card px-2">
+              <TabsList variant="line" className="h-11 w-full justify-start gap-0.5">
+                {inspectorTabs.map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="flex-none px-2 after:bg-brand data-active:text-brand"
+                  >
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
-              <div className="ok-num ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-                <button
-                  type="button"
-                  aria-label={t("documentDetail.zoomOut")}
-                  onClick={() => setPreviewZoom((z) => Math.max(50, z - 25))}
-                  className="px-1 hover:text-foreground"
-                >
-                  −
-                </button>
-                <span>{previewZoom}%</span>
-                <button
-                  type="button"
-                  aria-label={t("documentDetail.zoomIn")}
-                  onClick={() => setPreviewZoom((z) => Math.min(300, z + 25))}
-                  className="px-1 hover:text-foreground"
-                >
-                  +
-                </button>
-                {pageCount > 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      aria-label={t("documentDetail.page")}
-                      onClick={() => setPreviewPage((p) => Math.max(1, p - 1))}
-                      className="px-1 hover:text-foreground"
-                    >
-                      ‹
-                    </button>
-                    <span>
-                      {previewPage} / {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={t("documentDetail.page")}
-                      onClick={() => setPreviewPage((p) => Math.min(pageCount, p + 1))}
-                      className="px-1 hover:text-foreground"
-                    >
-                      ›
-                    </button>
-                  </>
-                ) : null}
-              </div>
             </div>
 
-            <TabsContent value="preview">
-              <Card>
-                <CardContent className="p-4 space-y-4">
-                  <div
-                    className="w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--ok-paper-border)] bg-[var(--ok-sunken)]"
-                    style={{ height: "calc(100vh - 230px)" }}
-                  >
-                    {previewQuery.isLoading && (
-                      <div className="flex h-full items-center justify-center">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      </div>
-                    )}
-                    {previewQuery.isError && (
-                      <div className="flex h-full items-center justify-center p-6 text-sm text-destructive">
-                        {copy.loadPreviewFailed}
-                      </div>
-                    )}
-                    {previewUrl &&
-                      !previewQuery.isLoading &&
-                      !previewQuery.isError && (
-                        <>
-                          {/* PDF: iframe */}
-                          {previewCategory === "pdf" && (
-                            <iframe
-                              key={`${previewPage}-${previewZoom}`}
-                              src={`${previewUrl}#page=${previewPage}&zoom=${previewZoom}`}
-                              className="h-full w-full bg-[var(--ok-paper)]"
-                              title={t("documentDetail.documentPreviewTitle")}
-                            />
-                          )}
-
-                          {/* Image: native img */}
-                          {previewCategory === "image" && (
-                            <div className="flex h-full items-center justify-center bg-[var(--ok-paper)] p-4">
-                              <img
-                                src={previewUrl}
-                                alt={doc.title}
-                                style={{ transform: `scale(${previewZoom / 100})` }}
-                                className="max-h-full max-w-full rounded object-contain shadow-lg transition-transform"
-                              />
-                            </div>
-                          )}
-
-                          {/* Text: inline preformatted */}
-                          {previewCategory === "text" && (
-                            <div className="h-full overflow-auto bg-[var(--ok-paper)] p-4">
-                              <pre className="whitespace-pre-wrap break-words font-mono text-sm leading-relaxed text-[var(--ok-paper-ink)]">
-                                {textPreviewContent ?? t("documentDetail.loadingContent")}
-                              </pre>
-                            </div>
-                          )}
-
-                          {/* Video: native video player */}
-                          {previewCategory === "video" && (
-                            <div className="flex h-full items-center justify-center bg-black p-4">
-                              <video
-                                src={previewUrl}
-                                controls
-                                className="max-h-full max-w-full rounded"
-                              >
-                                {t("documentDetail.browserNoVideo")}
-                              </video>
-                            </div>
-                          )}
-
-                          {/* Audio: native audio player */}
-                          {previewCategory === "audio" && (
-                            <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
-                              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                                <FileText className="h-10 w-10 text-primary" />
-                              </div>
-                              <audio
-                                src={previewUrl}
-                                controls
-                                className="w-full max-w-md"
-                              >
-                                {t("documentDetail.browserNoAudio")}
-                              </audio>
-                            </div>
-                          )}
-
-                          {/* Unsupported: friendly fallback */}
-                          {previewCategory === "unsupported" && (
-                            <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-                              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted-foreground/10">
-                                <FileQuestion className="h-8 w-8 text-muted-foreground" />
-                              </div>
-                              <div className="space-y-1.5">
-                                <p className="text-sm font-medium text-foreground">
-                                 {copy.previewUnavailable}
-                                </p>
-                                <p className="text-xs text-muted-foreground max-w-xs">
-                                  {t("documentDetail.unsupportedPreviewPrefix")} (
-                                  {friendlyMimeLabel(doc.mimeType)}) {t("documentDetail.unsupportedPreviewSuffix")}
-                                </p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-1.5 mt-2"
-                                onClick={() => handleDownload("original")}
-                              >
-                                <Download className="h-3.5 w-3.5" />
-                                 {copy.downloadFile}
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => handleDownload("original")}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                       {copy.downloadOriginal}
-                    </Button>
-                    {doc.searchablePdfAvailable && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => handleDownload("searchable")}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                         {copy.downloadSearchable}
-                      </Button>
-                    )}
-                  </div>
-                  {downloadError ? (
-                    <p className="text-sm text-destructive" role="alert">
-                      {downloadError}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* OCR Text Tab */}
-            <TabsContent value="text">
-              <Card>
-                <CardContent className="p-4">
-                  {textQuery.isLoading && (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  {textQuery.isError && (
-                     <p className="text-sm text-destructive">{copy.loadDocumentTextFailed}</p>
-                  )}
-                  {textQuery.isSuccess && pageNumbers.length === 0 && (
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                       {copy.noOcr}
-                    </p>
-                  )}
-                  {textQuery.isSuccess && pageNumbers.length > 0 && (
-                    <div className="space-y-6">
-                      {pageNumbers.map((pageNum) => (
-                        <div key={pageNum}>
-                          <h3 className="text-sm font-semibold text-muted-foreground mb-2">
-                             {copy.page(pageNum)}
-                          </h3>
-                          <div className="rounded-md border bg-muted/50 p-3 text-sm leading-relaxed whitespace-pre-wrap font-mono">
-                            {textBlocksByPage[pageNum]
-                              .map((b) => b.text)
-                              .join("\n")}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="intelligence">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">{t("documentDetail.documentIntelligence")}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {!intelligence ? (
-                    <p className="text-sm text-muted-foreground">
-                      {t("documentDetail.noAgentIntelligence")}
-                    </p>
-                  ) : (
-                    <>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-md border p-3 space-y-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium">{t("documentDetail.routing")}</p>
-                            {intelligence.routing?.confidence != null && (
-                              <span className={`text-xs font-medium ${confidenceColor(intelligence.routing.confidence)}`}>
-                                <span className="ok-num">{(intelligence.routing.confidence * 100).toFixed(0)}%</span>
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm space-y-1">
-                            <p>
-                              <span className="text-muted-foreground">{t("documentDetail.type")}</span>{" "}
-                              {intelligence.routing?.documentType ?? "-"}
-                            </p>
-                            {intelligence.routing?.subtype && (
-                              <p>
-                                <span className="text-muted-foreground">{t("documentDetail.subtype")}</span>{" "}
-                                {intelligence.routing.subtype}
-                              </p>
-                            )}
-                            {intelligence.routing?.provider && (
-                              <p>
-                                <span className="text-muted-foreground">{t("documentDetail.model")}</span>{" "}
-                                {intelligence.routing.provider}
-                                {intelligence.routing.model ? ` / ${intelligence.routing.model}` : ""}
-                              </p>
-                            )}
-                          </div>
-                          {intelligence.routing?.reasoningHints?.length ? (
-                            <div className="flex flex-wrap gap-1 pt-1">
-                              {intelligence.routing.reasoningHints.map((hint) => (
-                                <Badge key={hint} variant="outline" className="text-xs">
-                                  {hint}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <DocumentSummarySection
-                          documentId={doc.id}
-                          initialSummary={intelligence.summary?.value ?? doc.metadata.summary}
-                          initialProvider={intelligence.summary?.provider}
-                          initialModel={intelligence.summary?.model}
-                        />
-                      </div>
-
-                      <div className="rounded-md border p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium">{t("documentDetail.typeSpecificFields")}</p>
-                          {intelligence.extraction?.provider && (
-                            <span className="text-xs text-muted-foreground">
-                              {intelligence.extraction.provider}
-                              {intelligence.extraction.model ? ` / ${intelligence.extraction.model}` : ""}
-                            </span>
-                          )}
-                        </div>
-                        {visibleIntelligenceFields.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">{t("documentDetail.noExtractedFields")}</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {visibleIntelligenceFields.map(([field, value]) => {
-                              const provenance = fieldProvenance[field];
-                              const confidence = fieldConfidence[field];
-                              return (
-                                <div key={field} className="rounded-md border bg-muted/30 p-3 space-y-2">
-                                  <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                      <p className="text-sm font-medium">{formatAgentFieldLabel(field)}</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {formatAgentFieldValue(value)}
-                                      </p>
-                                    </div>
-                                    {confidence != null && (
-                                      <Badge variant="outline" className="text-xs">
-                                        <span className="ok-num">{(confidence * 100).toFixed(0)}%</span>
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {provenance && (
-                                    <div className="rounded-md border bg-background px-3 py-2 text-xs space-y-1">
-                                      <p>
-                                        <span className="text-muted-foreground">{t("documentDetail.source")}</span>{" "}
-                                        {provenance.source ?? "-"}
-                                        {provenance.provider ? ` / ${provenance.provider}` : ""}
-                                      </p>
-                                      {(provenance.page != null || provenance.lineIndex != null) && (
-                                        <p>
-                                          <span className="text-muted-foreground">{t("documentDetail.location")}</span>{" "}
-                                          {provenance.page != null ? `${t("documentDetail.pageWord")} ${provenance.page}` : ""}
-                                          {provenance.lineIndex != null ? `, ${t("documentDetail.lineWord")} ${provenance.lineIndex}` : ""}
-                                        </p>
-                                      )}
-                                      {provenance.snippet && (
-                                        <p className="font-mono text-[11px] text-muted-foreground whitespace-pre-wrap">
-                                          {provenance.snippet}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">{t("documentDetail.taggingCorrespondent")}</p>
-                          <div className="flex flex-wrap gap-1">
-                            {(intelligence.tagging?.tags ?? []).map((tagValue) => (
-                              <Badge key={tagValue} variant="secondary" className="text-xs">
-                                {tagValue}
-                              </Badge>
-                            ))}
-                          </div>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            <p>
-                              {t("documentDetail.correspondent")}: {intelligence.correspondentResolution?.resolvedName ?? "-"}
-                            </p>
-                            <p>
-                              {t("documentDetail.strategy")}: {intelligence.correspondentResolution?.strategy ?? "-"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">{t("documentDetail.validation")}</p>
-                          {(intelligence.validation?.warnings?.length ?? 0) > 0 && (
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">{t("documentDetail.warnings")}</p>
-                              <div className="flex flex-wrap gap-1">
-                                {intelligence.validation?.warnings?.map((warning) => (
-                                  <Badge key={warning} variant="warning" className="text-xs">
-                                    {formatReviewReason(warning)}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {(intelligence.validation?.errors?.length ?? 0) > 0 && (
-                            <div>
-                              <p className="text-xs text-muted-foreground mb-1">{t("documentDetail.errors")}</p>
-                              <div className="flex flex-wrap gap-1">
-                                {intelligence.validation?.errors?.map((error) => (
-                                  <Badge key={error} variant="destructive" className="text-xs">
-                                    {formatReviewReason(error)}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {Object.entries(intelligence.validation?.duplicateSignals ?? {}).length > 0 && (
-                            <div className="rounded-md border bg-muted/30 p-2 text-xs font-mono whitespace-pre-wrap">
-                              {JSON.stringify(intelligence.validation?.duplicateSignals ?? {}, null, 2)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="rounded-md border p-3 space-y-2">
-                          <p className="text-sm font-medium">{t("documentDetail.pipeline")}</p>
-                        <div className="grid gap-2 md:grid-cols-2 text-xs text-muted-foreground">
-                          <p>{t("documentDetail.framework")}: {intelligence.pipeline?.framework ?? "-"}</p>
-                          <p>{t("documentDetail.status")}: {intelligence.pipeline?.status ?? "-"}</p>
-                          <p>{t("documentDetail.runId")}: {intelligence.pipeline?.runId ?? "-"}</p>
-                          <p>
-                            {t("documentDetail.providerOrder")}: {(intelligence.pipeline?.providerOrder ?? []).join(" -> ") || "-"}
-                          </p>
-                        </div>
-                        {Object.entries(intelligence.pipeline?.durationsMs ?? {}).length > 0 && (
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {Object.entries(intelligence.pipeline?.durationsMs ?? {}).map(([key, value]) => (
-                              <Badge key={key} variant="outline" className="text-xs">
-                                {formatAgentFieldLabel(key)}: {formatDuration(value)}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Details / Raw Metadata Tab */}
-            <TabsContent value="details">
-              {(() => {
-                const emailProvenance = (doc.metadata as Record<string, unknown> | undefined)
-                  ?.email as
-                  | { from?: string; subject?: string | null; receivedAt?: string | null }
-                  | undefined;
-                if (!emailProvenance) return null;
-                return (
-                  <Card className="mb-4">
-                    <CardContent className="p-4 text-sm">
+            <TabsContent value="fields" className="min-h-0 lg:overflow-hidden">
+              <FieldsRail
+                doc={doc}
+                form={editForm}
+                onFormChange={(patch) => setEditForm((current) => ({ ...current, ...patch }))}
+                correspondents={correspondentsQuery.data ?? []}
+                documentTypes={documentTypesQuery.data ?? []}
+                tags={tagsQuery.data ?? []}
+                onCreateTag={(name) => createTagMutation.mutate(name)}
+                createTagPending={createTagMutation.isPending}
+                onCreateCorrespondent={(name) => createCorrespondentMutation.mutate(name)}
+                createCorrespondentPending={createCorrespondentMutation.isPending}
+                lockedFields={lockedFields}
+                onUnlockFields={(fields) =>
+                  clearOverrideMutation.mutate(fields as ManualOverrideField[])
+                }
+                onSave={saveEdits}
+                onReset={seedForm}
+                saving={updateMutation.isPending}
+                saveError={updateMutation.isError ? t("documentDetail.failedToSaveChanges") : null}
+                actionError={railActionError}
+                lockNote={lockNote}
+                fieldConfidence={fieldConfidence}
+                readOnly={offlineReadOnly}
+              >
+                {emailProvenance ? (
+                  <section className="mx-2 flex items-start gap-3 rounded-xl border p-3.5 text-sm">
+                    <IconTile size="sm">
+                      <Mail />
+                    </IconTile>
+                    <div className="min-w-0">
                       <p className="font-medium">{t("documentDetail.arrivedByEmail")}</p>
-                      <p className="mt-1 text-muted-foreground">
+                      <p className="mt-0.5 text-xs wrap-anywhere text-muted-foreground">
                         {emailProvenance.from ?? "?"}
                         {emailProvenance.receivedAt
                           ? ` · ${format(new Date(emailProvenance.receivedAt), "MMM d, yyyy HH:mm")}`
                           : ""}
                         {emailProvenance.subject ? ` · ${emailProvenance.subject}` : ""}
                       </p>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-              <Card>
-                <CardContent className="p-4">
-                  <pre className="overflow-auto rounded-md border bg-muted/50 p-4 text-xs font-mono leading-relaxed max-h-[60vh]">
-                    {JSON.stringify(doc, null, 2)}
-                  </pre>
-                </CardContent>
-              </Card>
+                    </div>
+                  </section>
+                ) : null}
+                <RawJson
+                  label={t("documentDetail.rawMetadata")}
+                  value={doc}
+                  className="mx-2"
+                  contentClassName="max-h-96"
+                />
+              </FieldsRail>
             </TabsContent>
 
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">{t("documentDetail.documentHistory")}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {historyQuery.isLoading && (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  )}
-                  {historyQuery.isError && (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                      {copy.loadHistory}
-                    </div>
-                  )}
-                  {historyQuery.isSuccess && historyQuery.data.items.length === 0 && (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      {t("documentDetail.noAuditEvents")}
-                    </p>
-                  )}
-                  {historyQuery.data?.items.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-lg border p-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {formatHistoryEventType(event.eventType)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {event.actorDisplayName ||
-                              event.actorEmail ||
-                              t("documentDetail.system")}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          <span className="ok-num">{formatDateTime(event.createdAt)}</span>
-                        </p>
-                      </div>
-                      {Object.keys(event.payload ?? {}).length > 0 && (
-                        <pre className="mt-3 overflow-auto rounded-md border bg-muted/50 p-3 text-xs font-mono leading-relaxed">
-                          {JSON.stringify(event.payload, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+            <TabsContent value="intelligence" className="min-h-0 lg:overflow-y-auto">
+              <IntelligencePanel doc={doc} />
             </TabsContent>
 
-
-            <TabsContent value="qa">
+            <TabsContent value="qa" className="h-[75svh] flex-none lg:h-auto lg:min-h-0 lg:flex-1">
               {offlineReadOnly ? (
-                <p className="p-4 text-sm text-muted-foreground" role="status">
-                  {t("offline.askDisabled")}
-                </p>
+                <div className="flex h-full items-center justify-center p-6">
+                  <p className="text-center text-sm text-muted-foreground" role="status">
+                    {t("offline.askDisabled")}
+                  </p>
+                </div>
               ) : (
-                <DocumentQaSection documentId={doc.id} />
+                <DocumentQaSection
+                  documentId={doc.id}
+                  documentTitle={doc.title}
+                  onOpenPage={openPage}
+                />
               )}
             </TabsContent>
-          </Tabs>
-        </div>
 
-        {/* Right rail: fields, review, processing. One fieldset gates every
-            mutating control in it while the archive is an offline copy. */}
-        <fieldset disabled={offlineReadOnly} className="contents">
-        <FieldsRail
-          doc={doc}
-          form={editForm}
-          onFormChange={(patch) => setEditForm((current) => ({ ...current, ...patch }))}
-          correspondents={correspondentsQuery.data ?? []}
-          documentTypes={documentTypesQuery.data ?? []}
-          tags={tagsQuery.data ?? []}
-          onCreateTag={(name) => createTagMutation.mutate(name)}
-          createTagPending={createTagMutation.isPending}
-          onCreateCorrespondent={(name) => createCorrespondentMutation.mutate(name)}
-          createCorrespondentPending={createCorrespondentMutation.isPending}
-          lockedFields={lockedFields}
-          onUnlockFields={(fields) => clearOverrideMutation.mutate(fields as ManualOverrideField[])}
-          onSave={saveEdits}
-          onReset={seedForm}
-          saving={updateMutation.isPending}
-          saveError={updateMutation.isError ? t("documentDetail.failedToSaveChanges") : null}
-          actionError={railActionError}
-          lockNote={lockNote}
-          onReprocess={() => {
-            const available =
-              providersQuery.data?.parseProviders.filter((entry) => entry.available) ?? [];
-            if (available.length > 1) {
-              setSelectedParseProvider(
-                providersQuery.data?.activeParseProvider ?? available[0]?.id ?? "",
-              );
-              setReprocessDialogOpen(true);
-            } else {
-              reprocessMutation.mutate(undefined);
-            }
-          }}
-          reprocessPending={reprocessMutation.isPending}
-          onDelete={() => setDeleteDialogOpen(true)}
-          deletePending={deleteDocumentMutation.isPending}
-          processing={doc.status === "processing"}
-        />
-        </fieldset>
+            <TabsContent value="text" className="min-h-0 bg-stage lg:overflow-y-auto">
+              <OcrTextPanel
+                loading={textQuery.isLoading}
+                failed={textQuery.isError}
+                onRetry={() => void textQuery.refetch()}
+                pageNumbers={pageNumbers}
+                blocksByPage={textBlocksByPage}
+              />
+            </TabsContent>
+
+            <TabsContent value="history" className="min-h-0 lg:overflow-y-auto">
+              <HistoryPanel
+                loading={historyQuery.isLoading}
+                failed={historyQuery.isError}
+                failedLabel={copy.loadHistory}
+                onRetry={() => void historyQuery.refetch()}
+                items={historyQuery.data?.items}
+              />
+            </TabsContent>
+          </Tabs>
+        </aside>
       </div>
 
-          {/* Reprocess provider picker dialog */}
-          <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("documentDetail.reprocessDialogTitle")}</DialogTitle>
-                <DialogDescription>
-                  {t("documentDetail.reprocessDialogDescription")}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                {reprocessMutation.isError ? (
-                  <p className="text-sm text-[var(--ok-red)]" role="alert">
-                    {errorText(reprocessMutation.error) ??
-                      t("documentDetail.failedToReprocessDocument")}
-                  </p>
-                ) : null}
-                <Label htmlFor="parse-provider-select">{t("documentDetail.ocrProvider")}</Label>
-                <Select
-                  value={selectedParseProvider}
-                  onValueChange={(value) => setSelectedParseProvider(value as ParseProvider)}
-                >
-                  <SelectTrigger id="parse-provider-select">
-                    <SelectValue placeholder={t("documentDetail.selectProvider")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(providersQuery.data?.parseProviders ?? [])
-                      .filter((p) => p.available)
-                      .map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          <span className="flex items-center gap-2">
-                            {parseProviderLabel(p.id)}
-                            {p.id === providersQuery.data?.activeParseProvider && (
-                              <span className="text-xs text-muted-foreground">({t("documentDetail.active")})</span>
-                            )}
-                            {p.id === providersQuery.data?.fallbackParseProvider && (
-                              <span className="text-xs text-muted-foreground">({t("documentDetail.fallback")})</span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                {doc.parseProvider && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("documentDetail.lastProcessedWith")} <span className="font-medium">{parseProviderLabel(doc.parseProvider)}</span>
-                  </p>
-                )}
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setReprocessDialogOpen(false)}
-                  disabled={reprocessMutation.isPending}
-                >
-                  {t("documentDetail.cancel")}
-                </Button>
-                <Button
-                  onClick={() => reprocessMutation.mutate(selectedParseProvider || undefined)}
-                  disabled={reprocessMutation.isPending || !selectedParseProvider}
-                >
-                  {reprocessMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t("documentDetail.reprocessing")}
-                    </>
-                  ) : (
-                    t("documentDetail.reprocess")
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+      {/* Reprocess provider picker dialog */}
+      <Dialog open={reprocessDialogOpen} onOpenChange={setReprocessDialogOpen}>
+        <DialogContent onCloseAutoFocus={returnFocusToMenu}>
+          <DialogHeader>
+            <DialogTitle>{t("documentDetail.reprocessDialogTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("documentDetail.reprocessDialogDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2.5">
+            {reprocessMutation.isError ? (
+              <Alert variant="destructive">
+                <AlertTriangle />
+                <AlertDescription>
+                  {errorText(reprocessMutation.error) ??
+                    t("documentDetail.failedToReprocessDocument")}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <Label htmlFor="parse-provider-select">{t("documentDetail.ocrProvider")}</Label>
+            <Select
+              value={selectedParseProvider}
+              onValueChange={(value) => setSelectedParseProvider(value as ParseProvider)}
+            >
+              <SelectTrigger id="parse-provider-select" className="w-full">
+                <SelectValue placeholder={t("documentDetail.selectProvider")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(providersQuery.data?.parseProviders ?? [])
+                  .filter((p) => p.available)
+                  .map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="flex items-center gap-2">
+                        {parseProviderLabel(p.id)}
+                        {p.id === providersQuery.data?.activeParseProvider && (
+                          <span className="text-xs text-muted-foreground">({t("documentDetail.active")})</span>
+                        )}
+                        {p.id === providersQuery.data?.fallbackParseProvider && (
+                          <span className="text-xs text-muted-foreground">({t("documentDetail.fallback")})</span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {doc.parseProvider && (
+              <p className="text-xs text-muted-foreground">
+                {t("documentDetail.lastProcessedWith")}{" "}
+                <span className="font-medium">{parseProviderLabel(doc.parseProvider)}</span>
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReprocessDialogOpen(false)}
+              disabled={reprocessMutation.isPending}
+            >
+              {t("documentDetail.cancel")}
+            </Button>
+            <Button
+              onClick={() => reprocessMutation.mutate(selectedParseProvider || undefined)}
+              disabled={reprocessMutation.isPending || !selectedParseProvider}
+            >
+              {reprocessMutation.isPending ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {t("documentDetail.reprocessing")}
+                </>
+              ) : (
+                t("documentDetail.reprocess")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("documentDetail.deleteDialogTitle")}</DialogTitle>
-                <DialogDescription>
-                  {t("documentDetail.deleteDialogDescription")}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm">
-                <span className="font-medium">{doc.title}</span>
-              </div>
-              {deleteDocumentMutation.isError ? (
-                <p className="text-sm text-[var(--ok-red)]" role="alert">
-                  {errorText(deleteDocumentMutation.error) ??
-                    t("documentDetail.failedToDeleteDocument")}
-                </p>
-              ) : null}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setDeleteDialogOpen(false)}
-                  disabled={deleteDocumentMutation.isPending}
-                >
-                  {t("documentDetail.cancel")}
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => deleteDocumentMutation.mutate()}
-                  disabled={deleteDocumentMutation.isPending}
-                >
-                  {deleteDocumentMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {t("documentDetail.deleting")}
-                    </>
-                  ) : (
-                    t("documentDetail.deletePermanently")
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent onCloseAutoFocus={returnFocusToMenu}>
+          <DialogHeader>
+            <DialogTitle>{t("documentDetail.deleteDialogTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("documentDetail.deleteDialogDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-danger-soft px-3 py-2 text-sm font-medium text-danger">
+            {doc.title}
+          </div>
+          {deleteDocumentMutation.isError ? (
+            <Alert variant="destructive">
+              <AlertTriangle />
+              <AlertDescription>
+                {errorText(deleteDocumentMutation.error) ??
+                  t("documentDetail.failedToDeleteDocument")}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteDocumentMutation.isPending}
+            >
+              {t("documentDetail.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteDocumentMutation.mutate()}
+              disabled={deleteDocumentMutation.isPending}
+            >
+              {deleteDocumentMutation.isPending ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {t("documentDetail.deleting")}
+                </>
+              ) : (
+                t("documentDetail.deletePermanently")
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-
 }
 
 // ---------------------------------------------------------------------------
-// AI Section component — Q&A with SSE streaming
+// Loading
 // ---------------------------------------------------------------------------
+
+function DetailSkeleton() {
+  return (
+    <div className="flex h-full min-h-0 flex-col" aria-busy="true">
+      <div className="flex shrink-0 items-center gap-3 border-b bg-card px-4 py-3.5">
+        <Skeleton className="size-8 rounded-lg" />
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Skeleton className="h-4 w-56 max-w-full" />
+          <Skeleton className="h-3 w-36 max-w-full" />
+        </div>
+        <Skeleton className="h-8 w-28 rounded-lg" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(350px,40%,480px)]">
+        <div className="flex h-[62svh] bg-stage p-5 lg:h-full">
+          <div className="mx-auto h-full w-full max-w-3xl rounded-md border border-paper-border bg-paper p-8 shadow-raised">
+            <div className="flex flex-col gap-3">
+              {[40, 92, 88, 94, 76].map((width) => (
+                <Skeleton key={width} className="h-3 rounded-full" style={{ width: `${width}%` }} />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 border-l bg-card p-4">
+          {[0, 1, 2, 3, 4, 5, 6].map((row) => (
+            <Skeleton key={row} className="h-7 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Left pane: the document on its stage
+// ---------------------------------------------------------------------------
+
+function ToolbarIconButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label={label}
+          onClick={onClick}
+          disabled={disabled}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function DocumentViewer({
+  doc,
+  category,
+  previewUrl,
+  previewLoading,
+  previewFailed,
+  onRetryPreview,
+  textContent,
+  zoom,
+  onZoomChange,
+  page,
+  onPageChange,
+  pageCount,
+  onDownload,
+  downloadError,
+}: {
+  doc: Document;
+  category: PreviewCategory;
+  previewUrl: string | null;
+  previewLoading: boolean;
+  previewFailed: boolean;
+  onRetryPreview: () => void;
+  textContent: string | null;
+  zoom: number;
+  onZoomChange: (update: (zoom: number) => number) => void;
+  page: number;
+  onPageChange: (update: (page: number) => number) => void;
+  pageCount: number;
+  onDownload: (variant: "original" | "searchable") => void;
+  downloadError: string | null;
+}) {
+  const { t } = useI18n();
+  const zoomable = category === "pdf" || category === "image";
+
+  return (
+    <section className="flex h-full min-h-0 flex-col bg-stage">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b bg-card px-2">
+        {category === "pdf" && pageCount > 1 ? (
+          <>
+            <ToolbarIconButton
+              label={t("documentDetail.previousPage")}
+              onClick={() => onPageChange((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+            >
+              <ChevronLeft />
+            </ToolbarIconButton>
+            <span className="num min-w-12 text-center text-xs text-muted-foreground">
+              {page} / {pageCount}
+            </span>
+            <ToolbarIconButton
+              label={t("documentDetail.nextPage")}
+              onClick={() => onPageChange((p) => Math.min(pageCount, p + 1))}
+              disabled={page >= pageCount}
+            >
+              <ChevronRight />
+            </ToolbarIconButton>
+            {zoomable ? <Separator orientation="vertical" className="mx-1 my-3" /> : null}
+          </>
+        ) : null}
+        {zoomable ? (
+          <>
+            <ToolbarIconButton
+              label={t("documentDetail.zoomOut")}
+              onClick={() => onZoomChange((z) => Math.max(50, z - 25))}
+              disabled={zoom <= 50}
+            >
+              <ZoomOut />
+            </ToolbarIconButton>
+            <span className="num min-w-10 text-center text-xs text-muted-foreground">{zoom}%</span>
+            <ToolbarIconButton
+              label={t("documentDetail.zoomIn")}
+              onClick={() => onZoomChange((z) => Math.min(300, z + 25))}
+              disabled={zoom >= 300}
+            >
+              <ZoomIn />
+            </ToolbarIconButton>
+          </>
+        ) : null}
+
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            aria-label={t("documentDetail.downloadOriginal")}
+            onClick={() => onDownload("original")}
+          >
+            <Download />
+            <span className="hidden sm:inline">{t("documentDetail.original")}</span>
+          </Button>
+          {doc.searchablePdfAvailable ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              aria-label={t("documentDetail.downloadSearchable")}
+              onClick={() => onDownload("searchable")}
+            >
+              <FileSearch />
+              <span className="hidden xl:inline">{t("documentDetail.searchablePdf")}</span>
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {downloadError ? (
+        <div className="shrink-0 px-3 pt-3">
+          <Alert variant="destructive">
+            <AlertTriangle />
+            <AlertDescription>{downloadError}</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 overflow-auto p-3 md:p-5">
+        {previewFailed ? (
+          <div className="m-auto w-full max-w-md">
+            <Alert variant="destructive">
+              <AlertTriangle />
+              <AlertDescription>{t("documentDetail.loadPreviewFailed")}</AlertDescription>
+              <AlertAction>
+                <Button type="button" variant="outline" size="xs" onClick={onRetryPreview}>
+                  {t("documentDetail.retry")}
+                </Button>
+              </AlertAction>
+            </Alert>
+          </div>
+        ) : previewLoading || !previewUrl ? (
+          <div className="mx-auto h-full w-full max-w-3xl rounded-md border border-paper-border bg-paper p-8 shadow-raised">
+            <div className="flex flex-col gap-3">
+              {[40, 92, 88, 94, 76].map((width) => (
+                <Skeleton
+                  key={width}
+                  className="h-3 rounded-full bg-paper-border"
+                  style={{ width: `${width}%` }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {category === "pdf" && (
+              <div className="mx-auto h-full w-full max-w-4xl overflow-hidden rounded-md border border-paper-border bg-paper shadow-raised">
+                <iframe
+                  key={`${page}-${zoom}`}
+                  src={`${previewUrl}#page=${page}&zoom=${zoom}`}
+                  className="h-full w-full"
+                  title={t("documentDetail.documentPreviewTitle")}
+                />
+              </div>
+            )}
+
+            {category === "image" && (
+              <img
+                src={previewUrl}
+                alt={doc.title}
+                style={{ height: `${zoom}%`, maxWidth: zoom <= 100 ? "100%" : "none" }}
+                className="m-auto rounded-md border border-paper-border bg-paper object-contain shadow-raised"
+              />
+            )}
+
+            {category === "text" && (
+              <div className="mx-auto h-full w-full max-w-4xl overflow-auto rounded-md border border-paper-border bg-paper p-6 shadow-raised">
+                <pre className="font-mono text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-paper-foreground">
+                  {textContent ?? t("documentDetail.loadingContent")}
+                </pre>
+              </div>
+            )}
+
+            {category === "video" && (
+              <video
+                src={previewUrl}
+                controls
+                className="m-auto max-h-full max-w-full rounded-md shadow-raised"
+              >
+                {t("documentDetail.browserNoVideo")}
+              </video>
+            )}
+
+            {category === "audio" && (
+              <div className="m-auto flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border bg-card p-8 shadow-card">
+                <IconTile size="lg">
+                  <FileText />
+                </IconTile>
+                <audio src={previewUrl} controls className="w-full">
+                  {t("documentDetail.browserNoAudio")}
+                </audio>
+              </div>
+            )}
+
+            {category === "unsupported" && (
+              <Empty className="m-auto">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileQuestion />
+                  </EmptyMedia>
+                  <EmptyTitle>{t("documentDetail.previewUnavailable")}</EmptyTitle>
+                  <EmptyDescription>
+                    {t("documentDetail.unsupportedPreviewPrefix")} (
+                    {friendlyMimeLabel(doc.mimeType)}){" "}
+                    {t("documentDetail.unsupportedPreviewSuffix")}
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button variant="outline" size="sm" onClick={() => onDownload("original")}>
+                    <Download />
+                    {t("documentDetail.downloadFile")}
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inspector panels
+// ---------------------------------------------------------------------------
+
+/** A collapsed block of JSON: real data, but rarely what you came for. */
+function RawJson({
+  label,
+  value,
+  className,
+  contentClassName,
+}: {
+  label: string;
+  value: unknown;
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <Collapsible className={className}>
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="group/raw -ml-1 text-muted-foreground"
+        >
+          <ChevronRight className="transition-transform group-data-[state=open]/raw:rotate-90" />
+          {label}
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre
+          className={cn(
+            "mt-1.5 overflow-auto rounded-lg border bg-muted/50 p-3 font-mono text-xs leading-relaxed",
+            contentClassName,
+          )}
+        >
+          {JSON.stringify(value, null, 2)}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function InspectorCard({
+  title,
+  aside,
+  children,
+}: {
+  title: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2.5 rounded-xl border p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MetaRows({ rows }: { rows: Array<[label: string, value: React.ReactNode]> }) {
+  return (
+    <dl className="flex flex-col gap-1.5 text-xs">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-baseline gap-2">
+          <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+          <dd className="min-w-0 flex-1 wrap-anywhere">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function IntelligencePanel({ doc }: { doc: Document }) {
+  const { t } = useI18n();
+  const intelligence = doc.metadata.intelligence;
+
+  if (!intelligence) {
+    return (
+      <Empty className="py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BrainCircuit />
+          </EmptyMedia>
+          <EmptyDescription>{t("documentDetail.noAgentIntelligence")}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  const fieldConfidence = intelligence.extraction?.fieldConfidence ?? {};
+  const fieldProvenance = intelligence.extraction?.fieldProvenance ?? {};
+  const visibleFields = Object.entries({
+    ...intelligence.extraction?.fields,
+    ...intelligence.validation?.normalizedFields,
+  }).filter(([, value]) => {
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  });
+  const warnings = intelligence.validation?.warnings ?? [];
+  const errors = intelligence.validation?.errors ?? [];
+  const duplicateSignals = Object.entries(intelligence.validation?.duplicateSignals ?? {});
+  const durations = Object.entries(intelligence.pipeline?.durationsMs ?? {});
+  const taggedValues = intelligence.tagging?.tags ?? [];
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      <h2 className="text-sm font-medium">{t("documentDetail.documentIntelligence")}</h2>
+
+      <DocumentSummarySection
+        documentId={doc.id}
+        initialSummary={intelligence.summary?.value ?? doc.metadata.summary}
+        initialProvider={intelligence.summary?.provider}
+        initialModel={intelligence.summary?.model}
+      />
+
+      <InspectorCard
+        title={t("documentDetail.routing")}
+        aside={
+          intelligence.routing?.confidence != null ? (
+            <ConfidenceMeter value={intelligence.routing.confidence} showValue />
+          ) : null
+        }
+      >
+        <MetaRows
+          rows={[
+            [t("documentDetail.type"), intelligence.routing?.documentType ?? "-"],
+            ...(intelligence.routing?.subtype
+              ? ([[t("documentDetail.subtype"), intelligence.routing.subtype]] as Array<
+                  [string, React.ReactNode]
+                >)
+              : []),
+            ...(intelligence.routing?.provider
+              ? ([
+                  [
+                    t("documentDetail.model"),
+                    `${intelligence.routing.provider}${
+                      intelligence.routing.model ? ` / ${intelligence.routing.model}` : ""
+                    }`,
+                  ],
+                ] as Array<[string, React.ReactNode]>)
+              : []),
+          ]}
+        />
+        {intelligence.routing?.reasoningHints?.length ? (
+          <div className="flex flex-wrap gap-1">
+            {intelligence.routing.reasoningHints.map((hint) => (
+              <Badge key={hint} variant="outline">
+                {hint}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </InspectorCard>
+
+      <InspectorCard
+        title={t("documentDetail.typeSpecificFields")}
+        aside={
+          intelligence.extraction?.provider ? (
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              {intelligence.extraction.provider}
+              {intelligence.extraction.model ? ` / ${intelligence.extraction.model}` : ""}
+            </span>
+          ) : null
+        }
+      >
+        {visibleFields.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("documentDetail.noExtractedFields")}</p>
+        ) : (
+          <ul className="flex flex-col divide-y">
+            {visibleFields.map(([field, value]) => {
+              const provenance = fieldProvenance[field];
+              const confidence = fieldConfidence[field];
+              return (
+                <li key={field} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {formatAgentFieldLabel(field)}
+                      </p>
+                      <p className="text-sm wrap-anywhere">{formatAgentFieldValue(value)}</p>
+                    </div>
+                    {confidence != null ? <ConfidenceMeter value={confidence} showValue /> : null}
+                  </div>
+                  {provenance ? (
+                    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                      <p>
+                        <span className="font-medium">{t("documentDetail.source")}</span>{" "}
+                        {provenance.source ?? "-"}
+                        {provenance.provider ? ` / ${provenance.provider}` : ""}
+                      </p>
+                      {provenance.page != null || provenance.lineIndex != null ? (
+                        <p>
+                          <span className="font-medium">{t("documentDetail.location")}</span>{" "}
+                          {provenance.page != null
+                            ? `${t("documentDetail.pageWord")} ${provenance.page}`
+                            : ""}
+                          {provenance.lineIndex != null
+                            ? `, ${t("documentDetail.lineWord")} ${provenance.lineIndex}`
+                            : ""}
+                        </p>
+                      ) : null}
+                      {provenance.snippet ? (
+                        <p className="w-fit max-w-full rounded-md bg-highlight px-1.5 py-0.5 wrap-anywhere whitespace-pre-wrap text-highlight-foreground">
+                          {provenance.snippet}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </InspectorCard>
+
+      <InspectorCard title={t("documentDetail.taggingCorrespondent")}>
+        {taggedValues.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {taggedValues.map((tagValue) => (
+              <Badge key={tagValue} variant="secondary">
+                {tagValue}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        <MetaRows
+          rows={[
+            [
+              t("documentDetail.correspondent"),
+              intelligence.correspondentResolution?.resolvedName ?? "-",
+            ],
+            [t("documentDetail.strategy"), intelligence.correspondentResolution?.strategy ?? "-"],
+          ]}
+        />
+      </InspectorCard>
+
+      <InspectorCard title={t("documentDetail.validation")}>
+        {warnings.length === 0 && errors.length === 0 && duplicateSignals.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("documentDetail.noValidationIssues")}</p>
+        ) : null}
+        {warnings.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              {t("documentDetail.warnings")}
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {warnings.map((warning) => (
+                <Badge key={warning} variant="warning">
+                  {formatReviewReason(warning)}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {errors.length > 0 ? (
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium text-muted-foreground">
+              {t("documentDetail.errors")}
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {errors.map((error) => (
+                <Badge key={error} variant="danger">
+                  {formatReviewReason(error)}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {duplicateSignals.length > 0 ? (
+          <pre className="overflow-auto rounded-lg border bg-muted/50 p-2.5 font-mono text-xs whitespace-pre-wrap">
+            {JSON.stringify(intelligence.validation?.duplicateSignals ?? {}, null, 2)}
+          </pre>
+        ) : null}
+      </InspectorCard>
+
+      <InspectorCard title={t("documentDetail.pipeline")}>
+        <MetaRows
+          rows={[
+            [t("documentDetail.framework"), intelligence.pipeline?.framework ?? "-"],
+            [t("documentDetail.status"), intelligence.pipeline?.status ?? "-"],
+            [
+              t("documentDetail.runId"),
+              intelligence.pipeline?.runId ? (
+                <span className="font-mono">{intelligence.pipeline.runId}</span>
+              ) : (
+                "-"
+              ),
+            ],
+            [
+              t("documentDetail.providerOrder"),
+              (intelligence.pipeline?.providerOrder ?? []).join(" → ") || "-",
+            ],
+          ]}
+        />
+        {durations.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {durations.map(([key, value]) => (
+              <Badge key={key} variant="outline" className="num">
+                {formatAgentFieldLabel(key)}: {formatDuration(value)}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </InspectorCard>
+    </div>
+  );
+}
+
+function OcrTextPanel({
+  loading,
+  failed,
+  onRetry,
+  pageNumbers,
+  blocksByPage,
+}: {
+  loading: boolean;
+  failed: boolean;
+  onRetry: () => void;
+  pageNumbers: number[];
+  blocksByPage: Record<number, TextBlock[]>;
+}) {
+  const { t } = useI18n();
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-3 p-4">
+        {[92, 88, 94, 60, 80].map((width) => (
+          <Skeleton key={width} className="h-3 rounded-full" style={{ width: `${width}%` }} />
+        ))}
+      </div>
+    );
+  }
+  if (failed) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertDescription>{t("documentDetail.loadDocumentTextFailed")}</AlertDescription>
+          <AlertAction>
+            <Button type="button" variant="outline" size="xs" onClick={onRetry}>
+              {t("documentDetail.retry")}
+            </Button>
+          </AlertAction>
+        </Alert>
+      </div>
+    );
+  }
+  if (pageNumbers.length === 0) {
+    return (
+      <Empty className="py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ScanText />
+          </EmptyMedia>
+          <EmptyDescription>{t("documentDetail.noOcr")}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      {pageNumbers.map((pageNumber) => (
+        <section key={pageNumber} className="flex flex-col gap-1.5">
+          <h3 className="num text-xs font-medium text-muted-foreground">
+            {t("documentDetail.pageWord")} {pageNumber}
+          </h3>
+          <div className="rounded-md border border-paper-border bg-paper p-4 text-sm leading-relaxed wrap-break-word whitespace-pre-wrap text-paper-foreground shadow-card">
+            {blocksByPage[pageNumber].map((block) => block.text).join("\n")}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function HistoryPanel({
+  loading,
+  failed,
+  failedLabel,
+  onRetry,
+  items,
+}: {
+  loading: boolean;
+  failed: boolean;
+  failedLabel: string;
+  onRetry: () => void;
+  items: DocumentHistoryResponse["items"] | undefined;
+}) {
+  const { t } = useI18n();
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="flex flex-col gap-1.5">
+            <Skeleton className="h-3.5 w-2/3" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (failed) {
+    return (
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertDescription>{failedLabel}</AlertDescription>
+          <AlertAction>
+            <Button type="button" variant="outline" size="xs" onClick={onRetry}>
+              {t("documentDetail.retry")}
+            </Button>
+          </AlertAction>
+        </Alert>
+      </div>
+    );
+  }
+  if (!items || items.length === 0) {
+    return (
+      <Empty className="py-16">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <History />
+          </EmptyMedia>
+          <EmptyDescription>{t("documentDetail.noAuditEvents")}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <h2 className="text-sm font-medium">{t("documentDetail.documentHistory")}</h2>
+      <ol className="relative flex flex-col gap-4 before:absolute before:inset-y-1.5 before:left-[5px] before:w-px before:bg-border">
+        {items.map((event) => (
+          <li key={event.id} className="relative pl-5">
+            <span
+              aria-hidden="true"
+              className="absolute top-1.5 left-0 size-[11px] rounded-full border-2 border-card bg-brand"
+            />
+            <p className="text-sm font-medium">{formatHistoryEventType(event.eventType)}</p>
+            <p className="flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
+              <span>
+                {event.actorDisplayName || event.actorEmail || t("documentDetail.system")}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="num">{formatDateTime(event.createdAt)}</span>
+            </p>
+            {Object.keys(event.payload ?? {}).length > 0 ? (
+              <RawJson label={t("documentDetail.details")} value={event.payload} className="mt-1" />
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}

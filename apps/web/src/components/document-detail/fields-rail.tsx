@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ChevronRight, Loader2, Lock, LockOpen, Pencil, Plus, TriangleAlert, X } from "lucide-react";
 import type {
   Correspondent as TaxonomyCorrespondent,
   DocumentType as TaxonomyDocumentType,
@@ -31,9 +31,14 @@ type RailDocument = {
   embeddingProvider: string | null;
   embeddingModel: string | null;
   lastProcessingError: string | null;
+  latestProcessingJob?: { status: string } | null;
   metadata: { pageCount?: number };
 };
+import { DocumentStatusBadge } from "@/components/document-detail/detail-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -42,6 +47,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatCurrency } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -85,20 +92,27 @@ type FieldsRailProps = {
   saveError: string | null;
   actionError: string | null;
   lockNote: string | null;
-  onReprocess: () => void;
-  reprocessPending: boolean;
-  onDelete: () => void;
-  deletePending: boolean;
-  processing: boolean;
+  /** how sure the extraction is, keyed like `lockedFields` */
+  fieldConfidence?: Record<string, number | null | undefined>;
+  /** the archive is an offline copy: everything reads, nothing edits */
+  readOnly?: boolean;
+  /** extra read-only panels below the processing section */
+  children?: ReactNode;
 };
 
 const PARSE_PROVIDER_LABELS: Record<string, string> = {
   "local-ocr": "Local OCR",
-  "aws-textract": "Amazon Textract",
-  "azure-document-intelligence": "Azure Document Intelligence",
-  "google-document-ai": "Google Document AI",
+  "google-document-ai-enterprise-ocr": "Google Doc AI Enterprise",
+  "google-document-ai-gemini-layout-parser": "Google Doc AI Gemini",
+  "amazon-textract": "Amazon Textract",
+  "azure-ai-document-intelligence": "Azure Document Intelligence",
   "mistral-ocr": "Mistral OCR",
 };
+
+export function parseProviderLabel(id: string | null | undefined): string {
+  if (!id) return "—";
+  return PARSE_PROVIDER_LABELS[id] ?? id;
+}
 
 const EMBEDDING_PROVIDER_LABELS: Record<string, string> = {
   "local-embeddings": "Local (bge-m3)",
@@ -123,13 +137,69 @@ function formatReviewReason(reason: string): string {
   return reason.replace(/_/g, " ");
 }
 
+/** How sure the AI is, as a small meter that colours itself by threshold. */
+export function ConfidenceMeter({
+  value,
+  showValue = false,
+  className,
+}: {
+  /** 0 to 1 */
+  value: number;
+  showValue?: boolean;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const percent = Math.round(value * 100);
+  const label = `${t("documentDetail.confidence")} ${percent}%`;
+  return (
+    <span className={cn("inline-flex shrink-0 items-center gap-1.5", className)} title={label}>
+      <Progress
+        value={percent}
+        aria-label={label}
+        className={cn(
+          "h-1 w-7",
+          value >= 0.8 && "[&>[data-slot=progress-indicator]]:bg-success",
+          value >= 0.5 && value < 0.8 && "[&>[data-slot=progress-indicator]]:bg-warning",
+          value < 0.5 && "[&>[data-slot=progress-indicator]]:bg-danger",
+        )}
+      />
+      {showValue ? <span className="num text-xs text-muted-foreground">{percent}%</span> : null}
+    </span>
+  );
+}
+
+/** A manual override: the lock says so, and clicking it gives the field back to the AI. */
+function UnlockButton({ label, onUnlock }: { label: string; onUnlock: () => void }) {
+  const { t } = useI18n();
+  const name = `${t("documentDetail.unlock")} ${label}`;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={name}
+          onClick={onUnlock}
+          className="group/lock shrink-0 text-warning hover:bg-warning-soft hover:text-warning"
+        >
+          <Lock className="group-hover/lock:hidden" />
+          <LockOpen className="hidden group-hover/lock:block" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{name}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** One label-left / value-right row; click to edit in place, dirty in amber. */
 function FieldRow({
   label,
   display,
   dirty,
-  mono = false,
+  numeric = false,
   locked = false,
+  confidence,
   blurCloses = true,
   onUnlock,
   children,
@@ -137,9 +207,10 @@ function FieldRow({
   label: string;
   display: string;
   dirty: boolean;
-  mono?: boolean;
+  numeric?: boolean;
   /** the field carries a manual override that pins it against reprocessing */
   locked?: boolean;
+  confidence?: number | null;
   /**
    * Rows whose editor owns a portalled popup (the selects) opt out: the popup
    * takes focus outside this element, so a blur handler would tear the editor
@@ -148,25 +219,25 @@ function FieldRow({
    */
   blurCloses?: boolean;
   onUnlock?: () => void;
-  children: (close: () => void) => React.ReactNode;
+  children: (close: () => void) => ReactNode;
 }) {
-  const { t } = useI18n();
   const [editing, setEditing] = useState(false);
 
   return (
     <div
       className={cn(
-        "flex min-h-[30px] items-center gap-2 rounded-[var(--r-sm)] px-1.5 py-0.5",
-        dirty && "bg-[var(--ok-amber-soft)]",
+        "group/row flex min-h-9 gap-2 rounded-lg px-2 py-1 transition-colors",
+        editing ? "items-start" : "items-center",
+        dirty && "bg-warning-soft",
       )}
     >
-      <span className="w-[112px] flex-shrink-0 text-xs text-muted-foreground">
+      <span className={cn("w-28 shrink-0 text-xs font-medium text-muted-foreground", editing && "pt-2")}>
         {label}
       </span>
       {editing ? (
         <div
           className="min-w-0 flex-1"
-          // Only leave edit mode when focus lands outside the editor — the
+          // Only leave edit mode when focus lands outside the editor: the
           // amount row holds two inputs and tabbing between them would
           // otherwise close it mid-edit.
           onBlur={(event) => {
@@ -183,29 +254,28 @@ function FieldRow({
           type="button"
           onClick={() => setEditing(true)}
           className={cn(
-            "min-w-0 flex-1 truncate rounded-[var(--r-sm)] text-left text-sm font-medium hover:bg-secondary",
-            mono && "ok-num",
-            dirty && "text-[var(--ok-amber)]",
+            "-mx-1 flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm font-medium outline-none enabled:hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+            numeric && "num",
+            dirty && "text-warning",
             display === "—" && "font-normal text-muted-foreground",
           )}
         >
-          {display}
+          <span className="min-w-0 truncate">{display}</span>
+          <Pencil
+            aria-hidden="true"
+            className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/row:opacity-100 group-has-disabled/row:hidden"
+          />
         </button>
       )}
-      {locked && onUnlock ? (
-        <button
-          type="button"
-          aria-label={`${t("documentDetail.unlock")} ${label}`}
-          title={`${t("documentDetail.unlock")} ${label}`}
-          onClick={onUnlock}
-          className="flex-shrink-0 rounded-[var(--r-sm)] border border-[var(--ok-amber)]/40 bg-[var(--ok-amber-soft)] px-1.5 text-[10px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
-        >
-          {t("documentDetail.unlock")}
-        </button>
+      {confidence != null && !locked && !dirty && !editing ? (
+        <ConfidenceMeter value={confidence} />
       ) : null}
+      {locked && onUnlock ? <UnlockButton label={label} onUnlock={onUnlock} /> : null}
     </div>
   );
 }
+
+const optionClass = "rounded-full font-normal shadow-none";
 
 export function FieldsRail({
   doc,
@@ -226,17 +296,16 @@ export function FieldsRail({
   saveError,
   actionError,
   lockNote,
-  onReprocess,
-  reprocessPending,
-  onDelete,
-  deletePending,
-  processing,
+  fieldConfidence = {},
+  readOnly = false,
+  children,
 }: FieldsRailProps) {
   const { t } = useI18n();
   const [tagQuery, setTagQuery] = useState("");
   const [correspondentQuery, setCorrespondentQuery] = useState("");
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [processingOpen, setProcessingOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(() =>
+    Boolean(doc.expiryDate || doc.holderName || doc.issuingAuthority),
+  );
 
   /**
    * Every field the API can pin needs its own unlock control. A row may own
@@ -248,6 +317,7 @@ export function FieldsRail({
     return {
       locked: locked.length > 0,
       onUnlock: onUnlockFields ? () => onUnlockFields(locked) : undefined,
+      confidence: fieldConfidence[fields[0]!],
     };
   };
 
@@ -309,20 +379,45 @@ export function FieldsRail({
     doc.confidence != null ? Math.round(doc.confidence * 100) : null;
 
   return (
-    <aside className="flex min-h-0 flex-col border-l bg-[var(--ok-bar)]">
-      <div className="min-h-0 flex-1 overflow-auto">
-        {/* Fields */}
-        <section className="border-b px-3.5 py-3">
-          <p className="ok-eyebrow mb-2">{t("documentDetail.fields")}</p>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 px-2 py-4 lg:overflow-y-auto">
+        {doc.reviewStatus === "pending" ? (
+          <div className="px-2">
+            <Alert className="border-warning/30 bg-warning-soft text-warning">
+              <TriangleAlert />
+              <AlertTitle>{t("documentDetail.whyReview")}</AlertTitle>
+              <AlertDescription className="text-warning">
+                <p>
+                  {reviewReasons.map(formatReviewReason).join(" · ") ||
+                    t("documentDetail.needsReview")}
+                  {confidencePct != null ? (
+                    <>
+                      {" · "}
+                      <span className="num">{confidencePct}%</span>
+                    </>
+                  ) : null}
+                </p>
+                {doc.reviewNote ? <p className="mt-1 opacity-85">{doc.reviewNote}</p> : null}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
+
+        <section className="flex flex-col gap-1">
+          <h2 className="sr-only">{t("documentDetail.fields")}</h2>
           {lockedFields.length > 0 ? (
-            <p className="mb-1.5 text-xs text-[var(--ok-amber)]">
-              <span className="ok-num">{lockedFields.length}</span>{" "}
-              {lockedFields.length === 1
-                ? t("documentDetail.fieldLocked")
-                : t("documentDetail.fieldsLocked")}
+            <p className="flex items-center gap-1.5 px-2 pb-1 text-xs text-warning">
+              <Lock aria-hidden="true" className="size-3" />
+              <span>
+                <span className="num">{lockedFields.length}</span>{" "}
+                {lockedFields.length === 1
+                  ? t("documentDetail.fieldLocked")
+                  : t("documentDetail.fieldsLocked")}
+              </span>
             </p>
           ) : null}
-          <div className="flex flex-col gap-0.5">
+
+          <fieldset disabled={readOnly} className="flex min-w-0 flex-col gap-0.5">
             <FieldRow
               label={t("documentDetail.title")}
               display={form.title || "—"}
@@ -335,7 +430,7 @@ export function FieldsRail({
                   value={form.title}
                   onChange={(event) => onFormChange({ title: event.target.value })}
                   onKeyDown={(event) => event.key === "Enter" && close()}
-                  className="h-[26px]"
+                  className="h-8"
                 />
               )}
             </FieldRow>
@@ -363,48 +458,54 @@ export function FieldsRail({
                       if (event.key === "Escape") close();
                     }}
                     placeholder={t("documentDetail.searchCorrespondent")}
-                    className="h-[26px]"
+                    className="h-8"
                   />
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    <button
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <Button
                       type="button"
+                      variant="outline"
+                      size="xs"
+                      className={optionClass}
                       onClick={() => {
                         onFormChange({ correspondentId: EMPTY_SELECT_VALUE });
                         setCorrespondentQuery("");
                         close();
                       }}
-                      className="rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
                     >
                       —
-                    </button>
+                    </Button>
                     {correspondentMatches.map((entry) => (
-                      <button
+                      <Button
                         key={entry.id}
                         type="button"
+                        variant="outline"
+                        size="xs"
+                        className={optionClass}
                         onClick={() => {
                           onFormChange({ correspondentId: entry.id });
                           setCorrespondentQuery("");
                           close();
                         }}
-                        className="rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
                       >
                         {entry.name}
-                      </button>
+                      </Button>
                     ))}
                     {canCreateCorrespondent ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="xs"
+                        className={cn(optionClass, "border-dashed text-brand")}
                         disabled={createCorrespondentPending}
                         onClick={() => {
                           onCreateCorrespondent(correspondentQuery.trim());
                           setCorrespondentQuery("");
                           close();
                         }}
-                        className="inline-flex items-center gap-1 rounded-[var(--r-pill)] border border-dashed px-2 py-0.5 text-xs text-[var(--ok-accent)] hover:bg-secondary"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus />
                         {correspondentQuery.trim()}
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                 </div>
@@ -431,7 +532,7 @@ export function FieldsRail({
                     if (!open) close();
                   }}
                 >
-                  <SelectTrigger className="h-[26px]">
+                  <SelectTrigger className="h-8 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -450,7 +551,7 @@ export function FieldsRail({
               label={t("today.issueDate")}
               display={formatRailDate(form.issueDate || null)}
               dirty={dirty.issueDate}
-              mono
+              numeric
               {...unlockProps("issueDate")}
             >
               {(close) => (
@@ -460,7 +561,7 @@ export function FieldsRail({
                   value={form.issueDate}
                   onChange={(event) => onFormChange({ issueDate: event.target.value })}
                   onKeyDown={(event) => event.key === "Enter" && close()}
-                  className="h-[26px]"
+                  className="h-8"
                 />
               )}
             </FieldRow>
@@ -469,7 +570,7 @@ export function FieldsRail({
               label={t("dashboard.deadline")}
               display={formatRailDate(form.dueDate || null)}
               dirty={dirty.dueDate}
-              mono
+              numeric
               {...unlockProps("dueDate")}
             >
               {(close) => (
@@ -479,7 +580,7 @@ export function FieldsRail({
                   value={form.dueDate}
                   onChange={(event) => onFormChange({ dueDate: event.target.value })}
                   onKeyDown={(event) => event.key === "Enter" && close()}
-                  className="h-[26px]"
+                  className="h-8"
                 />
               )}
             </FieldRow>
@@ -493,7 +594,7 @@ export function FieldsRail({
                   : "—"
               }
               dirty={dirty.amount || dirty.currency}
-              mono
+              numeric
               {...unlockProps("amount", "currency")}
             >
               {(close) => (
@@ -505,7 +606,7 @@ export function FieldsRail({
                     value={form.amount}
                     onChange={(event) => onFormChange({ amount: event.target.value })}
                     onKeyDown={(event) => event.key === "Enter" && close()}
-                    className="ok-num h-[26px]"
+                    className="num h-8"
                   />
                   <Input
                     value={form.currency}
@@ -515,7 +616,7 @@ export function FieldsRail({
                       onFormChange({ currency: event.target.value.toUpperCase() })
                     }
                     onKeyDown={(event) => event.key === "Enter" && close()}
-                    className="ok-num h-[26px] w-16"
+                    className="num h-8 w-16"
                   />
                 </div>
               )}
@@ -525,7 +626,7 @@ export function FieldsRail({
               label={t("today.reference")}
               display={form.referenceNumber || "—"}
               dirty={dirty.reference}
-              mono
+              numeric
               {...unlockProps("referenceNumber")}
             >
               {(close) => (
@@ -536,217 +637,194 @@ export function FieldsRail({
                     onFormChange({ referenceNumber: event.target.value })
                   }
                   onKeyDown={(event) => event.key === "Enter" && close()}
-                  className="ok-num h-[26px]"
+                  className="num h-8"
                 />
               )}
             </FieldRow>
-          </div>
 
-          {/* Tags */}
-          <div
-            className={cn(
-              "mt-1 rounded-[var(--r-sm)] px-1.5 py-1",
-              dirty.tags && "bg-[var(--ok-amber-soft)]",
-            )}
-          >
-            <span className="text-xs text-muted-foreground">
-              {t("documentDetail.tags")}
-            </span>
-            {lockedFields.includes("tagIds") && onUnlockFields ? (
-              <button
-                type="button"
-                aria-label={`${t("documentDetail.unlock")} ${t("documentDetail.tags")}`}
-                title={`${t("documentDetail.unlock")} ${t("documentDetail.tags")}`}
-                onClick={() => onUnlockFields(["tagIds"])}
-                className="ml-1.5 rounded-[var(--r-sm)] border border-[var(--ok-amber)]/40 bg-[var(--ok-amber-soft)] px-1.5 text-[10px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
-              >
-                {t("documentDetail.unlock")}
-              </button>
-            ) : null}
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              {selectedTags.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex items-center gap-1 rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs"
-                >
-                  {tag.name}
-                  <button
-                    type="button"
-                    aria-label={`${t("documentDetail.removeTag")} ${tag.name}`}
-                    onClick={() =>
-                      onFormChange({
-                        tagIds: form.tagIds.filter((id) => id !== tag.id),
-                      })
-                    }
-                  >
-                    <X className="h-3 w-3 text-muted-foreground" />
-                  </button>
+            {/* Tags */}
+            <div
+              className={cn(
+                "flex flex-col gap-1.5 rounded-lg px-2 py-2",
+                dirty.tags && "bg-warning-soft",
+              )}
+            >
+              <div className="flex min-h-6 items-center gap-2">
+                <span className="flex-1 text-xs font-medium text-muted-foreground">
+                  {t("documentDetail.tags")}
                 </span>
-              ))}
-              <Input
-                value={tagQuery}
-                onChange={(event) => setTagQuery(event.target.value)}
-                placeholder={t("documentDetail.addTag")}
-                className="h-[24px] w-28 flex-1"
-              />
-            </div>
-            {tagFilter ? (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {suggestions.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => {
-                      onFormChange({ tagIds: [...form.tagIds, tag.id] });
-                      setTagQuery("");
-                    }}
-                    className="rounded-[var(--r-pill)] border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
-                  >
-                    {tag.name}
-                  </button>
-                ))}
-                {!exactTagMatch ? (
-                  <button
-                    type="button"
-                    disabled={createTagPending}
-                    onClick={() => {
-                      onCreateTag(tagQuery.trim());
-                      setTagQuery("");
-                    }}
-                    className="inline-flex items-center gap-1 rounded-[var(--r-pill)] border border-dashed px-2 py-0.5 text-xs text-[var(--ok-accent)] hover:bg-secondary"
-                  >
-                    <Plus className="h-3 w-3" />
-                    {tagQuery.trim()}
-                  </button>
+                {fieldConfidence.tagIds != null && !lockedFields.includes("tagIds") && !dirty.tags ? (
+                  <ConfidenceMeter value={fieldConfidence.tagIds} />
+                ) : null}
+                {lockedFields.includes("tagIds") && onUnlockFields ? (
+                  <UnlockButton
+                    label={t("documentDetail.tags")}
+                    onUnlock={() => onUnlockFields(["tagIds"])}
+                  />
                 ) : null}
               </div>
-            ) : null}
-          </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {selectedTags.map((tag) => (
+                  <Badge key={tag.id} variant="secondary" className="pr-1">
+                    {tag.name}
+                    <button
+                      type="button"
+                      aria-label={`${t("documentDetail.removeTag")} ${tag.name}`}
+                      className="rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                      onClick={() =>
+                        onFormChange({
+                          tagIds: form.tagIds.filter((id) => id !== tag.id),
+                        })
+                      }
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <Input
+                  value={tagQuery}
+                  onChange={(event) => setTagQuery(event.target.value)}
+                  placeholder={t("documentDetail.addTag")}
+                  className="h-7 w-28 flex-1 text-xs md:text-xs"
+                />
+              </div>
+              {tagFilter ? (
+                <div className="flex flex-wrap gap-1">
+                  {suggestions.map((tag) => (
+                    <Button
+                      key={tag.id}
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className={optionClass}
+                      onClick={() => {
+                        onFormChange({ tagIds: [...form.tagIds, tag.id] });
+                        setTagQuery("");
+                      }}
+                    >
+                      {tag.name}
+                    </Button>
+                  ))}
+                  {!exactTagMatch ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className={cn(optionClass, "border-dashed text-brand")}
+                      disabled={createTagPending}
+                      onClick={() => {
+                        onCreateTag(tagQuery.trim());
+                        setTagQuery("");
+                      }}
+                    >
+                      <Plus />
+                      {tagQuery.trim()}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </fieldset>
 
-          {/* Rarely-used fields collapse so the rail fits 900px. */}
-          <button
-            type="button"
-            onClick={() => setMoreOpen((current) => !current)}
-            className="mt-1.5 flex items-center gap-1 px-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-          >
-            {moreOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            {t("documentDetail.moreFields")}
-          </button>
-          {moreOpen ? (
-            <div className="mt-0.5 flex flex-col gap-0.5">
-              <FieldRow
-                label={t("documentDetail.expiryDate")}
-                display={formatRailDate(form.expiryDate || null)}
-                dirty={dirty.expiryDate}
-                mono
-                {...unlockProps("expiryDate")}
+          {/* Rarely-used fields stay out of the way until a document has them. */}
+          <Collapsible open={moreOpen} onOpenChange={setMoreOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="group/more ml-1 text-muted-foreground"
               >
-                {(close) => (
-                  <Input
-                    autoFocus
-                    type="date"
-                    value={form.expiryDate}
-                    onChange={(event) => onFormChange({ expiryDate: event.target.value })}
-                    onKeyDown={(event) => event.key === "Enter" && close()}
-                    className="h-[26px]"
-                  />
-                )}
-              </FieldRow>
-              <FieldRow
-                label={t("documentDetail.holderName")}
-                display={form.holderName || "—"}
-                dirty={dirty.holderName}
-                {...unlockProps("holderName")}
-              >
-                {(close) => (
-                  <Input
-                    autoFocus
-                    value={form.holderName}
-                    onChange={(event) => onFormChange({ holderName: event.target.value })}
-                    onKeyDown={(event) => event.key === "Enter" && close()}
-                    className="h-[26px]"
-                  />
-                )}
-              </FieldRow>
-              <FieldRow
-                label={t("documentDetail.issuingAuthority")}
-                display={form.issuingAuthority || "—"}
-                dirty={dirty.issuingAuthority}
-                {...unlockProps("issuingAuthority")}
-              >
-                {(close) => (
-                  <Input
-                    autoFocus
-                    value={form.issuingAuthority}
-                    onChange={(event) =>
-                      onFormChange({ issuingAuthority: event.target.value })
-                    }
-                    onKeyDown={(event) => event.key === "Enter" && close()}
-                    className="h-[26px]"
-                  />
-                )}
-              </FieldRow>
+                <ChevronRight className="transition-transform group-data-[state=open]/more:rotate-90" />
+                {t("documentDetail.moreFields")}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <fieldset disabled={readOnly} className="flex min-w-0 flex-col gap-0.5 pt-1">
+                <FieldRow
+                  label={t("documentDetail.expiryDate")}
+                  display={formatRailDate(form.expiryDate || null)}
+                  dirty={dirty.expiryDate}
+                  numeric
+                  {...unlockProps("expiryDate")}
+                >
+                  {(close) => (
+                    <Input
+                      autoFocus
+                      type="date"
+                      value={form.expiryDate}
+                      onChange={(event) => onFormChange({ expiryDate: event.target.value })}
+                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      className="h-8"
+                    />
+                  )}
+                </FieldRow>
+                <FieldRow
+                  label={t("documentDetail.holderName")}
+                  display={form.holderName || "—"}
+                  dirty={dirty.holderName}
+                  {...unlockProps("holderName")}
+                >
+                  {(close) => (
+                    <Input
+                      autoFocus
+                      value={form.holderName}
+                      onChange={(event) => onFormChange({ holderName: event.target.value })}
+                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      className="h-8"
+                    />
+                  )}
+                </FieldRow>
+                <FieldRow
+                  label={t("documentDetail.issuingAuthority")}
+                  display={form.issuingAuthority || "—"}
+                  dirty={dirty.issuingAuthority}
+                  {...unlockProps("issuingAuthority")}
+                >
+                  {(close) => (
+                    <Input
+                      autoFocus
+                      value={form.issuingAuthority}
+                      onChange={(event) =>
+                        onFormChange({ issuingAuthority: event.target.value })
+                      }
+                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      className="h-8"
+                    />
+                  )}
+                </FieldRow>
+              </fieldset>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {actionError ? (
+            <div className="px-2 pt-1">
+              <Alert variant="destructive">
+                <TriangleAlert />
+                <AlertDescription>{actionError}</AlertDescription>
+              </Alert>
             </div>
           ) : null}
         </section>
 
-        {/* Why it needs review */}
-        {doc.reviewStatus === "pending" ? (
-          <section className="border-b px-3.5 py-3">
-            <p className="ok-eyebrow mb-2">{t("documentDetail.whyReview")}</p>
-            <div className="rounded-[var(--r-md)] border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-2.5 py-2">
-              <p className="text-sm font-semibold text-[var(--ok-amber)]">
-                {reviewReasons.map(formatReviewReason).join(" · ") ||
-                  t("documentDetail.needsReview")}
-                {confidencePct != null ? (
-                  <>
-                    {" · "}
-                    <span className="ok-num">{confidencePct}%</span>
-                  </>
-                ) : null}
-              </p>
-              {doc.reviewNote ? (
-                <p className="mt-1 text-xs text-[var(--ok-amber)] opacity-85">
-                  {doc.reviewNote}
-                </p>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        {/* Processing disclosure */}
-        <section className="border-b px-3.5 py-3">
-          <button
-            type="button"
-            onClick={() => setProcessingOpen((current) => !current)}
-            className="flex w-full items-center gap-1"
-          >
-            {processingOpen ? (
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-3 w-3 text-muted-foreground" />
-            )}
-            <span className="ok-eyebrow">{t("documentDetail.processing")}</span>
-            <span className="ok-num ml-auto text-xs text-muted-foreground">
-              {PARSE_PROVIDER_LABELS[doc.parseProvider ?? ""] ??
-                doc.parseProvider ??
-                "—"}
-              {confidencePct != null ? ` · ${confidencePct}%` : ""}
-            </span>
-          </button>
-          {processingOpen ? (
-            <dl className="mt-2 space-y-1">
-              {[
-                [
-                  t("documentDetail.parseProvider"),
-                  PARSE_PROVIDER_LABELS[doc.parseProvider ?? ""] ??
-                    doc.parseProvider ??
-                    "—",
-                ],
+        {/* Where the document stands in the pipeline. */}
+        <section className="mx-2 flex flex-col gap-3 rounded-xl border bg-muted/40 p-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium">{t("documentDetail.processing")}</h2>
+            <DocumentStatusBadge doc={doc} />
+          </div>
+          {doc.lastProcessingError ? (
+            <Alert variant="destructive">
+              <TriangleAlert />
+              <AlertDescription className="wrap-anywhere">
+                {doc.lastProcessingError}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <dl className="flex flex-col gap-1.5 text-xs">
+            {(
+              [
+                [t("documentDetail.parseProvider"), parseProviderLabel(doc.parseProvider)],
                 [
                   t("documentDetail.embedding"),
                   `${doc.embeddingStatus}${
@@ -760,78 +838,49 @@ export function FieldsRail({
                 ],
                 [t("documentDetail.pages"), String(doc.metadata.pageCount ?? "—")],
                 [t("documentDetail.chunks"), String(doc.chunkCount)],
-                [
-                  t("documentDetail.confidence"),
-                  confidencePct != null ? `${confidencePct}%` : "—",
-                ],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-center gap-2">
-                  <dt className="w-[112px] flex-shrink-0 text-xs text-muted-foreground">
-                    {label}
-                  </dt>
-                  <dd className="ok-num min-w-0 flex-1 truncate text-xs">{value}</dd>
-                </div>
-              ))}
-              {doc.lastProcessingError ? (
-                <div className="rounded-[var(--r-md)] border border-[var(--ok-red)]/30 bg-[var(--ok-red-soft)] px-2.5 py-1.5 text-xs text-[var(--ok-red)]">
-                  {doc.lastProcessingError}
-                </div>
-              ) : null}
-            </dl>
-          ) : null}
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="flex items-baseline gap-2">
+                <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+                <dd className="num min-w-0 flex-1 truncate" title={value}>
+                  {value}
+                </dd>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <dt className="w-24 shrink-0 text-muted-foreground">
+                {t("documentDetail.confidence")}
+              </dt>
+              <dd className="min-w-0 flex-1">
+                {doc.confidence != null ? (
+                  <ConfidenceMeter value={doc.confidence} showValue />
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+          </dl>
         </section>
 
-        {/* Danger / maintenance actions */}
-        <section className="px-3.5 py-3">
-          {actionError ? (
-            <p className="mb-2 text-xs text-[var(--ok-red)]" role="alert">
-              {actionError}
-            </p>
-          ) : null}
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReprocess}
-              disabled={reprocessPending || processing}
-            >
-              {reprocessPending ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-              {t("documentDetail.reprocess")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-[var(--ok-red)]"
-              onClick={onDelete}
-              disabled={deletePending || processing}
-            >
-              {deletePending ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              {t("documents.bulkDelete")}
-            </Button>
-          </div>
-        </section>
+        {children}
       </div>
 
-      {/* One save bar at the bottom of the rail. */}
+      {/* One save bar at the bottom of the inspector. */}
       {isDirty ? (
-        <div className="flex-shrink-0 border-t bg-card px-3.5 py-2.5">
-          {lockNote ? (
-            <p className="mb-1.5 text-xs text-[var(--ok-amber)]">{lockNote}</p>
-          ) : null}
-          {saveError ? (
-            <p className="mb-1.5 text-xs text-[var(--ok-red)]">{saveError}</p>
-          ) : null}
-          <div className="flex items-center gap-1.5">
-            <Button size="sm" onClick={onSave} disabled={saving}>
+        <div className="sticky bottom-0 z-10 flex shrink-0 flex-col gap-2 border-t bg-card px-4 py-3">
+          {lockNote ? <p className="text-xs text-warning">{lockNote}</p> : null}
+          {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={onSave} disabled={saving || readOnly}>
               {saving ? <Loader2 className="animate-spin" /> : null}
               {t("documentDetail.save")}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onReset} disabled={saving}>
+            <Button variant="ghost" size="sm" onClick={onReset} disabled={saving || readOnly}>
               {t("documentDetail.discard")}
             </Button>
           </div>
         </div>
       ) : null}
-    </aside>
+    </div>
   );
 }
