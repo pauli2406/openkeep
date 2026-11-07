@@ -1,36 +1,26 @@
 import { useNavigation } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import type { AppStackParamList } from "../../App";
 import { useAuth } from "../auth";
+import { Skeleton } from "../components/layout";
 import { EmptyState, ErrorCard, Notice, Panel, Row, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
-import { useOfflineArchive } from "../offline-archive";
-import type { AppStackParamList } from "../../App";
-import { createThemedStyles, radii, useColors } from "../theme";
-import { text } from "../typography";
 import { fetchTaxonomy, taxonomyQueryKey, type FacetsResponse } from "../lib";
-
-function initialsFor(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
+import { useOfflineArchive } from "../offline-archive";
+import { createThemedStyles } from "../theme";
+import { CardList, Monogram, SearchField } from "./documents/parts";
 
 /**
- * A row per sender: initials, name, `N Dokumente`, chevron.
+ * A row per sender: monogram, name, `N documents`, chevron.
  *
- * The facets and taxonomy calls yield `id`, `name`, `slug` and `count` — no
- * dates and no sums — so nothing else may appear here. (#117)
+ * The facets and taxonomy calls yield `id`, `name`, `slug` and `count`, no dates
+ * and no sums, so nothing else may appear here. (#117)
  */
 export function CorrespondentsScreen() {
   const styles = useStyles();
-  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
@@ -78,156 +68,107 @@ export function CorrespondentsScreen() {
     .sort((a, b) => (b.count !== a.count ? b.count - a.count : a.name.localeCompare(b.name)));
 
   const isLoading = facetsQuery.isLoading || (!shouldUseCache && taxonomyQuery.isLoading);
-  const isError = facetsQuery.isError || taxonomyQuery.isError;
+  const isError = facetsQuery.isError || (!shouldUseCache && taxonomyQuery.isError);
   const hasData = shouldUseCache ? Boolean(facetsQuery.data) : Boolean(taxonomyQuery.data);
 
   return (
     <Screen
       title={t("correspondents.title")}
+      titleMeta={hasData ? `${visible.length} ${t("correspondents.count")}` : undefined}
       onBack={() => navigation.goBack()}
-      padded={false}
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
     >
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBox}>
-          <MaterialCommunityIcons name="magnify" size={15} color={colors.dim} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={t("correspondents.searchPlaceholder")}
-            placeholderTextColor={colors.dim}
-            style={styles.searchInput}
-            autoCorrect={false}
-          />
-        </View>
-      </View>
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t("correspondents.searchPlaceholder")}
+      />
 
       {isLoading ? (
-        <View style={styles.gutter}>
-          <Panel padded>
-            <Text style={styles.hint}>{t("correspondents.loading")}</Text>
-          </Panel>
-        </View>
+        <Panel style={styles.card}>
+          {[0, 1, 2, 3, 4].map((row) => (
+            <View key={row} style={styles.skeletonRow}>
+              <Skeleton style={styles.skeletonTile} />
+              <Skeleton style={styles.skeletonLine} />
+            </View>
+          ))}
+        </Panel>
       ) : null}
 
       {isError ? (
-        <View style={styles.gutter}>
-          <ErrorCard
-            message={t("correspondents.loadError")}
-            onRetry={() => {
-              void facetsQuery.refetch();
-              void taxonomyQuery.refetch();
-            }}
-          />
-        </View>
+        <ErrorCard
+          message={t("correspondents.loadError")}
+          onRetry={() => {
+            void facetsQuery.refetch();
+            void taxonomyQuery.refetch();
+          }}
+        />
       ) : null}
 
-      {hasData ? (
-        <>
-          <View style={styles.countStrip}>
-            <Text style={styles.countText}>
-              {`${visible.length} ${t("correspondents.count")}`}
-            </Text>
-          </View>
-
-          {visible.length === 0 ? (
-            needle ? (
+      {hasData && !isError ? (
+        visible.length === 0 ? (
+          <Panel>
+            {needle ? (
               <EmptyState
+                icon="account-search-outline"
                 title={t("state.emptySearch")}
                 action={t("state.showAll")}
                 onAction={() => setQuery("")}
               />
             ) : (
               <EmptyState
+                icon="account-multiple-outline"
                 title={t("correspondents.emptyTitle")}
                 body={t("correspondents.emptyBody")}
               />
-            )
-          ) : (
-            visible.map((item) => (
-              <Row
-                key={item.id}
-                leading={
-                  <View style={styles.initials}>
-                    <Text style={styles.initialsText}>{initialsFor(item.name) || "–"}</Text>
-                  </View>
-                }
-                title={item.name}
-                value={String(item.count)}
-                valueMeta={t("correspondents.documents")}
-                chevron
-                onPress={() =>
-                  navigation.navigate("CorrespondentDossier", {
-                    slug: item.slug,
-                    name: item.name,
-                  })
-                }
-              />
-            ))
-          )}
-        </>
+            )}
+          </Panel>
+        ) : (
+          <Panel style={styles.card}>
+            <CardList>
+              {visible.map((item) => (
+                <Row
+                  key={item.id}
+                  leading={<Monogram name={item.name} />}
+                  title={item.name}
+                  value={String(item.count)}
+                  valueMeta={t("correspondents.documents")}
+                  chevron
+                  onPress={() =>
+                    navigation.navigate("CorrespondentDossier", {
+                      slug: item.slug,
+                      name: item.name,
+                    })
+                  }
+                />
+              ))}
+            </CardList>
+          </Panel>
+        )
       ) : null}
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  gutter: {
-    padding: 16,
+  card: {
+    overflow: "hidden",
   },
-  hint: {
-    ...text.meta,
-    color: c.muted,
-  },
-  searchWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
-  },
-  searchBox: {
+  skeletonRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    height: 36,
-    borderWidth: 1,
-    borderColor: c.borderStrong,
-    borderRadius: radii.lg,
-    backgroundColor: c.panel,
-    paddingHorizontal: 10,
-  },
-  searchInput: {
-    ...text.body,
-    flex: 1,
-    minWidth: 0,
-    color: c.ink,
-    padding: 0,
-  },
-  countStrip: {
+    gap: 12,
+    minHeight: 56,
     paddingHorizontal: 16,
-    paddingVertical: 7,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
-    backgroundColor: c.bar,
   },
-  countText: {
-    ...text.numeric,
-    color: c.dim,
-  },
-  initials: {
-    height: 32,
+  skeletonTile: {
     width: 32,
-    flexShrink: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 7,
-    backgroundColor: c.accentSoft,
+    height: 32,
   },
-  initialsText: {
-    ...text.numericStrong,
-    fontSize: 11,
-    lineHeight: 15,
-    color: c.accentSoftInk,
+  skeletonLine: {
+    flex: 1,
+    height: 14,
   },
 }));

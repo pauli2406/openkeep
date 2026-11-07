@@ -2,7 +2,9 @@ import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import {
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -81,11 +83,18 @@ export function IconTile({
   tone = "soft",
 }: {
   children: ReactNode;
-  size?: "sm" | "default" | "lg";
+  size?: "sm" | "default" | "lg" | "xl";
   tone?: "soft" | "solid";
 }) {
   const styles = useStyles();
-  const box = size === "sm" ? styles.tileSm : size === "lg" ? styles.tileLg : styles.tile;
+  const box =
+    size === "sm"
+      ? styles.tileSm
+      : size === "lg"
+        ? styles.tileLg
+        : size === "xl"
+          ? styles.tileXl
+          : styles.tile;
   if (tone === "solid") {
     return (
       <Gradient name="brand" style={[styles.tileBase, box]} borderRadius={box.borderRadius}>
@@ -211,7 +220,11 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.sheetRoot}>
+      {/* A modal is its own window, so the screen's avoiding view never reaches it. */}
+      <KeyboardAvoidingView
+        style={styles.sheetRoot}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <Pressable
           accessibilityLabel={title}
           style={StyleSheet.absoluteFill}
@@ -238,7 +251,7 @@ export function BottomSheet({
           </ScrollView>
           {footer ? <View style={styles.sheetFooter}>{footer}</View> : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -269,6 +282,11 @@ const useStyles = createThemedStyles((c) => ({
     width: 36,
     height: 36,
     borderRadius: radii.md,
+  },
+  tileXl: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.xl,
   },
   tileLg: {
     width: 44,
