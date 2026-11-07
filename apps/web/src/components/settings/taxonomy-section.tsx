@@ -232,10 +232,15 @@ export function TaxonomyManagementSection() {
           mergeAction: "Zusammenführen",
           deleteTitle: (n: string) => `„${n}“ löschen?`,
           bulkDeleteTitle: (n: number) => `${n} ${n === 1 ? "Eintrag" : "Einträge"} löschen?`,
-          bulkDeleteDescription: (documents: number) =>
-            documents > 0
-              ? `${documents} ${documents === 1 ? "Dokument verliert" : "Dokumente verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
-              : "Keinem Dokument ist etwas davon zugeordnet. Das lässt sich nicht rückgängig machen.",
+          // Null while the counts are still loading: never claim nothing uses them.
+          bulkDeleteDescription: (count: number | null, categories: boolean) =>
+            count === null
+              ? "Das lässt sich nicht rückgängig machen."
+              : count > 0
+                ? categories
+                  ? `${count} ${count === 1 ? "Absender verliert" : "Absender verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
+                  : `${count} ${count === 1 ? "Dokument verliert" : "Dokumente verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
+                : "Davon wird nichts verwendet. Das lässt sich nicht rückgängig machen.",
           deleteDescription: (count: number | null) =>
             count
               ? `Der Eintrag wird von ${count} Dokumenten entfernt. Das lässt sich nicht rückgängig machen.`
@@ -291,10 +296,17 @@ export function TaxonomyManagementSection() {
           mergeAction: "Merge",
           deleteTitle: (n: string) => `Delete “${n}”?`,
           bulkDeleteTitle: (n: number) => `Delete ${n} ${n === 1 ? "entry" : "entries"}?`,
-          bulkDeleteDescription: (documents: number) =>
-            documents > 0
-              ? `${documents} ${documents === 1 ? "document loses" : "documents lose"} this assignment. This cannot be undone.`
-              : "No document uses any of these. This cannot be undone.",
+          // Null while the counts are still loading: never claim nothing uses them.
+          bulkDeleteDescription: (count: number | null, categories: boolean) =>
+            count === null
+              ? "This cannot be undone."
+              : count > 0
+                ? `${count} ${
+                    categories
+                      ? count === 1 ? "correspondent loses" : "correspondents lose"
+                      : count === 1 ? "document loses" : "documents lose"
+                  } this assignment. This cannot be undone.`
+                : "Nothing uses any of these. This cannot be undone.",
           deleteDescription: (count: number | null) =>
             count
               ? `It comes off ${count} documents. This can't be undone.`
@@ -418,8 +430,9 @@ export function TaxonomyManagementSection() {
   }, [allRows, filter, quick, suggestions, sortKey, sortAsc]);
 
   const maxCount = Math.max(...allRows.map((row) => row.count ?? 0), 1);
+  // Builtin entries cannot be deleted, so the sweep must not count or try them.
   const unusedCount = countsKnown
-    ? allRows.filter((row) => row.count === 0).length
+    ? allRows.filter((row) => row.count === 0 && !row.builtin).length
     : 0;
 
   const virtualizer = useVirtualizer({
@@ -462,10 +475,12 @@ export function TaxonomyManagementSection() {
   };
 
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
-  const bulkDeleteDocuments = (bulkDeleteIds ?? []).reduce(
-    (sum, id) => sum + (allRows.find((row) => row.id === id)?.count ?? 0),
-    0,
-  );
+  const bulkDeleteUsage = countsKnown
+    ? (bulkDeleteIds ?? []).reduce(
+        (sum, id) => sum + (allRows.find((row) => row.id === id)?.count ?? 0),
+        0,
+      )
+    : null;
 
   // The menu item that opened a dialog is gone by the time it closes, so focus
   // goes back to that row's menu button instead of falling to the page body.
@@ -492,7 +507,8 @@ export function TaxonomyManagementSection() {
     renameMutation.error ??
     createMutation.error;
 
-  const selectedRows = rows.filter((row) => selectedIds.includes(row.id));
+  // From every row, not the visible ones: a filter must not hide a builtin from the check.
+  const selectedRows = allRows.filter((row) => selectedIds.includes(row.id));
   const bulkTargetNeedle = bulkTargetQuery.trim().toLowerCase();
   const bulkTargetOptions = allRows
     .filter(
@@ -598,6 +614,8 @@ export function TaxonomyManagementSection() {
                 </Chip>
               ))}
             </div>
+            {/* Categories are a fixed vocabulary: the API has no create for them. */}
+            {kind === "categories" ? null : (
             <div className="flex w-full items-center gap-2 lg:ml-auto lg:w-auto">
               <Input
                 value={createValue}
@@ -620,6 +638,7 @@ export function TaxonomyManagementSection() {
                 {copy.add}
               </Button>
             </div>
+            )}
           </div>
 
           {/* Bulk bar / unused sweep */}
@@ -731,7 +750,9 @@ export function TaxonomyManagementSection() {
                 variant="outline"
                 disabled={busy}
                 onClick={() =>
-                  setBulkDeleteIds(allRows.filter((row) => row.count === 0).map((row) => row.id))
+                  setBulkDeleteIds(
+                    allRows.filter((row) => row.count === 0 && !row.builtin).map((row) => row.id),
+                  )
                 }
               >
                 <Trash2 />
@@ -1110,7 +1131,7 @@ export function TaxonomyManagementSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>{copy.bulkDeleteTitle(bulkDeleteIds?.length ?? 0)}</AlertDialogTitle>
             <AlertDialogDescription>
-              {copy.bulkDeleteDescription(bulkDeleteDocuments)}
+              {copy.bulkDeleteDescription(bulkDeleteUsage, kind === "categories")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteMutation.error ? (
