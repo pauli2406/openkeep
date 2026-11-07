@@ -35,26 +35,31 @@ type Screen = {
 const onScreen = (page: Page, text: string, exact = false) =>
   page.getByText(text, { exact }).filter({ visible: true }).first();
 
+/** The primary destinations live in the drawer, as on the web at phone width. */
 const tab = (label: string): Reach => async (page) => {
-  await page.getByText(label, { exact: true }).filter({ visible: true }).last().click();
+  await page.getByRole("button", { name: "Open menu", exact: true }).click();
+  await page
+    .getByRole("button", { name: new RegExp(`^${label}`) })
+    .filter({ visible: true })
+    .last()
+    .click();
 };
 
 const SCREENS: Screen[] = [
-  { name: "today", ready: "Recently added" },
+  { name: "today", ready: "Sorted by due date" },
   { name: "documents", ready: "documents", reach: tab("Documents") },
   {
     name: "documents-selection",
     // Without the queued and failed rows the list stops polling, which is what
     // makes a synthesised long press reliable.
     search: "?settled=1",
-    ready: "Add tag",
+    ready: "Select all",
     reach: async (page) => {
       await tab("Documents")(page);
       // The chip row grows when the dashboard query supplies the review count,
       // which pushes the list down by a few pixels. Measuring a row before that
       // lands is how a long press ends up on the row below the intended one — it
       // did, on a runner. Wait for the final chip row and the count strip first.
-      await onScreen(page, "Review · 1").waitFor();
       await onScreen(page, "5 documents").waitFor();
 
       // `.last()`, not `.first()`: the navigator leaves the Today copy of this row
@@ -95,28 +100,69 @@ const SCREENS: Screen[] = [
   },
   {
     name: "document-detail",
-    ready: "Issued",
-    // Opened from Today's recent list rather than from Documents: that list polls
-    // while a document is processing, and a list that re-renders every two
-    // seconds never satisfies Playwright's "stable" check for a click.
+    // `?settled=1` stops the list polling: a list that re-renders every two seconds
+    // never satisfies Playwright's "stable" check for a click.
+    search: "?settled=1",
+    ready: "Why it needs review",
     reach: async (page) => {
+      await tab("Documents")(page);
       await onScreen(page, "Beitragsanpassung Hausrat").click();
     },
   },
   {
-    name: "document-details-tab",
-    ready: "File",
+    name: "document-fields",
+    search: "?settled=1",
+    ready: "Parse provider",
     reach: async (page) => {
+      await tab("Documents")(page);
       await onScreen(page, "Beitragsanpassung Hausrat").click();
-      await onScreen(page, "Details", true).click();
+      await page.getByRole("tab", { name: "Fields" }).click();
     },
   },
   {
-    name: "document-history-tab",
-    ready: "Changes",
+    name: "document-qa",
+    search: "?settled=1",
+    ready: "Beitragsanpassung",
     reach: async (page) => {
+      await tab("Documents")(page);
       await onScreen(page, "Beitragsanpassung Hausrat").click();
-      await onScreen(page, "History", true).click();
+      await page.getByRole("tab", { name: "Q&A" }).click();
+    },
+  },
+  {
+    name: "document-history",
+    search: "?settled=1",
+    ready: "Document History",
+    reach: async (page) => {
+      await tab("Documents")(page);
+      await onScreen(page, "Beitragsanpassung Hausrat").click();
+      await page.getByRole("tab", { name: "History" }).click();
+    },
+  },
+  { name: "taxes", ready: "By document type", reach: tab("Taxes") },
+  {
+    name: "omnibar",
+    ready: "Jump to",
+    reach: async (page) => {
+      await page.getByRole("button", { name: "Ask the archive", exact: true }).click();
+    },
+  },
+  { name: "profile", ready: "Two-factor", reach: tab("You") },
+  {
+    name: "settings-taxonomy",
+    search: "?taxonomy=rich",
+    ready: "Correspondents",
+    reach: async (page) => {
+      await tab("Settings")(page);
+      await page.getByRole("button", { name: /^Tags/ }).filter({ visible: true }).first().click();
+    },
+  },
+  {
+    name: "settings-providers",
+    ready: "Parsing",
+    reach: async (page) => {
+      await tab("Settings")(page);
+      await page.getByRole("button", { name: /^AI providers/ }).filter({ visible: true }).first().click();
     },
   },
   {
@@ -140,18 +186,14 @@ const SCREENS: Screen[] = [
     name: "settings",
     ready: "Appearance",
     reach: async (page) => {
-      // The avatar is labelled with the signed-in name, which is how a
-      // screen reader announces it.
-      await page.getByRole("button", { name: "You", exact: true }).click();
+      await tab("Settings")(page);
     },
   },
   {
     name: "offline-archive",
     ready: "Delete the copy",
     reach: async (page) => {
-      // The avatar is labelled with the signed-in name, which is how a
-      // screen reader announces it.
-      await page.getByRole("button", { name: "You", exact: true }).click();
+      await tab("Settings")(page);
       await onScreen(page, "Available offline", true).click();
     },
   },

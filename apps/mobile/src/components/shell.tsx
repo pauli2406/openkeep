@@ -21,7 +21,7 @@ import { useI18n } from "../i18n";
 import { createThemedStyles, radii, useAppearance, useColors } from "../theme";
 import { fonts, text } from "../typography";
 import { Gradient } from "./layout";
-import { ShellContext, useShell } from "./shell-context";
+import { SHELL_HEADER_HEIGHT, ShellContext, useShell } from "./shell-context";
 
 export { useInShell, useShell } from "./shell-context";
 
@@ -322,7 +322,7 @@ const useStyles = createThemedStyles((c) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    height: 56,
+    height: SHELL_HEADER_HEIGHT,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: c.border,

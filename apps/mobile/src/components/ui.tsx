@@ -18,7 +18,7 @@ import {
   type ViewStyle,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
 import {
   cardShadow,
@@ -29,7 +29,7 @@ import {
   useColors,
 } from "../theme";
 import { Gradient, IconTile } from "./layout";
-import { useInShell } from "./shell-context";
+import { SHELL_HEADER_HEIGHT, useInShell } from "./shell-context";
 
 /**
  * A modal that covers the screen, with its safe area respected.
@@ -119,6 +119,7 @@ export function Screen({
   const colors = useColors();
   const scrollRef = useRef<ScrollView>(null);
   const inShell = useInShell();
+  const insets = useSafeAreaInsets();
 
   useScrollToTop(scrollRef);
 
@@ -150,7 +151,9 @@ export function Screen({
         contentContainerStyle,
       ]}
     >
-      {scroll && !hideHeader ? pageHeader : null}
+      {scroll && !hideHeader ? (
+        padded ? <View style={styles.pageHeaderInset}>{pageHeader}</View> : pageHeader
+      ) : null}
       {children}
     </View>
   );
@@ -196,6 +199,9 @@ export function Screen({
       <KeyboardAvoidingView
         style={styles.flexFill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // The shell's header sits above this view, and the avoiding view measures
+        // from its own top, not the screen's.
+        keyboardVerticalOffset={inShell ? SHELL_HEADER_HEIGHT + insets.top : 0}
       >
         {scroll ? (
           <ScrollView
@@ -516,6 +522,7 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       disabled={disabled || loading}
       onPress={onPress}
@@ -958,6 +965,11 @@ const useStyles = createThemedStyles((c) => ({
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 12,
+  },
+  pageHeaderInset: {
+    marginHorizontal: -16,
+    marginTop: -20,
+    marginBottom: -8,
   },
   pageHeaderText: {
     flex: 1,

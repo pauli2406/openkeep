@@ -74,9 +74,8 @@ before first paint — reading `localStorage["openkeep.theme"]`, falling back to
 (`src/hooks/use-theme.ts`) keeps React in sync, persists an explicit choice, and
 follows the OS until one is made.
 
-Public Sans and IBM Plex Mono are local, OFL-licensed assets shared from the mobile
-workspace and bundled by Vite. The web UI therefore keeps identical text metrics
-inside Electron's self-only CSP and in network-restricted web deployments.
+Geist is bundled from the OFL-licensed `@fontsource-variable` packages, so the web and
+Electron builds need no network hop for it.
 
 Two things need care when adding UI:
 

@@ -1,6 +1,9 @@
 import { createContext, useContext } from "react";
 import type { HomeTabParamList } from "../../App";
 
+/** What sits above every shell screen, for keyboard avoidance. */
+export const SHELL_HEADER_HEIGHT = 56;
+
 export type Shell = {
   active: keyof HomeTabParamList;
   setActive: (route: keyof HomeTabParamList) => void;

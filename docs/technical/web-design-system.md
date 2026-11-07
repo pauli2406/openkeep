@@ -19,9 +19,11 @@ with generous spacing. Dark mode keeps the same structure on navy.
 
 ## Tokens
 
-`apps/web/src/theme.css` is the only place colours are defined, and
-`scripts/tokens/check.mjs` fails the build on a colour literal anywhere else in
-`apps/web/src`. The mobile app keeps its own palette in `packages/tokens`.
+`apps/web/src/theme.css` is the only place colours are defined, for every client.
+`pnpm tokens:generate` converts it into `packages/tokens/src/palette.generated.ts`, which
+the mobile app imports, because React Native understands neither `oklch()` nor CSS
+gradients. `scripts/tokens/check.mjs` fails the build when that file is stale, and on a
+colour literal anywhere else in `apps/web/src` or `apps/mobile/src`.
 
 Use the shadcn names through Tailwind (`bg-card`, `text-muted-foreground`,
 `border-border`, `bg-primary`), plus these additions:
@@ -81,6 +83,14 @@ its citation markers.
 
 These components sit on OpenKeep's own answer stream (`hooks/use-answer-stream.ts`), not
 on the AI SDK, because the patterns only need plain props.
+
+## Mobile
+
+`apps/mobile` looks and works the same: the web at phone width is its specification. The same
+theme, Geist and radius scale reach it through `packages/tokens` and `src/typography.ts`, and
+`src/components/layout.tsx` holds its `Gradient`, `GradientPanel`, `IconTile`, `Chip`,
+`Segmented`, `Skeleton` and `BottomSheet`. `src/components/shell.tsx` is the header and sidebar,
+opened as a drawer. A feature added to the web belongs in the app as well.
 
 ## Visual baselines
 

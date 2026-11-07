@@ -162,6 +162,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
             onPress={() => onChange(option.value)}
+            hitSlop={{ top: 6, bottom: 6 }}
             style={[styles.segment, active ? styles.segmentActive : null]}
           >
             {option.icon ? (
