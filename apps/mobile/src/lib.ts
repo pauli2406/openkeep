@@ -915,9 +915,23 @@ export async function responseToMessage(response: Response) {
   return text;
 }
 
+function exportsDirectory() {
+  return `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}exports/`;
+}
+
+/**
+ * Decrypted copies handed to the share sheet live in one folder, so they can be
+ * removed: the share sheet gives no reliable moment to delete a file after use, so
+ * this runs on launch and on sign-out instead.
+ */
+export async function purgeExports() {
+  await FileSystem.deleteAsync(exportsDirectory(), { idempotent: true });
+}
+
 export async function saveDownloadToFile(response: Response, filename: string) {
   const arrayBuffer = await response.arrayBuffer();
-  const uri = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}${filename}`;
+  await FileSystem.makeDirectoryAsync(exportsDirectory(), { intermediates: true });
+  const uri = `${exportsDirectory()}${filename}`;
   await FileSystem.writeAsStringAsync(uri, Buffer.from(arrayBuffer).toString("base64"), {
     encoding: FileSystem.EncodingType.Base64,
   });

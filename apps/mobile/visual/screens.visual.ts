@@ -147,14 +147,14 @@ const SCREENS: Screen[] = [
       await page.getByRole("button", { name: "Ask the archive", exact: true }).click();
     },
   },
-  { name: "profile", ready: "Two-factor", reach: tab("You") },
+  { name: "profile", ready: "Two-factor", reach: tab("Profile") },
   {
     name: "settings-taxonomy",
     search: "?taxonomy=rich",
     ready: "Correspondents",
     reach: async (page) => {
       await tab("Settings")(page);
-      await page.getByRole("button", { name: /^Tags/ }).filter({ visible: true }).first().click();
+      await page.getByRole("tab", { name: /^Tags/ }).filter({ visible: true }).first().click();
     },
   },
   {
@@ -162,7 +162,7 @@ const SCREENS: Screen[] = [
     ready: "Parsing",
     reach: async (page) => {
       await tab("Settings")(page);
-      await page.getByRole("button", { name: /^AI providers/ }).filter({ visible: true }).first().click();
+      await page.getByRole("tab", { name: /^AI providers/ }).filter({ visible: true }).first().click();
     },
   },
   {

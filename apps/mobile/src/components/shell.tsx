@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Animated,
+  BackHandler,
   Image,
   Platform,
   Pressable,
@@ -156,6 +157,17 @@ export function AppDrawer() {
       if (finished && !shell.drawerOpen) setMounted(false);
     });
   }, [shell.drawerOpen, progress]);
+
+  // The drawer is an overlay rather than a modal, so Android's back button would
+  // otherwise act on the screen behind it.
+  useEffect(() => {
+    if (!shell.drawerOpen) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      shell.closeDrawer();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [shell.drawerOpen, shell.closeDrawer]);
 
   if (!mounted) return null;
 

@@ -7,6 +7,7 @@ import { Chip, IconTile } from "../components/layout";
 import { Button, Panel, Pill, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { formatShortDate, parseArchiveDate } from "../lib";
+import { clearLocalHistory } from "../local-history";
 import { useOfflineArchive } from "../offline-archive";
 import { OFFLINE_CACHE_LIMIT_CHOICES } from "../offline-metadata-store";
 import { createThemedStyles, radii, useColors } from "../theme";
@@ -79,7 +80,7 @@ export function OfflineArchiveScreen() {
         text: t("offline.deleteCopy"),
         style: "destructive",
         onPress: () =>
-          void offline.clearCachedDocuments().catch((error) =>
+          void Promise.all([offline.clearCachedDocuments(), clearLocalHistory()]).catch((error) =>
             Alert.alert(
               t("settings.clearCacheFailed"),
               error instanceof Error ? error.message : t("settings.clearCacheFailed"),

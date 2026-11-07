@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -7,6 +8,8 @@ import { GradientPanel, Skeleton } from "../components/layout";
 import { Button, EmptyState, Panel, Screen } from "../components/ui";
 import { useDashboardInsights } from "../hooks/useDashboardInsights";
 import { useI18n } from "../i18n";
+import { purgeExports } from "../lib";
+import { clearLocalHistory } from "../local-history";
 import { useOfflineArchive } from "../offline-archive";
 import { createThemedStyles, radii, useColors } from "../theme";
 import { fonts, tabular, text } from "../typography";
@@ -26,6 +29,7 @@ function initialsOf(name: string) {
 }
 
 export function ProfileScreen() {
+  const queryClient = useQueryClient();
   const styles = useStyles();
   const colors = useColors();
   const auth = useAuth();
@@ -59,8 +63,16 @@ export function ProfileScreen() {
       {
         text: t("profile.signOut"),
         style: "destructive",
-        // The offline copy belongs to this account, so it goes with the session.
-        onPress: () => void offline.clearCachedDocuments().finally(() => auth.logout()),
+        // Everything local belongs to this account, so it goes with the session.
+        onPress: () =>
+          void Promise.allSettled([
+            offline.clearCachedDocuments(),
+            clearLocalHistory(),
+            purgeExports(),
+          ]).finally(() => {
+            queryClient.clear();
+            return auth.logout();
+          }),
       },
     ]);
   }

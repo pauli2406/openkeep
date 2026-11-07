@@ -515,6 +515,17 @@ export function ReviewScreen() {
     [documentTypesQuery.data],
   );
 
+  // A confirm the server has taken is gone from the queue, so its hold can go too.
+  // Keeping it would hide the document if it were requeued later in this session.
+  useEffect(() => {
+    if (!reviewQuery.data) return;
+    const queued = new Set(reviewQuery.data.items.map((item) => item.id));
+    setConfirmedIds((current) => {
+      const next = new Set([...current].filter((id) => queued.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [reviewQuery.data]);
+
   const items = useMemo(
     () => (reviewQuery.data?.items ?? []).filter((item) => !confirmedIds.has(item.id)),
     [confirmedIds, reviewQuery.data],
@@ -678,9 +689,9 @@ export function ReviewScreen() {
     const documentId = pendingConfirm.current;
     pendingConfirm.current = null;
     if (documentId) {
-      resolveMutation.mutate(documentId);
-      // Sent, so it no longer has to survive a kill.
-      void outbox.release();
+      // Only a confirm the server took may leave the outbox. If this fails, signing
+      // out mid-window being the likely case, the next open sends it again.
+      void resolveMutation.mutateAsync(documentId).then(() => outbox.release(), () => {});
     }
   }, [resolveMutation, outbox]);
 

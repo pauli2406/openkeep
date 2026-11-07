@@ -830,7 +830,7 @@ export function ScanScreen() {
                 onRetry={() => retry(item)}
                 onOpen={openDocument}
                 onOpenOriginal={openDocument}
-                onOpenReview={() => navigation.navigate("Home", { screen: "Review" } as never)}
+                onOpenReview={() => navigation.popTo("Home", { screen: "Review" } as never)}
               />
             ))}
           </Panel>
@@ -842,7 +842,7 @@ export function ScanScreen() {
             <View style={styles.queueAction}>
               <Button
                 label={t("import.done")}
-                onPress={() => navigation.navigate("Home", { screen: "Documents" } as never)}
+                onPress={() => navigation.popTo("Home", { screen: "Documents" } as never)}
               />
             </View>
           </View>

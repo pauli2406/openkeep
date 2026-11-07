@@ -1009,6 +1009,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    const { refreshToken } = tokensRef.current;
+    const baseUrl = apiUrlRef.current;
+    // Best effort: signing out must work with the server unreachable, and the local
+    // session goes either way. Revoking means a copied token dies with it.
+    if (refreshToken && baseUrl) {
+      await Promise.race([
+        fetch(resolveUrl(baseUrl, "/api/auth/logout"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...cfAccessHeaders() },
+          body: JSON.stringify({ refreshToken }),
+        }).catch(() => {}),
+        new Promise((settle) => setTimeout(settle, 4_000)),
+      ]);
+    }
     await clearSession();
   }, [clearSession]);
 

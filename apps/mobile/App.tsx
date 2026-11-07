@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Text } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -34,6 +34,7 @@ import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { createThemedStyles, ThemeProvider, useAppearance, useColors } from "./src/theme";
 import { fontAssets } from "./src/typography";
+import { purgeExports } from "./src/lib";
 
 export type AppStackParamList = {
   Home: undefined;
@@ -223,6 +224,11 @@ function AppTree() {
 }
 
 function AppShell() {
+  // Exported copies are decrypted, so none outlive the session that shared them.
+  useEffect(() => {
+    void purgeExports().catch(() => {});
+  }, []);
+
   const colors = useColors();
   const appearance = useAppearance();
   const auth = useAuth();

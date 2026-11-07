@@ -251,7 +251,8 @@ export function SearchScreen() {
   const cachedList = useQuery({
     queryKey: ["cached-ids", offline.cacheSummary.revision],
     enabled: shouldUseCache,
-    queryFn: () => offline.queryCachedDocuments(),
+    // Every document, not the default page: one past it is still on the device.
+    queryFn: () => offline.queryCachedDocuments({ pageSize: 100_000 }),
   });
   const cachedIds = useMemo(
     () => new Set((cachedList.data?.items ?? []).map((document) => document.id)),
