@@ -1,14 +1,13 @@
 /**
- * The OpenKeep palette — one source, two clients (#124).
+ * The mobile palette.
  *
- * Plain data with no dependencies. `apps/mobile` imports it directly and
- * `apps/web` generates its `--ok-*` custom properties from it, so a colour
- * changes in one place and both clients follow.
+ * Plain data with no dependencies, imported directly by `apps/mobile`. The web
+ * and desktop clients have their own theme in `apps/web/src/theme.css`.
  *
  * Light is the base theme and dark is a full peer, not an inversion.
  */
 
-/** The categorical ramp (`--ok-cat-1…8`) for tag and document-type dots. */
+/** The categorical ramp for tag and document-type dots. */
 export type CategoricalRamp = readonly [
   string,
   string,
