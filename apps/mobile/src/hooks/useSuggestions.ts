@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { useAuth } from "../auth";
+import { buildSuggestions } from "../components/chat/palette";
 import { useI18n } from "../i18n";
 import type { DashboardInsights, FacetsResponse } from "../lib";
 
@@ -8,9 +10,10 @@ export function useSuggestions(
   enabled: boolean,
 ) {
   const { t } = useI18n();
+  const { apiUrl } = useAuth();
 
   const facetsQuery = useQuery({
-    queryKey: ["search", "facets"],
+    queryKey: ["search", "facets", apiUrl],
     queryFn: async () => {
       const response = await authFetch("/api/documents/facets");
       if (!response.ok) throw new Error("Failed to load facets");
@@ -21,7 +24,7 @@ export function useSuggestions(
   });
 
   const insightsQuery = useQuery({
-    queryKey: ["search", "dashboard-insights"],
+    queryKey: ["search", "dashboard-insights", apiUrl],
     queryFn: async () => {
       const response = await authFetch("/api/dashboard/insights");
       if (!response.ok) throw new Error("Failed to load insights");
@@ -31,45 +34,12 @@ export function useSuggestions(
     enabled,
   });
 
-  const suggestions = useMemo(() => {
-    const facets = facetsQuery.data;
-    const insights = insightsQuery.data;
-    if (!facets && !insights) return [];
+  const suggestions = useMemo(
+    () => buildSuggestions(facetsQuery.data, insightsQuery.data, t),
+    [facetsQuery.data, insightsQuery.data, t],
+  );
 
-    const items: string[] = [];
+  const isLoading = enabled && (facetsQuery.isLoading || insightsQuery.isLoading);
 
-    if (insights?.overdueItems && insights.overdueItems.length > 0) {
-      items.push(t("suggestions.overdue"));
-    }
-
-    if (insights?.upcomingDeadlines && insights.upcomingDeadlines.length > 0) {
-      items.push(t("suggestions.upcomingDeadlines"));
-    }
-
-    const topCorrespondent = facets?.correspondents[0];
-    if (topCorrespondent) {
-      items.push(`${t("suggestions.summarizeFrom")} ${topCorrespondent.name}`);
-    }
-
-    const secondCorrespondent = facets?.correspondents[1];
-    if (secondCorrespondent) {
-      items.push(`${t("suggestions.keyTopics")} ${secondCorrespondent.name} ${t("suggestions.documentsSuffix")}`);
-    }
-
-    const topDocType = facets?.documentTypes[0];
-    if (topDocType) {
-      items.push(`${t("suggestions.showAll")} ${topDocType.name.toLowerCase()} ${t("correspondents.documents")}`);
-    }
-
-    const topTag = facets?.tags[0];
-    if (topTag) {
-      items.push(`${t("suggestions.tagged")} "${topTag.name}"?`);
-    }
-
-    return items.slice(0, 5);
-  }, [facetsQuery.data, insightsQuery.data, t]);
-
-  const isLoading = facetsQuery.isLoading || insightsQuery.isLoading;
-
-  return { suggestions, isLoading };
+  return { suggestions, isLoading, facets: facetsQuery.data };
 }

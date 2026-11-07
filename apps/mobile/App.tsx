@@ -28,6 +28,7 @@ import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { TaxesScreen } from "./src/screens/TaxesScreen";
 import { AppDrawer, AppHeader, ShellProvider, useShell } from "./src/components/shell";
+import { Omnibar } from "./src/components/Omnibar";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -103,6 +104,7 @@ function HomeTabs() {
     <ShellProvider>
       <HomeNavigator />
       <AppDrawer />
+      <Omnibar />
     </ShellProvider>
   );
 }
