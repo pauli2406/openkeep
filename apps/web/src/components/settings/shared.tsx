@@ -1,72 +1,22 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
   Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
   ProviderConfig,
-  ReadinessResponse,
-  Tag,
   WatchFolderScanResponse,
 } from "@openkeep/types";
-import { api, getApiErrorMessage } from "@/lib/api";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Key,
-  Plus,
-  Trash2,
-  Copy,
-  Shield,
-  Server,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Activity,
-  Layers,
-  RefreshCw,
-  Edit2,
-  Download,
-  Upload,
-  Tags,
-  Users,
-  FileType,
-  Check,
-  X,
-  FolderSearch,
-  Brain,
-} from "lucide-react";
+import { AlertCircle, Check, Copy } from "lucide-react";
 import { format } from "date-fns";
+import { IconTile } from "@/components/layout/page";
+import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Item, ItemActions, ItemContent, ItemDescription } from "@/components/ui/item";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { useI18n, type AppLanguage } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export interface ApiToken {
   id: string;
@@ -109,6 +59,190 @@ export function queueLabel(queueName: string): string {
 }
 
 
+/** The heading of one settings destination, under the shell's page title. */
+export function SettingsHeading({
+  title,
+  description,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      {description ? (
+        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A settings section: a card with a title row, a body and an optional footer. */
+export function SectionCard({
+  icon,
+  title,
+  description,
+  action,
+  footer,
+  headingLevel = "h3",
+  className,
+  children,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  footer?: ReactNode;
+  headingLevel?: "h2" | "h3";
+  className?: string;
+  children: ReactNode;
+}) {
+  const Heading = headingLevel;
+  return (
+    <Card className={cn("gap-0 py-0 shadow-card", className)}>
+      <div className="flex flex-wrap items-start gap-x-3.5 gap-y-3 border-b px-5 py-4">
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 basis-56 gap-3.5",
+            description ? "items-start" : "items-center",
+          )}
+        >
+          {icon ? <IconTile>{icon}</IconTile> : null}
+          <div className="min-w-0">
+            <Heading className="font-medium">{title}</Heading>
+            {description ? (
+              <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+            ) : null}
+          </div>
+        </div>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      </div>
+      <div className="px-5 py-5">{children}</div>
+      {footer ? (
+        <div className="flex flex-wrap items-center gap-3 border-t bg-muted/40 px-5 py-3">
+          {footer}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Label on the left, control on the right; stacks on a phone. */
+export function SettingRow({
+  label,
+  description,
+  htmlFor,
+  children,
+}: {
+  label: ReactNode;
+  description?: ReactNode;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Item className="flex-col items-stretch gap-x-6 gap-y-2 rounded-none px-0 py-3.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center">
+      <ItemContent className="min-w-0 gap-0.5">
+        <Label htmlFor={htmlFor} className="font-medium">
+          {label}
+        </Label>
+        {description ? (
+          <ItemDescription className="line-clamp-none text-xs">{description}</ItemDescription>
+        ) : null}
+      </ItemContent>
+      <ItemActions className="shrink-0">{children}</ItemActions>
+    </Item>
+  );
+}
+
+export type StatusTone = "ok" | "warn" | "bad" | "muted" | "brand";
+
+const DOT_CLASS: Record<StatusTone, string> = {
+  ok: "bg-success",
+  warn: "bg-warning",
+  bad: "bg-danger",
+  muted: "bg-muted-foreground/40",
+  brand: "bg-brand",
+};
+
+export function StatusDot({ tone, className }: { tone: StatusTone; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn("inline-block size-2 shrink-0 rounded-full", DOT_CLASS[tone], className)}
+    />
+  );
+}
+
+const BADGE_VARIANT = {
+  ok: "success",
+  warn: "warning",
+  bad: "danger",
+  muted: "secondary",
+  brand: "brand",
+} as const;
+
+/** A soft pill with a dot: the one way these screens say how something is doing. */
+export function StatusBadge({
+  tone,
+  className,
+  children,
+}: {
+  tone: StatusTone;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Badge variant={BADGE_VARIANT[tone]} className={className}>
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {/* Sentence case without `capitalize`, which would give "Nicht Konfiguriert". */}
+      <span className="inline-block first-letter:uppercase">{children}</span>
+    </Badge>
+  );
+}
+
+/** A number with a label. `tone` tints it when the number wants attention. */
+export function StatTile({
+  label,
+  value,
+  note,
+  tone = "default",
+  loading = false,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  note?: ReactNode;
+  tone?: "default" | "brand" | "warning" | "danger";
+  loading?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-0 rounded-xl border p-3.5 transition-colors",
+        tone === "brand" && "border-transparent bg-brand-soft",
+        tone === "warning" && "border-transparent bg-warning-soft",
+        tone === "danger" && "border-transparent bg-danger-soft",
+      )}
+    >
+      <p className="truncate text-xs text-muted-foreground">{label}</p>
+      {loading ? (
+        <Skeleton className="mt-1.5 h-7 w-12" />
+      ) : (
+        <p
+          className={cn(
+            "num mt-0.5 text-2xl font-semibold tracking-tight",
+            tone === "brand" && "text-brand-soft-foreground",
+            tone === "warning" && "text-warning",
+            tone === "danger" && "text-danger",
+          )}
+        >
+          {value}
+        </p>
+      )}
+      {note ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{note}</p> : null}
+    </div>
+  );
+}
+
 export function QueueCard({
   label,
   value,
@@ -121,28 +255,95 @@ export function QueueCard({
   variant?: "warning";
 }) {
   return (
+    <StatTile
+      label={label}
+      value={value}
+      tone={active ? (variant === "warning" ? "warning" : "brand") : "default"}
+    />
+  );
+}
+
+/** A failure with a way out. */
+export function RetryAlert({
+  message,
+  onRetry,
+  className,
+}: {
+  message: ReactNode;
+  onRetry?: () => void;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  return (
+    <Alert variant="destructive" className={cn(onRetry && "pr-36", className)}>
+      <AlertCircle />
+      <AlertDescription>{message}</AlertDescription>
+      {onRetry ? (
+        <AlertAction>
+          <Button variant="outline" size="xs" onClick={onRetry}>
+            {t("settings.retry")}
+          </Button>
+        </AlertAction>
+      ) : null}
+    </Alert>
+  );
+}
+
+/** Placeholder rows for a list that is on its way. */
+export function RowsSkeleton({ rows = 3, className }: { rows?: number; className?: string }) {
+  const { t } = useI18n();
+  return (
     <div
-      className={`rounded-lg border p-3 text-center transition-colors ${
-        active
-          ? variant === "warning"
-            ? "border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)]"
-            : "border-primary/30 bg-primary/5"
-          : ""
-      }`}
+      role="status"
+      aria-label={t("root.loading")}
+      className={cn("flex flex-col gap-2.5", className)}
     >
-      <p
-        className={`ok-num text-xl font-semibold ${
-          active
-            ? variant === "warning"
-              ? "text-[var(--ok-amber)]"
-              : "text-primary"
-            : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      {Array.from({ length: rows }, (_, index) => (
+        <Skeleton key={index} className="h-10 w-full rounded-lg" />
+      ))}
     </div>
+  );
+}
+
+/** A secret shown once: highlighted, monospaced and one click from the clipboard. */
+export function SecretBlock({
+  value,
+  copied,
+  onCopy,
+}: {
+  value: string;
+  copied?: boolean;
+  onCopy?: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-start gap-2 rounded-lg bg-brand-soft p-3 ring-1 ring-brand/25">
+      <code className="min-w-0 flex-1 self-center font-mono text-sm break-all text-brand-soft-foreground">
+        {value}
+      </code>
+      {onCopy ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          aria-label={t("settings.copy")}
+          onClick={onCopy}
+          className="shrink-0"
+        >
+          {copied ? <Check className="text-success" /> : <Copy />}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/** The warning that goes with a one-time reveal. */
+export function ShownOnceNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2 rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">
+      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+      {children}
+    </p>
   );
 }
 
@@ -236,7 +437,12 @@ export function WatchFolderFieldReview({
 }) {
   const { t } = useI18n();
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">{t("settings.loadingExtractedFields")}</p>;
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner />
+        {t("settings.loadingExtractedFields")}
+      </p>
+    );
   }
 
   if (isError) {
@@ -267,35 +473,36 @@ export function WatchFolderFieldReview({
     .filter((entry) => !missingFields.has(entry.field) && entry.value !== null);
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {document.metadata.reviewEvidence?.confidence != null && (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <span>
             {t("settings.confidence")}:{" "}
             <span className={confidenceTextClass(document.metadata.reviewEvidence.confidence)}>
-              <span className="ok-num">{(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%</span>
+              <span className="num">{(document.metadata.reviewEvidence.confidence * 100).toFixed(0)}%</span>
             </span>
           </span>
           {document.metadata.reviewEvidence.confidenceThreshold != null && (
             <span>
-              {t("settings.threshold")}: <span className="ok-num">{(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%</span>
+              {t("settings.threshold")}:{" "}
+              <span className="num">
+                {(document.metadata.reviewEvidence.confidenceThreshold * 100).toFixed(0)}%
+              </span>
             </span>
           )}
         </div>
       )}
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-md border bg-background/70 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {t("settings.foundValues")}
-          </p>
-          <div className="mt-2 space-y-2">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">{t("settings.foundValues")}</p>
+          <div className="mt-2 grid gap-2">
             {foundFields.length > 0 ? (
               foundFields.map(({ field, value }) => (
-                <div key={field} className="rounded-md border bg-muted/20 px-3 py-2">
+                <div key={field} className="rounded-lg bg-muted px-3 py-2">
                   <p className="text-xs text-muted-foreground">
                     {formatWatchFolderFieldLabel(field)}
                   </p>
-                  <p className="text-sm font-medium text-foreground">{value}</p>
+                  <p className="num text-sm font-medium">{value}</p>
                 </div>
               ))
             ) : (
@@ -303,11 +510,11 @@ export function WatchFolderFieldReview({
             )}
           </div>
         </div>
-        <div className="rounded-md border bg-background/70 p-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground">
             {t("settings.missingKeyFields")}
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {missingFields.size > 0 ? (
               Array.from(missingFields).map((field) => (
                 <Badge key={field} variant="warning">
@@ -325,9 +532,9 @@ export function WatchFolderFieldReview({
 }
 
 export function confidenceTextClass(confidence: number): string {
-  if (confidence >= 0.8) return "font-medium text-[var(--ok-green)]";
-  if (confidence >= 0.5) return "font-medium text-[var(--ok-amber)]";
-  return "font-medium text-[var(--ok-red)]";
+  if (confidence >= 0.8) return "font-medium text-success";
+  if (confidence >= 0.5) return "font-medium text-warning";
+  return "font-medium text-danger";
 }
 
 export function formatJobTime(dateStr: string, language: AppLanguage, t: Translate): string {

@@ -1,32 +1,19 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
-  Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
-  ProviderConfig,
-  ReadinessResponse,
-  Tag,
-  WatchFolderScanResponse,
-} from "@openkeep/types";
+import { Key, Plus, Trash2 } from "lucide-react";
+import { format } from "date-fns";
 import { api, getApiErrorMessage } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -37,24 +24,25 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Key,
-  Plus,
-  Trash2,
-  Copy,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  } from "lucide-react";
-import { format } from "date-fns";
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { useI18n } from "@/lib/i18n";
-import { ApiToken, CreateTokenResponse } from "./shared";
+import {
+  type ApiToken,
+  type CreateTokenResponse,
+  RetryAlert,
+  RowsSkeleton,
+  SecretBlock,
+  SectionCard,
+  ShownOnceNote,
+} from "./shared";
 
 export function ApiTokensSection() {
   const { t } = useI18n();
@@ -149,78 +137,51 @@ export function ApiTokensSection() {
   }
 
   const tokens = tokensQuery.data ?? [];
+  const tokenToDelete = tokens.find((token) => token.id === deleteConfirmId) ?? null;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Key className="h-5 w-5" />
-              {t("settings.apiTokensTitle")}
-            </CardTitle>
-            <CardDescription>
-              {t("settings.apiTokensDescription")}
-            </CardDescription>
-          </div>
-          <Dialog open={createDialogOpen} onOpenChange={handleDialogClose}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4" />
-                {t("settings.createToken")}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              {generatedToken ? (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>{t("settings.tokenCreated")}</DialogTitle>
-                    <DialogDescription>
-                      {t("settings.tokenCreatedDescription")}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 rounded-md border bg-muted p-3">
-                        <code className="break-all text-sm">
-                          {generatedToken}
-                        </code>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCopy}
-                        className="shrink-0"
-                      >
-                        {copied ? (
-                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-sm text-[var(--ok-amber)]">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      {t("settings.tokenShownOnce")}
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={() => handleDialogClose(false)}>
-                      {t("settings.done")}
-                    </Button>
-                  </DialogFooter>
-                </>
-              ) : (
-                <>
-                  <DialogHeader>
-                    <DialogTitle>{t("settings.createApiToken")}</DialogTitle>
-                    <DialogDescription>
-                      {t("settings.createApiTokenDescription")}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleCreate} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="token-name">{t("settings.name")}</Label>
+    <SectionCard
+      headingLevel="h2"
+      icon={<Key />}
+      title={t("settings.apiTokensTitle")}
+      description={t("settings.apiTokensDescription")}
+      action={
+        <Dialog open={createDialogOpen} onOpenChange={handleDialogClose}>
+          <DialogTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Plus />
+              {t("settings.createToken")}
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            {generatedToken ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t("settings.tokenCreated")}</DialogTitle>
+                  <DialogDescription>
+                    {t("settings.tokenCreatedDescription")}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-3">
+                  <SecretBlock value={generatedToken} copied={copied} onCopy={handleCopy} />
+                  <ShownOnceNote>{t("settings.tokenShownOnce")}</ShownOnceNote>
+                </div>
+                <DialogFooter>
+                  <Button onClick={() => handleDialogClose(false)}>{t("settings.done")}</Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{t("settings.createApiToken")}</DialogTitle>
+                  <DialogDescription>
+                    {t("settings.createApiTokenDescription")}
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreate} className="flex flex-col gap-5">
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="token-name">{t("settings.name")}</FieldLabel>
                       <Input
                         id="token-name"
                         value={tokenName}
@@ -228,11 +189,11 @@ export function ApiTokensSection() {
                         placeholder={t("settings.tokenNamePlaceholder")}
                         required
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="token-expiry">
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="token-expiry">
                         {t("settings.expiryOptional")}
-                      </Label>
+                      </FieldLabel>
                       <Input
                         id="token-expiry"
                         type="date"
@@ -240,149 +201,165 @@ export function ApiTokensSection() {
                         onChange={(e) => setTokenExpiry(e.target.value)}
                         min={format(new Date(), "yyyy-MM-dd")}
                       />
-                    </div>
-                    {createMutation.isError && (
-                      <p className="text-sm text-destructive" role="alert">
-                        {createMutation.error instanceof Error
-                          ? createMutation.error.message
-                          : t("settings.createTokenFailed")}
-                      </p>
-                    )}
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleDialogClose(false)}
-                      >
-                        {t("settings.cancel")}
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={
-                          createMutation.isPending || !tokenName.trim()
-                        }
-                      >
-                        {createMutation.isPending ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            {t("settings.creating")}
-                          </>
-                        ) : (
-                          t("settings.create")
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {tokensQuery.isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        )}
-
-        {tokensQuery.isError && (
-          <div
-            className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive"
-            role="alert"
-          >
-            {tokensQuery.error instanceof Error
-              ? tokensQuery.error.message
-              : t("settings.loadTokensFailed")}
-          </div>
-        )}
-
-        {tokensQuery.data && tokens.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Key className="h-8 w-8 text-muted-foreground/40" />
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t("settings.noApiTokens")}
-            </p>
-          </div>
-        )}
-
-        {tokens.length > 0 && (
-          <div className="space-y-3">
-            {tokens.map((token) => (
-              <div
-                key={token.id}
-                className="flex items-center justify-between rounded-lg border p-3"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">{token.name}</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="font-mono">{token.tokenPrefix}...</span>
-                    {token.lastUsedAt && (
-                      <span>
-                        {t("settings.lastUsed")}:{" "}
-                        <span className="ok-num">{format(new Date(token.lastUsedAt), "MMM d, yyyy")}</span>
-                      </span>
-                    )}
-                    {!token.lastUsedAt && <span>{t("settings.neverUsed")}</span>}
-                    {token.expiresAt && (
-                      <span>
-                        {t("settings.expires")}:{" "}
-                        <span className="ok-num">{format(new Date(token.expiresAt), "MMM d, yyyy")}</span>
-                      </span>
-                    )}
-                    {!token.expiresAt && <span>{t("settings.noExpiry")}</span>}
-                  </div>
-                </div>
-
-                {deleteConfirmId === token.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {t("settings.deleteConfirm")}
-                    </span>
+                    </Field>
+                  </FieldGroup>
+                  {createMutation.isError ? (
+                    <FieldError>
+                      {createMutation.error instanceof Error
+                        ? createMutation.error.message
+                        : t("settings.createTokenFailed")}
+                    </FieldError>
+                  ) : null}
+                  <DialogFooter>
                     <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => deleteMutation.mutate(token.id)}
-                      disabled={deleteMutation.isPending}
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleDialogClose(false)}
                     >
-                      {deleteMutation.isPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t("settings.cancel")}
+                    </Button>
+                    <Button type="submit" disabled={createMutation.isPending || !tokenName.trim()}>
+                      {createMutation.isPending ? (
+                        <>
+                          <Spinner />
+                          {t("settings.creating")}
+                        </>
                       ) : (
-                        t("settings.yes")
+                        t("settings.create")
                       )}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setDeleteConfirmId(null)}
-                    >
-                      {t("settings.no")}
-                    </Button>
+                  </DialogFooter>
+                </form>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {tokensQuery.isLoading ? <RowsSkeleton rows={2} /> : null}
+
+        {tokensQuery.isError ? (
+          <RetryAlert
+            message={
+              tokensQuery.error instanceof Error
+                ? tokensQuery.error.message
+                : t("settings.loadTokensFailed")
+            }
+            onRetry={() => void tokensQuery.refetch()}
+          />
+        ) : null}
+
+        {tokensQuery.data && tokens.length === 0 ? (
+          <Empty className="bg-gradient-wash py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Key />
+              </EmptyMedia>
+              <EmptyTitle>{t("settings.noApiTokens")}</EmptyTitle>
+              <EmptyDescription>{t("settings.noApiTokensHint")}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+
+        {tokens.length > 0 ? (
+          <div className="divide-y rounded-lg border">
+            {tokens.map((token) => (
+              <div key={token.id} className="flex items-center gap-3 px-3.5 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <p className="truncate text-sm font-medium">{token.name}</p>
+                    <Badge variant="secondary" className="font-mono">
+                      {token.tokenPrefix}...
+                    </Badge>
                   </div>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteConfirmId(token.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">{t("settings.delete")}</span>
-                  </Button>
-                )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                    {token.lastUsedAt ? (
+                      <span>
+                        {t("settings.lastUsed")}:{" "}
+                        <span className="num">
+                          {format(new Date(token.lastUsedAt), "MMM d, yyyy")}
+                        </span>
+                      </span>
+                    ) : (
+                      <span>{t("settings.neverUsed")}</span>
+                    )}
+                    {token.expiresAt ? (
+                      <span>
+                        {t("settings.expires")}:{" "}
+                        <span className="num">
+                          {format(new Date(token.expiresAt), "MMM d, yyyy")}
+                        </span>
+                      </span>
+                    ) : (
+                      <span>{t("settings.noExpiry")}</span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => setDeleteConfirmId(token.id)}
+                >
+                  <Trash2 />
+                  <span className="sr-only">{t("settings.delete")}</span>
+                </Button>
               </div>
             ))}
           </div>
-        )}
-
-        {deleteMutation.isError ? (
-          <p className="mt-3 text-sm text-destructive" role="alert">
-            {deleteMutation.error instanceof Error
-              ? deleteMutation.error.message
-              : t("settings.failedToDeleteToken")}
-          </p>
         ) : null}
-      </CardContent>
-    </Card>
+
+        {deleteMutation.isError && !deleteConfirmId ? (
+          <RetryAlert
+            message={
+              deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : t("settings.failedToDeleteToken")
+            }
+          />
+        ) : null}
+      </div>
+
+      <AlertDialog
+        open={deleteConfirmId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("settings.deleteTokenTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tokenToDelete ? (
+                <span className="font-medium text-foreground">{tokenToDelete.name}</span>
+              ) : null}
+              {tokenToDelete ? " · " : null}
+              {t("settings.deleteTokenDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteMutation.isError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : t("settings.failedToDeleteToken")}
+            </p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("settings.cancel")}</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (deleteConfirmId) deleteMutation.mutate(deleteConfirmId);
+              }}
+            >
+              {deleteMutation.isPending ? <Spinner /> : null}
+              {t("settings.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </SectionCard>
   );
 }

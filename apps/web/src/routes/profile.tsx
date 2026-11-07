@@ -1,10 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Download, LogOut } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Archive, Download, LogOut } from "lucide-react";
+import { GradientPanel, Page } from "@/components/layout/page";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiTokensSection } from "@/components/settings/api-tokens-section";
+import { SectionCard } from "@/components/settings/shared";
 import { TwoFactorSection } from "@/components/settings/two-factor-section";
 import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/lib/api";
@@ -107,104 +110,98 @@ function ProfilePage() {
     }
   }
 
+  const statTiles = [
+    { label: copy.documents, value: stats?.totalDocuments?.toLocaleString() ?? "—", note: null },
+    {
+      label: copy.reviewed,
+      value: notAwaitingReview?.toLocaleString() ?? "—",
+      note: stats ? copy.stillOpen(stats.pendingReview) : null,
+    },
+    {
+      label: copy.correspondents,
+      value: stats?.correspondentsCount?.toLocaleString() ?? "—",
+      note: null,
+    },
+    {
+      label: copy.documentTypes,
+      value: stats?.documentTypesCount?.toLocaleString() ?? "—",
+      note: null,
+    },
+  ];
+
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-5">
-      {/* Identity header */}
-      <div className="flex items-center gap-4 rounded-[var(--r-lg)] border bg-card px-4 py-3.5">
-        <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[var(--r-md)] bg-accent text-base font-bold text-accent-foreground">
-          {initials}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-base font-semibold">
-              {user?.displayName ?? "—"}
-            </span>
-            {user?.isOwner ? <Badge variant="soft">{copy.owner}</Badge> : null}
+    <Page>
+      <GradientPanel className="p-5 md:p-7">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <Avatar className="size-14 after:border-white/25">
+            <AvatarFallback className="bg-white/15 text-lg font-semibold text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1 basis-48">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h1 className="truncate text-2xl font-semibold tracking-tight">
+                {user?.displayName ?? "—"}
+              </h1>
+              {user?.isOwner ? (
+                <span className="rounded-full bg-white/15 px-2 py-0.5 text-xs font-medium">
+                  {copy.owner}
+                </span>
+              ) : null}
+            </div>
+            <p className="truncate text-sm text-white/85">{user?.email}</p>
           </div>
-          <p className="ok-num truncate text-sm text-muted-foreground">{user?.email}</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => {
-            auth.logout();
-            navigate({ to: "/" });
-          }}
-        >
-          <LogOut />
-          {copy.signOut}
-        </Button>
-      </div>
-
-      {/* Four numbers */}
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {[
-          {
-            label: copy.documents,
-            value: stats?.totalDocuments?.toLocaleString() ?? "—",
-            note: null,
-          },
-          {
-            label: copy.reviewed,
-            value: notAwaitingReview?.toLocaleString() ?? "—",
-            note: stats ? copy.stillOpen(stats.pendingReview) : null,
-          },
-          {
-            label: copy.correspondents,
-            value: stats?.correspondentsCount?.toLocaleString() ?? "—",
-            note: null,
-          },
-          {
-            label: copy.documentTypes,
-            value: stats?.documentTypesCount?.toLocaleString() ?? "—",
-            note: null,
-          },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className="rounded-[var(--r-lg)] border bg-card px-3 py-2.5"
+          <Button
+            variant="outline"
+            className="border-transparent bg-white/12 text-white hover:bg-white/20 hover:text-white dark:border-transparent dark:bg-white/12 dark:hover:bg-white/20"
+            onClick={() => {
+              auth.logout();
+              navigate({ to: "/" });
+            }}
           >
-            <p className="text-xs text-muted-foreground">{stat.label}</p>
-            <p className="ok-num mt-0.5 text-xl font-semibold">{stat.value}</p>
-            {stat.note ? (
-              <p className="text-xs text-muted-foreground">{stat.note}</p>
-            ) : null}
-          </div>
-        ))}
-      </div>
+            <LogOut />
+            {copy.signOut}
+          </Button>
+        </div>
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="space-y-4">
-          {/* Existing 2FA enrollment + recovery-code flow, kept as-is */}
+        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          {statTiles.map((stat) => (
+            <div key={stat.label} className="min-w-0 rounded-xl bg-white/12 p-3.5">
+              <p className="text-sm font-medium">{stat.label}</p>
+              {insightsQuery.isLoading ? (
+                <Skeleton className="mt-2 h-8 w-14 bg-white/20" />
+              ) : (
+                <p className="num mt-1.5 text-3xl font-semibold tracking-tight">{stat.value}</p>
+              )}
+              {stat.note ? <p className="mt-0.5 text-xs text-white/80">{stat.note}</p> : null}
+            </div>
+          ))}
+        </div>
+      </GradientPanel>
+
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {/* Existing 2FA enrollment + recovery-code flow */}
           <TwoFactorSection />
           {/* Existing token create dialog with its show-once behaviour */}
           <ApiTokensSection />
         </div>
 
-        {/* Your data */}
-        <div className="rounded-[var(--r-lg)] border bg-card">
-          <div className="border-b bg-[var(--ok-bar)] px-3.5 py-2">
-            <p className="ok-section-title">{copy.yourData}</p>
-          </div>
-          <div className="space-y-2 px-3.5 py-3">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => void exportArchive()}
-            >
+        <SectionCard headingLevel="h2" icon={<Archive />} title={copy.yourData}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">{copy.exportNote}</p>
+            <Button variant="outline" className="w-full" onClick={() => void exportArchive()}>
               <Download />
               {copy.exportArchive}
             </Button>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {copy.exportNote}
-            </p>
             {exportError ? (
-              <p className="text-xs text-destructive" role="alert">
+              <p className="text-sm text-destructive" role="alert">
                 {exportError}
               </p>
             ) : null}
           </div>
-        </div>
+        </SectionCard>
       </div>
-    </div>
+    </Page>
   );
 }
