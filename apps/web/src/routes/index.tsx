@@ -242,7 +242,7 @@ function TaskPreview({ documentId }: { documentId: string }) {
   const isImage = previewQuery.data?.type.startsWith("image/");
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-auto">
       <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
         <span className="min-w-0 flex-1 truncate font-medium">{doc?.title ?? "—"}</span>
         {needsReview ? <Badge variant="warning">{t("today.needsReview")}</Badge> : null}
@@ -258,7 +258,7 @@ function TaskPreview({ documentId }: { documentId: string }) {
       </div>
 
       {/* A scan is a scan: paper stays white, the stage around it takes the theme. */}
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-stage p-4">
+      <div className="flex min-h-56 flex-1 items-start justify-center overflow-auto bg-stage p-4">
         {previewUrl && isImage ? (
           <img
             src={previewUrl}
@@ -511,7 +511,8 @@ function TodayPage() {
         </div>
       </GradientPanel>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,460px)]">
+      {/* On a short window the page scrolls rather than squeezing the queue away. */}
+      <div className="grid flex-1 grid-cols-1 gap-5 lg:min-h-[480px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,460px)]">
         {/* Left: what needs you */}
         <Card className="min-h-0 gap-0 py-0 shadow-card">
           <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">

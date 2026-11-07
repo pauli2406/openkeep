@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useRef } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, ChevronsUpDown, FileSearch } from "lucide-react";
 import type { Document } from "@openkeep/types";
@@ -53,6 +54,44 @@ export function formatRowDate(value: string | null | undefined): string {
   });
 }
 
+function SortButton({
+  label,
+  field,
+  sort,
+  direction,
+  onSortChange,
+  className,
+}: {
+  label: string;
+  field: SortField;
+  sort: SortField;
+  direction: "asc" | "desc";
+  onSortChange: (sort: SortField, direction: "asc" | "desc") => void;
+  className?: string;
+}) {
+  const active = sort === field;
+  const SortIcon = !active ? ChevronsUpDown : direction === "desc" ? ArrowDown : ArrowUp;
+  return (
+    <button
+      type="button"
+      className={cn(
+        "group/sort inline-flex items-center gap-1 rounded-sm transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+        active && "text-foreground",
+        className,
+      )}
+      onClick={() => onSortChange(field, active && direction === "desc" ? "asc" : "desc")}
+    >
+      {label}
+      <SortIcon
+        className={cn(
+          "size-3.5",
+          !active && "opacity-0 transition-opacity group-hover/sort:opacity-60 group-focus-visible/sort:opacity-60",
+        )}
+      />
+    </button>
+  );
+}
+
 function SortableHead({
   label,
   className,
@@ -60,6 +99,7 @@ function SortableHead({
   sort,
   direction,
   onSortChange,
+  children,
 }: {
   label: string;
   className?: string;
@@ -67,30 +107,23 @@ function SortableHead({
   sort: SortField;
   direction: "asc" | "desc";
   onSortChange: (sort: SortField, direction: "asc" | "desc") => void;
+  children?: ReactNode;
 }) {
-  const active = sort === field;
-  const SortIcon = !active ? ChevronsUpDown : direction === "desc" ? ArrowDown : ArrowUp;
   return (
     <TableHead
       className={className}
-      aria-sort={active ? (direction === "desc" ? "descending" : "ascending") : undefined}
+      aria-sort={
+        sort === field ? (direction === "desc" ? "descending" : "ascending") : undefined
+      }
     >
-      <button
-        type="button"
-        className={cn(
-          "group/sort inline-flex items-center gap-1 rounded-sm transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
-          active && "text-foreground",
-        )}
-        onClick={() => onSortChange(field, active && direction === "desc" ? "asc" : "desc")}
-      >
-        {label}
-        <SortIcon
-          className={cn(
-            "size-3.5",
-            !active && "opacity-0 transition-opacity group-hover/sort:opacity-60 group-focus-visible/sort:opacity-60",
-          )}
-        />
-      </button>
+      <SortButton
+        label={label}
+        field={field}
+        sort={sort}
+        direction={direction}
+        onSortChange={onSortChange}
+      />
+      {children}
     </TableHead>
   );
 }
@@ -187,7 +220,17 @@ export function DocumentTable({
               sort={sort}
               direction={direction}
               onSortChange={onSortChange}
-            />
+            >
+              {/* The date column folds away on a narrow table; its sort must not. */}
+              <SortButton
+                label={t("documents.date")}
+                field="issueDate"
+                sort={sort}
+                direction={direction}
+                onSortChange={onSortChange}
+                className="ml-4 @md:hidden"
+              />
+            </SortableHead>
             <TableHead className={cn(headClassName, typeColumn)}>
               {t("today.documentType")}
             </TableHead>

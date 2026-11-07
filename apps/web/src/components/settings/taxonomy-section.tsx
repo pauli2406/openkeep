@@ -451,7 +451,19 @@ export function TaxonomyManagementSection() {
     setRowDialog(null);
   };
 
+  // The menu item that opened a dialog is gone by the time it closes, so focus
+  // goes back to that row's menu button instead of falling to the page body.
+  const dialogRowId = useRef<string | null>(null);
+  const returnFocusToRow = (event: Event) => {
+    event.preventDefault();
+    if (!dialogRowId.current) return;
+    document
+      .querySelector<HTMLElement>(`[data-row-menu="${CSS.escape(dialogRowId.current)}"]`)
+      ?.focus();
+  };
+
   const openRowDialog = (dialog: RowDialog) => {
+    dialogRowId.current = dialog.row.id;
     setDialogName(dialog.kind === "rename" ? dialog.row.name : "");
     setDialogTargetId(dialog.kind === "merge" ? (dialog.targetId ?? "") : "");
     setDialogTargetQuery("");
@@ -487,6 +499,9 @@ export function TaxonomyManagementSection() {
           dialogTargetNeedle === "" ||
           row.name.toLowerCase().includes(dialogTargetNeedle)),
     )
+    // The selected target stays first, so the cap can never leave the Select
+    // blank while Merge still acts on it.
+    .sort((a, b) => Number(b.id === dialogTargetId) - Number(a.id === dialogTargetId))
     .slice(0, 50);
 
   const sortIcon = (key: SortKey) =>
@@ -892,6 +907,7 @@ export function TaxonomyManagementSection() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                data-row-menu={row.id}
                                 aria-label={copy.actionsFor(row.name)}
                                 className="text-muted-foreground"
                               >
@@ -954,7 +970,7 @@ export function TaxonomyManagementSection() {
           if (!open) setRowDialog(null);
         }}
       >
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={returnFocusToRow}>
           <DialogHeader>
             <DialogTitle>{copy.renameTitle(rowDialog?.row.name ?? "")}</DialogTitle>
             <DialogDescription>{copy.renameDescription}</DialogDescription>
@@ -1007,7 +1023,7 @@ export function TaxonomyManagementSection() {
           if (!open) setRowDialog(null);
         }}
       >
-        <DialogContent>
+        <DialogContent onCloseAutoFocus={returnFocusToRow}>
           <DialogHeader>
             <DialogTitle>{copy.mergeTitle(rowDialog?.row.name ?? "")}</DialogTitle>
             <DialogDescription>{copy.mergeDescription}</DialogDescription>
@@ -1076,7 +1092,7 @@ export function TaxonomyManagementSection() {
           if (!open) setRowDialog(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={returnFocusToRow}>
           <AlertDialogHeader>
             <AlertDialogTitle>{copy.deleteTitle(rowDialog?.row.name ?? "")}</AlertDialogTitle>
             <AlertDialogDescription>

@@ -137,6 +137,10 @@ function ChatPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const isWide = useMediaQuery("(min-width: 1280px)");
   const composerRef = useRef<HTMLFormElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  // The composer moves when the first question leaves the empty state, which
+  // remounts it. Whoever was typing keeps typing.
+  const refocusComposer = useRef(false);
   const startedFromParam = useRef<string | null>(null);
 
   const copy =
@@ -477,11 +481,14 @@ function ChatPage() {
       className="w-full"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!offlineReadOnly) ask(draft);
+        if (offlineReadOnly) return;
+        refocusComposer.current = true;
+        ask(draft);
       }}
     >
       <InputGroup className="h-auto rounded-2xl bg-card shadow-raised has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-3 has-[textarea:focus-visible]:ring-ring/30 dark:bg-card">
         <InputGroupTextarea
+          ref={composerInputRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -537,6 +544,12 @@ function ChatPage() {
 
   const isEmpty = !active && !pendingQuestion;
 
+  useEffect(() => {
+    if (!refocusComposer.current) return;
+    refocusComposer.current = false;
+    composerInputRef.current?.focus();
+  }, [isEmpty]);
+
   return (
     <div className="flex h-full min-h-0">
       {/* Conversations */}
@@ -590,7 +603,7 @@ function ChatPage() {
         ) : null}
 
         {isEmpty ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto bg-gradient-wash p-4 md:p-8">
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto bg-gradient-wash p-4 md:p-8">
             <Button
               variant="ghost"
               size="icon-sm"
@@ -611,7 +624,9 @@ function ChatPage() {
                 <p className="max-w-md text-muted-foreground">{copy.emptyBody}</p>
               </div>
               {composer}
-              {suggestionRow(copy.starters)}
+              {suggestionRow([
+                ...new Set([...followUps.map((entry) => entry.query), ...copy.starters]),
+              ])}
             </div>
           </div>
         ) : (

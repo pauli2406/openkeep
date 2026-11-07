@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   CalendarRange,
   Download,
@@ -134,6 +134,9 @@ export function ExplorerSurface({
     // do not overwrite each other in the cache.
     queryKey: ["documents", "facets", search],
     queryFn: () => fetchExplorerFacets(search),
+    // Every filter change is a new key. Holding the last counts keeps the sidebar
+    // mounted, so the input being typed in does not lose focus to a skeleton.
+    placeholderData: keepPreviousData,
   });
   const documentsQuery = useQuery({
     queryKey: ["documents", "explorer", search],
