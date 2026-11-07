@@ -25,14 +25,18 @@ In production-style deployments, the built web app is served by the API process 
 The root route in `apps/web/src/routes/__root.tsx` provides:
 
 - authenticated shell layout
-- a 48px top bar carrying primary navigation
+- a collapsible sidebar carrying primary navigation, and a workspace header
 - redirect behavior for unauthenticated users
 
-The top bar replaced the former sidebar and mobile drawer. Left to right it
-holds the logo mark, the primary tabs, a search field that opens the omnibar
-(also reachable with Cmd/Ctrl+K), the Import action, the theme toggle, the
-settings gear and the account menu. The tab row scrolls horizontally on narrow
-viewports; the search field collapses to its icon below the `md` breakpoint.
+The shell is shadcn's `Sidebar` in its inset variant: a deep-blue field with the white
+workspace floating on it. `components/layout/app-sidebar.tsx` holds the logo, the primary
+navigation with its counts, settings and the account menu; it collapses to icons (Cmd/Ctrl+B)
+and becomes a sheet on phones. The workspace header holds the sidebar toggle, a search field
+that opens the omnibar (also reachable with Cmd/Ctrl+K), any host accessory, the theme toggle
+and the Import action. Public routes (`/login`, `/setup`) render without the shell.
+
+The look and its rules are in [Web Design System](./web-design-system.md).
+
 Native hosts may provide their platform through the shared host-shell context, so
 shortcut labels remain `Cmd` on macOS and `Ctrl` on Windows/Linux while the same
 omnibar keyboard handler continues to accept either modifier.
@@ -60,10 +64,9 @@ types.
 
 ## Theming
 
-Color lives entirely in `apps/web/src/index.css` as `--ok-*` custom properties:
-`:root` carries the light values and `[data-theme="dark"]` overrides them. The
-shadcn/Radix `--color-*` names are aliases onto those tokens, so components
-never name a color directly.
+Color lives entirely in `apps/web/src/theme.css`: `:root` carries the light values
+and `[data-theme="dark"]` overrides them. `index.css` exposes them to Tailwind, so
+components never name a color directly. See [Web Design System](./web-design-system.md).
 
 `data-theme` is set on `<html>`. An inline script in `index.html` applies it
 before first paint — reading `localStorage["openkeep.theme"]`, falling back to
@@ -80,7 +83,7 @@ Two things need care when adding UI:
 - Canvas 2D cannot resolve `var()`. Anything painted through `fillStyle` or
   `strokeStyle` must go through `resolveColor()` from `src/lib/explorer.ts`, and
   its draw effect must depend on the current theme so it repaints on toggle.
-- Document previews render on `--ok-paper`, which stays light in both themes.
+- Document previews render on `bg-paper`, which stays white in both themes.
 
 ## Auth Model
 

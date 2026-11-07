@@ -113,6 +113,76 @@ function makeDocument(index, overrides = {}) {
 
 export const DOCUMENTS = Array.from({ length: 12 }, (_, index) => makeDocument(index));
 
+/** The first document as the detail screen sees it, with what the pipeline found. */
+const DOCUMENT_DETAIL = {
+  ...DOCUMENTS[0],
+  reviewReasons: ["low_confidence"],
+  metadata: {
+    ...DOCUMENTS[0].metadata,
+    manual: {
+      lockedFields: ["dueDate"],
+      values: { dueDate: "2026-03-18" },
+      updatedAt: "2026-03-19T11:30:00.000Z",
+      updatedByUserId: USER.id,
+    },
+    intelligence: {
+      routing: {
+        documentType: "invoice",
+        confidence: 0.86,
+        reasoningHints: ["keyword:rechnung"],
+        provider: "openai",
+        model: "gpt-4.1-mini",
+      },
+      title: { value: DOCUMENTS[0].title, confidence: 0.9 },
+      summary: {
+        value: "Stromabrechnung der Stadtwerke München über **128,50 EUR**, fällig am 18.03.2026.",
+        provider: "openai",
+        model: "gpt-4.1-mini",
+      },
+      extraction: {
+        documentType: "invoice",
+        fields: { amount: 40, issueDate: DOCUMENTS[0].issueDate, referenceNumber: DOCUMENTS[0].referenceNumber },
+        fieldConfidence: { amount: 0.91, issueDate: 0.72, referenceNumber: 0.44 },
+        fieldProvenance: {
+          amount: {
+            source: "llm_structured_extraction",
+            provider: "openai",
+            page: 1,
+            lineIndex: 2,
+            snippet: "Rechnungsbetrag 128,50 EUR",
+          },
+        },
+        provider: "openai",
+        model: "gpt-4.1-mini",
+      },
+      tagging: { tags: ["Finance"], confidence: 0.83 },
+      correspondentResolution: {
+        resolvedName: DOCUMENTS[0].correspondent.name,
+        confidence: 0.95,
+        strategy: "exact_match",
+      },
+      validation: { warnings: ["routing_low_confidence"], errors: [], duplicateSignals: {} },
+      pipeline: {
+        framework: "langgraph-ready",
+        status: "completed",
+        runId: "run-0001",
+        providerOrder: ["openai"],
+        durationsMs: { routing: 420, extraction: 1280 },
+      },
+    },
+  },
+};
+
+/** The smallest PDF that opens: one A4 page with one line. Served as bytes, not JSON. */
+const MOCK_PDF_TEXT = "BT /F1 18 Tf 72 760 Td (Stromabrechnung 2026) Tj ET";
+const MOCK_PDF =
+  "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n" +
+  "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+  "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R" +
+  "/Resources<</Font<</F1<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>>>>>>>endobj\n" +
+  `4 0 obj<</Length ${MOCK_PDF_TEXT.length}>>stream\n${MOCK_PDF_TEXT}\nendstream endobj\n` +
+  "trailer<</Root 1 0 R>>\n%%EOF\n";
+
 /**
  * Exported so other tooling can compose this table rather than fork it — the
  * README screenshot script (`scripts/readme-screenshots.mjs`) serves these
@@ -285,6 +355,59 @@ export const ROUTES = [
     pageSize: 100,
     appliedFilters: {},
   })],
+  ["GET", /^\/api\/correspondents\/[^/]+\/insights$/, () => ({
+    correspondent: {
+      ...CORRESPONDENTS[0],
+      categoryId: "b0000000-0000-4000-8000-000000000001",
+      categoryName: "Housing",
+      categorySource: "deterministic",
+      summaryGeneratedAt: "2026-03-18T10:00:00.000Z",
+      intelligenceGeneratedAt: "2026-03-18T10:00:00.000Z",
+    },
+    summaryStatus: "ready",
+    summary: "Stadtwerke München supplies electricity and gas; bills arrive every month and the annual statement in January.",
+    intelligenceStatus: "ready",
+    intelligence: {
+      overview: "Your energy supplier for electricity and gas. The monthly advance went up in January after the annual statement, and the current contract runs until the end of the year.",
+      profile: {
+        category: "utilities",
+        subcategory: "energy",
+        narrative: "A long-running utility relationship.",
+        keySignals: ["monthly billing", "annual statement"],
+      },
+      timeline: [
+        { date: "2026-01-14", title: "Annual statement received", description: "The 2025 statement closed with a credit of €38.20." },
+        { date: "2025-11-02", title: "Contract renewed", description: "The electricity tariff was extended by twelve months." },
+      ],
+      changes: [
+        { title: "Monthly advance increased", description: "The advance payment rose after the annual statement.", effectiveDate: "2026-02-01", valueBefore: "€84.00", valueAfter: "€92.00" },
+      ],
+      currentState: [
+        { label: "Latest amount", value: "€92.00", asOf: "2026-03-10" },
+        { label: "Latest document type", value: "Utility Bill", asOf: "2026-03-10" },
+      ],
+      domainInsights: {},
+      sourceDocumentIds: [],
+    },
+    stats: {
+      documentCount: 12,
+      totalAmount: 1240.5,
+      currency: "EUR",
+      dateRange: { from: "2025-02-10", to: "2026-03-10" },
+      avgConfidence: 0.93,
+    },
+    documentTypeBreakdown: [{ name: "Utility Bill", count: 9 }, { name: "Contract", count: 2 }, { name: "Tax notice", count: 1 }],
+    timeline: [
+      { month: "2025-10", count: 1 },
+      { month: "2025-11", count: 2 },
+      { month: "2025-12", count: 1 },
+      { month: "2026-01", count: 3 },
+      { month: "2026-02", count: 1 },
+      { month: "2026-03", count: 2 },
+    ],
+    recentDocuments: [],
+    upcomingDeadlines: [],
+  })],
   ["GET", /^\/api\/documents\/timeline$/, () => ({
     years: [
       {
@@ -316,6 +439,21 @@ export const ROUTES = [
       { month: "2026-03", count: 6 },
     ],
   })],
+  ["GET", /^\/api\/email-ingest\/status$/, () => ({
+    configured: true,
+    mailbox: { host: "imap.example.com", folder: "INBOX", user: "archive" },
+    lastPoll: { at: "2026-03-20T08:30:00.000Z" },
+    counts: { imported: 18, skipped: 2, rejected: 1 },
+    recentRejections: [
+      {
+        fromAddress: "unknown@example.org",
+        subject: "Scan 0412",
+        status: "rejected",
+        reason: "sender_not_allowed",
+        createdAt: "2026-03-19T14:00:00.000Z",
+      },
+    ],
+  })],
   ["GET", /^\/api\/archive\/watch-folder$/, () => ({
     configured: true,
     configuredPath: "/srv/watch",
@@ -333,16 +471,58 @@ export const ROUTES = [
   ["GET", /^\/api\/documents\/[^/]+\/text$/, () => ({
     documentId: DOCUMENTS[0].id,
     blocks: [
-      { documentId: DOCUMENTS[0].id, page: 1, lineIndex: 0, boundingBox: null, text: "Rechnungsbetrag 128,50 EUR" },
+      { documentId: DOCUMENTS[0].id, page: 1, lineIndex: 0, boundingBox: null, text: "Stadtwerke München" },
+      { documentId: DOCUMENTS[0].id, page: 1, lineIndex: 1, boundingBox: null, text: "Stromabrechnung 2026" },
+      { documentId: DOCUMENTS[0].id, page: 1, lineIndex: 2, boundingBox: null, text: "Rechnungsbetrag 128,50 EUR" },
+      { documentId: DOCUMENTS[0].id, page: 2, lineIndex: 0, boundingBox: null, text: "Zahlbar bis 18.03.2026" },
     ],
   })],
-  ["GET", /^\/api\/documents\/[^/]+\/history$/, () => ({ documentId: DOCUMENTS[0].id, items: [] })],
-  ["GET", /^\/api\/documents\/[^/]+$/, () => DOCUMENTS[0]],
+  ["GET", /^\/api\/documents\/[^/]+\/history$/, () => ({
+    documentId: DOCUMENTS[0].id,
+    items: [
+      {
+        id: "e0000000-0000-4000-8000-000000000002",
+        actorUserId: USER.id,
+        actorDisplayName: USER.displayName,
+        actorEmail: USER.email,
+        documentId: DOCUMENTS[0].id,
+        eventType: "document.updated",
+        payload: { dueDate: "2026-03-18" },
+        createdAt: "2026-03-19T11:30:00.000Z",
+      },
+      {
+        id: "e0000000-0000-4000-8000-000000000001",
+        actorUserId: null,
+        documentId: DOCUMENTS[0].id,
+        eventType: "document.processed",
+        payload: {},
+        createdAt: "2026-03-19T10:01:00.000Z",
+      },
+    ],
+  })],
+  ["GET", /^\/api\/documents\/[^/]+\/qa-history$/, () => [
+    {
+      id: "f0000000-0000-4000-8000-000000000001",
+      question: "Bis wann muss ich zahlen?",
+      answer: "Der Rechnungsbetrag von **128,50 EUR** ist bis zum 18.03.2026 fällig [1].",
+      citations: [
+        { chunkIndex: 1, pageFrom: 2, pageTo: 2, index: 1, used: true, quote: "Zahlbar bis 18.03.2026", score: 0.91 },
+        { chunkIndex: 0, pageFrom: 1, pageTo: 1, index: 2, used: false, quote: "Rechnungsbetrag 128,50 EUR", score: 0.64 },
+      ],
+      createdAt: "2026-03-19T12:00:00.000Z",
+    },
+  ]],
+  ["GET", /^\/api\/documents\/[^/]+$/, () => DOCUMENT_DETAIL],
 ];
 
 export function startMockApi(port) {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
+    if (/^\/api\/documents\/[^/]+\/download(\/searchable)?$/.test(url.pathname)) {
+      response.setHeader("Content-Type", "application/pdf");
+      response.end(MOCK_PDF);
+      return;
+    }
     const route = ROUTES.find(
       ([method, pattern]) => method === request.method && pattern.test(url.pathname),
     );

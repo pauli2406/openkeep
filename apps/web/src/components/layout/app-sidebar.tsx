@@ -124,16 +124,16 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild isActive={item.active} tooltip={item.label}>
                     <Link to={item.to} onClick={closeOnMobile}>
                       <item.icon />
-                      <span>{item.label}</span>
+                      <span>
+                        {item.label}
+                        {item.count ? <span className="sr-only"> {item.count}</span> : null}
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                   {item.count ? (
                     <SidebarMenuBadge
-                      className={
-                        item.active
-                          ? "num text-sidebar-primary-foreground peer-hover/menu-button:text-sidebar-primary-foreground"
-                          : "num text-sidebar-muted"
-                      }
+                      aria-hidden="true"
+                      className="num text-sidebar-muted"
                     >
                       {item.count.toLocaleString()}
                     </SidebarMenuBadge>
