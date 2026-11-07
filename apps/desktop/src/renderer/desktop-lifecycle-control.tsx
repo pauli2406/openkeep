@@ -1,4 +1,9 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { OFFLINE_CACHE_LIMIT_CHOICES } from "../shared/desktop-api";
 import type {
   DesktopBridge,
@@ -9,6 +14,7 @@ import type {
   DesktopOfflineAvailability,
   DesktopUpdatesState,
 } from "../shared/desktop-api";
+import { MonitorCogIcon } from "./desktop-icons";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -50,12 +56,15 @@ const NOTIFICATION_LABELS: Array<{
   },
 ];
 
-function TrayGlyph() {
+const OPTION_ROW =
+  "flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/60 has-data-checked:border-ring/60 has-data-checked:bg-brand-soft has-disabled:cursor-not-allowed has-disabled:opacity-60";
+
+function OptionText({ title, detail }: { title: string; detail: ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M5 6.5h14v9H5z" />
-      <path d="M8 19h8M12 15.5V19M8 3.5h8" />
-    </svg>
+    <span className="flex min-w-0 flex-col gap-0.5">
+      <span className="text-sm font-medium">{title}</span>
+      <span className="text-xs leading-snug text-muted-foreground">{detail}</span>
+    </span>
   );
 }
 
@@ -73,8 +82,6 @@ export function DesktopLifecycleControl({
   /** The active archive, whose offline copy the panel inspects. */
   profileId?: string;
 }) {
-  const panelId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [settings, setSettings] = useState<DesktopLifecycleSettings | null>(null);
   const [notifications, setNotifications] =
@@ -122,22 +129,6 @@ export function DesktopLifecycleControl({
       active = false;
     };
   }, [open, profileId, bridge]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
 
   async function changeCloseBehavior(closeBehavior: DesktopCloseBehavior) {
     if (!settings || closeBehavior === settings.closeBehavior) return;
@@ -247,124 +238,130 @@ export function DesktopLifecycleControl({
   }
 
   return (
-    <div className="desktop-lifecycle-control" ref={rootRef}>
-      <button
-        type="button"
-        className="desktop-lifecycle-control__trigger"
-        aria-label="Desktop behavior"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <TrayGlyph />
-      </button>
-      {open ? (
-        <section
-          id={panelId}
-          className="desktop-lifecycle-control__panel"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
           aria-label="Desktop behavior"
         >
-          <header>
-            <span>Desktop behavior</span>
-            <strong>{settings?.trayAvailable ? "Tray ready" : "No tray"}</strong>
-          </header>
-          <fieldset disabled={busy || !settings}>
-            <legend>When the window closes</legend>
-            <label>
-              <input
-                type="radio"
-                name="desktop-close-behavior"
-                checked={settings?.closeBehavior === "tray"}
-                disabled={!settings?.trayAvailable}
-                onChange={() => void changeCloseBehavior("tray")}
-              />
-              <span>
-                <strong>Keep OpenKeep running</strong>
-                <small>
-                  Hide in the system tray so imports and background work can continue.
-                </small>
-              </span>
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="desktop-close-behavior"
-                checked={settings?.closeBehavior === "quit"}
-                onChange={() => void changeCloseBehavior("quit")}
-              />
-              <span>
-                <strong>Quit OpenKeep</strong>
-                <small>
-                  Closing the window stops imports and all background work.
-                </small>
-              </span>
-            </label>
-          </fieldset>
-          <fieldset disabled={busy || !notifications}>
-            <legend>Notify me about</legend>
-            {NOTIFICATION_LABELS.map(({ kind, title, detail }) => (
-              <label key={kind}>
-                <input
-                  type="checkbox"
-                  checked={notifications?.preferences[kind] ?? false}
-                  onChange={(event) =>
-                    void changeNotification(kind, event.target.checked)
-                  }
+          <MonitorCogIcon className="size-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="max-h-[min(80vh,720px)] w-[min(390px,calc(100vw-28px))] gap-0 overflow-y-auto rounded-xl p-0 shadow-raised"
+        aria-label="Desktop behavior"
+      >
+        <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
+          <span className="text-sm font-medium">Desktop behavior</span>
+          <Badge variant={settings?.trayAvailable ? "brand" : "secondary"} className="font-normal">
+            {settings?.trayAvailable ? "Tray ready" : "No tray"}
+          </Badge>
+        </header>
+        <div className="flex flex-col gap-4 p-4">
+          <fieldset disabled={busy || !settings} className="flex min-w-0 flex-col gap-2">
+            <legend className="pb-2 text-xs font-medium text-muted-foreground">
+              When the window closes
+            </legend>
+            <RadioGroup
+              value={settings?.closeBehavior ?? ""}
+              onValueChange={(value) => void changeCloseBehavior(value as DesktopCloseBehavior)}
+            >
+              <label className={OPTION_ROW}>
+                <RadioGroupItem
+                  value="tray"
+                  className="mt-0.5"
+                  disabled={!settings?.trayAvailable}
                 />
-                <span>
-                  <strong>{title}</strong>
-                  <small>{detail}</small>
-                </span>
+                <OptionText
+                  title="Keep OpenKeep running"
+                  detail="Hide in the system tray so imports and background work can continue."
+                />
+              </label>
+              <label className={OPTION_ROW}>
+                <RadioGroupItem value="quit" className="mt-0.5" />
+                <OptionText
+                  title="Quit OpenKeep"
+                  detail="Closing the window stops imports and all background work."
+                />
+              </label>
+            </RadioGroup>
+          </fieldset>
+          <fieldset disabled={busy || !notifications} className="flex min-w-0 flex-col gap-2">
+            <legend className="pb-2 text-xs font-medium text-muted-foreground">
+              Notify me about
+            </legend>
+            {NOTIFICATION_LABELS.map(({ kind, title, detail }) => (
+              <label key={kind} className={OPTION_ROW}>
+                <Checkbox
+                  className="mt-0.5"
+                  checked={notifications?.preferences[kind] ?? false}
+                  onCheckedChange={(checked) => void changeNotification(kind, checked === true)}
+                />
+                <OptionText title={title} detail={detail} />
               </label>
             ))}
           </fieldset>
           {updates ? (
-            <div className="desktop-lifecycle-control__updates">
-              <div>
-                <strong>Updates</strong>
-                <small role="status">{describeUpdates(updates)}</small>
+            <div className="flex flex-col items-start gap-2 rounded-lg border bg-muted/50 p-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Updates</span>
+                <span role="status" className="text-xs leading-snug text-muted-foreground">
+                  {describeUpdates(updates)}
+                </span>
               </div>
               {updates.status === "ready" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="xs"
                   onClick={() => void bridge.updates?.install()}
                 >
                   Restart and install
-                </button>
+                </Button>
               ) : updates.status === "available-manual" ? (
-                <a href={updates.url} target="_blank" rel="noreferrer">
-                  Open the release page
-                </a>
+                <Button asChild variant="outline" size="xs">
+                  <a href={updates.url} target="_blank" rel="noreferrer">
+                    Open the release page
+                  </a>
+                </Button>
               ) : updates.status !== "unsupported" ? (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="xs"
                   disabled={
                     updates.status === "checking" || updates.status === "downloading"
                   }
                   onClick={() => void checkForUpdates()}
                 >
                   Check for updates
-                </button>
+                </Button>
               ) : null}
             </div>
           ) : null}
           {profileId && offlineCopy ? (
-            <div className="desktop-lifecycle-control__offline">
-              <div>
-                <strong>Offline copy</strong>
-                <small>
+            <div className="flex flex-col items-start gap-2 rounded-lg border bg-muted/50 p-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">Offline copy</span>
+                <span className="text-xs leading-snug text-muted-foreground">
                   {offlineCopy.documentCount} document
                   {offlineCopy.documentCount === 1 ? "" : "s"} ·{" "}
                   {formatBytes(offlineCopy.fileStorageBytes)} · last saved{" "}
                   {offlineCopy.lastCachedAt
                     ? new Date(offlineCopy.lastCachedAt).toLocaleString()
                     : "never"}
-                </small>
+                </span>
               </div>
-              <label className="desktop-lifecycle-control__offline-limit">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Size limit</span>
                 <select
                   disabled={busy}
+                  className="h-7 rounded-md border border-input bg-background px-1.5 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                   value={String(offlineCopy.maxBytes)}
                   onChange={(event) =>
                     void changeOfflineLimit(Number(event.target.value))
@@ -387,45 +384,68 @@ export function DesktopLifecycleControl({
                 </select>
               </label>
               {offlineCopy.quarantined > 0 ? (
-                <small role="status">
+                <span role="status" className="text-xs leading-snug text-warning">
                   {offlineCopy.quarantined} damaged{" "}
                   {offlineCopy.quarantined === 1 ? "entry was" : "entries were"}{" "}
                   removed from the copy. Reopen the affected documents online to
                   restore them.
-                </small>
+                </span>
               ) : null}
               {confirmingClear ? (
-                <div className="desktop-lifecycle-control__offline-confirm">
-                  <span>Delete the offline copy from this computer? The archive itself is not changed.</span>
-                  <button type="button" disabled={busy} onClick={() => void clearOfflineCopy()}>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="basis-full text-xs leading-snug text-danger">
+                    Delete the offline copy from this computer? The archive itself is not changed.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="xs"
+                    disabled={busy}
+                    onClick={() => void clearOfflineCopy()}
+                  >
                     Delete copy
-                  </button>
-                  <button type="button" onClick={() => setConfirmingClear(false)}>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setConfirmingClear(false)}
+                  >
                     Keep
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button type="button" disabled={busy} onClick={() => setConfirmingClear(true)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  disabled={busy}
+                  onClick={() => setConfirmingClear(true)}
+                >
                   Delete offline copy…
-                </button>
+                </Button>
               )}
             </div>
           ) : null}
           {notifications && !notifications.supported ? (
-            <p className="desktop-lifecycle-control__notice">
+            <p className="text-xs leading-snug text-muted-foreground">
               This system has no notification service available, so OpenKeep cannot
               show them. Import results stay visible in the app.
             </p>
           ) : null}
           {settings && !settings.trayAvailable ? (
-            <p className="desktop-lifecycle-control__notice">
+            <p className="text-xs leading-snug text-muted-foreground">
               A usable system tray is unavailable, so closing the window quits
               OpenKeep to avoid leaving an invisible process.
             </p>
           ) : null}
-          {message ? <p className="desktop-lifecycle-control__error" role="alert">{message}</p> : null}
-        </section>
-      ) : null}
-    </div>
+          {message ? (
+            <p className="text-xs leading-snug text-danger" role="alert">
+              {message}
+            </p>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

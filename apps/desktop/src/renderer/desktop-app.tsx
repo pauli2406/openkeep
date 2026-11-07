@@ -6,6 +6,7 @@ import {
   type HostSaveResult,
 } from "@openkeep/web/app";
 import { setApiFailureHandler } from "@openkeep/web/api";
+import { Spinner } from "@/components/ui/spinner";
 import type {
   DesktopProfilesSnapshot,
   DesktopRuntimeInfo,
@@ -101,14 +102,14 @@ export function DesktopApp({
 
   if (!sessionState || !profiles || !runtime) {
     return (
-      <main className="desktop-connect-shell">
-        <section
-          className="desktop-connect-panel desktop-connect-loading"
-          aria-live="polite"
-        >
-          <span className="desktop-connect-status-dot" aria-hidden="true" />
-          <span>Restoring your archive connection…</span>
-        </section>
+      <main
+        className="flex h-svh items-center justify-center bg-gradient-chrome text-sidebar-foreground"
+        aria-live="polite"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <Spinner className="size-6" />
+          <p className="text-sm">Restoring your archive connection…</p>
+        </div>
       </main>
     );
   }

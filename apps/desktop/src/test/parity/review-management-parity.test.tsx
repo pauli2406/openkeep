@@ -195,8 +195,8 @@ describe("desktop review and document-management parity", () => {
     await user.click(screen.getByText("Missing required field"));
     await user.click(screen.getByRole("button", { name: /confirm and file/i }));
     expect(
-      await screen.findByText("Archive refused review mutation"),
-    ).toHaveAttribute("role", "alert");
+      (await screen.findByText("Archive refused review mutation")).closest("[role='alert']"),
+    ).not.toBeNull();
     expect(resolved).not.toContain(ineligible.id);
   });
 
@@ -394,6 +394,7 @@ describe("desktop review and document-management parity", () => {
     expect(await screen.findByText("Document Processed")).toBeInTheDocument();
     expect(screen.getByText("OpenKeep Worker")).toBeInTheDocument();
 
+    await view.user.click(screen.getByRole("tab", { name: /fields/i }));
     const rail = screen.getByRole("complementary");
     await view.user.click(
       within(rail).getByRole("button", { name: /unlock issue date/i }),
@@ -421,26 +422,27 @@ describe("desktop review and document-management parity", () => {
     await view.user.click(
       screen.getByRole("button", { name: /resolve review/i }),
     );
-    expect(
-      await screen.findByRole("button", { name: /^requeue$/i }),
-    ).toBeInTheDocument();
-    await view.user.click(screen.getByRole("button", { name: /^requeue$/i }));
+    await view.user.click(await screen.findByRole("button", { name: /more actions/i }));
+    await view.user.click(await screen.findByRole("menuitem", { name: /^requeue$/i }));
     expect(
       await screen.findByRole("button", { name: /resolve review/i }),
     ).toBeInTheDocument();
 
-    await view.user.click(within(rail).getByRole("button", { name: /^reprocess$/i }));
+    await view.user.click(screen.getByRole("button", { name: /more actions/i }));
+    await view.user.click(await screen.findByRole("menuitem", { name: /^reprocess$/i }));
     let dialog = await screen.findByRole("dialog");
     await view.user.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
     expect(reprocessBodies).toEqual([]);
-    await view.user.click(within(rail).getByRole("button", { name: /^reprocess$/i }));
+    await view.user.click(screen.getByRole("button", { name: /more actions/i }));
+    await view.user.click(await screen.findByRole("menuitem", { name: /^reprocess$/i }));
     dialog = await screen.findByRole("dialog");
     await view.user.click(
       within(dialog).getByRole("button", { name: /^reprocess$/i }),
     );
     await waitFor(() => expect(reprocessBodies).toEqual([{ parseProvider: "local-ocr" }]));
 
-    await view.user.click(within(rail).getByRole("button", { name: /^delete$/i }));
+    await view.user.click(screen.getByRole("button", { name: /more actions/i }));
+    await view.user.click(await screen.findByRole("menuitem", { name: /^delete$/i }));
     dialog = await screen.findByRole("dialog");
     await view.user.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
     expect(deleteCalls).toBe(0);
@@ -482,13 +484,12 @@ describe("desktop review and document-management parity", () => {
     );
 
     const { user } = renderDesktopArchive({ route: `/documents/${documentId}` });
-    expect(await screen.findByText("failed")).toBeInTheDocument();
+    expect((await screen.findAllByText(/^failed$/i)).length).toBeGreaterThan(0);
     expect(
       await screen.findByText("Failed to load document preview."),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /processing local ocr/i }));
     expect(
-      screen.getByText("Conversion failed: unsupported source encoding"),
+      await screen.findByText("Conversion failed: unsupported source encoding"),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /ocr text/i }));

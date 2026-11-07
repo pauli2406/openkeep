@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import type {
   DesktopOfflineAvailability,
   DesktopProfileSummary,
@@ -7,6 +8,7 @@ import type {
 } from "../shared/desktop-api";
 import { ArchiveSwitcher } from "./archive-switcher";
 import { ConnectionScreen } from "./connection-screen";
+import { DesktopAuthSurface } from "./desktop-auth-surface";
 
 type ProfileChooserProps = {
   initialState: Exclude<DesktopSessionState, { status: "connected" }>;
@@ -139,63 +141,57 @@ export function ProfileChooser({
     snapshot.activeProfileId ?? snapshot.profiles[0]?.id ?? "";
 
   return (
-    <main className="desktop-connect-shell">
-      <section className="desktop-connect-panel" aria-labelledby="profile-chooser-title">
-        <div className="desktop-connect-mark" aria-hidden="true">
-          <img src="/brand/logo-mark.svg" alt="" />
-        </div>
-        <div className="desktop-connect-copy">
-          <p className="desktop-connect-eyebrow">OPENKEEP · ARCHIVES</p>
-          <h1 id="profile-chooser-title">Choose an archive</h1>
-          <p>{message}</p>
-        </div>
-        <div className="desktop-profile-chooser__switcher">
-          <ArchiveSwitcher
-            profiles={snapshot.profiles}
-            activeProfileId={selectedProfileId}
-            busyProfileId={busyProfileId}
-            onActivate={(profileId) => void activate(profileId)}
-            onAdd={() => setEditor({ mode: "add" })}
-            onEdit={(profile) => setEditor({ mode: "edit", profile })}
-            onRemove={(profile) => remove(profile)}
-          />
-        </div>
+    <DesktopAuthSurface
+      labelledBy="profile-chooser-title"
+      title="Choose an archive"
+      description={message}
+      footer={<span>Each profile uses isolated local storage and encrypted credentials</span>}
+    >
+      <div className="flex flex-col gap-3">
+        <ArchiveSwitcher
+          fill
+          profiles={snapshot.profiles}
+          activeProfileId={selectedProfileId}
+          busyProfileId={busyProfileId}
+          onActivate={(profileId) => void activate(profileId)}
+          onAdd={() => setEditor({ mode: "add" })}
+          onEdit={(profile) => setEditor({ mode: "edit", profile })}
+          onRemove={(profile) => remove(profile)}
+        />
         {initialState.status === "unavailable" ? (
-          <div className="desktop-connect-actions">
-            <button type="button" onClick={() => void retry()}>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Button type="button" size="lg" onClick={() => void retry()}>
               Retry last archive
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="desktop-secondary-button"
+              variant="outline"
+              size="lg"
               onClick={() => setEditor({ mode: "add" })}
             >
               Add archive
-            </button>
+            </Button>
           </div>
         ) : null}
         {offline[selectedProfileId] ? (
-          <div className="desktop-connect-offline">
-            <button
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3">
+            <Button
               type="button"
-              className="desktop-secondary-button"
+              variant="outline"
+              size="sm"
               disabled={Boolean(busyProfileId)}
               onClick={() => void openOffline(selectedProfileId)}
             >
               Open offline copy
-            </button>
-            <span>
+            </Button>
+            <span className="min-w-0 text-xs leading-snug text-muted-foreground">
               {offline[selectedProfileId]!.documentCount} document
               {offline[selectedProfileId]!.documentCount === 1 ? "" : "s"} saved on
               this computer — read only
             </span>
           </div>
         ) : null}
-        <footer>
-          <span className="desktop-connect-status-dot" aria-hidden="true" />
-          <span>Each profile uses isolated local storage and encrypted credentials</span>
-        </footer>
-      </section>
-    </main>
+      </div>
+    </DesktopAuthSurface>
   );
 }

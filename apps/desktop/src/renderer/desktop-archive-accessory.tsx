@@ -109,7 +109,7 @@ export function DesktopArchiveAccessory() {
 
   return (
     <>
-      <div className="desktop-archive-accessory">
+      <div className="relative flex min-w-0 items-center gap-1">
         <ArchiveSwitcher
           profiles={snapshot.profiles}
           activeProfileId={session.state.profile.id}
@@ -122,14 +122,17 @@ export function DesktopArchiveAccessory() {
         <DesktopWatchFolders />
         <DesktopLifecycleControl profileId={session.state.profile.id} />
         {message ? (
-          <span className="desktop-archive-accessory__error" role="alert">
+          <span
+            className="absolute top-full right-0 z-130 mt-2 w-[min(340px,calc(100vw-28px))] rounded-lg border border-destructive/40 bg-popover px-3 py-2 text-xs text-danger shadow-raised"
+            role="alert"
+          >
             {message}
           </span>
         ) : null}
       </div>
 
       {editor ? (
-        <div className="desktop-profile-editor" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-240 overflow-auto bg-background" role="dialog" aria-modal="true">
           <ConnectionScreen
             initialState={{ status: "disconnected", reason: "choose-profile" }}
             profile={editor.mode === "edit" ? editor.profile : undefined}
