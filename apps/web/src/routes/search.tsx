@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { AnswerCitation, HealthProvidersResponse } from "@openkeep/types";
 import { AnswerMarkdown } from "@/components/chat/answer-markdown";
+import { Sources } from "@/components/chat/sources";
 import { IconTile } from "@/components/layout/page";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -107,98 +108,12 @@ function persistConversations(conversations: Conversation[]) {
 }
 
 /** One source pill per document instead of one per retrieved chunk. */
-function groupCitationsByDocument(citations: AnswerCitation[]): AnswerCitation[][] {
-  const groups = new Map<string, AnswerCitation[]>();
-  for (const citation of citations) {
-    const group = groups.get(citation.documentId) ?? [];
-    group.push(citation);
-    groups.set(citation.documentId, group);
-  }
-  return [...groups.values()];
-}
-
 function relativeAge(at: number, language: string): string {
   const days = Math.round((Date.now() - at) / 86_400_000);
   if (days < 1) return language === "de" ? "jetzt" : "now";
   if (days < 7) return `${days} ${language === "de" ? "T" : "d"}`;
   if (days < 30) return `${Math.round(days / 7)} ${language === "de" ? "W" : "w"}`;
   return `${Math.round(days / 30)} M`;
-}
-
-function Sources({
-  citations,
-  label,
-  defaultOpen,
-  selected,
-  pageLabel,
-  onSelect,
-}: {
-  citations: AnswerCitation[];
-  label: string;
-  defaultOpen?: boolean;
-  selected: AnswerCitation | null;
-  pageLabel: string;
-  onSelect: (citation: AnswerCitation) => void;
-}) {
-  return (
-    <Trace>
-      <TraceCollapsible defaultOpen={defaultOpen}>
-        <TraceCollapsibleTrigger>
-          <TraceLine>
-            <TraceIcon>
-              <FileTextIcon />
-            </TraceIcon>
-            <TraceTitle>{label}</TraceTitle>
-          </TraceLine>
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {groupCitationsByDocument(citations).map((group) => {
-              const first = group[0]!;
-              const pages = [
-                ...new Set(
-                  group
-                    .map((citation) => citation.pageFrom)
-                    .filter((page): page is number => page != null),
-                ),
-              ];
-              return (
-                <Button
-                  key={`${first.documentId}-${first.index ?? 0}`}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "h-auto max-w-full justify-start rounded-lg py-1.5 font-normal shadow-none",
-                    selected != null && group.includes(selected) && "border-ring bg-brand-soft",
-                  )}
-                  onClick={() => onSelect(first)}
-                >
-                  <span className="num flex shrink-0 gap-0.5">
-                    {group.map((citation, index) => (
-                      <span
-                        key={citation.index ?? index}
-                        className="flex size-4.5 items-center justify-center rounded-full bg-brand-soft text-[10px] font-semibold text-brand-soft-foreground"
-                      >
-                        {citation.index ?? index + 1}
-                      </span>
-                    ))}
-                  </span>
-                  <span className="truncate">{first.documentTitle}</span>
-                  {pages.length > 0 ? (
-                    <span className="num shrink-0 text-xs text-muted-foreground">
-                      {pageLabel}
-                      {pages.join(",")}
-                    </span>
-                  ) : null}
-                </Button>
-              );
-            })}
-          </div>
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  );
 }
 
 function ChatPage() {

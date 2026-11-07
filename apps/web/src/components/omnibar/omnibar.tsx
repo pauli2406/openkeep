@@ -6,41 +6,80 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import Markdown from "react-markdown";
+import { Command as CommandPrimitive } from "cmdk";
 import {
-  Search,
-  X,
-  Loader2,
-  FileText,
-  Quote,
-  ArrowRight,
-  Command,
-  CornerDownLeft,
-  AlertTriangle,
+  ArrowLeftIcon,
+  CircleCheckIcon,
+  ClipboardCheckIcon,
+  FileTextIcon,
+  FilesIcon,
+  HistoryIcon,
+  LandmarkIcon,
+  LoaderCircleIcon,
+  SearchIcon,
+  SettingsIcon,
+  SparklesIcon,
+  SunriseIcon,
+  TagIcon,
+  TriangleAlertIcon,
+  UploadIcon,
+  UserRoundIcon,
+  XIcon,
+  type LucideIcon,
 } from "lucide-react";
-import { format } from "date-fns";
-import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
-import { useAnswerStream, linkifyCitations } from "@/hooks/use-answer-stream";
-import { useRecentSearches } from "@/hooks/use-recent-searches";
-import { useI18n } from "@/lib/i18n";
-import { usePrimaryModifierLabel } from "@/lib/host-shell";
-import {
-  fetchExplorerFacets,
-  fetchDashboardInsights,
-  type ExplorerFacets,
-} from "@/lib/explorer";
 import type {
   AnswerCitation,
   DashboardInsightsResponse,
   SemanticSearchResult,
 } from "@openkeep/types";
+import { AnswerMarkdown } from "@/components/chat/answer-markdown";
+import { Sources } from "@/components/chat/sources";
+import { IconTile } from "@/components/layout/page";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+  CommandShortcut,
+} from "@/components/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { Trace, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
+import { useAnswerStream } from "@/hooks/use-answer-stream";
+import { useRecentSearches } from "@/hooks/use-recent-searches";
+import { api } from "@/lib/api";
+import {
+  fetchDashboardInsights,
+  fetchExplorerFacets,
+  type ExplorerFacets,
+} from "@/lib/explorer";
+import { usePrimaryModifierLabel } from "@/lib/host-shell";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
-function citationPageHash(citations: AnswerCitation[], documentId: string) {
-  const page = citations.find((entry) => entry.documentId === documentId)?.pageFrom;
-  return page ? `page-${page}` : undefined;
+type Translate = (key: TranslationKey) => string;
+
+/** `t()` has no interpolation; these strings carry `{name}` style slots. */
+function fill(template: string, values: Record<string, string | number>) {
+  return template.replace(/\{(\w+)\}/g, (slot, key: string) =>
+    key in values ? String(values[key]) : slot,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -50,45 +89,47 @@ function citationPageHash(citations: AnswerCitation[], documentId: string) {
 function generateSuggestions(
   facets: ExplorerFacets | undefined,
   insights: DashboardInsightsResponse | undefined,
+  t: Translate,
 ): string[] {
   if (!facets && !insights) return [];
   const suggestions: string[] = [];
 
   if (insights?.overdueItems && insights.overdueItems.length > 0) {
-    suggestions.push("What documents are overdue and need attention?");
+    suggestions.push(t("omnibar.suggestOverdue"));
   }
 
   if (insights?.upcomingDeadlines && insights.upcomingDeadlines.length > 0) {
-    suggestions.push("What are my upcoming deadlines this month?");
+    suggestions.push(t("omnibar.suggestDeadlines"));
   }
 
   const topCorrespondent = facets?.correspondents[0];
   if (topCorrespondent) {
-    suggestions.push(`Summarize my documents from ${topCorrespondent.name}`);
+    suggestions.push(fill(t("omnibar.suggestSummarize"), { name: topCorrespondent.name }));
   }
 
   const secondCorrespondent = facets?.correspondents[1];
   if (secondCorrespondent) {
-    suggestions.push(
-      `What are the key topics in ${secondCorrespondent.name} documents?`,
-    );
+    suggestions.push(fill(t("omnibar.suggestTopics"), { name: secondCorrespondent.name }));
   }
 
   const topDocType = facets?.documentTypes[0];
   if (topDocType) {
-    suggestions.push(`Show me all ${topDocType.name.toLowerCase()} documents`);
+    suggestions.push(fill(t("omnibar.suggestType"), { name: topDocType.name }));
   }
 
   const topTag = facets?.tags[0];
   if (topTag) {
-    suggestions.push(`What documents are tagged "${topTag.name}"?`);
+    suggestions.push(fill(t("omnibar.suggestTag"), { name: topTag.name }));
   }
 
   if (facets?.years && facets.years.length >= 2) {
     const latestYear = facets.years[facets.years.length - 1];
     if (latestYear) {
       suggestions.push(
-        `Compare documents from ${latestYear.year} vs ${latestYear.year - 1}`,
+        fill(t("omnibar.suggestCompare"), {
+          year: latestYear.year,
+          previous: latestYear.year - 1,
+        }),
       );
     }
   }
@@ -98,7 +139,7 @@ function generateSuggestions(
     facets?.amountRange?.max !== undefined &&
     facets.amountRange.max > 0
   ) {
-    suggestions.push("What are my highest value documents?");
+    suggestions.push(t("omnibar.suggestHighest"));
   }
 
   return suggestions.slice(0, 5);
@@ -121,6 +162,16 @@ interface CitationTarget {
   quote?: string;
   pageFrom?: number | null;
   pageTo?: number | null;
+}
+
+function citationTarget(citation: AnswerCitation): CitationTarget {
+  return {
+    documentId: citation.documentId,
+    title: citation.documentTitle,
+    quote: citation.quote,
+    pageFrom: citation.pageFrom,
+    pageTo: citation.pageTo,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -147,18 +198,21 @@ export function openOmnibar() {
 }
 
 export function Omnibar() {
-  const location = useLocation();
   const [screen, setScreen] = useState<OmnibarScreen>("idle");
   const [query, setQuery] = useState("");
   const [citation, setCitation] = useState<CitationTarget | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const answerStream = useAnswerStream();
   const { recentSearches, addSearch } = useRecentSearches();
+  const navigate = useNavigate();
+  const { t } = useI18n();
+  const primaryModifier = usePrimaryModifierLabel();
+  const askShortcut = primaryModifier === "⌘" ? "⌘↵" : `${primaryModifier}+↵`;
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   const isOpen = screen !== "idle";
-  const isOnSearchPage = location.pathname === "/search";
 
   // Data for zero state suggestions
   const facetsQuery = useQuery({
@@ -178,8 +232,8 @@ export function Omnibar() {
   });
 
   const suggestions = useMemo(
-    () => generateSuggestions(facetsQuery.data, insightsQuery.data),
-    [facetsQuery.data, insightsQuery.data],
+    () => generateSuggestions(facetsQuery.data, insightsQuery.data, t),
+    [facetsQuery.data, insightsQuery.data, t],
   );
 
   // Document results come from the answer stream's search-results SSE event —
@@ -190,6 +244,8 @@ export function Omnibar() {
   // ─── Open / Close ───
 
   const open = useCallback(() => {
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setScreen("zero-state");
     setQuery("");
     answerStream.reset();
@@ -231,13 +287,6 @@ export function Omnibar() {
     [addSearch, answerStream],
   );
 
-  const navigate = useNavigate();
-  const { t } = useI18n();
-  const primaryModifier = usePrimaryModifierLabel();
-  const askShortcut =
-    primaryModifier === "⌘" ? "⌘↵" : `${primaryModifier}+↵`;
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
   // The palette rows the arrows walk. `>` switches to command mode.
   const paletteRows = useMemo<PaletteRow[]>(() => {
     const rows: PaletteRow[] = [];
@@ -250,19 +299,20 @@ export function Omnibar() {
     const needle = (commandMode ? query.slice(1) : query).trim().toLowerCase();
 
     const jump: PaletteRow[] = [
-      { id: "go-today", section: "jump", label: t("omnibar.goToday"), hint: "T", run: go("/"), newTab: tab("/") },
-      { id: "go-documents", section: "jump", label: t("omnibar.goDocuments"), hint: "D", run: go("/documents"), newTab: tab("/documents") },
+      { id: "go-today", section: "jump", label: t("omnibar.goToday"), icon: SunriseIcon, hint: "T", run: go("/"), newTab: tab("/") },
+      { id: "go-documents", section: "jump", label: t("omnibar.goDocuments"), icon: FilesIcon, hint: "D", run: go("/documents"), newTab: tab("/documents") },
       {
         id: "go-review",
         section: "jump",
         label: `${t("omnibar.goReview")}${insightsQuery.data?.stats.pendingReview ? ` · ${insightsQuery.data.stats.pendingReview}` : ""}`,
+        icon: ClipboardCheckIcon,
         hint: "R",
         run: go("/review"),
         newTab: tab("/review"),
       },
-      { id: "go-taxes", section: "jump", label: t("omnibar.goTaxes"), run: go("/taxes"), newTab: tab("/taxes") },
-      { id: "go-import", section: "jump", label: t("omnibar.goImport"), hint: "U", run: go("/upload"), newTab: tab("/upload") },
-      { id: "go-settings", section: "jump", label: t("omnibar.goSettings"), run: go("/settings"), newTab: tab("/settings") },
+      { id: "go-taxes", section: "jump", label: t("omnibar.goTaxes"), icon: LandmarkIcon, run: go("/taxes"), newTab: tab("/taxes") },
+      { id: "go-import", section: "jump", label: t("omnibar.goImport"), icon: UploadIcon, hint: "U", run: go("/upload"), newTab: tab("/upload") },
+      { id: "go-settings", section: "jump", label: t("omnibar.goSettings"), icon: SettingsIcon, run: go("/settings"), newTab: tab("/settings") },
     ];
 
     if (commandMode) {
@@ -272,15 +322,23 @@ export function Omnibar() {
     }
 
     if (!needle) {
-      const asks = [
-        ...suggestions.slice(0, 3),
-        ...recentSearches.slice(0, 2).map((entry) => entry.query),
-      ];
+      const suggested = suggestions.slice(0, 3);
+      const recent = [...new Set(recentSearches.slice(0, 2).map((entry) => entry.query))].filter(
+        (text) => !suggested.includes(text),
+      );
       return [
-        ...[...new Set(asks)].map((text, index) => ({
+        ...[...new Set(suggested)].map((text, index) => ({
           id: `ask-${index}`,
           section: "ask" as const,
           label: text,
+          icon: SparklesIcon,
+          run: () => submitQuery(text),
+        })),
+        ...recent.map((text, index) => ({
+          id: `recent-${index}`,
+          section: "recent" as const,
+          label: text,
+          icon: HistoryIcon,
           run: () => submitQuery(text),
         })),
         ...jump.slice(0, 4),
@@ -292,6 +350,7 @@ export function Omnibar() {
       id: "ask-query",
       section: "ask",
       label: query,
+      icon: SparklesIcon,
       run: () => submitQuery(query),
       newTab: () => window.open(`/search?q=${encodeURIComponent(query)}`, "_blank"),
     });
@@ -309,7 +368,8 @@ export function Omnibar() {
         id: `c-${correspondent.id}`,
         section: "documents",
         label: correspondent.name,
-        hint: t("omnibar.kindCorrespondent"),
+        icon: UserRoundIcon,
+        meta: t("omnibar.kindCorrespondent"),
         run: go(to),
         newTab: tab(to),
       });
@@ -320,7 +380,8 @@ export function Omnibar() {
         id: `t-${documentType.id}`,
         section: "documents",
         label: documentType.name,
-        hint: t("omnibar.kindType"),
+        icon: FileTextIcon,
+        meta: t("omnibar.kindType"),
         run: go(to),
         newTab: tab(to),
       });
@@ -331,7 +392,8 @@ export function Omnibar() {
         id: `g-${tag.id}`,
         section: "documents",
         label: tag.name,
-        hint: t("omnibar.kindTag"),
+        icon: TagIcon,
+        meta: t("omnibar.kindTag"),
         run: go(to),
         newTab: tab(to),
       });
@@ -343,7 +405,6 @@ export function Omnibar() {
   useEffect(() => {
     setSelectedIndex(0);
   }, [query, screen]);
-
 
   // ─── Open citation preview ───
 
@@ -365,6 +426,8 @@ export function Omnibar() {
 
   // ─── Keyboard shortcuts ───
 
+  // Escape steps back through the dialog's onEscapeKeyDown below, so that an
+  // open citation hover card takes the key first.
   useEffect(() => {
     function handleKeyDown(e: globalThis.KeyboardEvent) {
       // Cmd+K / Ctrl+K to toggle
@@ -375,19 +438,12 @@ export function Omnibar() {
         } else {
           open();
         }
-        return;
-      }
-
-      // Escape to step back
-      if (e.key === "Escape" && isOpen) {
-        e.preventDefault();
-        stepBack();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, open, close, stepBack]);
+  }, [isOpen, open, close]);
 
   // The top bar's search field opens the omnibar without owning its state.
   useEffect(() => {
@@ -395,22 +451,13 @@ export function Omnibar() {
     return () => window.removeEventListener(OMNIBAR_OPEN_EVENT, open);
   }, [open]);
 
-  // ─── Scroll lock when open ───
-
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
-
   // ─── Input key handler ───
 
   const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // cmdk also binds these on its root. Selection is driven from here, and
+    // Home/End should keep moving the caret.
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) e.stopPropagation();
+
     if (screen !== "zero-state") {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -438,124 +485,177 @@ export function Omnibar() {
     }
   };
 
-  // ─── Hide resting pill on /search ───
+  if (!isOpen) return null;
 
-  if (isOnSearchPage && !isOpen) return null;
+  const isStreaming =
+    answerStream.status === "searching" || answerStream.status === "streaming";
+  const isPreview = screen === "citation-preview" && citation !== null;
+  const suggestionsLoading =
+    !query.trim() && (facetsQuery.isLoading || insightsQuery.isLoading) && suggestions.length === 0;
 
   return (
-    <>
-      {/* The resting trigger lives in the top bar now (#43). */}
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby="omnibar-description"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+        }}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          restoreFocusRef.current?.focus();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+          stepBack();
+        }}
+        className={cn(
+          "top-[3svh] flex translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl border bg-popover p-0 shadow-raised ring-0 outline-none sm:top-[9svh]",
+          isPreview
+            ? "h-[min(760px,94svh)] sm:h-[min(760px,84svh)] sm:max-w-[min(1100px,calc(100%-2rem))]"
+            : "max-h-[94svh] sm:max-h-[min(640px,84svh)]",
+          !isPreview && (screen === "zero-state" ? "sm:max-w-2xl" : "sm:max-w-3xl"),
+        )}
+      >
+        <DialogTitle className="sr-only">{t("omnibar.title")}</DialogTitle>
+        <DialogDescription id="omnibar-description" className="sr-only">
+          {t("omnibar.description")}
+        </DialogDescription>
 
-      {/* ─── Overlay ─── */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center">
-          {/* Backdrop */}
-          <div
-            className="omnibar-backdrop absolute inset-0 bg-[var(--ok-overlay)] backdrop-blur-sm"
-            onClick={close}
+        {isPreview ? (
+          <CitationPreviewPane
+            citation={citation}
+            answerStream={answerStream}
+            onSelectCitation={setCitation}
+            onClose={() => {
+              setCitation(null);
+              setScreen("results");
+            }}
+            onOpenDocument={close}
           />
-
-          {/* Panel */}
-          <div
-            ref={panelRef}
-            className={cn(
-              "omnibar-panel relative mt-6 flex max-h-[min(600px,calc(100vh-3rem))] flex-col overflow-hidden rounded-[var(--r-lg)] border bg-card shadow-[0_16px_40px_rgba(0,0,0,0.16)]",
-              screen === "citation-preview"
-                ? "w-[min(1100px,calc(100vw-2rem))]"
-                : screen === "zero-state"
-                  ? "w-[min(560px,calc(100vw-2rem))]"
-                  : "w-[min(720px,calc(100vw-2rem))]",
-            )}
-          >
-            {screen === "citation-preview" && citation ? (
-              <CitationPreviewPane
-                citation={citation}
-                answerStream={answerStream}
-                searchResults={streamedResults}
-                onClose={() => {
-                  setCitation(null);
-                  setScreen("results");
-                }}
-              />
-            ) : (
-              <>
-                {/* Search input */}
-                <div className="flex items-center gap-3 border-b border-[color:var(--explorer-border)] px-5">
-                  <Search className="h-5 w-5 shrink-0 text-[color:var(--explorer-muted)]" />
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={handleInputKeyDown}
-                    placeholder={t("omnibar.placeholder")}
-                    className="h-12 flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none"
-                    autoFocus
-                  />
-                  {query.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuery("");
-                        setScreen("zero-state");
-                        answerStream.reset();
-                        inputRef.current?.focus();
-                      }}
-                      className="rounded-md p-1 text-[color:var(--explorer-muted)] transition-colors hover:text-[color:var(--explorer-ink)]"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                  <kbd className="ok-num hidden rounded-[3px] border px-1.5 py-0.5 text-[10px] text-muted-foreground sm:flex">
-                    ESC
-                  </kbd>
-                </div>
-
-                {/* Content area */}
-                <div className="flex-1 overflow-y-auto">
-                  {screen === "zero-state" && (
-                    <Palette
-                      rows={paletteRows}
-                      selectedIndex={selectedIndex}
-                      onHover={setSelectedIndex}
-                      onRun={(row) => row.run()}
-                      sectionLabels={{
-                        ask: t("omnibar.sectionAsk"),
-                        documents: t("omnibar.sectionDocuments"),
-                        actions: t("omnibar.sectionActions"),
-                        jump: t("omnibar.sectionJump"),
-                      }}
-                    />
-                  )}
-
-                  {(screen === "searching" || screen === "results") && (
-                    <ResultsPane
-                      query={query}
-                      answerStream={answerStream}
-                      searchResults={streamedResults}
-                      searchLoading={answerStream.status === "searching"}
-                      onCitationClick={openCitation}
-                      onFollowUp={submitQuery}
-                      onRetry={() => answerStream.startStream(query)}
-                      onOpenFullPage={close}
-                    />
-                  )}
-                </div>
-
-                {screen === "zero-state" ? (
-                  <div className="ok-num flex flex-shrink-0 items-center gap-3 border-t bg-[var(--ok-bar)] px-4 py-1.5 text-[10.5px] text-muted-foreground">
-                    <span>↑↓ {t("omnibar.footerNavigate")}</span>
-                    <span>↵ {t("omnibar.footerOpen")}</span>
-                    <span>{askShortcut} {t("omnibar.footerAsk")}</span>
-                    <span className="ml-auto">&gt; {t("omnibar.footerCommands")}</span>
-                  </div>
+        ) : (
+          <>
+            {/* The results below sit outside cmdk, which would otherwise swallow Enter on their buttons. */}
+            <Command
+              shouldFilter={false}
+              vimBindings={false}
+              label={t("omnibar.title")}
+              value={paletteRows[selectedIndex]?.id ?? ""}
+              onValueChange={(value) => {
+                const index = paletteRows.findIndex((row) => row.id === value);
+                if (index >= 0) setSelectedIndex(index);
+              }}
+              className="h-auto min-h-0 rounded-none! bg-transparent p-0"
+            >
+              <div className={cn("flex shrink-0 items-center gap-3 px-4 sm:px-5", "border-b")}>
+                {isStreaming ? (
+                  <Spinner className="size-5 shrink-0 text-brand" />
+                ) : (
+                  <SearchIcon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+                )}
+                <CommandPrimitive.Input
+                  ref={inputRef}
+                  autoFocus
+                  value={query}
+                  onValueChange={setQuery}
+                  onKeyDown={handleInputKeyDown}
+                  aria-label={t("omnibar.placeholder")}
+                  placeholder={t("omnibar.placeholder")}
+                  className="h-14 min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground md:text-lg"
+                />
+                {query.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    aria-label={t("omnibar.clear")}
+                    onClick={() => {
+                      setQuery("");
+                      setScreen("zero-state");
+                      answerStream.reset();
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <XIcon />
+                  </Button>
                 ) : null}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </>
+                <Kbd className="hidden sm:inline-flex">Esc</Kbd>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="-mr-1.5 text-muted-foreground sm:hidden"
+                  onClick={close}
+                >
+                  {t("omnibar.close")}
+                </Button>
+              </div>
+
+              {screen === "zero-state" ? (
+                <Palette
+                  rows={paletteRows}
+                  loading={suggestionsLoading}
+                  onRun={(row) => row.run()}
+                  emptyLabel={t("omnibar.noMatches")}
+                  sectionLabels={{
+                    ask: t("omnibar.sectionAsk"),
+                    recent: t("omnibar.sectionRecent"),
+                    documents: t("omnibar.sectionDocuments"),
+                    actions: t("omnibar.sectionActions"),
+                    jump: t("omnibar.sectionJump"),
+                  }}
+                />
+              ) : null}
+            </Command>
+
+            {screen === "searching" || screen === "results" ? (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <ResultsPane
+                  query={query}
+                  answerStream={answerStream}
+                  searchResults={streamedResults}
+                  onCitationClick={openCitation}
+                  onFollowUp={submitQuery}
+                  onRetry={() => answerStream.startStream(query)}
+                  onOpenFullPage={close}
+                />
+              </div>
+            ) : null}
+
+            {screen === "zero-state" ? (
+              <div className="hidden shrink-0 items-center gap-4 border-t bg-muted/50 px-5 py-2 text-xs text-muted-foreground sm:flex">
+                <span className="flex items-center gap-1.5">
+                  <KbdGroup>
+                    <Kbd>↑</Kbd>
+                    <Kbd>↓</Kbd>
+                  </KbdGroup>
+                  {t("omnibar.footerNavigate")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Kbd>↵</Kbd>
+                  {t("omnibar.footerOpen")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Kbd>{askShortcut}</Kbd>
+                  {t("omnibar.footerAsk")}
+                </span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  <Kbd>&gt;</Kbd>
+                  {t("omnibar.footerCommands")}
+                </span>
+              </div>
+            ) : null}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -565,76 +665,91 @@ export function Omnibar() {
 
 export type PaletteRow = {
   id: string;
-  section: "jump" | "documents" | "actions" | "ask";
+  section: "jump" | "documents" | "actions" | "ask" | "recent";
   label: string;
+  icon: LucideIcon;
+  /** A key hint, drawn as a `Kbd`. */
   hint?: string;
+  /** What kind of thing the row is, in words. */
+  meta?: string;
   run: () => void;
   newTab?: () => void;
 };
 
 function Palette({
   rows,
-  selectedIndex,
-  onHover,
+  loading,
   onRun,
+  emptyLabel,
   sectionLabels,
 }: {
   rows: PaletteRow[];
-  selectedIndex: number;
-  onHover: (index: number) => void;
+  loading: boolean;
   onRun: (row: PaletteRow) => void;
+  emptyLabel: string;
   sectionLabels: Record<PaletteRow["section"], string>;
 }) {
-  const sections: Array<PaletteRow["section"]> = ["ask", "documents", "actions", "jump"];
-  let flatIndex = -1;
+  const sections: Array<PaletteRow["section"]> = ["ask", "recent", "documents", "actions", "jump"];
 
   return (
-    <div className="py-1">
+    <CommandList className="max-h-none min-h-0 flex-1 p-2 pb-2.5">
       {sections.map((section) => {
         const sectionRows = rows.filter((row) => row.section === section);
-        if (sectionRows.length === 0) return null;
+        const showSkeleton = section === "ask" && loading;
+        if (sectionRows.length === 0 && !showSkeleton) return null;
         return (
-          <div key={section} className="px-2 pb-1">
-            <p className="ok-eyebrow px-2 pb-1 pt-2">{sectionLabels[section]}</p>
+          <CommandGroup key={section} heading={sectionLabels[section]}>
             {sectionRows.map((row) => {
-              flatIndex += 1;
-              const index = rows.indexOf(row);
-              const active = index === selectedIndex;
+              const Icon = row.icon;
               return (
-                <button
+                <CommandItem
                   key={row.id}
-                  type="button"
-                  onMouseEnter={() => onHover(index)}
-                  onClick={() => onRun(row)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-[var(--r-md)] px-2 py-1.5 text-left text-sm",
-                    active ? "bg-accent text-accent-foreground" : "text-foreground",
-                  )}
+                  value={row.id}
+                  onSelect={() => onRun(row)}
+                  className="min-h-10 gap-3 px-2 data-selected:bg-accent data-selected:text-accent-foreground"
                 >
                   {section === "ask" ? (
-                    <CornerDownLeft className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <IconTile size="sm">
+                      <Icon />
+                    </IconTile>
                   ) : (
-                    <FileText className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground group-data-selected/command-item:bg-background">
+                      <Icon className="size-3.5" />
+                    </span>
                   )}
                   <span className="min-w-0 flex-1 truncate">{row.label}</span>
-                  {row.hint ? (
-                    <kbd className="ok-num flex-shrink-0 rounded-[3px] border px-1 text-[10px] text-muted-foreground">
-                      {row.hint}
-                    </kbd>
+                  {row.meta ? (
+                    <Badge variant="secondary" className="shrink-0 font-normal">
+                      {row.meta}
+                    </Badge>
                   ) : null}
-                </button>
+                  <CommandShortcut className="flex shrink-0 tracking-normal">
+                    {row.hint ? (
+                      <Kbd className="hidden sm:inline-flex">{row.hint}</Kbd>
+                    ) : (
+                      <Kbd className="hidden group-data-selected/command-item:sm:inline-flex">↵</Kbd>
+                    )}
+                  </CommandShortcut>
+                </CommandItem>
               );
             })}
-          </div>
+            {showSkeleton
+              ? [78, 62, 70].map((width) => (
+                  <div key={width} className="flex min-h-10 items-center gap-3 px-2">
+                    <Skeleton className="size-7 shrink-0 rounded-md" />
+                    <Skeleton className="h-3 rounded-full" style={{ width: `${width}%` }} />
+                  </div>
+                ))
+              : null}
+          </CommandGroup>
         );
       })}
       {rows.length === 0 ? (
-        <p className="px-4 py-6 text-center text-sm text-muted-foreground">—</p>
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">{emptyLabel}</p>
       ) : null}
-    </div>
+    </CommandList>
   );
 }
-
 
 // ---------------------------------------------------------------------------
 // Results Pane
@@ -644,7 +759,6 @@ function ResultsPane({
   query,
   answerStream,
   searchResults,
-  searchLoading,
   onCitationClick,
   onFollowUp,
   onRetry,
@@ -653,229 +767,155 @@ function ResultsPane({
   query: string;
   answerStream: ReturnType<typeof useAnswerStream>;
   searchResults: SemanticSearchResult[];
-  searchLoading: boolean;
   onCitationClick: (target: CitationTarget) => void;
   onFollowUp: (query: string) => void;
   onRetry: () => void;
   onOpenFullPage: () => void;
 }) {
-  const isStreaming =
-    answerStream.status === "searching" || answerStream.status === "streaming";
+  const { t } = useI18n();
+  const { status, answerText, citations, toolStatus, lowConfidence } = answerStream;
+  const isStreaming = status === "searching" || status === "streaming";
 
   // Generate follow-up suggestions from context
   const followUps = useMemo(() => {
-    if (answerStream.status !== "done" || searchResults.length === 0) return [];
+    if (status !== "done" || searchResults.length === 0) return [];
     const items: string[] = [];
 
     const firstDoc = searchResults[0]?.document;
     if (firstDoc?.correspondent) {
-      items.push(
-        `What other documents are from ${firstDoc.correspondent.name}?`,
-      );
+      items.push(fill(t("omnibar.followUpFrom"), { name: firstDoc.correspondent.name }));
     }
     if (firstDoc?.documentType) {
-      items.push(`Show me similar ${firstDoc.documentType.name} documents`);
+      items.push(fill(t("omnibar.followUpSimilar"), { name: firstDoc.documentType.name }));
     }
-    items.push(`Tell me more about "${query}"`);
+    items.push(fill(t("omnibar.followUpMore"), { query }));
 
     return items.slice(0, 3);
-  }, [answerStream.status, searchResults, query]);
+  }, [status, searchResults, query, t]);
+
+  // Show what the answer actually cited; the full retrieval set only appears
+  // when no marker survived (legacy payloads have no `used` flag and count as used).
+  const shownCitations = citations.some((entry) => entry.used !== false)
+    ? citations.filter((entry) => entry.used !== false)
+    : citations;
 
   return (
-    <div className="p-5">
-      {/* Query heading */}
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <h2 className="text-xl leading-tight text-[color:var(--explorer-ink)]">
+    <div className="flex flex-col gap-5 p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <h2 className="min-w-0 flex-1 basis-60 text-lg leading-snug font-semibold tracking-tight wrap-break-word">
           {query}
         </h2>
-        <Link
-          to="/search"
-          search={{ q: query }}
-          onClick={onOpenFullPage}
-          className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
-        >
-          Open full search
-        </Link>
+        <Button asChild variant="outline" size="sm" className="shrink-0">
+          <Link to="/search" search={{ q: query }} onClick={onOpenFullPage}>
+            {t("omnibar.openFullSearch")}
+          </Link>
+        </Button>
       </div>
 
-      {/* Error state */}
-      {answerStream.status === "error" && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-[color:var(--ok-amber-soft)] bg-[color:var(--ok-amber-soft)] px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--ok-amber)]" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-[color:var(--ok-amber)]">
-              Archive retrieval failed
-            </p>
-            <p className="mt-0.5 text-xs text-[color:var(--ok-amber)]/80">
-              {answerStream.errorMessage ?? "Try rephrasing your question."}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="shrink-0 rounded-lg border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {status === "error" ? (
+        <Alert variant="destructive">
+          <TriangleAlertIcon />
+          <AlertTitle>{t("omnibar.retrievalFailed")}</AlertTitle>
+          <AlertDescription>
+            {answerStream.errorMessage ?? t("omnibar.tryRephrasing")}
+          </AlertDescription>
+          <AlertAction>
+            <Button type="button" variant="outline" size="xs" onClick={onRetry}>
+              {t("omnibar.retry")}
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : (
+        <Message className="gap-3">
+          <MessageAvatar className="self-start">
+            <IconTile size="sm" tone="solid">
+              <SparklesIcon />
+            </IconTile>
+          </MessageAvatar>
+          <MessageContent className="min-w-0 flex-1 gap-3">
+            {isStreaming ? (
+              <Trace>
+                {status === "searching" ? (
+                  <TraceLine status="running">
+                    <TraceIcon>
+                      <SearchIcon />
+                    </TraceIcon>
+                    <TraceTitle>{t("omnibar.searching")}</TraceTitle>
+                  </TraceLine>
+                ) : searchResults.length > 0 ? (
+                  <TraceLine>
+                    <TraceIcon>
+                      <CircleCheckIcon />
+                    </TraceIcon>
+                    <TraceTitle>
+                      {searchResults.length === 1
+                        ? t("omnibar.searchedOne")
+                        : fill(t("omnibar.searchedMany"), { count: searchResults.length })}
+                    </TraceTitle>
+                  </TraceLine>
+                ) : null}
+                {toolStatus ? (
+                  <TraceLine status="running">
+                    <TraceIcon>
+                      <LoaderCircleIcon className="animate-spin" />
+                    </TraceIcon>
+                    <TraceTitle>{toolStatus}</TraceTitle>
+                  </TraceLine>
+                ) : null}
+              </Trace>
+            ) : null}
 
-      {/* Searching skeleton */}
-      {answerStream.status === "searching" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex h-6 w-6 items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-[color:var(--ok-accent)]" />
-            </div>
-            <span className="text-sm text-[color:var(--explorer-muted)]">
-              Searching your archive...
-            </span>
-          </div>
-          {/* Text skeletons */}
-          <div className="space-y-2.5">
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="h-4 animate-pulse rounded bg-[color:var(--ok-raised)]"
-                style={{
-                  width: `${85 - i * 15}%`,
-                  animationDelay: `${i * 150}ms`,
-                }}
+            {answerText ? (
+              <AnswerMarkdown
+                text={answerText}
+                citations={citations}
+                onCitationSelect={(entry) => onCitationClick(citationTarget(entry))}
               />
-            ))}
-          </div>
-          {/* Citation skeletons */}
-          <div className="mt-4 grid grid-cols-2 gap-2.5">
-            {[...Array(2)].map((_, i) => (
-              <div
-                key={i}
-                className="h-20 animate-pulse rounded-xl border border-[color:var(--explorer-border)] bg-[color:var(--ok-app)]"
-                style={{ animationDelay: `${i * 200 + 400}ms` }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Streaming / Done answer */}
-      {(answerStream.status === "streaming" ||
-        answerStream.status === "done") && (
-        <div className="space-y-4">
-          {/* AI Summary box */}
-          <div className="rounded-xl border border-[color:var(--ok-accent-soft)] bg-[color:var(--ok-accent-soft)]/40 px-4 py-3">
-            <div className="prose prose-sm max-w-none text-[color:var(--explorer-ink)] prose-headings:font-semibold prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-[color:var(--explorer-ink)]">
-              <Markdown
-                components={{
-                  a: ({ href, children, title, ...externalProps }) => {
-                    if (href?.startsWith("/documents/")) {
-                      const documentId = href.replace("/documents/", "");
-                      return (
-                        <Link
-                          to="/documents/$documentId"
-                          params={{ documentId }}
-                          hash={citationPageHash(answerStream.citations, documentId)}
-                          className="no-underline"
-                          title={title}
-                        >
-                          <span className="inline-flex items-center rounded bg-[color:var(--ok-amber-soft)] px-1.5 py-0.5 text-[11px] ok-num font-bold text-[color:var(--ok-amber)] transition-colors hover:bg-[color:var(--ok-amber)] hover:text-[var(--ok-accent-fill-ink)]">
-                            {children}
-                          </span>
-                        </Link>
-                      );
-                    }
-                    return (
-                      <a
-                        href={href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                          {...externalProps}
-                      >
-                        {children}
-                      </a>
-                    );
-                  },
-                }}
-              >
-                {linkifyCitations(
-                  answerStream.answerText,
-                  answerStream.citations,
-                  answerStream.searchResults,
-                )}
-              </Markdown>
-              {answerStream.status === "streaming" && (
-                <span className="inline-block h-4 w-1.5 animate-pulse rounded-full bg-[color:var(--ok-accent)]" />
-              )}
-            </div>
-          </div>
-
-          {/* Citations / Sources */}
-          {answerStream.citations.length > 0 && (
-            <div>
-              <h3 className="mb-2.5 flex items-center gap-1.5 ok-eyebrow text-[color:var(--explorer-muted)]">
-                <Quote className="h-3 w-3" />
-                Sources
-              </h3>
-              <div className="grid grid-cols-2 gap-2.5">
-                {(answerStream.citations.some((cit) => cit.used !== false)
-                  ? // Show what the answer actually cited; the full retrieval
-                    // set only appears when no marker survived (legacy payloads
-                    // have no `used` flag and count as used).
-                    answerStream.citations.filter((cit) => cit.used !== false)
-                  : answerStream.citations
-                ).map((cit, i) => (
-                  <button
-                    key={`${cit.documentId}-${cit.chunkIndex}`}
-                    type="button"
-                    onClick={() =>
-                      onCitationClick({
-                        documentId: cit.documentId,
-                        title: cit.documentTitle,
-                        quote: cit.quote,
-                        pageFrom: cit.pageFrom,
-                        pageTo: cit.pageTo,
-                      })
-                    }
-                    className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/35 hover:shadow-sm"
-                  >
-                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[color:var(--ok-amber-soft)] text-[10px] font-bold text-[color:var(--ok-amber)]">
-                      {cit.index ?? i + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[color:var(--explorer-ink)] group-hover/card:underline">
-                        {cit.documentTitle}
-                      </p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-[color:var(--explorer-muted)]">
-                        {cit.quote}
-                      </p>
-                      {(cit.pageFrom || cit.pageTo) && (
-                        <span className="mt-1 inline-block text-[10px] font-medium text-[color:var(--explorer-muted)]/70">
-                          p.{cit.pageFrom ?? cit.pageTo}
-                          {cit.pageTo && cit.pageTo !== cit.pageFrom
-                            ? `\u2013${cit.pageTo}`
-                            : ""}
-                        </span>
-                      )}
-                    </div>
-                    <ArrowRight className="mt-1 h-3 w-3 shrink-0 text-[color:var(--explorer-muted)] opacity-0 transition-opacity group-hover/card:opacity-100" />
-                  </button>
+            ) : isStreaming ? (
+              <div className="flex flex-col gap-2 pt-1">
+                {[92, 88, 94, 60].map((width) => (
+                  <Skeleton
+                    key={width}
+                    className="h-3 rounded-full"
+                    style={{ width: `${width}%` }}
+                  />
                 ))}
               </div>
-            </div>
-          )}
+            ) : null}
 
-          {/* Document results (when no citations or as additional) */}
-          {answerStream.citations.length === 0 &&
-            searchResults.length > 0 && (
-              <div>
-                <h3 className="mb-2.5 flex items-center gap-1.5 ok-eyebrow text-[color:var(--explorer-muted)]">
-                  <FileText className="h-3 w-3" />
-                  Matching Documents
-                </h3>
-                <div className="grid grid-cols-2 gap-2.5">
+            {lowConfidence || (status === "done" && !answerText) ? (
+              <p className="flex items-center gap-1.5 text-xs text-warning">
+                <TriangleAlertIcon className="size-3.5 shrink-0" />
+                {t("omnibar.insufficient")}
+              </p>
+            ) : null}
+
+            {shownCitations.length > 0 ? (
+              <Sources
+                citations={shownCitations}
+                label={
+                  shownCitations.length === 1
+                    ? t("omnibar.usedSourcesOne")
+                    : fill(t("omnibar.usedSourcesMany"), { count: shownCitations.length })
+                }
+                defaultOpen
+                pageLabel={t("omnibar.pageAbbrev")}
+                onSelect={(entry) => onCitationClick(citationTarget(entry))}
+              />
+            ) : null}
+
+            {citations.length === 0 && searchResults.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {t("omnibar.matchingDocuments")}
+                </p>
+                <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-2">
                   {searchResults.slice(0, 4).map((result) => (
-                    <button
+                    <Button
                       key={result.document.id}
                       type="button"
+                      variant="outline"
+                      className="h-auto min-w-0 justify-start rounded-lg py-2 text-left font-normal shadow-none"
                       onClick={() =>
                         onCitationClick({
                           documentId: result.document.id,
@@ -883,62 +923,43 @@ function ResultsPane({
                           quote: result.matchedChunks[0]?.text,
                         })
                       }
-                      className="group/card flex items-start gap-2.5 rounded-xl border border-[color:var(--explorer-border)] bg-card px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-[color:var(--ok-accent)]/35 hover:shadow-sm"
                     >
-                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--explorer-muted)]" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[color:var(--explorer-ink)] group-hover/card:underline">
-                          {result.document.title}
-                        </p>
-                        {result.document.correspondent && (
-                          <p className="mt-0.5 truncate text-xs text-[color:var(--explorer-muted)]">
+                      <FileTextIcon className="text-muted-foreground" />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate">{result.document.title}</span>
+                        {result.document.correspondent ? (
+                          <span className="truncate text-xs text-muted-foreground">
                             {result.document.correspondent.name}
-                          </p>
-                        )}
-                      </div>
-                    </button>
+                          </span>
+                        ) : null}
+                      </span>
+                    </Button>
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
 
-          {/* No answer text */}
-          {answerStream.status === "done" && !answerStream.answerText && (
-            <div className="rounded-xl border border-[var(--ok-amber)]/25 bg-[var(--ok-amber-soft)] px-4 py-3 text-sm text-[var(--ok-amber)]">
-              Not enough evidence in your archive to answer this question
-              confidently.
-            </div>
-          )}
-
-          {/* Follow-up chips */}
-          {followUps.length > 0 && answerStream.status === "done" && (
-            <div>
-              <h3 className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
-                Follow up
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {followUps.map((fu) => (
-                  <button
-                    key={fu}
-                    type="button"
-                    onClick={() => onFollowUp(fu)}
-                    className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-all hover:border-[color:var(--ok-accent)]/35 hover:bg-[color:var(--ok-accent-soft)]"
-                  >
-                    {fu}
-                  </button>
-                ))}
+            {followUps.length > 0 ? (
+              <div className="flex flex-col gap-1.5 pt-1">
+                <p className="text-xs font-medium text-muted-foreground">{t("omnibar.followUp")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {followUps.map((followUp) => (
+                    <Button
+                      key={followUp}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-auto max-w-full rounded-full py-1.5 text-left font-normal whitespace-normal text-muted-foreground shadow-none"
+                      onClick={() => onFollowUp(followUp)}
+                    >
+                      {followUp}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Search results loading below AI answer */}
-      {searchLoading && answerStream.status !== "searching" && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-[color:var(--explorer-muted)]">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading documents...
-        </div>
+            ) : null}
+          </MessageContent>
+        </Message>
       )}
     </div>
   );
@@ -951,14 +972,18 @@ function ResultsPane({
 function CitationPreviewPane({
   citation,
   answerStream,
-  searchResults,
+  onSelectCitation,
   onClose,
+  onOpenDocument,
 }: {
   citation: CitationTarget;
   answerStream: ReturnType<typeof useAnswerStream>;
-  searchResults: SemanticSearchResult[];
+  onSelectCitation: (target: CitationTarget) => void;
   onClose: () => void;
+  onOpenDocument: () => void;
 }) {
+  const { t, language } = useI18n();
+
   // Fetch document detail
   const documentQuery = useQuery({
     queryKey: ["document", citation.documentId],
@@ -994,7 +1019,6 @@ function CitationPreviewPane({
 
   const doc = documentQuery.data;
   const blocks = textQuery.data?.blocks ?? [];
-
   // Group blocks by page
   const pages = useMemo(() => {
     const pageMap = new Map<number, TextBlock[]>();
@@ -1037,166 +1061,176 @@ function CitationPreviewPane({
     }
   }, [citedPage, pages]);
 
+  const documentHash = citation.pageFrom ? `page-${citation.pageFrom}` : undefined;
+
   return (
-    <div className="flex h-full min-h-0">
-      {/* Left panel – Search summary (40%) */}
-      <div className="flex w-2/5 flex-col overflow-y-auto border-r border-[color:var(--explorer-border)]">
-        <div className="flex items-center justify-between border-b border-[color:var(--explorer-border)] px-4 py-3">
-          <h3 className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Search Results
-          </h3>
-          <button
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      {/* The document, first on a phone. */}
+      <div className="order-2 flex max-h-[38%] min-h-0 flex-col overflow-y-auto border-t md:order-1 md:max-h-none md:w-2/5 md:border-t-0 md:border-r">
+        <div className="sticky top-0 z-10 hidden h-14 shrink-0 items-center gap-2 border-b bg-popover px-3 md:flex">
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground"
+            aria-label={t("omnibar.backToResults")}
             onClick={onClose}
-            className="rounded-md p-1 text-[color:var(--explorer-muted)] transition-colors hover:text-[color:var(--explorer-ink)]"
           >
-            <ArrowRight className="h-4 w-4 rotate-180" />
-          </button>
+            <ArrowLeftIcon />
+          </Button>
+          <h3 className="text-sm font-medium">{t("omnibar.answer")}</h3>
         </div>
 
-        {/* Mini AI summary */}
-        {answerStream.answerText && (
-          <div className="border-b border-[color:var(--explorer-border)] p-4">
-            <div className="prose prose-sm max-w-none text-[color:var(--explorer-ink)] prose-p:text-[13px] prose-p:leading-relaxed">
-              <Markdown
-                components={{
-                  a: ({ href, children, title, ...externalProps }) => {
-                    if (href?.startsWith("/documents/")) {
-                      const documentId = href.replace("/documents/", "");
-                      return (
-                        <Link
-                          to="/documents/$documentId"
-                          params={{ documentId }}
-                          hash={citationPageHash(answerStream.citations, documentId)}
-                          className="no-underline"
-                          title={title}
-                        >
-                          <span className="inline-flex items-center rounded bg-[color:var(--ok-amber-soft)] px-1 py-0.5 text-[10px] font-bold text-[color:var(--ok-amber)]">
-                            {children}
-                          </span>
-                        </Link>
-                      );
-                    }
-                    return (
-                      <a href={href} target="_blank" rel="noopener noreferrer" {...externalProps}>
-                        {children}
-                      </a>
-                    );
-                  },
-                }}
-              >
-                {linkifyCitations(
-                  answerStream.answerText,
-                  answerStream.citations,
-                  answerStream.searchResults,
-                )}
-              </Markdown>
-            </div>
+        {answerStream.answerText ? (
+          <div className="border-b p-4">
+            <AnswerMarkdown
+              text={answerStream.answerText}
+              citations={answerStream.citations}
+              onCitationSelect={(entry) => onSelectCitation(citationTarget(entry))}
+              className="text-[13px]"
+            />
           </div>
-        )}
+        ) : null}
 
-        {/* Other citations */}
-        {answerStream.citations.length > 0 && (
-          <div className="p-4">
-            <h4 className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
-              All Sources
-            </h4>
-            <div className="space-y-1.5">
-              {answerStream.citations.map((cit, i) => (
-                <div
-                  key={`${cit.documentId}-${cit.chunkIndex}`}
+        {answerStream.citations.length > 0 ? (
+          <div className="flex flex-col gap-1.5 p-4">
+            <h4 className="text-xs font-medium text-muted-foreground">{t("omnibar.allSources")}</h4>
+            <div className="flex flex-col gap-1">
+              {answerStream.citations.map((entry, index) => (
+                <Button
+                  key={`${entry.documentId}-${entry.chunkIndex}`}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
                   className={cn(
-                    "flex items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors",
-                    cit.documentId === citation.documentId
-                      ? "bg-[color:var(--ok-accent-soft)] border border-[color:var(--ok-accent)]/20"
-                      : "hover:bg-[color:var(--ok-app)]",
+                    "h-auto justify-start py-1.5 text-left font-normal",
+                    entry.documentId === citation.documentId && "bg-brand-soft text-brand-soft-foreground",
                   )}
+                  onClick={() => onSelectCitation(citationTarget(entry))}
                 >
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold bg-[color:var(--ok-amber-soft)] text-[color:var(--ok-amber)]">
-                    {i + 1}
+                  <span className="num flex size-4.5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[10px] font-semibold text-brand-soft-foreground">
+                    {entry.index ?? index + 1}
                   </span>
-                  <p className="truncate text-xs font-medium text-[color:var(--explorer-ink)]">
-                    {cit.documentTitle}
-                  </p>
-                </div>
+                  <span className="truncate">{entry.documentTitle}</span>
+                </Button>
               ))}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Right panel – Document viewer (60%) */}
-      <div className="flex w-3/5 flex-col">
-        {/* Document header */}
-        <div className="flex items-start justify-between border-b border-[color:var(--explorer-border)] px-5 py-3">
+      <div className="order-1 flex min-h-0 min-w-0 flex-1 flex-col md:order-2">
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5 md:min-h-14 md:px-4 md:py-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground md:hidden"
+            aria-label={t("omnibar.backToResults")}
+            onClick={onClose}
+          >
+            <ArrowLeftIcon />
+          </Button>
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg text-[color:var(--explorer-ink)]">
-              {doc?.title ?? citation.title}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[color:var(--explorer-muted)]">
-              {doc?.correspondent && <span>{doc.correspondent.name}</span>}
-              {doc?.issueDate && (
-                <span className="ok-num">{format(new Date(doc.issueDate), "MMM d, yyyy")}</span>
-              )}
-              {doc?.documentType && (
-                <span className="rounded-full border border-[color:var(--explorer-border)] px-2 py-0.5">
-                  {doc.documentType.name}
-                </span>
-              )}
-            </div>
+            <h2 className="truncate text-sm font-medium">{doc?.title ?? citation.title}</h2>
+            {doc?.correspondent || doc?.issueDate || doc?.documentType ? (
+              <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                {doc.correspondent ? <span className="truncate">{doc.correspondent.name}</span> : null}
+                {doc.issueDate ? (
+                  <span className="num">
+                    {new Date(doc.issueDate).toLocaleDateString(language, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                ) : null}
+                {doc.documentType ? (
+                  <Badge variant="secondary" className="font-normal">
+                    {doc.documentType.name}
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          <div className="flex items-center gap-1.5">
+          <Button asChild variant="outline" size="sm" className="shrink-0">
             <Link
               to="/documents/$documentId"
               params={{ documentId: citation.documentId }}
-              hash={citation.pageFrom ? `page-${citation.pageFrom}` : undefined}
-              className="rounded-lg border border-[color:var(--explorer-border)] px-2.5 py-1.5 text-xs font-medium text-[color:var(--explorer-ink)] transition-colors hover:bg-[color:var(--ok-app)]"
+              hash={documentHash}
+              onClick={onOpenDocument}
             >
-              Open full
+              {t("omnibar.openDocument")}
             </Link>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-[color:var(--explorer-muted)] transition-colors hover:text-[color:var(--explorer-ink)]"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="hidden text-muted-foreground md:inline-flex"
+            aria-label={t("omnibar.close")}
+            onClick={onClose}
+          >
+            <XIcon />
+          </Button>
         </div>
 
-        {/* Document text content */}
-        <div ref={docViewerRef} className="flex-1 overflow-y-auto p-5">
+        <div ref={docViewerRef} className="min-h-0 flex-1 overflow-y-auto bg-stage p-3 sm:p-5">
           {documentQuery.isLoading || textQuery.isLoading ? (
-            <div className="flex items-center gap-2 py-8 text-sm text-[color:var(--explorer-muted)]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading document...
+            <div className="flex flex-col gap-2.5 rounded-lg border border-paper-border bg-paper p-5 shadow-card">
+              {[64, 92, 88, 94, 70, 90, 42].map((width) => (
+                <Skeleton
+                  key={width}
+                  className="h-3 rounded-full"
+                  style={{ width: `${width}%` }}
+                />
+              ))}
             </div>
           ) : documentQuery.isError ? (
-            <div className="py-8 text-center text-sm text-[color:var(--ok-amber)]">
-              Failed to load document
-            </div>
-          ) : pages.length === 0 ? (
-            <div className="py-8 text-center text-sm text-[color:var(--explorer-muted)]">
-              No text content available for this document.
-              <div className="mt-3">
-                <Link
-                  to="/documents/$documentId"
-                  params={{ documentId: citation.documentId }}
-                  hash={citation.pageFrom ? `page-${citation.pageFrom}` : undefined}
-                  className="text-[color:var(--ok-accent)] hover:underline"
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>{t("omnibar.documentFailed")}</AlertTitle>
+              <AlertAction>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => void documentQuery.refetch()}
                 >
-                  Open the full document view
-                </Link>
-              </div>
-            </div>
+                  {t("omnibar.retry")}
+                </Button>
+              </AlertAction>
+            </Alert>
+          ) : pages.length === 0 ? (
+            <Empty className="h-full">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <FileTextIcon />
+                </EmptyMedia>
+                <EmptyTitle>{t("omnibar.noTextTitle")}</EmptyTitle>
+                <EmptyDescription>{t("omnibar.noTextDetail")}</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    to="/documents/$documentId"
+                    params={{ documentId: citation.documentId }}
+                    hash={documentHash}
+                    onClick={onOpenDocument}
+                  >
+                    {t("omnibar.openDocument")}
+                  </Link>
+                </Button>
+              </EmptyContent>
+            </Empty>
           ) : (
-            <div className="space-y-6">
+            <div className="flex flex-col gap-5">
               {pages.map((page) => (
-                <div key={page.page} data-page={page.page}>
-                  <p className="mb-2 ok-eyebrow text-[color:var(--explorer-muted)]">
-                    Page {page.page}
+                <div key={page.page} data-page={page.page} className="flex flex-col gap-1.5">
+                  <p className="num text-xs font-medium text-muted-foreground">
+                    {fill(t("omnibar.page"), { page: page.page })}
                   </p>
-                  <div className="space-y-0.5">
+                  <div className="flex flex-col gap-0.5 rounded-lg border border-paper-border bg-paper p-4 text-paper-foreground shadow-card sm:p-6">
                     {page.blocks.map((block, bi) => {
                       // Highlight the block if it matches the cited quote
                       const isHighlighted =
@@ -1210,9 +1244,9 @@ function CitationPreviewPane({
                         <p
                           key={bi}
                           className={cn(
-                            "text-sm leading-relaxed text-[color:var(--explorer-ink)]",
+                            "text-sm leading-relaxed",
                             isHighlighted &&
-                              "rounded bg-[color:var(--ok-amber-soft)] px-1.5 py-0.5 ring-1 ring-[color:var(--ok-amber)]/20",
+                              "-mx-1 rounded-sm bg-highlight px-1 text-highlight-foreground",
                           )}
                         >
                           {block.text}

@@ -49,7 +49,9 @@ function RootComponent() {
     );
   }
 
-  if (!isAuthed && isPublicRoute) {
+  // Public routes never get the shell, whether or not someone is signed in:
+  // setup signs the owner in halfway through and must not remount for it.
+  if (isPublicRoute) {
     return <Outlet />;
   }
 

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { FolderSyncIcon } from "lucide-react";
 import { AuthPanel, FieldError } from "@/components/auth/auth-panel";
+import { IconTile } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -11,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
 
@@ -19,6 +22,7 @@ import { useI18n } from "@/lib/i18n";
  * router as soon as that happens — which re-runs this guard while the user is
  * still on step 1. Without this flag the wizard would bounce to "/" and the
  * language and watch-folder steps would be unreachable.
+ *
  */
 let wizardInProgress = false;
 
@@ -63,6 +67,10 @@ function SetupPage() {
           skip: "Überspringen",
           done: "Fertig",
           save: "Speichern und weiter",
+          languageLabel: "Sprache",
+          steps: ["Konto", "Sprache", "Ordner"],
+          setupFailed: "Einrichtung fehlgeschlagen",
+          saveFailed: "Speichern fehlgeschlagen",
         }
       : {
           step1Title: "Set up archive",
@@ -77,6 +85,10 @@ function SetupPage() {
           skip: "Skip",
           done: "Done",
           save: "Save and continue",
+          languageLabel: "Language",
+          steps: ["Account", "Language", "Folder"],
+          setupFailed: "Setup failed",
+          saveFailed: "Failed to save",
         };
 
   async function handleCreateOwner(e: React.FormEvent) {
@@ -97,7 +109,7 @@ function SetupPage() {
       setStep(2);
     } catch (err) {
       wizardInProgress = false;
-      setError(err instanceof Error ? err.message : "Setup failed");
+      setError(err instanceof Error ? err.message : copy.setupFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -114,7 +126,7 @@ function SetupPage() {
       });
       setStep(3);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      setError(err instanceof Error ? err.message : copy.saveFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -122,46 +134,77 @@ function SetupPage() {
 
   if (step === 2) {
     return (
-      <AuthPanel title={copy.step2Title} subtitle={copy.step2Subtitle} step="2 / 3">
-        <div className="flex flex-col gap-3">
-          <Select
-            value={docLanguage}
-            onValueChange={(value) => setDocLanguage(value as DocLanguage)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="de">Deutsch</SelectItem>
-              <SelectItem value="en">English</SelectItem>
-            </SelectContent>
-          </Select>
-          <FieldError>{error}</FieldError>
-          <Button className="w-full" disabled={isSubmitting} onClick={handleSaveLanguage}>
-            {copy.save}
-          </Button>
-          <button
-            type="button"
-            className="text-center text-xs text-muted-foreground hover:underline"
-            onClick={() => setStep(3)}
-          >
-            {copy.skip}
-          </button>
-        </div>
+      <AuthPanel
+        title={copy.step2Title}
+        subtitle={copy.step2Subtitle}
+        step="2 / 3"
+        stepLabels={copy.steps}
+      >
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="docLanguage">{copy.languageLabel}</FieldLabel>
+            <Select
+              value={docLanguage}
+              onValueChange={(value) => setDocLanguage(value as DocLanguage)}
+            >
+              <SelectTrigger id="docLanguage" className="h-10 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="de">Deutsch</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+            <FieldError>{error}</FieldError>
+          </Field>
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={isSubmitting}
+              onClick={handleSaveLanguage}
+            >
+              {isSubmitting ? <Spinner /> : null}
+              {copy.save}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setStep(3)}
+            >
+              {copy.skip}
+            </Button>
+          </div>
+        </FieldGroup>
       </AuthPanel>
     );
   }
 
   if (step === 3) {
     return (
-      <AuthPanel title={copy.step3Title} subtitle={copy.step3Subtitle} step="3 / 3">
-        <div className="flex flex-col gap-3">
-          <p className="rounded-[var(--r-md)] border bg-[var(--ok-bar)] px-3 py-2.5 text-sm leading-relaxed text-muted-foreground">
-            {copy.step3Body.split("WATCH_FOLDER_PATH")[0]}
-            <code className="ok-num text-foreground">WATCH_FOLDER_PATH</code>
-            {copy.step3Body.split("WATCH_FOLDER_PATH")[1]}
-          </p>
+      <AuthPanel
+        title={copy.step3Title}
+        subtitle={copy.step3Subtitle}
+        step="3 / 3"
+        stepLabels={copy.steps}
+      >
+        <FieldGroup>
+          <div className="flex gap-3.5 rounded-xl border bg-muted/50 p-4">
+            <IconTile>
+              <FolderSyncIcon />
+            </IconTile>
+            <p className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+              {copy.step3Body.split("WATCH_FOLDER_PATH")[0]}
+              <code className="font-mono text-[0.8125rem] break-all text-foreground">
+                WATCH_FOLDER_PATH
+              </code>
+              {copy.step3Body.split("WATCH_FOLDER_PATH")[1]}
+            </p>
+          </div>
           <Button
+            size="lg"
             className="w-full"
             onClick={() => {
               wizardInProgress = false;
@@ -170,7 +213,7 @@ function SetupPage() {
           >
             {copy.done}
           </Button>
-        </div>
+        </FieldGroup>
       </AuthPanel>
     );
   }
@@ -180,77 +223,78 @@ function SetupPage() {
       title={copy.step1Title}
       subtitle={copy.step1Subtitle}
       step="1 / 3"
+      stepLabels={copy.steps}
       footer={
         <span className="text-muted-foreground">
           {t("setup.alreadySetup")}{" "}
-          <Link to="/login" className="font-semibold text-[var(--ok-accent)] hover:underline">
+          <Link to="/login" className="font-medium text-brand hover:underline">
             {t("setup.signIn")}
           </Link>
         </span>
       }
     >
-      <form onSubmit={handleCreateOwner} className="flex flex-col gap-3">
-        <div>
-          <Label htmlFor="displayName" className="text-xs text-muted-foreground">
-            {t("setup.displayName")}
-          </Label>
-          <Input
-            id="displayName"
-            type="text"
-            placeholder={t("setup.yourName")}
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor="email" className="text-xs text-muted-foreground">
-            {t("setup.email")}
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor="password" className="text-xs text-muted-foreground">
-            {t("setup.password")}
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder={t("setup.passwordMin")}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={12}
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor="confirmPassword" className="text-xs text-muted-foreground">
-            {t("setup.confirmPassword")}
-          </Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={12}
-            className="mt-1"
-          />
-          <FieldError>{error}</FieldError>
-        </div>
-        <Button type="submit" className="mt-1 w-full" disabled={isSubmitting}>
-          {isSubmitting ? t("setup.creatingAccount") : copy.continue}
-        </Button>
+      <form onSubmit={handleCreateOwner}>
+        <FieldGroup className="gap-4">
+          <Field>
+            <FieldLabel htmlFor="displayName">{t("setup.displayName")}</FieldLabel>
+            <Input
+              id="displayName"
+              type="text"
+              autoComplete="name"
+              placeholder={t("setup.yourName")}
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              className="h-10"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="email">{t("setup.email")}</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="username"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-10"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">{t("setup.password")}</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder={t("setup.passwordMin")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={12}
+              className="h-10"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="confirmPassword">{t("setup.confirmPassword")}</FieldLabel>
+            <Input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={12}
+              aria-invalid={Boolean(error) || undefined}
+              className="h-10"
+            />
+            <FieldError>{error}</FieldError>
+          </Field>
+          <Button type="submit" size="lg" className="mt-1 w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Spinner /> : null}
+            {isSubmitting ? t("setup.creatingAccount") : copy.continue}
+          </Button>
+        </FieldGroup>
       </form>
     </AuthPanel>
   );
