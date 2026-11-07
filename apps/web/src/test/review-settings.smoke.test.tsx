@@ -485,6 +485,11 @@ describe("settings smoke", () => {
 
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
 
+    // Bulk deletion is permanent, so it asks first and nothing has happened yet.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(deleteCalls).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
     await waitFor(() => {
       expect(deleteCalls).toEqual(["2"]);
     });

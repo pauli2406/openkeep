@@ -231,6 +231,11 @@ export function TaxonomyManagementSection() {
           mergePlaceholder: "Ziel wählen…",
           mergeAction: "Zusammenführen",
           deleteTitle: (n: string) => `„${n}“ löschen?`,
+          bulkDeleteTitle: (n: number) => `${n} ${n === 1 ? "Eintrag" : "Einträge"} löschen?`,
+          bulkDeleteDescription: (documents: number) =>
+            documents > 0
+              ? `${documents} ${documents === 1 ? "Dokument verliert" : "Dokumente verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
+              : "Keinem Dokument ist etwas davon zugeordnet. Das lässt sich nicht rückgängig machen.",
           deleteDescription: (count: number | null) =>
             count
               ? `Der Eintrag wird von ${count} Dokumenten entfernt. Das lässt sich nicht rückgängig machen.`
@@ -285,6 +290,11 @@ export function TaxonomyManagementSection() {
           mergePlaceholder: "Choose a target…",
           mergeAction: "Merge",
           deleteTitle: (n: string) => `Delete “${n}”?`,
+          bulkDeleteTitle: (n: number) => `Delete ${n} ${n === 1 ? "entry" : "entries"}?`,
+          bulkDeleteDescription: (documents: number) =>
+            documents > 0
+              ? `${documents} ${documents === 1 ? "document loses" : "documents lose"} this assignment. This cannot be undone.`
+              : "No document uses any of these. This cannot be undone.",
           deleteDescription: (count: number | null) =>
             count
               ? `It comes off ${count} documents. This can't be undone.`
@@ -450,6 +460,12 @@ export function TaxonomyManagementSection() {
     setFilter("");
     setRowDialog(null);
   };
+
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
+  const bulkDeleteDocuments = (bulkDeleteIds ?? []).reduce(
+    (sum, id) => sum + (allRows.find((row) => row.id === id)?.count ?? 0),
+    0,
+  );
 
   // The menu item that opened a dialog is gone by the time it closes, so focus
   // goes back to that row's menu button instead of falling to the page body.
@@ -688,7 +704,7 @@ export function TaxonomyManagementSection() {
                 title={
                   selectedRows.some((row) => row.builtin) ? copy.builtinUndeletable : undefined
                 }
-                onClick={() => deleteMutation.mutate(selectedIds)}
+                onClick={() => setBulkDeleteIds(selectedIds)}
               >
                 <Trash2 />
                 {copy.del}
@@ -715,9 +731,7 @@ export function TaxonomyManagementSection() {
                 variant="outline"
                 disabled={busy}
                 onClick={() =>
-                  deleteMutation.mutate(
-                    allRows.filter((row) => row.count === 0).map((row) => row.id),
-                  )
+                  setBulkDeleteIds(allRows.filter((row) => row.count === 0).map((row) => row.id))
                 }
               >
                 <Trash2 />
@@ -728,7 +742,7 @@ export function TaxonomyManagementSection() {
 
           {/* A failed create, rename, merge or delete used to leave no trace at
               all — the list simply did not change. */}
-          {mutationError && !rowDialog ? (
+          {mutationError && !rowDialog && !bulkDeleteIds ? (
             <div className="border-b px-4 py-2.5">
               <RetryAlert
                 message={
@@ -1084,6 +1098,46 @@ export function TaxonomyManagementSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete several at once, from the selection or the unused sweep */}
+      <AlertDialog
+        open={bulkDeleteIds !== null}
+        onOpenChange={(open) => {
+          if (!open) setBulkDeleteIds(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{copy.bulkDeleteTitle(bulkDeleteIds?.length ?? 0)}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {copy.bulkDeleteDescription(bulkDeleteDocuments)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteMutation.error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : copy.actionFailed}
+            </p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{copy.cancel}</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                if (!bulkDeleteIds) return;
+                deleteMutation.mutate(bulkDeleteIds, {
+                  onSuccess: () => setBulkDeleteIds(null),
+                });
+              }}
+            >
+              {deleteMutation.isPending ? <Spinner /> : <Trash2 />}
+              {copy.del}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete */}
       <AlertDialog
