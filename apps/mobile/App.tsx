@@ -11,6 +11,7 @@ import {
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
@@ -63,6 +64,15 @@ export type HomeTabParamList = {
   Chat: undefined;
   Settings: undefined;
   Profile: undefined;
+};
+
+// An icon font's glyph is text, so VoiceOver would read it as part of every button's
+// name. Icons here are decoration: a button's label says what it does.
+MaterialCommunityIcons.defaultProps = {
+  ...MaterialCommunityIcons.defaultProps,
+  accessible: false,
+  accessibilityElementsHidden: true,
+  importantForAccessibility: "no-hide-descendants",
 };
 
 const queryClient = new QueryClient();
