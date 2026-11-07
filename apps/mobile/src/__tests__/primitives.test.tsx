@@ -71,12 +71,12 @@ describe("Row", () => {
 
 describe("Button", () => {
   it.each(["primary", "secondary", "danger"] as const)(
-    "keeps the shared semibold face in the %s variant",
+    "keeps the shared medium face in the %s variant",
     async (variant) => {
       // The variant styles used to set `fontFamily` after the base style, which
       // silently rendered every label in the regular face.
       const view = await renderThemed(<Button label="Confirm" variant={variant} onPress={() => {}} />);
-      expect(styleOf(view.getByText("Confirm")).fontFamily).toBe(fonts.sans.semibold);
+      expect(styleOf(view.getByText("Confirm")).fontFamily).toBe(fonts.sans.medium);
     },
   );
 
