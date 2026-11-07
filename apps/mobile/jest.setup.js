@@ -22,6 +22,15 @@ jest.mock("@react-native-community/netinfo", () => ({
   fetch: jest.fn(() => Promise.resolve({ isConnected: true, isInternetReachable: true })),
 }));
 
+jest.mock("expo-linear-gradient", () => {
+  const { View } = require("react-native");
+  return { LinearGradient: View };
+});
+
+jest.mock("expo-clipboard", () => ({
+  setStringAsync: jest.fn(async () => true),
+}));
+
 jest.mock("expo-sqlite", () => ({
   openDatabaseAsync: jest.fn(async () => ({
     execAsync: jest.fn(async () => undefined),

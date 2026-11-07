@@ -7,6 +7,33 @@ import {
 
 const messages = {
   en: {
+    "common.comingSoon": "Loading…",
+    "today.action.handle": "Handle",
+    "today.action.handleNow": "Handle immediately",
+    "today.action.review": "Review",
+    "today.action.reviewNow": "Review immediately",
+    "today.action.respond": "Respond",
+    "today.action.respondNow": "Respond immediately",
+    "today.action.pay": "Pay",
+    "today.action.payNow": "Pay immediately",
+    "today.sorted": "Sorted by due date · {count} open",
+    "today.task": "Task",
+    "today.invoices": "Invoices",
+    "today.thisMonth": "This month",
+    "today.openTasks": "Open tasks",
+    "today.summary.openOnly": "{open} open, none of them overdue.",
+    "today.summary.open": "{open} open, {overdue} of them overdue.",
+    "today.summary.allClear": "Your archive is in order. Nothing is waiting for you.",
+    "today.greeting.evening": "Good evening",
+    "today.greeting.afternoon": "Good afternoon",
+    "today.greeting.morning": "Good morning",
+    "shell.toggleTheme": "Toggle theme",
+    "shell.search": "Ask the archive",
+    "shell.closeMenu": "Close menu",
+    "shell.openMenu": "Open menu",
+    "tabs.profile": "Profile",
+    "tabs.settings": "Settings",
+    "tabs.taxes": "Taxes",
     "app.loadingTitle": "Loading OpenKeep",
     "app.loadingText": "Restoring your mobile archive session.",
     "tabs.today": "Today",
@@ -422,6 +449,33 @@ const messages = {
     "suggestions.tagged": "What documents are tagged",
   },
   de: {
+    "common.comingSoon": "Wird geladen…",
+    "today.action.handle": "Erledigen",
+    "today.action.handleNow": "Sofort erledigen",
+    "today.action.review": "Prüfen",
+    "today.action.reviewNow": "Sofort prüfen",
+    "today.action.respond": "Antworten",
+    "today.action.respondNow": "Sofort antworten",
+    "today.action.pay": "Bezahlen",
+    "today.action.payNow": "Sofort bezahlen",
+    "today.sorted": "Sortiert nach Fälligkeit · {count} offen",
+    "today.task": "Aufgabe",
+    "today.invoices": "Rechnungen",
+    "today.thisMonth": "Diesen Monat",
+    "today.openTasks": "Offene Aufgaben",
+    "today.summary.openOnly": "{open} offen, nichts davon überfällig.",
+    "today.summary.open": "{open} offen, davon {overdue} überfällig.",
+    "today.summary.allClear": "Dein Archiv ist in Ordnung. Nichts wartet auf dich.",
+    "today.greeting.evening": "Guten Abend",
+    "today.greeting.afternoon": "Guten Tag",
+    "today.greeting.morning": "Guten Morgen",
+    "shell.toggleTheme": "Design umschalten",
+    "shell.search": "Archiv fragen",
+    "shell.closeMenu": "Menü schließen",
+    "shell.openMenu": "Menü öffnen",
+    "tabs.profile": "Profil",
+    "tabs.settings": "Einstellungen",
+    "tabs.taxes": "Steuern",
     "app.loadingTitle": "OpenKeep wird geladen",
     "app.loadingText": "Deine mobile Archivsitzung wird wiederhergestellt.",
     "tabs.today": "Heute",
@@ -840,7 +894,7 @@ const messages = {
 } as const;
 
 export type AppLanguage = keyof typeof messages;
-type TranslationKey = keyof typeof messages.en;
+export type TranslationKey = keyof typeof messages.en;
 
 type I18nContextValue = {
   language: AppLanguage;

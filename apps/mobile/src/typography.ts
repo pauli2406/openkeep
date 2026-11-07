@@ -1,43 +1,37 @@
 /**
- * OpenKeep mobile type scale (#105)
+ * OpenKeep mobile type scale, the same one as the web client.
  *
- * Public Sans for text, IBM Plex Mono for every number, date, amount, count,
- * confidence value and identifier. The values come from
- * `design/mobile/prototype/openkeep-mobile.dc.html`.
+ * Geist for everything; numbers use its tabular figures so columns line up. Geist
+ * Mono is only for literal machine values: checksums, tokens, identifiers.
  *
- * React Native picks a face by `fontFamily`, so each weight is a separate
- * bundled file and nothing in the app sets `fontWeight`. 600 is the heaviest
- * weight the UI uses; `sans.bold` exists for the wordmark and the avatar
- * monogram in the app bar.
+ * React Native picks a face by `fontFamily`, so each weight is a separate bundled
+ * file and nothing in the app sets `fontWeight`.
  */
 import type { TextStyle } from "react-native";
 
 export const fonts = {
   sans: {
-    regular: "PublicSans-Regular",
-    medium: "PublicSans-Medium",
-    semibold: "PublicSans-SemiBold",
-    bold: "PublicSans-Bold",
-    /** React Native will not synthesise italics for a named face on Android. */
-    italic: "PublicSans-Italic",
+    regular: "Geist-Regular",
+    medium: "Geist-Medium",
+    semibold: "Geist-SemiBold",
+    bold: "Geist-Bold",
   },
   mono: {
-    regular: "IBMPlexMono-Regular",
-    medium: "IBMPlexMono-Medium",
-    semibold: "IBMPlexMono-SemiBold",
+    regular: "GeistMono-Regular",
+    medium: "GeistMono-Medium",
+    semibold: "GeistMono-SemiBold",
   },
 } as const;
 
 /** What `useFonts` needs. Keys are the names `fontFamily` refers to. */
 export const fontAssets = {
-  [fonts.sans.regular]: require("../assets/fonts/PublicSans-Regular.ttf"),
-  [fonts.sans.medium]: require("../assets/fonts/PublicSans-Medium.ttf"),
-  [fonts.sans.semibold]: require("../assets/fonts/PublicSans-SemiBold.ttf"),
-  [fonts.sans.bold]: require("../assets/fonts/PublicSans-Bold.ttf"),
-  [fonts.sans.italic]: require("../assets/fonts/PublicSans-Italic.ttf"),
-  [fonts.mono.regular]: require("../assets/fonts/IBMPlexMono-Regular.ttf"),
-  [fonts.mono.medium]: require("../assets/fonts/IBMPlexMono-Medium.ttf"),
-  [fonts.mono.semibold]: require("../assets/fonts/IBMPlexMono-SemiBold.ttf"),
+  [fonts.sans.regular]: require("../assets/fonts/Geist-Regular.ttf"),
+  [fonts.sans.medium]: require("../assets/fonts/Geist-Medium.ttf"),
+  [fonts.sans.semibold]: require("../assets/fonts/Geist-SemiBold.ttf"),
+  [fonts.sans.bold]: require("../assets/fonts/Geist-Bold.ttf"),
+  [fonts.mono.regular]: require("../assets/fonts/GeistMono-Regular.ttf"),
+  [fonts.mono.medium]: require("../assets/fonts/GeistMono-Medium.ttf"),
+  [fonts.mono.semibold]: require("../assets/fonts/GeistMono-SemiBold.ttf"),
 };
 
 /** Numbers line up in a column. Spread onto any mono style that shows digits. */
@@ -46,32 +40,30 @@ export const tabular = {
 } satisfies TextStyle;
 
 export const text = {
-  /** Screen and sheet titles. Was 32px/800. */
+  /** The title of a page (web: `text-2xl font-semibold tracking-tight`). */
   screenTitle: {
     fontFamily: fonts.sans.semibold,
-    fontSize: 20,
-    lineHeight: 26,
-    letterSpacing: -0.4,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.5,
   },
-  /** The app-bar title, one step below a screen title. */
+  /** A stack screen's bar title and a card's heading. */
   barTitle: {
     fontFamily: fonts.sans.semibold,
     fontSize: 16,
-    lineHeight: 21,
-    letterSpacing: -0.16,
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
-  /** The strip above a group of rows. Mono, uppercase, wide. */
+  /** The label above a group of rows (web: `text-xs font-medium text-muted-foreground`). */
   sectionLabel: {
-    fontFamily: fonts.mono.medium,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
+    fontFamily: fonts.sans.medium,
+    fontSize: 12,
+    lineHeight: 16,
   },
   /** The first line of a row. */
   rowTitle: {
     fontFamily: fonts.sans.medium,
-    fontSize: 14.5,
+    fontSize: 14,
     lineHeight: 20,
   },
   body: {
@@ -80,67 +72,72 @@ export const text = {
     lineHeight: 20,
   },
   bodyStrong: {
-    fontFamily: fonts.sans.semibold,
+    fontFamily: fonts.sans.medium,
     fontSize: 14,
     lineHeight: 20,
   },
   /** The second line of a row, and table metadata. */
   meta: {
     fontFamily: fonts.sans.regular,
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 16,
   },
   metaStrong: {
-    fontFamily: fonts.sans.semibold,
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontFamily: fonts.sans.medium,
+    fontSize: 12,
+    lineHeight: 16,
   },
   small: {
     fontFamily: fonts.sans.regular,
-    fontSize: 11.5,
+    fontSize: 12,
     lineHeight: 16,
   },
   smallStrong: {
-    fontFamily: fonts.sans.semibold,
-    fontSize: 11.5,
+    fontFamily: fonts.sans.medium,
+    fontSize: 12,
     lineHeight: 16,
   },
 
-  /* ── numeric ── every number, date, amount, count and identifier ── */
+  /* ── numeric ── tabular figures, in the text face ── */
 
-  /** The big number in the Today strip. */
+  /** The big number on a tile. */
   statValue: {
-    fontFamily: fonts.mono.semibold,
-    fontSize: 20,
-    lineHeight: 25,
-    letterSpacing: -0.4,
+    fontFamily: fonts.sans.semibold,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
     ...tabular,
   },
   /** A row's trailing amount. */
   amount: {
-    fontFamily: fonts.mono.semibold,
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontFamily: fonts.sans.medium,
+    fontSize: 14,
+    lineHeight: 20,
     ...tabular,
   },
-  /** Dates, counts, positions, percentages, IDs. */
+  /** Dates, counts, positions, percentages. */
   numeric: {
-    fontFamily: fonts.mono.regular,
-    fontSize: 11.5,
+    fontFamily: fonts.sans.regular,
+    fontSize: 12,
     lineHeight: 16,
     ...tabular,
   },
   numericStrong: {
-    fontFamily: fonts.mono.medium,
-    fontSize: 11.5,
+    fontFamily: fonts.sans.medium,
+    fontSize: 12,
     lineHeight: 16,
     ...tabular,
   },
-  /** Metadata-sized numerics, e.g. "12 Dokumente · 3 offen". */
   numericMeta: {
-    fontFamily: fonts.mono.regular,
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontFamily: fonts.sans.regular,
+    fontSize: 12,
+    lineHeight: 16,
     ...tabular,
+  },
+  /** Literal machine values only: a checksum, a token, an identifier. */
+  mono: {
+    fontFamily: fonts.mono.regular,
+    fontSize: 12,
+    lineHeight: 18,
   },
 } satisfies Record<string, TextStyle>;

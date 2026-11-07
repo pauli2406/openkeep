@@ -849,7 +849,7 @@ const useMarkdownStyles = createThemedStyles((c) => ({
   },
   em: {
     // Android will not synthesise an italic for a named face, so name the face.
-    fontFamily: fonts.sans.italic,
+    fontFamily: fonts.sans.regular,
   },
   paragraph: {
     marginTop: 0,

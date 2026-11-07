@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,7 +20,16 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { useI18n } from "../i18n";
-import { createThemedStyles, DENSITY_SCALE, radii, useAppearance, useColors } from "../theme";
+import {
+  cardShadow,
+  createThemedStyles,
+  DENSITY_SCALE,
+  radii,
+  useAppearance,
+  useColors,
+} from "../theme";
+import { Gradient, IconTile } from "./layout";
+import { useInShell } from "./shell-context";
 
 /**
  * A modal that covers the screen, with its safe area respected.
@@ -74,6 +84,7 @@ export function Screen({
   includeTopSafeArea = true,
   padded = true,
   footer,
+  hideHeader = false,
 }: {
   title: string;
   /** A mono sub-line under the bar title — Chat names the scope there. */
@@ -101,12 +112,33 @@ export function Screen({
    * stay reachable however far down the list the user is.
    */
   footer?: ReactNode;
+  /** A screen with its own hero, such as Today, opens without a page heading. */
+  hideHeader?: boolean;
 }) {
   const styles = useStyles();
   const colors = useColors();
   const scrollRef = useRef<ScrollView>(null);
+  const inShell = useInShell();
 
   useScrollToTop(scrollRef);
+
+  // Inside the shell the header belongs to the shell, so a title is the page's
+  // own heading in the body, exactly as on the web.
+  const pageHeader = inShell ? (
+    <View style={styles.pageHeader}>
+      <View style={styles.pageHeaderText}>
+        <Text style={styles.pageTitle} numberOfLines={2} accessibilityRole="header">
+          {title}
+        </Text>
+        {titleMeta ? (
+          <Text style={styles.pageMeta} numberOfLines={2}>
+            {titleMeta}
+          </Text>
+        ) : null}
+      </View>
+      {right ? <View style={styles.appBarActions}>{right}</View> : null}
+    </View>
+  ) : null;
 
   // A non-scrolling screen pins things to the bottom, so its body has to fill
   // the space rather than size to its children.
@@ -118,12 +150,14 @@ export function Screen({
         contentContainerStyle,
       ]}
     >
+      {scroll && !hideHeader ? pageHeader : null}
       {children}
     </View>
   );
 
   return (
-    <SafeAreaView edges={includeTopSafeArea ? ["top"] : []} style={styles.safeArea}>
+    <SafeAreaView edges={includeTopSafeArea && !inShell ? ["top"] : []} style={styles.safeArea}>
+      {inShell ? null : (
       <View style={[styles.appBar, onBack ? styles.appBarWithBack : null]}>
         {onBack ? (
           <Pressable
@@ -156,7 +190,9 @@ export function Screen({
         )}
         {right ? <View style={styles.appBarActions}>{right}</View> : null}
       </View>
+      )}
       {notice}
+      {!scroll && !hideHeader ? pageHeader : null}
       <KeyboardAvoidingView
         style={styles.flexFill}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -229,7 +265,7 @@ export function Notice({
   );
 }
 
-/** A bordered surface. Borders, not shadows. */
+/** A card: white, softly lifted, with the web's rounded corners. */
 export function Panel({
   children,
   style,
@@ -244,8 +280,7 @@ export function Panel({
 }
 
 /**
- * The strip above a group of rows: a mono uppercase label on the bar surface,
- * with an optional count on the right.
+ * The label above a group of rows, with an optional count on the right.
  */
 export function SectionHeader({
   label,
@@ -444,13 +479,16 @@ export function Button({
   size = "md",
   disabled,
   loading,
+  icon,
 }: {
   label: string;
   onPress?: () => void;
-  variant?: "primary" | "secondary" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "md" | "sm";
   disabled?: boolean;
   loading?: boolean;
+  /** A MaterialCommunityIcons name, drawn before the label. */
+  icon?: string;
 }) {
   const styles = useStyles();
   const colors = useColors();
@@ -458,17 +496,20 @@ export function Button({
   const boxMap = {
     primary: styles.primaryButton,
     secondary: styles.secondaryButton,
+    ghost: styles.ghostButton,
     danger: styles.dangerButton,
   };
   const textMap = {
     primary: styles.primaryButtonText,
     secondary: styles.secondaryButtonText,
+    ghost: styles.secondaryButtonText,
     danger: styles.dangerButtonText,
   };
   // Each spinner matches its label, so a loading button stays legible.
   const spinnerMap = {
     primary: colors.accentFillInk,
     secondary: colors.ink,
+    ghost: colors.ink,
     danger: colors.red,
   };
 
@@ -490,7 +531,17 @@ export function Button({
         pressed && !(disabled || loading) ? styles.buttonPressed : null,
       ]}
     >
+      {variant === "primary" ? (
+        <Gradient name="action" style={styles.buttonFill} borderRadius={radii.lg} />
+      ) : null}
       {loading ? <ActivityIndicator size="small" color={spinnerMap[variant]} /> : null}
+      {icon && !loading ? (
+        <MaterialCommunityIcons
+          name={icon as never}
+          size={size === "sm" ? 15 : 17}
+          color={spinnerMap[variant]}
+        />
+      ) : null}
       <Text style={[styles.buttonText, textMap[variant]]}>{label}</Text>
     </Pressable>
   );
@@ -566,16 +617,25 @@ export function EmptyState({
   body,
   action,
   onAction,
+  icon,
 }: {
   title: string;
   body?: string;
+  /** A MaterialCommunityIcons name, in a soft tile above the title. */
+  icon?: string;
   /** A way back — "show all" after a filter turned up nothing. */
   action?: string;
   onAction?: () => void;
 }) {
   const styles = useStyles();
+  const colors = useColors();
   return (
     <View style={styles.emptyState}>
+      {icon ? (
+        <IconTile>
+          <MaterialCommunityIcons name={icon as never} size={18} color={colors.accentSoftInk} />
+        </IconTile>
+      ) : null}
       <Text style={styles.emptyTitle}>{title}</Text>
       {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
       {action && onAction ? (
@@ -656,12 +716,12 @@ const useStyles = createThemedStyles((c) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    height: 46,
+    height: 52,
     flexShrink: 0,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
-    backgroundColor: c.bar,
+    backgroundColor: c.app,
   },
   appBarTitle: {
     ...text.barTitle,
@@ -674,7 +734,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 9,
   },
   backButton: {
-    padding: 4,
+    padding: 6,
   },
   backButtonPressed: {
     opacity: 0.7,
@@ -685,15 +745,13 @@ const useStyles = createThemedStyles((c) => ({
   },
   appBarTitleMeta: {
     ...text.numeric,
-    fontSize: 10.5,
-    lineHeight: 14,
     marginTop: 1,
-    color: c.faint,
+    color: c.muted,
   },
   appBarActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
   },
   scrollContent: {
     flexGrow: 1,
@@ -704,9 +762,7 @@ const useStyles = createThemedStyles((c) => ({
     gap: 8,
     flexShrink: 0,
     paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    paddingVertical: 8,
   },
   noticeNeutral: {
     backgroundColor: c.bar,
@@ -728,7 +784,7 @@ const useStyles = createThemedStyles((c) => ({
     flex: 1,
   },
   noticeTextNeutral: {
-    color: c.dim,
+    color: c.muted,
   },
   noticeTextWarn: {
     color: c.amber,
@@ -741,13 +797,15 @@ const useStyles = createThemedStyles((c) => ({
     color: c.accent,
   },
   content: {
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
   contentFlex: {
     flex: 1,
   },
   contentPadded: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 28,
     gap: 16,
   },
   panel: {
@@ -755,9 +813,10 @@ const useStyles = createThemedStyles((c) => ({
     borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: c.border,
+    ...cardShadow(c),
   },
   panelPadded: {
-    padding: 14,
+    padding: 16,
     gap: 12,
   },
   sectionHeader: {
@@ -765,19 +824,17 @@ const useStyles = createThemedStyles((c) => ({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
-    backgroundColor: c.bar,
+    paddingTop: 18,
+    paddingBottom: 8,
   },
   sectionHeaderLabel: {
     ...text.sectionLabel,
     flex: 1,
-    color: c.dim,
+    color: c.muted,
   },
   sectionHeaderCount: {
     ...text.numeric,
-    color: c.faint,
+    color: c.muted,
   },
   row: {
     flexDirection: "row",
@@ -785,12 +842,12 @@ const useStyles = createThemedStyles((c) => ({
     gap: 12,
     minHeight: 56,
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: c.borderSoft,
+    borderBottomColor: c.border,
   },
   rowPressed: {
-    backgroundColor: c.raised,
+    backgroundColor: c.bar,
   },
   rowBad: {
     backgroundColor: c.redSoft,
@@ -808,12 +865,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   rowMeta: {
     ...text.meta,
-    marginTop: 3,
-    color: c.dim,
+    marginTop: 2,
+    color: c.muted,
   },
   rowMetaMono: {
     ...text.numericMeta,
-    marginTop: 3,
+    marginTop: 2,
   },
   rowValueWrap: {
     // Shrinkable and capped, so a long value truncates instead of squeezing the
@@ -839,12 +896,12 @@ const useStyles = createThemedStyles((c) => ({
   },
   rowValueMeta: {
     ...text.numeric,
-    marginTop: 3,
-    color: c.faint,
+    marginTop: 2,
+    color: c.muted,
   },
   dot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     flexShrink: 0,
     borderRadius: radii.pill,
   },
@@ -861,11 +918,11 @@ const useStyles = createThemedStyles((c) => ({
     backgroundColor: c.green,
   },
   dotFaint: {
-    backgroundColor: c.borderStrong,
+    backgroundColor: c.muted,
   },
   button: {
-    height: 46,
-    borderRadius: 9,
+    height: 44,
+    borderRadius: radii.lg,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -874,20 +931,46 @@ const useStyles = createThemedStyles((c) => ({
   },
   buttonSm: {
     height: 38,
+    borderRadius: radii.md,
     paddingHorizontal: 12,
   },
   primaryButton: {
     backgroundColor: c.accentFill,
   },
   secondaryButton: {
-    backgroundColor: c.panel,
+    backgroundColor: c.app,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.border,
   },
   dangerButton: {
-    backgroundColor: c.panel,
-    borderWidth: 1,
-    borderColor: c.borderStrong,
+    backgroundColor: c.redSoft,
+  },
+  buttonFill: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  ghostButton: {
+    backgroundColor: "transparent",
+  },
+  pageHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  pageHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pageTitle: {
+    ...text.screenTitle,
+    color: c.ink,
+  },
+  pageMeta: {
+    ...text.body,
+    marginTop: 2,
+    color: c.muted,
   },
   buttonDisabled: {
     opacity: 0.45,
@@ -913,13 +996,13 @@ const useStyles = createThemedStyles((c) => ({
     gap: 6,
   },
   fieldLabel: {
-    ...text.meta,
-    color: c.muted,
+    ...text.metaStrong,
+    color: c.ink,
   },
   input: {
     ...text.body,
     height: 44,
-    borderRadius: 9,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: c.borderStrong,
     backgroundColor: c.panel,
@@ -935,9 +1018,9 @@ const useStyles = createThemedStyles((c) => ({
   },
   pill: {
     alignSelf: "flex-start",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
   },
   pillSoft: {
     backgroundColor: c.accentSoft,
@@ -953,12 +1036,10 @@ const useStyles = createThemedStyles((c) => ({
   },
   pillOutline: {
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.border,
   },
   pillText: {
     ...text.smallStrong,
-    fontSize: 11,
-    lineHeight: 15,
   },
   pillTextSoft: {
     color: c.accentSoftInk,
@@ -973,12 +1054,12 @@ const useStyles = createThemedStyles((c) => ({
     color: c.green,
   },
   pillTextOutline: {
-    color: c.dim,
+    color: c.ink,
   },
   emptyState: {
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 36,
+    gap: 8,
+    paddingVertical: 40,
     paddingHorizontal: 24,
   },
   emptyTitle: {
@@ -987,8 +1068,8 @@ const useStyles = createThemedStyles((c) => ({
     textAlign: "center",
   },
   emptyBody: {
-    ...text.meta,
-    color: c.dim,
+    ...text.body,
+    color: c.muted,
     textAlign: "center",
     maxWidth: 300,
   },
@@ -1033,9 +1114,7 @@ const useStyles = createThemedStyles((c) => ({
   },
   metricLabel: {
     ...text.small,
-    fontSize: 10.5,
-    lineHeight: 14,
     marginTop: 2,
-    color: c.faint,
+    color: c.muted,
   },
 }));

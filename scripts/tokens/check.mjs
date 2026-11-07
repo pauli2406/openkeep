@@ -4,12 +4,14 @@
  * whether hex, `rgb()`/`rgba()`, `hsl()` or `oklch()`. A hex-only check is what let
  * seven `rgba(255,255,255,…)` surfaces survive the #108 audit.
  *
- * Each client has one source: `apps/web/src/theme.css` for the web and desktop
- * clients, and `packages/tokens` for mobile.
+ * There is one source: `apps/web/src/theme.css`. Mobile reads it through
+ * `packages/tokens`, whose palette is generated from it, and this also fails when
+ * that generated file is stale.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -73,4 +75,7 @@ if (offences.length > 0) {
   process.exit(1);
 }
 
+execFileSync("node", [resolve(root, "scripts/tokens/generate.mjs"), "--check"], {
+  stdio: "inherit",
+});
 console.log(`no colour literals in ${ROOTS.join(", ")}`);

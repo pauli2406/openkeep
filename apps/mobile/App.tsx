@@ -1,24 +1,21 @@
 import "react-native-gesture-handler";
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMemo } from "react";
+import { ActivityIndicator, Text } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   NavigationContainer,
   DarkTheme,
   DefaultTheme,
-  useNavigation,
 } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./src/auth";
 import { I18nProvider, useI18n } from "./src/i18n";
-import { SelectionModeProvider, useSelectionMode } from "./src/selection-mode";
+import { SelectionModeProvider } from "./src/selection-mode";
 import { OfflineArchiveProvider, useOfflineArchive } from "./src/offline-archive";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { DocumentDetailScreen } from "./src/screens/DocumentDetailScreen";
@@ -27,13 +24,15 @@ import { ReviewScreen } from "./src/screens/ReviewScreen";
 import { SearchScreen } from "./src/screens/SearchScreen";
 import { ScanScreen } from "./src/screens/ScanScreen";
 import { OfflineArchiveScreen } from "./src/screens/OfflineArchiveScreen";
+import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { TaxesScreen } from "./src/screens/TaxesScreen";
+import { AppDrawer, AppHeader, ShellProvider, useShell } from "./src/components/shell";
 import { CorrespondentDossierScreen } from "./src/screens/CorrespondentDossierScreen";
 import { CorrespondentsScreen } from "./src/screens/CorrespondentsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
-import { createThemedStyles, radii, ThemeProvider, useAppearance, useColors } from "./src/theme";
-import { fontAssets, fonts, text } from "./src/typography";
-import { useDashboardInsights } from "./src/hooks/useDashboardInsights";
+import { createThemedStyles, ThemeProvider, useAppearance, useColors } from "./src/theme";
+import { fontAssets } from "./src/typography";
 
 export type AppStackParamList = {
   Home: undefined;
@@ -44,133 +43,67 @@ export type AppStackParamList = {
     citation?: { page: number | null; quote: string };
   };
   Scan: undefined;
-  Settings: undefined;
   OfflineArchive: undefined;
   Correspondents: undefined;
   CorrespondentDossier: { slug: string; name: string };
 };
 
-/** Review is a tab, not a stack screen — it is the daily job. */
+/**
+ * The primary destinations, the same as the web client's sidebar. A tab navigator
+ * keeps each one mounted while you move around; its bar is hidden, because the
+ * drawer is what navigates.
+ */
 export type HomeTabParamList = {
   Today: undefined;
   Documents: undefined;
   Review: undefined;
+  Taxes: undefined;
   Chat: undefined;
+  Settings: undefined;
+  Profile: undefined;
 };
-
-const TAB_ICONS: Record<keyof HomeTabParamList, string> = {
-  Today: "view-list-outline",
-  Documents: "file-multiple-outline",
-  Review: "check-circle-outline",
-  Chat: "message-outline",
-};
-
-/** Without the bottom inset. */
-const TAB_BAR_HEIGHT = 54;
 
 const queryClient = new QueryClient();
 const Stack = createNativeStackNavigator<AppStackParamList>();
 const Tabs = createBottomTabNavigator<HomeTabParamList>();
 
-function HomeTabs() {
-  const colors = useColors();
+function HomeNavigator() {
   const styles = useStyles();
-  const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
-  const [activeTab, setActiveTab] = useState<keyof HomeTabParamList>("Today");
-  const { t } = useI18n();
-  const insights = useDashboardInsights();
-  const { selecting } = useSelectionMode();
-
-  const pendingReview = insights.data?.stats.pendingReview ?? 0;
-  const totalDocuments = insights.data?.stats.totalDocuments ?? 0;
-
-  // The FAB sits above the tab bar everywhere except Review, where confirm and
-  // skip are the two primary actions and nothing may compete with them, and
-  // Chat, where the composer occupies the same corner. A live selection takes
-  // that corner too — its action bar puts `Delete` exactly there.
-  const showFab = activeTab !== "Review" && activeTab !== "Chat" && !selecting;
+  const shell = useShell();
 
   return (
-    <View style={styles.flex}>
+    <SafeAreaView edges={["top"]} style={styles.shell}>
+      <AppHeader />
       <Tabs.Navigator
+        tabBar={() => null}
         screenListeners={{
           state: (e) => {
             const state = (e.data as { state: { index: number; routeNames: string[] } }).state;
             if (state) {
-              setActiveTab(state.routeNames[state.index] as keyof HomeTabParamList);
+              shell.setActive(state.routeNames[state.index] as keyof HomeTabParamList);
             }
           },
         }}
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarActiveTintColor: colors.accent,
-          tabBarInactiveTintColor: colors.faint,
-          tabBarStyle: [
-            styles.tabBar,
-            {
-              height: TAB_BAR_HEIGHT + insets.bottom,
-              paddingBottom: insets.bottom,
-            },
-          ],
-          tabBarLabelStyle: styles.tabBarLabel,
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons
-              name={TAB_ICONS[route.name] as never}
-              size={21}
-              color={color}
-            />
-          ),
-        })}
+        screenOptions={{ headerShown: false }}
       >
-        <Tabs.Screen
-          name="Today"
-          component={DashboardScreen}
-          options={{ title: t("tabs.today"), tabBarLabel: t("tabs.today") }}
-        />
-        <Tabs.Screen
-          name="Documents"
-          component={DocumentsScreen}
-          options={{
-            title: t("tabs.documents"),
-            tabBarLabel: t("tabs.documents"),
-            tabBarBadge: totalDocuments > 0 ? totalDocuments : undefined,
-            tabBarBadgeStyle: styles.countBadge,
-          }}
-        />
-        <Tabs.Screen
-          name="Review"
-          component={ReviewScreen}
-          options={{
-            title: t("tabs.review"),
-            tabBarLabel: t("tabs.review"),
-            // A dot, not a number: the count is already the first Today stat.
-            tabBarBadge: pendingReview > 0 ? "" : undefined,
-            tabBarBadgeStyle: styles.dotBadge,
-          }}
-        />
-        <Tabs.Screen
-          name="Chat"
-          component={SearchScreen}
-          options={{ title: t("tabs.chat"), tabBarLabel: t("tabs.chat") }}
-        />
+        <Tabs.Screen name="Today" component={DashboardScreen} />
+        <Tabs.Screen name="Documents" component={DocumentsScreen} />
+        <Tabs.Screen name="Review" component={ReviewScreen} />
+        <Tabs.Screen name="Taxes" component={TaxesScreen} />
+        <Tabs.Screen name="Chat" component={SearchScreen} />
+        <Tabs.Screen name="Settings" component={SettingsScreen} />
+        <Tabs.Screen name="Profile" component={ProfileScreen} />
       </Tabs.Navigator>
+    </SafeAreaView>
+  );
+}
 
-      {showFab ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("screens.scanUpload")}
-          onPress={() => navigation.navigate("Scan")}
-          style={({ pressed }) => [
-            styles.fab,
-            { bottom: TAB_BAR_HEIGHT + insets.bottom + 12 },
-            pressed ? styles.fabPressed : null,
-          ]}
-        >
-          <MaterialCommunityIcons name="line-scan" size={23} color={colors.accentFillInk} />
-        </Pressable>
-      ) : null}
-    </View>
+function HomeTabs() {
+  return (
+    <ShellProvider>
+      <HomeNavigator />
+      <AppDrawer />
+    </ShellProvider>
   );
 }
 
@@ -235,11 +168,6 @@ function AppNavigator({ fontsLoaded }: { fontsLoaded: boolean }) {
           component={DocumentDetailScreen}
           // The screen brings its own bar and its own safe-area inset; the native
           // header would sit above both as an empty strip.
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
@@ -357,46 +285,8 @@ const useStyles = createThemedStyles((c) => ({
     color: c.muted,
     textAlign: "center",
   },
-  tabBar: {
-    backgroundColor: c.bar,
-    borderTopWidth: 1,
-    borderTopColor: c.border,
-    paddingTop: 6,
-  },
-  tabBarLabel: {
-    fontFamily: fonts.sans.medium,
-    fontSize: 10,
-    lineHeight: 14,
-  },
-  countBadge: {
-    ...text.numeric,
-    fontSize: 9.5,
-    lineHeight: 13,
-    minWidth: 16,
-    height: 14,
-    borderRadius: radii.sm,
-    backgroundColor: c.raised,
-    color: c.dim,
-  },
-  dotBadge: {
-    minWidth: 7,
-    width: 7,
-    height: 7,
-    borderRadius: radii.pill,
-    backgroundColor: c.amber,
-  },
-  fab: {
-    position: "absolute",
-    right: 16,
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: c.accentFill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  fabPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.94 }],
+  shell: {
+    flex: 1,
+    backgroundColor: c.app,
   },
 }));
