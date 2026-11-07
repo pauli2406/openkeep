@@ -297,14 +297,14 @@ export function colorForValue(value: string): string {
   // Theme-aware: each token has a light and a dark value, so tag and
   // type dots stay legible on both surfaces.
   const palette = [
-    "var(--ok-cat-1)",
-    "var(--ok-cat-2)",
-    "var(--ok-cat-3)",
-    "var(--ok-cat-4)",
-    "var(--ok-cat-5)",
-    "var(--ok-cat-6)",
-    "var(--ok-cat-7)",
-    "var(--ok-cat-8)",
+    "var(--chart-1)",
+    "var(--chart-2)",
+    "var(--chart-3)",
+    "var(--chart-4)",
+    "var(--chart-5)",
+    "var(--chart-6)",
+    "var(--chart-7)",
+    "var(--chart-8)",
   ];
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {

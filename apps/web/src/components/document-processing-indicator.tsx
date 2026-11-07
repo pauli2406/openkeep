@@ -1,6 +1,7 @@
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { getDocumentProcessingLabel, isDocumentProcessing } from "@/lib/document-processing";
+import { useI18n } from "@/lib/i18n";
 
 type ProcessableDocumentLike = {
   status: string;
@@ -16,21 +17,18 @@ export function DocumentProcessingIndicator({
   document: ProcessableDocumentLike;
   className?: string;
 }) {
+  const { t } = useI18n();
+
   if (!isDocumentProcessing(document)) {
     return null;
   }
 
-  const label = getDocumentProcessingLabel(document) ?? "Processing";
+  const queued = getDocumentProcessingLabel(document) === "Queued";
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--ok-accent)]/20 bg-[color:var(--ok-accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ok-accent)]">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        {label}
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--ok-accent)]/12">
-        <div className="h-full w-1/3 animate-[pulse_1.4s_ease-in-out_infinite] rounded-full bg-[color:var(--ok-accent)]" />
-      </div>
-    </div>
+    <Badge variant="info" className={className}>
+      <Spinner aria-hidden="true" />
+      {queued ? t("documents.queued") : t("documents.processing")}
+    </Badge>
   );
 }

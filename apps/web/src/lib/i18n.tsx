@@ -8,6 +8,212 @@ import {
 export type AppLanguage = "en" | "de";
 
 export type TranslationKey =
+  | "taxes.groupsHeading"
+  | "import.stepsTitle"
+  | "import.stepEmbedHint"
+  | "import.stepExtractHint"
+  | "import.stepOcrHint"
+  | "import.stepUploadHint"
+  | "import.dropHint"
+  | "import.openOriginal"
+  | "omnibar.followUpMore"
+  | "omnibar.followUpSimilar"
+  | "omnibar.followUpFrom"
+  | "omnibar.suggestHighest"
+  | "omnibar.suggestCompare"
+  | "omnibar.suggestTag"
+  | "omnibar.suggestType"
+  | "omnibar.suggestTopics"
+  | "omnibar.suggestSummarize"
+  | "omnibar.suggestDeadlines"
+  | "omnibar.suggestOverdue"
+  | "omnibar.page"
+  | "omnibar.noTextDetail"
+  | "omnibar.noTextTitle"
+  | "omnibar.documentFailed"
+  | "omnibar.openDocument"
+  | "omnibar.backToResults"
+  | "omnibar.allSources"
+  | "omnibar.answer"
+  | "omnibar.followUp"
+  | "omnibar.matchingDocuments"
+  | "omnibar.pageAbbrev"
+  | "omnibar.usedSourcesMany"
+  | "omnibar.usedSourcesOne"
+  | "omnibar.insufficient"
+  | "omnibar.searchedMany"
+  | "omnibar.searchedOne"
+  | "omnibar.searching"
+  | "omnibar.retry"
+  | "omnibar.tryRephrasing"
+  | "omnibar.retrievalFailed"
+  | "omnibar.openFullSearch"
+  | "omnibar.noMatches"
+  | "omnibar.close"
+  | "omnibar.clear"
+  | "omnibar.sectionRecent"
+  | "omnibar.description"
+  | "omnibar.title"
+  | "documentDetail.copyAnswer"
+  | "documentDetail.qaFurtherMatches"
+  | "documentDetail.qaStarterAction"
+  | "documentDetail.qaStarterDates"
+  | "documentDetail.qaStarterSummary"
+  | "documentDetail.qaEmptyBody"
+  | "documentDetail.qaStreamEnded"
+  | "documentDetail.noValidationIssues"
+  | "documentDetail.retry"
+  | "documentDetail.rawMetadata"
+  | "documentDetail.nextPage"
+  | "documentDetail.previousPage"
+  | "documentDetail.statusFailed"
+  | "documentDetail.statusQueued"
+  | "documentDetail.statusReady"
+  | "documentDetail.download"
+  | "documentDetail.moreActions"
+  | "dossier.documentsError"
+  | "dossier.loadingDocuments"
+  | "dossier.openInExplorer"
+  | "dossier.documentsFrom"
+  | "dossier.noSummary"
+  | "dossier.summary"
+  | "dossier.noTypes"
+  | "dossier.typeBreakdown"
+  | "dossier.cancellation"
+  | "dossier.renewal"
+  | "dossier.policyReferences"
+  | "dossier.insurance"
+  | "dossier.noTimeline"
+  | "dossier.timeline"
+  | "dossier.noCurrentState"
+  | "dossier.currentState"
+  | "dossier.activity"
+  | "dossier.noChanges"
+  | "dossier.changes"
+  | "dossier.noProvider"
+  | "dossier.generating"
+  | "dossier.unknownCategory"
+  | "dossier.overview"
+  | "dossier.undated"
+  | "dossier.notAvailable"
+  | "dossier.topType"
+  | "dossier.latestType"
+  | "dossier.latestAmount"
+  | "dossier.latestPremium"
+  | "dossier.metricChanges"
+  | "dossier.metricLastDocument"
+  | "dossier.metricDocuments"
+  | "dossier.description"
+  | "dossier.back"
+  | "dossier.loadError"
+  | "dossier.loading"
+  | "shared.correspondentUnresolved"
+  | "shared.classificationAmbiguous"
+  | "shared.document"
+  | "shared.deselectDocument"
+  | "shared.selectDocument"
+  | "shared.selected"
+  | "shared.select"
+  | "shared.noDocuments"
+  | "shared.daysLeft"
+  | "shared.daysOverdue"
+  | "shared.open"
+  | "shared.due"
+  | "shared.noDeadlines"
+  | "shared.sparklineLabel"
+  | "shared.noActivity"
+  | "groups.loadError"
+  | "groups.categoriesHint"
+  | "groups.correspondentsHint"
+  | "groups.groupBy"
+  | "documents.bulkFailed"
+  | "documents.reprocessFailed"
+  | "documents.reprocessQueueing"
+  | "documents.reprocessDescription"
+  | "documents.reprocessTitleMany"
+  | "documents.reprocessTitleOne"
+  | "documents.deleteFailed"
+  | "documents.deleteNow"
+  | "documents.deleteDescription"
+  | "documents.deleteTitleMany"
+  | "documents.deleteTitleOne"
+  | "documents.queued"
+  | "documents.processing"
+  | "documents.statusFailed"
+  | "documents.statusProcessing"
+  | "documents.statusPending"
+  | "documents.statusReady"
+  | "filters.done"
+  | "filters.remove"
+  | "filters.sheetDescription"
+  | "auth.truthSourcesDetail"
+  | "filters.loadError"
+  | "auth.truthSourcesTitle"
+  | "filters.hide"
+  | "auth.truthReadDetail"
+  | "filters.show"
+  | "auth.truthReadTitle"
+  | "explorer.timelineError"
+  | "auth.truthHostedDetail"
+  | "explorer.loadingTimeline"
+  | "auth.truthHostedTitle"
+  | "explorer.empty"
+  | "auth.brandHeadline"
+  | "explorer.emptyTitle"
+  | "explorer.loadError"
+  | "explorer.loadingDocuments"
+  | "explorer.showing"
+  | "explorer.countCategories"
+  | "explorer.countCorrespondents"
+  | "explorer.countMany"
+  | "explorer.countOne"
+  | "explorer.viewGroups"
+  | "explorer.viewTimeline"
+  | "explorer.viewList"
+  | "explorer.viewLabel"
+  | "explorer.searchPlaceholder"
+  | "twoFactor.requestFailed"
+  | "twoFactor.disableFailed"
+  | "twoFactor.invalidCode"
+  | "twoFactor.startFailed"
+  | "twoFactor.copied"
+  | "twoFactor.copyCodes"
+  | "twoFactor.recoveryOnce"
+  | "twoFactor.recoveryDescription"
+  | "twoFactor.recoveryTitle"
+  | "twoFactor.confirmEnable"
+  | "twoFactor.codeLabel"
+  | "twoFactor.manualSecret"
+  | "twoFactor.qrAlt"
+  | "twoFactor.setupDescription"
+  | "twoFactor.setupTitle"
+  | "twoFactor.authCode"
+  | "twoFactor.password"
+  | "twoFactor.disableDescription"
+  | "twoFactor.disableTitle"
+  | "twoFactor.disable"
+  | "twoFactor.enable"
+  | "twoFactor.disabledHint"
+  | "twoFactor.enabledHint"
+  | "twoFactor.disabled"
+  | "twoFactor.enabled"
+  | "twoFactor.description"
+  | "twoFactor.title"
+  | "settings.snapshotSection"
+  | "settings.sources"
+  | "settings.importModeMerge"
+  | "settings.importMode"
+  | "settings.deleteTokenDescription"
+  | "settings.deleteTokenTitle"
+  | "settings.noApiTokensHint"
+  | "settings.aiChatLanguageHint"
+  | "settings.aiProcessingLanguageHint"
+  | "settings.uiLanguageHint"
+  | "settings.copy"
+  | "settings.retry"
+  | "settingsNav.providersDescription"
+  | "settingsNav.taxonomyDescription"
+  | "settingsNav.generalDescription"
   | "today.summary.openOnly"
   | "today.summary.open"
   | "today.summary.allClear"
@@ -626,6 +832,212 @@ export type TranslationKey =
 
 const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
   en: {
+    "taxes.groupsHeading": "By document type",
+    "import.stepsTitle": "What happens to each file",
+    "import.stepEmbedHint": "Makes it searchable",
+    "import.stepExtractHint": "Finds sender, dates and amounts",
+    "import.stepOcrHint": "Reads the text, even from scans",
+    "import.stepUploadHint": "Stored safely in your archive",
+    "import.dropHint": "The upload starts right away.",
+    "import.openOriginal": "Open original",
+    "omnibar.followUpMore": "Tell me more about \"{query}\"",
+    "omnibar.followUpSimilar": "Show me similar {name} documents",
+    "omnibar.followUpFrom": "What other documents are from {name}?",
+    "omnibar.suggestHighest": "What are my highest value documents?",
+    "omnibar.suggestCompare": "Compare documents from {year} vs {previous}",
+    "omnibar.suggestTag": "What documents are tagged \"{name}\"?",
+    "omnibar.suggestType": "Show me all documents of type {name}",
+    "omnibar.suggestTopics": "What are the key topics in {name} documents?",
+    "omnibar.suggestSummarize": "Summarize my documents from {name}",
+    "omnibar.suggestDeadlines": "What are my upcoming deadlines this month?",
+    "omnibar.suggestOverdue": "What documents are overdue and need attention?",
+    "omnibar.page": "Page {page}",
+    "omnibar.noTextDetail": "This document has no text content to preview.",
+    "omnibar.noTextTitle": "No text available",
+    "omnibar.documentFailed": "Failed to load document",
+    "omnibar.openDocument": "Open document",
+    "omnibar.backToResults": "Back to results",
+    "omnibar.allSources": "All sources",
+    "omnibar.answer": "Answer",
+    "omnibar.followUp": "Follow up",
+    "omnibar.matchingDocuments": "Matching documents",
+    "omnibar.pageAbbrev": "p.",
+    "omnibar.usedSourcesMany": "Used {count} sources",
+    "omnibar.usedSourcesOne": "Used 1 source",
+    "omnibar.insufficient": "Not enough evidence in your archive to answer this question confidently.",
+    "omnibar.searchedMany": "Searched your archive, {count} matches",
+    "omnibar.searchedOne": "Searched your archive, 1 match",
+    "omnibar.searching": "Searching your archive…",
+    "omnibar.retry": "Retry",
+    "omnibar.tryRephrasing": "Try rephrasing your question.",
+    "omnibar.retrievalFailed": "Archive retrieval failed",
+    "omnibar.openFullSearch": "Open full search",
+    "omnibar.noMatches": "Nothing matches that.",
+    "omnibar.close": "Close",
+    "omnibar.clear": "Clear",
+    "omnibar.sectionRecent": "Recent",
+    "omnibar.description": "Search your archive, ask it a question or jump to a page.",
+    "omnibar.title": "Search and ask",
+    "documentDetail.copyAnswer": "Copy answer",
+    "documentDetail.qaFurtherMatches": "Further matches",
+    "documentDetail.qaStarterAction": "What do I have to pay or do?",
+    "documentDetail.qaStarterDates": "Which dates matter here?",
+    "documentDetail.qaStarterSummary": "Summarize the key points",
+    "documentDetail.qaEmptyBody": "Answers come only from this document and show the passages they rest on.",
+    "documentDetail.qaStreamEnded": "The archive ended the answer stream unexpectedly.",
+    "documentDetail.noValidationIssues": "No issues found.",
+    "documentDetail.retry": "Retry",
+    "documentDetail.rawMetadata": "Raw metadata",
+    "documentDetail.nextPage": "Next page",
+    "documentDetail.previousPage": "Previous page",
+    "documentDetail.statusFailed": "Failed",
+    "documentDetail.statusQueued": "Queued",
+    "documentDetail.statusReady": "Ready",
+    "documentDetail.download": "Download",
+    "documentDetail.moreActions": "More actions",
+    "dossier.documentsError": "Failed to load the document list for this correspondent.",
+    "dossier.loadingDocuments": "Loading correspondent documents",
+    "dossier.openInExplorer": "Open in explorer",
+    "dossier.documentsFrom": "Documents from {name}",
+    "dossier.noSummary": "No summary available yet.",
+    "dossier.summary": "Summary",
+    "dossier.noTypes": "No document types yet.",
+    "dossier.typeBreakdown": "Type breakdown",
+    "dossier.cancellation": "Cancellation",
+    "dossier.renewal": "Renewal",
+    "dossier.policyReferences": "Policy references",
+    "dossier.insurance": "Insurance lens",
+    "dossier.noTimeline": "No timeline highlights available yet.",
+    "dossier.timeline": "Timeline highlights",
+    "dossier.noCurrentState": "No current-state facts available yet.",
+    "dossier.currentState": "Current state",
+    "dossier.activity": "Documents per month",
+    "dossier.noChanges": "No major changes detected yet.",
+    "dossier.changes": "Key changes",
+    "dossier.noProvider": "No LLM provider is configured for correspondent intelligence yet.",
+    "dossier.generating": "Intelligence generation is in progress. This page will refresh automatically when the dossier is ready.",
+    "dossier.unknownCategory": "Unknown category",
+    "dossier.overview": "Relationship overview",
+    "dossier.undated": "Undated",
+    "dossier.notAvailable": "n/a",
+    "dossier.topType": "Top type",
+    "dossier.latestType": "Latest type",
+    "dossier.latestAmount": "Latest amount",
+    "dossier.latestPremium": "Latest premium",
+    "dossier.metricChanges": "Detected changes",
+    "dossier.metricLastDocument": "Last document",
+    "dossier.metricDocuments": "Documents",
+    "dossier.description": "A living dossier for one relationship: overview, detected changes, milestones, domain-specific signals, and the underlying document trail.",
+    "dossier.back": "Back to dashboard",
+    "dossier.loadError": "Failed to load correspondent insights.",
+    "dossier.loading": "Loading correspondent dossier",
+    "shared.correspondentUnresolved": "Correspondent unresolved",
+    "shared.classificationAmbiguous": "Classification ambiguous",
+    "shared.document": "Document",
+    "shared.deselectDocument": "Deselect {title}",
+    "shared.selectDocument": "Select {title}",
+    "shared.selected": "Selected",
+    "shared.select": "Select",
+    "shared.noDocuments": "No documents found for the current selection.",
+    "shared.daysLeft": "{days}d left",
+    "shared.daysOverdue": "{days}d overdue",
+    "shared.open": "Open",
+    "shared.due": "due",
+    "shared.noDeadlines": "No deadlines in view",
+    "shared.sparklineLabel": "Monthly activity sparkline",
+    "shared.noActivity": "No monthly activity yet",
+    "groups.loadError": "Could not load the groups.",
+    "groups.categoriesHint": "Life domains with their top correspondents. Click a card to open its documents.",
+    "groups.correspondentsHint": "The bar shows each correspondent's share of the documents. Click a card to open them.",
+    "groups.groupBy": "Group by",
+    "documents.bulkFailed": "The change could not be applied. Please try again.",
+    "documents.reprocessFailed": "The selected documents could not be reprocessed.",
+    "documents.reprocessQueueing": "Queueing",
+    "documents.reprocessDescription": "This will queue the selected documents for OCR and metadata extraction again. Manual overrides remain locked.",
+    "documents.reprocessTitleMany": "Reprocess {count} documents?",
+    "documents.reprocessTitleOne": "Reprocess 1 document?",
+    "documents.deleteFailed": "One or more documents could not be deleted.",
+    "documents.deleteNow": "Delete now",
+    "documents.deleteDescription": "This removes the selected archive records immediately. Use this when you want a clean re-ingest or to clear obvious mistakes in bulk.",
+    "documents.deleteTitleMany": "Delete {count} documents?",
+    "documents.deleteTitleOne": "Delete 1 document?",
+    "documents.queued": "Queued",
+    "documents.processing": "Processing",
+    "documents.statusFailed": "Failed",
+    "documents.statusProcessing": "Processing",
+    "documents.statusPending": "Pending",
+    "documents.statusReady": "Ready",
+    "filters.done": "Done",
+    "filters.remove": "Remove filter",
+    "filters.sheetDescription": "Narrow down the documents shown.",
+    "auth.truthSourcesDetail": "Ask a question and every answer points to the passage it came from.",
+    "filters.loadError": "Could not load the filters.",
+    "auth.truthSourcesTitle": "Answers show their sources",
+    "filters.hide": "Hide filters",
+    "auth.truthReadDetail": "OCR and extraction turn scans into searchable text, dates and amounts.",
+    "filters.show": "Show filters",
+    "auth.truthReadTitle": "It reads what you file",
+    "explorer.timelineError": "Could not load the timeline.",
+    "auth.truthHostedDetail": "The archive, its database and its files live on hardware you control.",
+    "explorer.loadingTimeline": "Loading timeline",
+    "auth.truthHostedTitle": "You host it",
+    "explorer.empty": "No documents match the current filters.",
+    "auth.brandHeadline": "Every document kept, read and ready to answer.",
+    "explorer.emptyTitle": "No documents found",
+    "explorer.loadError": "Could not load the documents.",
+    "explorer.loadingDocuments": "Loading documents",
+    "explorer.showing": "Showing {shown} of {total}",
+    "explorer.countCategories": "{count} categories",
+    "explorer.countCorrespondents": "{count} correspondents",
+    "explorer.countMany": "{count} documents",
+    "explorer.countOne": "1 document",
+    "explorer.viewGroups": "Groups",
+    "explorer.viewTimeline": "Timeline",
+    "explorer.viewList": "List",
+    "explorer.viewLabel": "View",
+    "explorer.searchPlaceholder": "Search titles, snippets, or archive terms",
+    "twoFactor.requestFailed": "Request failed",
+    "twoFactor.disableFailed": "Failed to disable two-factor",
+    "twoFactor.invalidCode": "Invalid authentication code",
+    "twoFactor.startFailed": "Failed to start enrollment",
+    "twoFactor.copied": "Copied",
+    "twoFactor.copyCodes": "Copy codes",
+    "twoFactor.recoveryOnce": "These codes are shown only once.",
+    "twoFactor.recoveryDescription": "Store these somewhere safe. Each code works once and lets you sign in if you lose access to your authenticator.",
+    "twoFactor.recoveryTitle": "Save your recovery codes",
+    "twoFactor.confirmEnable": "Confirm & enable",
+    "twoFactor.codeLabel": "6-digit code",
+    "twoFactor.manualSecret": "Or enter this secret manually",
+    "twoFactor.qrAlt": "TOTP QR code",
+    "twoFactor.setupDescription": "Scan the QR code with your authenticator app, then enter the 6-digit code to confirm.",
+    "twoFactor.setupTitle": "Set up two-factor authentication",
+    "twoFactor.authCode": "Authentication code",
+    "twoFactor.password": "Password",
+    "twoFactor.disableDescription": "Confirm with your password and a current code (or a recovery code).",
+    "twoFactor.disableTitle": "Disable two-factor authentication",
+    "twoFactor.disable": "Disable",
+    "twoFactor.enable": "Enable",
+    "twoFactor.disabledHint": "Add a second factor for stronger protection.",
+    "twoFactor.enabledHint": "Two-factor authentication is active on your account.",
+    "twoFactor.disabled": "Disabled",
+    "twoFactor.enabled": "Enabled",
+    "twoFactor.description": "Protect your account with a time-based one-time code (TOTP) from an authenticator app in addition to your password.",
+    "twoFactor.title": "Two-Factor Authentication",
+    "settings.snapshotSection": "Snapshot",
+    "settings.sources": "Incoming documents",
+    "settings.importModeMerge": "Merge",
+    "settings.importMode": "Import mode",
+    "settings.deleteTokenDescription": "Anything using it loses access right away. This can't be undone.",
+    "settings.deleteTokenTitle": "Delete this token?",
+    "settings.noApiTokensHint": "Create a token to let scripts and other tools reach your archive.",
+    "settings.aiChatLanguageHint": "The language answers come back in when you ask your archive.",
+    "settings.aiProcessingLanguageHint": "Summaries and metadata the AI writes for new documents.",
+    "settings.uiLanguageHint": "Menus, labels and messages in this app.",
+    "settings.copy": "Copy",
+    "settings.retry": "Retry",
+    "settingsNav.providersDescription": "What reads, indexes and answers for your archive. Providers are chosen in the server's environment.",
+    "settingsNav.taxonomyDescription": "Clean up the tags, correspondents, types and categories your documents are filed under.",
+    "settingsNav.generalDescription": "Language, archive portability and the state of this server.",
     "today.summary.openOnly": "{open} open, none of them overdue.",
     "today.summary.open": "{open} open, {overdue} of them overdue.",
     "today.summary.allClear": "Your archive is in order. Nothing is waiting for you.",
@@ -1246,6 +1658,212 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.ask": "Ask",
   },
   de: {
+    "taxes.groupsHeading": "Nach Dokumententyp",
+    "import.stepsTitle": "Was mit jeder Datei passiert",
+    "import.stepEmbedHint": "Macht es durchsuchbar",
+    "import.stepExtractHint": "Findet Absender, Daten und Beträge",
+    "import.stepOcrHint": "Liest den Text, auch aus Scans",
+    "import.stepUploadHint": "Sicher in deinem Archiv gespeichert",
+    "import.dropHint": "Der Upload startet sofort.",
+    "import.openOriginal": "Original öffnen",
+    "omnibar.followUpMore": "Erzähl mir mehr über „{query}“",
+    "omnibar.followUpSimilar": "Zeig mir ähnliche Dokumente vom Typ {name}",
+    "omnibar.followUpFrom": "Welche anderen Dokumente sind von {name}?",
+    "omnibar.suggestHighest": "Welche meiner Dokumente haben den höchsten Betrag?",
+    "omnibar.suggestCompare": "Vergleiche Dokumente von {year} und {previous}",
+    "omnibar.suggestTag": "Welche Dokumente haben das Tag „{name}“?",
+    "omnibar.suggestType": "Zeig mir alle Dokumente vom Typ {name}",
+    "omnibar.suggestTopics": "Was sind die wichtigsten Themen in den Dokumenten von {name}?",
+    "omnibar.suggestSummarize": "Fass meine Dokumente von {name} zusammen",
+    "omnibar.suggestDeadlines": "Welche Fristen stehen diesen Monat an?",
+    "omnibar.suggestOverdue": "Welche Dokumente sind überfällig und brauchen meine Aufmerksamkeit?",
+    "omnibar.page": "Seite {page}",
+    "omnibar.noTextDetail": "Für dieses Dokument gibt es keinen Text zur Vorschau.",
+    "omnibar.noTextTitle": "Kein Text verfügbar",
+    "omnibar.documentFailed": "Dokument konnte nicht geladen werden",
+    "omnibar.openDocument": "Dokument öffnen",
+    "omnibar.backToResults": "Zurück zu den Ergebnissen",
+    "omnibar.allSources": "Alle Quellen",
+    "omnibar.answer": "Antwort",
+    "omnibar.followUp": "Weiterfragen",
+    "omnibar.matchingDocuments": "Passende Dokumente",
+    "omnibar.pageAbbrev": "S.",
+    "omnibar.usedSourcesMany": "{count} Quellen verwendet",
+    "omnibar.usedSourcesOne": "1 Quelle verwendet",
+    "omnibar.insufficient": "Dein Archiv enthält nicht genug Belege, um diese Frage sicher zu beantworten.",
+    "omnibar.searchedMany": "Archiv durchsucht, {count} Treffer",
+    "omnibar.searchedOne": "Archiv durchsucht, 1 Treffer",
+    "omnibar.searching": "Dein Archiv wird durchsucht…",
+    "omnibar.retry": "Erneut versuchen",
+    "omnibar.tryRephrasing": "Versuch, deine Frage anders zu formulieren.",
+    "omnibar.retrievalFailed": "Archivabfrage fehlgeschlagen",
+    "omnibar.openFullSearch": "Vollständige Suche öffnen",
+    "omnibar.noMatches": "Dazu passt nichts.",
+    "omnibar.close": "Schließen",
+    "omnibar.clear": "Leeren",
+    "omnibar.sectionRecent": "Zuletzt",
+    "omnibar.description": "Durchsuche dein Archiv, stell ihm eine Frage oder spring zu einer Seite.",
+    "omnibar.title": "Suchen und fragen",
+    "documentDetail.copyAnswer": "Antwort kopieren",
+    "documentDetail.qaFurtherMatches": "Weitere Treffer",
+    "documentDetail.qaStarterAction": "Was muss ich zahlen oder tun?",
+    "documentDetail.qaStarterDates": "Welche Termine sind hier wichtig?",
+    "documentDetail.qaStarterSummary": "Fasse die wichtigsten Punkte zusammen",
+    "documentDetail.qaEmptyBody": "Antworten stützen sich nur auf dieses Dokument und zeigen dir die passenden Stellen.",
+    "documentDetail.qaStreamEnded": "Das Archiv hat den Antwort-Stream unerwartet beendet.",
+    "documentDetail.noValidationIssues": "Keine Probleme gefunden.",
+    "documentDetail.retry": "Erneut versuchen",
+    "documentDetail.rawMetadata": "Rohdaten",
+    "documentDetail.nextPage": "Nächste Seite",
+    "documentDetail.previousPage": "Vorherige Seite",
+    "documentDetail.statusFailed": "Fehlgeschlagen",
+    "documentDetail.statusQueued": "In Warteschlange",
+    "documentDetail.statusReady": "Fertig",
+    "documentDetail.download": "Herunterladen",
+    "documentDetail.moreActions": "Weitere Aktionen",
+    "dossier.documentsError": "Die Dokumentenliste dieses Absenders konnte nicht geladen werden.",
+    "dossier.loadingDocuments": "Dokumente des Absenders werden geladen",
+    "dossier.openInExplorer": "Im Explorer öffnen",
+    "dossier.documentsFrom": "Dokumente von {name}",
+    "dossier.noSummary": "Noch keine Zusammenfassung verfügbar.",
+    "dossier.summary": "Zusammenfassung",
+    "dossier.noTypes": "Noch keine Dokumententypen.",
+    "dossier.typeBreakdown": "Aufteilung nach Typ",
+    "dossier.cancellation": "Kündigung",
+    "dossier.renewal": "Verlängerung",
+    "dossier.policyReferences": "Vertragsnummern",
+    "dossier.insurance": "Versicherungsblick",
+    "dossier.noTimeline": "Noch keine Meilensteine verfügbar.",
+    "dossier.timeline": "Meilensteine",
+    "dossier.noCurrentState": "Noch keine Fakten zum aktuellen Stand verfügbar.",
+    "dossier.currentState": "Aktueller Stand",
+    "dossier.activity": "Dokumente pro Monat",
+    "dossier.noChanges": "Bisher wurden keine größeren Änderungen erkannt.",
+    "dossier.changes": "Wichtige Änderungen",
+    "dossier.noProvider": "Für Absender-Dossiers ist noch kein LLM-Anbieter konfiguriert.",
+    "dossier.generating": "Das Dossier wird gerade erstellt. Diese Seite aktualisiert sich automatisch, sobald es fertig ist.",
+    "dossier.unknownCategory": "Unbekannte Kategorie",
+    "dossier.overview": "Überblick über die Beziehung",
+    "dossier.undated": "Ohne Datum",
+    "dossier.notAvailable": "k. A.",
+    "dossier.topType": "Häufigster Typ",
+    "dossier.latestType": "Letzter Typ",
+    "dossier.latestAmount": "Letzter Betrag",
+    "dossier.latestPremium": "Letzter Beitrag",
+    "dossier.metricChanges": "Erkannte Änderungen",
+    "dossier.metricLastDocument": "Letztes Dokument",
+    "dossier.metricDocuments": "Dokumente",
+    "dossier.description": "Ein lebendiges Dossier zu dieser Beziehung: Überblick, erkannte Änderungen, Meilensteine, fachliche Signale und die zugehörigen Dokumente.",
+    "dossier.back": "Zurück zur Übersicht",
+    "dossier.loadError": "Die Einblicke zu diesem Absender konnten nicht geladen werden.",
+    "dossier.loading": "Absender-Dossier wird geladen",
+    "shared.correspondentUnresolved": "Absender ungeklärt",
+    "shared.classificationAmbiguous": "Einordnung unklar",
+    "shared.document": "Dokument",
+    "shared.deselectDocument": "Auswahl von {title} aufheben",
+    "shared.selectDocument": "{title} auswählen",
+    "shared.selected": "Ausgewählt",
+    "shared.select": "Auswählen",
+    "shared.noDocuments": "Für die aktuelle Auswahl wurden keine Dokumente gefunden.",
+    "shared.daysLeft": "noch {days} T.",
+    "shared.daysOverdue": "{days} T. überfällig",
+    "shared.open": "Offen",
+    "shared.due": "fällig",
+    "shared.noDeadlines": "Keine Fristen in Sicht",
+    "shared.sparklineLabel": "Verlauf der monatlichen Aktivität",
+    "shared.noActivity": "Noch keine monatliche Aktivität",
+    "groups.loadError": "Die Gruppen konnten nicht geladen werden.",
+    "groups.categoriesHint": "Lebensbereiche mit ihren wichtigsten Absendern. Klicke auf eine Karte, um ihre Dokumente zu öffnen.",
+    "groups.correspondentsHint": "Der Balken zeigt den Anteil jedes Absenders an den Dokumenten. Klicke auf eine Karte, um sie zu öffnen.",
+    "groups.groupBy": "Gruppieren nach",
+    "documents.bulkFailed": "Die Änderung konnte nicht übernommen werden. Bitte versuche es noch einmal.",
+    "documents.reprocessFailed": "Die ausgewählten Dokumente konnten nicht neu verarbeitet werden.",
+    "documents.reprocessQueueing": "Wird eingeplant",
+    "documents.reprocessDescription": "Die ausgewählten Dokumente werden erneut für OCR und Metadaten-Extraktion eingeplant. Manuelle Änderungen bleiben geschützt.",
+    "documents.reprocessTitleMany": "{count} Dokumente neu verarbeiten?",
+    "documents.reprocessTitleOne": "1 Dokument neu verarbeiten?",
+    "documents.deleteFailed": "Mindestens ein Dokument konnte nicht gelöscht werden.",
+    "documents.deleteNow": "Jetzt löschen",
+    "documents.deleteDescription": "Das entfernt die ausgewählten Einträge sofort aus dem Archiv. Nutze das für einen sauberen Neuimport oder um offensichtliche Fehler gesammelt zu beseitigen.",
+    "documents.deleteTitleMany": "{count} Dokumente löschen?",
+    "documents.deleteTitleOne": "1 Dokument löschen?",
+    "documents.queued": "In der Warteschlange",
+    "documents.processing": "Wird verarbeitet",
+    "documents.statusFailed": "Fehlgeschlagen",
+    "documents.statusProcessing": "In Verarbeitung",
+    "documents.statusPending": "Ausstehend",
+    "documents.statusReady": "Bereit",
+    "filters.done": "Fertig",
+    "filters.remove": "Filter entfernen",
+    "filters.sheetDescription": "Grenze die angezeigten Dokumente ein.",
+    "auth.truthSourcesDetail": "Stell eine Frage, und jede Antwort verweist auf die Stelle, aus der sie stammt.",
+    "filters.loadError": "Die Filter konnten nicht geladen werden.",
+    "auth.truthSourcesTitle": "Antworten nennen ihre Quellen",
+    "filters.hide": "Filter ausblenden",
+    "auth.truthReadDetail": "OCR und Extraktion machen aus Scans durchsuchbaren Text, Daten und Beträge.",
+    "filters.show": "Filter einblenden",
+    "auth.truthReadTitle": "Es liest, was du ablegst",
+    "explorer.timelineError": "Die Zeitachse konnte nicht geladen werden.",
+    "auth.truthHostedDetail": "Archiv, Datenbank und Dateien liegen auf Hardware, die du kontrollierst.",
+    "explorer.loadingTimeline": "Zeitachse wird geladen",
+    "auth.truthHostedTitle": "Du betreibst es selbst",
+    "explorer.empty": "Keine Dokumente passen zu den aktuellen Filtern.",
+    "auth.brandHeadline": "Jedes Dokument sicher abgelegt, gelesen und bereit für deine Fragen.",
+    "explorer.emptyTitle": "Keine Dokumente gefunden",
+    "explorer.loadError": "Die Dokumente konnten nicht geladen werden.",
+    "explorer.loadingDocuments": "Dokumente werden geladen",
+    "explorer.showing": "{shown} von {total} angezeigt",
+    "explorer.countCategories": "{count} Kategorien",
+    "explorer.countCorrespondents": "{count} Korrespondenten",
+    "explorer.countMany": "{count} Dokumente",
+    "explorer.countOne": "1 Dokument",
+    "explorer.viewGroups": "Gruppen",
+    "explorer.viewTimeline": "Zeitachse",
+    "explorer.viewList": "Liste",
+    "explorer.viewLabel": "Ansicht",
+    "explorer.searchPlaceholder": "Titel, Textstellen oder Begriffe im Archiv suchen",
+    "twoFactor.requestFailed": "Anfrage fehlgeschlagen",
+    "twoFactor.disableFailed": "Zwei-Faktor konnte nicht deaktiviert werden",
+    "twoFactor.invalidCode": "Ungültiger Authentifizierungscode",
+    "twoFactor.startFailed": "Die Einrichtung konnte nicht gestartet werden",
+    "twoFactor.copied": "Kopiert",
+    "twoFactor.copyCodes": "Codes kopieren",
+    "twoFactor.recoveryOnce": "Diese Codes werden nur einmal angezeigt.",
+    "twoFactor.recoveryDescription": "Bewahre sie sicher auf. Jeder Code funktioniert einmal und lässt dich anmelden, wenn du keinen Zugriff mehr auf deinen Authenticator hast.",
+    "twoFactor.recoveryTitle": "Speichere deine Wiederherstellungscodes",
+    "twoFactor.confirmEnable": "Bestätigen und aktivieren",
+    "twoFactor.codeLabel": "6-stelliger Code",
+    "twoFactor.manualSecret": "Oder gib dieses Geheimnis von Hand ein",
+    "twoFactor.qrAlt": "TOTP-QR-Code",
+    "twoFactor.setupDescription": "Scanne den QR-Code mit deiner Authenticator-App und gib dann den 6-stelligen Code zur Bestätigung ein.",
+    "twoFactor.setupTitle": "Zwei-Faktor-Authentifizierung einrichten",
+    "twoFactor.authCode": "Authentifizierungscode",
+    "twoFactor.password": "Passwort",
+    "twoFactor.disableDescription": "Bestätige mit deinem Passwort und einem aktuellen Code (oder einem Wiederherstellungscode).",
+    "twoFactor.disableTitle": "Zwei-Faktor-Authentifizierung deaktivieren",
+    "twoFactor.disable": "Deaktivieren",
+    "twoFactor.enable": "Aktivieren",
+    "twoFactor.disabledHint": "Füge einen zweiten Faktor für stärkeren Schutz hinzu.",
+    "twoFactor.enabledHint": "Die Zwei-Faktor-Authentifizierung ist für dein Konto aktiv.",
+    "twoFactor.disabled": "Inaktiv",
+    "twoFactor.enabled": "Aktiv",
+    "twoFactor.description": "Schütze dein Konto zusätzlich zum Passwort mit einem zeitbasierten Einmalcode (TOTP) aus einer Authenticator-App.",
+    "twoFactor.title": "Zwei-Faktor-Authentifizierung",
+    "settings.snapshotSection": "Schnappschuss",
+    "settings.sources": "Eingehende Dokumente",
+    "settings.importModeMerge": "Zusammenführen",
+    "settings.importMode": "Importmodus",
+    "settings.deleteTokenDescription": "Alles, was es nutzt, verliert sofort den Zugriff. Das lässt sich nicht rückgängig machen.",
+    "settings.deleteTokenTitle": "Dieses Token löschen?",
+    "settings.noApiTokensHint": "Erstelle ein Token, damit Skripte und andere Werkzeuge auf dein Archiv zugreifen können.",
+    "settings.aiChatLanguageHint": "Die Sprache der Antworten, wenn du dein Archiv etwas fragst.",
+    "settings.aiProcessingLanguageHint": "Zusammenfassungen und Metadaten, die die KI für neue Dokumente schreibt.",
+    "settings.uiLanguageHint": "Menüs, Beschriftungen und Meldungen in dieser App.",
+    "settings.copy": "Kopieren",
+    "settings.retry": "Erneut versuchen",
+    "settingsNav.providersDescription": "Was dein Archiv liest, indexiert und Fragen beantwortet. Anbieter werden in der Umgebung des Servers festgelegt.",
+    "settingsNav.taxonomyDescription": "Räume die Tags, Korrespondenten, Typen und Kategorien auf, unter denen deine Dokumente abgelegt sind.",
+    "settingsNav.generalDescription": "Sprache, Archiv-Portabilität und der Zustand dieses Servers.",
     "today.summary.openOnly": "{open} offen, nichts davon überfällig.",
     "today.summary.open": "{open} offen, davon {overdue} überfällig.",
     "today.summary.allClear": "Dein Archiv ist in Ordnung. Nichts wartet auf dich.",

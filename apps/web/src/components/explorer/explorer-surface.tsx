@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Search,
-  Sidebar,
-  LayoutGrid,
-  Rows3,
   CalendarRange,
-  Loader2,
+  Download,
+  FileType2,
+  Files,
+  LayoutGrid,
+  ListFilter,
   RefreshCw,
+  Rows3,
+  Search,
   Tag as TagIcon,
   Trash2,
   X,
@@ -23,6 +25,10 @@ import {
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { authFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { Page, PageHeader } from "@/components/layout/page";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,21 +38,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FilterSidebar } from "./filter-sidebar";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Spinner } from "@/components/ui/spinner";
+import { countActiveFilters, FilterSidebar } from "./filter-sidebar";
 import { ActiveFilters } from "./active-filters";
 import { GroupsView } from "./groups-view";
-import {
-  ErrorBlock,
-  ExplorerSectionHeader,
-  LoadingBlock,
-} from "./shared";
-import { DocumentTable, type SortField } from "./document-table";
-import { TimelineView } from "./timeline-view";
+import { ErrorBlock, SegmentedControl } from "./shared";
+import { DocumentTable, DocumentTableSkeleton, type SortField } from "./document-table";
+import { TimelineSkeleton, TimelineView } from "./timeline-view";
 
 type ExplorerSurfaceProps = {
   title: string;
-  eyebrow: string;
-  description: string;
   search: ExplorerSearch;
   onSearchChange: (next: ExplorerSearch) => void;
   openDocument: (documentId: string) => void;
@@ -54,20 +72,11 @@ type ExplorerSurfaceProps = {
   forcedView?: ExplorerView;
 };
 
-const VIEW_OPTIONS: Array<{
-  value: ExplorerView;
-  label: string;
-  icon: typeof Rows3;
-}> = [
-  { value: "list", label: "List", icon: Rows3 },
-  { value: "timeline", label: "Timeline", icon: CalendarRange },
-  { value: "groups", label: "Groups", icon: LayoutGrid },
-];
+/** A radix Select item cannot carry an empty value, so "no type" needs a name. */
+const NO_TYPE = "__none__";
 
 export function ExplorerSurface({
   title,
-  eyebrow,
-  description,
   search,
   onSearchChange,
   openDocument,
@@ -77,6 +86,7 @@ export function ExplorerSurface({
   const queryClient = useQueryClient();
   const { t } = useI18n();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [queryDraft, setQueryDraft] = useState(search.query ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -265,20 +275,49 @@ export function ExplorerSurface({
     },
   });
 
+  const activeFilterCount = countActiveFilters(search);
+  const filterCountBadge =
+    activeFilterCount > 0 ? (
+      <Badge variant="brand" className="num">
+        {activeFilterCount}
+      </Badge>
+    ) : null;
 
+  const documentCountLabel = (count: number) =>
+    count === 1
+      ? t("explorer.countOne")
+      : t("explorer.countMany").replace("{count}", count.toLocaleString());
 
+  // What the header counts follows the view: documents, or the groups on show.
+  let countLabel: string | null = null;
+  if (activeView === "list" && documentsQuery.data) {
+    countLabel = documentCountLabel(documentsQuery.data.total);
+  } else if (activeView === "timeline" && timelineQuery.data) {
+    countLabel = documentCountLabel(
+      timelineQuery.data.years.reduce((sum, year) => sum + year.count, 0),
+    );
+  } else if (activeView === "groups" && facetsQuery.data) {
+    countLabel =
+      search.groupBy === "categories"
+        ? t("explorer.countCategories").replace(
+            "{count}",
+            String(facetsQuery.data.categories?.length ?? 0),
+          )
+        : t("explorer.countCorrespondents").replace(
+            "{count}",
+            String(facetsQuery.data.correspondents.length),
+          );
+  }
 
   return (
-    <div className="space-y-6 p-6 md:p-8">
-      <ExplorerSectionHeader
-        eyebrow={eyebrow}
-        title={title}
-        description={description}
-      />
+    <Page width="wide">
+      {/* A non-breaking space holds the line, so the count does not shift the page. */}
+      <PageHeader icon={<Files />} title={title} description={countLabel ?? "\u00A0"} />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
         <form
-          className="flex min-w-[280px] flex-1 items-center gap-2 rounded-full border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] px-4 py-2"
+          role="search"
+          className="min-w-full flex-1 sm:min-w-64"
           onSubmit={(event) => {
             event.preventDefault();
             onSearchChange(
@@ -289,111 +328,93 @@ export function ExplorerSurface({
             );
           }}
         >
-          <Search className="h-4 w-4 text-[color:var(--explorer-muted)]" />
-          <input
-            value={queryDraft}
-            onChange={(event) => setQueryDraft(event.target.value)}
-            placeholder="Search titles, snippets, or archive terms"
-            className="h-10 w-full bg-transparent text-sm text-[color:var(--explorer-ink)] outline-none placeholder:text-[color:var(--explorer-muted)]"
-          />
+          <InputGroup className="h-9 bg-card shadow-xs">
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              value={queryDraft}
+              onChange={(event) => setQueryDraft(event.target.value)}
+              placeholder={t("explorer.searchPlaceholder")}
+              aria-label={t("explorer.searchPlaceholder")}
+            />
+          </InputGroup>
         </form>
 
         {allowViewSwitch ? (
-          <div className="flex items-center gap-2 rounded-full border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-1">
-            {VIEW_OPTIONS.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() =>
-                    onSearchChange(
-                      nextExplorerSearch(search, {
-                        view: option.value,
-                        page: undefined,
-                      }),
-                    )
-                  }
-                  className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                    activeView === option.value
-                      ? "bg-[color:var(--ok-accent-soft)] text-[color:var(--ok-accent)]"
-                      : "text-[color:var(--explorer-muted)]"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label={t("explorer.viewLabel")}
+            value={activeView}
+            onChange={(view) =>
+              onSearchChange(nextExplorerSearch(search, { view, page: undefined }))
+            }
+            options={[
+              { value: "list", label: t("explorer.viewList"), icon: Rows3 },
+              { value: "timeline", label: t("explorer.viewTimeline"), icon: CalendarRange },
+              { value: "groups", label: t("explorer.viewGroups"), icon: LayoutGrid },
+            ]}
+          />
         ) : null}
 
+        {/* Beside the results from xl up; a sheet below, where there is no room. */}
         <Button
           variant="outline"
+          className="hidden xl:inline-flex"
           onClick={() => setSidebarOpen((current) => !current)}
         >
-          <Sidebar className="h-4 w-4" />
-          {sidebarOpen ? "Hide filters" : "Show filters"}
+          <ListFilter />
+          {sidebarOpen ? t("filters.hide") : t("filters.show")}
+          {filterCountBadge}
         </Button>
-
+        <Button
+          variant="outline"
+          className="ml-auto sm:ml-0 xl:hidden"
+          aria-haspopup="dialog"
+          aria-label={t("filters.show")}
+          onClick={() => setFilterSheetOpen(true)}
+        >
+          <ListFilter />
+          <span className="hidden sm:inline">{t("filters.show")}</span>
+          {filterCountBadge}
+        </Button>
       </div>
 
-      {activeView === "list" && selectedIds.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-[var(--r-md)] border border-[var(--ok-accent)]/25 bg-accent px-3 py-2">
-          <span className="text-sm text-accent-foreground">
-            <span className="ok-num font-semibold">{selectedIds.length}</span>{" "}
-            {t("documents.selected")}
-          </span>
-          <div className="ml-2 flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBulkFailureCount(0);
-                setTagDialogOpen(true);
-              }}
-            >
-              <TagIcon className="h-4 w-4" />
-              {t("documents.bulkTag")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBulkFailureCount(0);
-                setTypeDialogOpen(true);
-              }}
-            >
-              {t("documents.bulkSetType")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportSelected}>
-              {t("documents.bulkExport")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setReprocessDialogOpen(true)}>
-              <RefreshCw />
-              {t("documents.reprocess")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-              <Trash2 />
-              {t("documents.bulkDelete")}
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            onClick={() => setSelectedIds([])}
-          >
-            <X />
-            {t("documents.clearSelection")}
-          </Button>
-        </div>
-      ) : null}
+      <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+        <SheetContent className="gap-0 data-[side=right]:w-[22rem] data-[side=right]:max-w-[90vw]">
+          <SheetHeader className="pb-2">
+            <SheetTitle>{t("filters.title")}</SheetTitle>
+            <SheetDescription>{t("filters.sheetDescription")}</SheetDescription>
+          </SheetHeader>
+          <FilterSidebar
+            surface="plain"
+            facets={facetsQuery.data}
+            loading={facetsQuery.isLoading}
+            error={facetsQuery.isError}
+            onRetry={() => facetsQuery.refetch()}
+            search={search}
+            onSearchChange={(updates) =>
+              onSearchChange(nextExplorerSearch(search, updates))
+            }
+          />
+          <SheetFooter className="mt-0 border-t">
+            <Button onClick={() => setFilterSheetOpen(false)}>{t("filters.done")}</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "grid min-w-0 gap-5",
+          sidebarOpen && "xl:grid-cols-[17rem_minmax(0,1fr)]",
+        )}
+      >
         {sidebarOpen ? (
           <FilterSidebar
+            className="hidden xl:flex"
             facets={facetsQuery.data}
+            loading={facetsQuery.isLoading}
+            error={facetsQuery.isError}
+            onRetry={() => facetsQuery.refetch()}
             search={search}
             onSearchChange={(updates) =>
               onSearchChange(nextExplorerSearch(search, updates))
@@ -401,7 +422,7 @@ export function ExplorerSurface({
           />
         ) : null}
 
-        <div className="space-y-5">
+        <div className="flex min-w-0 flex-col gap-3.5">
           <ActiveFilters
             facets={facetsQuery.data}
             search={search}
@@ -410,26 +431,86 @@ export function ExplorerSurface({
             }
           />
 
+          {activeView === "list" && selectedIds.length > 0 ? (
+            <div className="z-20 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-brand-soft px-3.5 py-2.5 shadow-card ring-1 ring-brand/20 sm:sticky sm:top-3">
+              <span className="text-sm font-medium text-brand-soft-foreground">
+                <span className="num font-semibold">{selectedIds.length}</span>{" "}
+                {t("documents.selected")}
+              </span>
+              <div className="order-3 flex w-full flex-wrap items-center gap-1.5 sm:order-2 sm:w-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBulkFailureCount(0);
+                    setTagDialogOpen(true);
+                  }}
+                >
+                  <TagIcon />
+                  {t("documents.bulkTag")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBulkFailureCount(0);
+                    setTypeDialogOpen(true);
+                  }}
+                >
+                  <FileType2 />
+                  {t("documents.bulkSetType")}
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportSelected}>
+                  <Download />
+                  {t("documents.bulkExport")}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setReprocessDialogOpen(true)}>
+                  <RefreshCw />
+                  {t("documents.reprocess")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-danger hover:text-danger"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 />
+                  {t("documents.bulkDelete")}
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="order-2 ml-auto sm:order-3"
+                aria-label={t("documents.clearSelection")}
+                onClick={() => setSelectedIds([])}
+              >
+                <X />
+              </Button>
+            </div>
+          ) : null}
+
           {activeView === "list" ? (
             documentsQuery.isLoading ? (
-              <LoadingBlock label="Loading filtered documents" />
+              <DocumentTableSkeleton label={t("explorer.loadingDocuments")} />
             ) : documentsQuery.isError ? (
               <ErrorBlock
-                label={`Failed to load the filtered archive list.${
+                label={`${t("explorer.loadError")}${
                   documentsQuery.error instanceof Error
                     ? ` (${documentsQuery.error.message})`
                     : ""
                 }`}
                 action={
-                  <Button variant="outline" onClick={() => documentsQuery.refetch()}>
-                    Retry
+                  <Button variant="outline" size="sm" onClick={() => documentsQuery.refetch()}>
+                    {t("dashboard.retry")}
                   </Button>
                 }
               />
             ) : (
               <DocumentTable
                 documents={documentsQuery.data?.items ?? []}
-                emptyLabel="No documents match the current explorer filters."
+                total={documentsQuery.data?.total}
+                emptyLabel={t("explorer.empty")}
                 selectedIds={selectedIds}
                 onSelectionChange={setSelectedIds}
                 onOpen={openDocument}
@@ -446,13 +527,13 @@ export function ExplorerSurface({
 
           {activeView === "timeline" ? (
             timelineQuery.isLoading ? (
-              <LoadingBlock label="Loading timeline map" />
+              <TimelineSkeleton label={t("explorer.loadingTimeline")} />
             ) : timelineQuery.isError || !timelineQuery.data ? (
               <ErrorBlock
-                label="Failed to load the timeline buckets."
+                label={t("explorer.timelineError")}
                 action={
-                  <Button variant="outline" onClick={() => timelineQuery.refetch()}>
-                    Retry
+                  <Button variant="outline" size="sm" onClick={() => timelineQuery.refetch()}>
+                    {t("dashboard.retry")}
                   </Button>
                 }
               />
@@ -476,45 +557,57 @@ export function ExplorerSurface({
           ) : null}
 
           {activeView === "groups" ? (
-            <GroupsView
-              facets={facetsQuery.data}
-              selectedCorrespondentIds={search.correspondentIds ?? []}
-              onSelectCorrespondent={(correspondentId) =>
-                // A group click opens the list for that correspondent, so it
-                // replaces the correspondent filter rather than adding to it.
-                onSearchChange(
-                  nextExplorerSearch(search, {
-                    correspondentIds: [correspondentId],
-                    view: "list",
-                    page: undefined,
-                  }),
-                )
-              }
-              groupBy={search.groupBy ?? "correspondents"}
-              onGroupByChange={(groupBy) =>
-                onSearchChange(nextExplorerSearch(search, { groupBy }))
-              }
-              onSelectCategory={(categoryId) =>
-                onSearchChange(
-                  nextExplorerSearch(search, {
-                    categoryIds: [categoryId],
-                    uncategorized: undefined,
-                    view: "list",
-                    page: undefined,
-                  }),
-                )
-              }
-              onSelectUncategorized={() =>
-                onSearchChange(
-                  nextExplorerSearch(search, {
-                    uncategorized: true,
-                    categoryIds: undefined,
-                    view: "list",
-                    page: undefined,
-                  }),
-                )
-              }
-            />
+            facetsQuery.isError ? (
+              <ErrorBlock
+                label={t("groups.loadError")}
+                action={
+                  <Button variant="outline" size="sm" onClick={() => facetsQuery.refetch()}>
+                    {t("dashboard.retry")}
+                  </Button>
+                }
+              />
+            ) : (
+              <GroupsView
+                facets={facetsQuery.data}
+                loading={facetsQuery.isLoading}
+                selectedCorrespondentIds={search.correspondentIds ?? []}
+                onSelectCorrespondent={(correspondentId) =>
+                  // A group click opens the list for that correspondent, so it
+                  // replaces the correspondent filter rather than adding to it.
+                  onSearchChange(
+                    nextExplorerSearch(search, {
+                      correspondentIds: [correspondentId],
+                      view: "list",
+                      page: undefined,
+                    }),
+                  )
+                }
+                groupBy={search.groupBy ?? "correspondents"}
+                onGroupByChange={(groupBy) =>
+                  onSearchChange(nextExplorerSearch(search, { groupBy }))
+                }
+                onSelectCategory={(categoryId) =>
+                  onSearchChange(
+                    nextExplorerSearch(search, {
+                      categoryIds: [categoryId],
+                      uncategorized: undefined,
+                      view: "list",
+                      page: undefined,
+                    }),
+                  )
+                }
+                onSelectUncategorized={() =>
+                  onSearchChange(
+                    nextExplorerSearch(search, {
+                      uncategorized: true,
+                      categoryIds: undefined,
+                      view: "list",
+                      page: undefined,
+                    }),
+                  )
+                }
+              />
+            )
           ) : null}
         </div>
       </div>
@@ -526,39 +619,34 @@ export function ExplorerSurface({
             <DialogDescription>{t("documents.bulkTagDescription")}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              <Button
-                variant={bulkTagAction === "add" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setBulkTagAction("add")}
-              >
-                {t("documents.bulkTagAdd")}
-              </Button>
-              <Button
-                variant={bulkTagAction === "remove" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setBulkTagAction("remove")}
-              >
-                {t("documents.bulkTagRemove")}
-              </Button>
-            </div>
-            <select
-              className="h-9 w-full rounded-[var(--r-md)] border border-input bg-card px-3 text-sm"
-              value={bulkTagId}
-              onChange={(event) => setBulkTagId(event.target.value)}
-            >
-              <option value="">{t("documents.bulkPickTag")}</option>
-              {(tagsQuery.data ?? []).map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-3">
+            <SegmentedControl
+              label={t("documents.bulkTag")}
+              value={bulkTagAction}
+              onChange={setBulkTagAction}
+              options={[
+                { value: "add", label: t("documents.bulkTagAdd") },
+                { value: "remove", label: t("documents.bulkTagRemove") },
+              ]}
+            />
+            <Select value={bulkTagId} onValueChange={setBulkTagId}>
+              <SelectTrigger className="h-9 w-full" aria-label={t("documents.bulkPickTag")}>
+                <SelectValue placeholder={t("documents.bulkPickTag")} />
+              </SelectTrigger>
+              <SelectContent>
+                {(tagsQuery.data ?? []).map((tag) => (
+                  <SelectItem key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {bulkFailureCount > 0 ? (
-              <p className="text-sm text-destructive">
-                {t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
-              </p>
+              <DialogError
+                label={t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
+              />
+            ) : bulkTagMutation.isError ? (
+              <DialogError label={t("documents.bulkFailed")} />
             ) : null}
           </div>
 
@@ -568,18 +656,13 @@ export function ExplorerSurface({
               onClick={() => setTagDialogOpen(false)}
               disabled={bulkTagMutation.isPending}
             >
-              <X className="h-4 w-4" />
               {t("documents.bulkCancel")}
             </Button>
             <Button
               onClick={() => bulkTagMutation.mutate()}
               disabled={!bulkTagId || selectedIds.length === 0 || bulkTagMutation.isPending}
             >
-              {bulkTagMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <TagIcon className="h-4 w-4" />
-              )}
+              {bulkTagMutation.isPending ? <Spinner /> : <TagIcon />}
               {t("documents.bulkApply")}
             </Button>
           </DialogFooter>
@@ -593,23 +676,34 @@ export function ExplorerSurface({
             <DialogDescription>{t("documents.bulkTypeDescription")}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <select
-              className="h-9 w-full rounded-[var(--r-md)] border border-input bg-card px-3 text-sm"
-              value={bulkTypeId}
-              onChange={(event) => setBulkTypeId(event.target.value)}
-            >
-              <option value="">{t("documents.bulkTypeNone")}</option>
-              {(documentTypesQuery.data ?? []).map((documentType) => (
-                <option key={documentType.id} value={documentType.id}>
-                  {documentType.name}
-                </option>
-              ))}
-            </select>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="bulk-document-type" className="text-xs text-muted-foreground">
+                {t("today.documentType")}
+              </Label>
+              <Select
+                value={bulkTypeId === "" ? NO_TYPE : bulkTypeId}
+                onValueChange={(value) => setBulkTypeId(value === NO_TYPE ? "" : value)}
+              >
+                <SelectTrigger id="bulk-document-type" className="h-9 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TYPE}>{t("documents.bulkTypeNone")}</SelectItem>
+                  {(documentTypesQuery.data ?? []).map((documentType) => (
+                    <SelectItem key={documentType.id} value={documentType.id}>
+                      {documentType.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {bulkFailureCount > 0 ? (
-              <p className="text-sm text-destructive">
-                {t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
-              </p>
+              <DialogError
+                label={t("documents.bulkPartialFailure").replace("{count}", String(bulkFailureCount))}
+              />
+            ) : bulkTypeMutation.isError ? (
+              <DialogError label={t("documents.bulkFailed")} />
             ) : null}
           </div>
 
@@ -619,14 +713,13 @@ export function ExplorerSurface({
               onClick={() => setTypeDialogOpen(false)}
               disabled={bulkTypeMutation.isPending}
             >
-              <X className="h-4 w-4" />
               {t("documents.bulkCancel")}
             </Button>
             <Button
               onClick={() => bulkTypeMutation.mutate()}
               disabled={selectedIds.length === 0 || bulkTypeMutation.isPending}
             >
-              {bulkTypeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {bulkTypeMutation.isPending ? <Spinner /> : null}
               {t("documents.bulkApply")}
             </Button>
           </DialogFooter>
@@ -634,21 +727,19 @@ export function ExplorerSurface({
       </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="border-[color:var(--explorer-border)] bg-card text-[color:var(--explorer-ink)]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="ok-page-title">
-              Delete {selectedIds.length} document{selectedIds.length === 1 ? "" : "s"}?
+            <DialogTitle>
+              {selectedIds.length === 1
+                ? t("documents.deleteTitleOne")
+                : t("documents.deleteTitleMany").replace("{count}", String(selectedIds.length))}
             </DialogTitle>
-            <DialogDescription className="text-sm text-[color:var(--explorer-muted)]">
-              This removes the selected archive records immediately. Use this when you want a clean re-ingest or to clear obvious mistakes in bulk.
-            </DialogDescription>
+            <DialogDescription>{t("documents.deleteDescription")}</DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3 text-sm text-[color:var(--explorer-ink)]">
-            {selectedIds.length > 0
-              ? `${selectedIds.length} selected items will be deleted from the current archive.`
-              : "No documents selected."}
-          </div>
+          {batchDeleteMutation.isError ? (
+            <DialogError label={t("documents.deleteFailed")} />
+          ) : null}
 
           <DialogFooter>
             <Button
@@ -656,20 +747,15 @@ export function ExplorerSurface({
               onClick={() => setDeleteDialogOpen(false)}
               disabled={batchDeleteMutation.isPending}
             >
-              <X className="h-4 w-4" />
-              Cancel
+              {t("documents.bulkCancel")}
             </Button>
             <Button
               variant="destructive"
               onClick={() => batchDeleteMutation.mutate(selectedIds)}
               disabled={selectedIds.length === 0 || batchDeleteMutation.isPending}
             >
-              {batchDeleteMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="h-4 w-4" />
-              )}
-              Delete now
+              {batchDeleteMutation.isPending ? <Spinner /> : <Trash2 />}
+              {t("documents.deleteNow")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -679,29 +765,24 @@ export function ExplorerSurface({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Reprocess {selectedIds.length} document{selectedIds.length === 1 ? "" : "s"}?
+              {selectedIds.length === 1
+                ? t("documents.reprocessTitleOne")
+                : t("documents.reprocessTitleMany").replace("{count}", String(selectedIds.length))}
             </DialogTitle>
-            <DialogDescription>
-              This will queue the selected documents for OCR and metadata extraction again. Manual
-              overrides remain locked.
-            </DialogDescription>
+            <DialogDescription>{t("documents.reprocessDescription")}</DialogDescription>
           </DialogHeader>
 
           {batchReprocessMutation.isError ? (
-            <p className="text-sm text-destructive">
-              {batchReprocessMutation.error instanceof Error
-                ? batchReprocessMutation.error.message
-                : "Failed to reprocess selected documents."}
-            </p>
+            <DialogError label={t("documents.reprocessFailed")} />
           ) : null}
 
           <DialogFooter>
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => setReprocessDialogOpen(false)}
               disabled={batchReprocessMutation.isPending}
             >
-              Cancel
+              {t("documents.bulkCancel")}
             </Button>
             <Button
               onClick={() => batchReprocessMutation.mutate(selectedIds)}
@@ -709,19 +790,27 @@ export function ExplorerSurface({
             >
               {batchReprocessMutation.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Queueing
+                  <Spinner />
+                  {t("documents.reprocessQueueing")}
                 </>
               ) : (
                 <>
-                  <RefreshCw className="h-4 w-4" />
-                  Reprocess
+                  <RefreshCw />
+                  {t("documents.reprocess")}
                 </>
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Page>
+  );
+}
+
+function DialogError({ label }: { label: string }) {
+  return (
+    <Alert variant="destructive" className="border-danger/25 bg-danger-soft text-danger">
+      <AlertDescription className="text-danger">{label}</AlertDescription>
+    </Alert>
   );
 }
