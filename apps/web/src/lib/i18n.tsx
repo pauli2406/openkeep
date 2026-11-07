@@ -8,6 +8,12 @@ import {
 export type AppLanguage = "en" | "de";
 
 export type TranslationKey =
+  | "today.summary.openOnly"
+  | "today.summary.open"
+  | "today.summary.allClear"
+  | "today.greeting.evening"
+  | "today.greeting.afternoon"
+  | "today.greeting.morning"
   | "root.loading"
   | "root.nav.today"
   | "root.nav.chat"
@@ -620,6 +626,12 @@ export type TranslationKey =
 
 const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
   en: {
+    "today.summary.openOnly": "{open} open, none of them overdue.",
+    "today.summary.open": "{open} open, {overdue} of them overdue.",
+    "today.summary.allClear": "Your archive is in order. Nothing is waiting for you.",
+    "today.greeting.evening": "Good evening",
+    "today.greeting.afternoon": "Good afternoon",
+    "today.greeting.morning": "Good morning",
     "root.loading": "Loading...",
     "root.nav.today": "Today",
     "root.nav.chat": "Chat",
@@ -1234,6 +1246,12 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.ask": "Ask",
   },
   de: {
+    "today.summary.openOnly": "{open} offen, nichts davon überfällig.",
+    "today.summary.open": "{open} offen, davon {overdue} überfällig.",
+    "today.summary.allClear": "Dein Archiv ist in Ordnung. Nichts wartet auf dich.",
+    "today.greeting.evening": "Guten Abend",
+    "today.greeting.afternoon": "Guten Tag",
+    "today.greeting.morning": "Guten Morgen",
     "root.loading": "Wird geladen...",
     "root.nav.today": "Heute",
     "root.nav.chat": "Chat",
