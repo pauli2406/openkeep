@@ -22,4 +22,5 @@ regexes = [
 description = "Allow test-only credential fixtures"
 paths = [
   '''^apps/api/test/.*\.spec\.ts$''',
+  '''^apps/mobile/visual/fixtures\.ts$''',
 ]
