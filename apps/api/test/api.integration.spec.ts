@@ -148,10 +148,11 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .withWaitStrategy(Wait.forLogMessage("database system is ready to accept connections"))
       .start();
 
-    minioContainer = await new GenericContainer(
-      "minio/minio:RELEASE.2025-02-18T16-25-55Z",
-    )
-      .withCommand(["server", "/data", "--console-address", ":9001"])
+    // minio/minio left Docker Hub in September 2026, and quay.io now refuses
+    // anonymous pulls. Chainguard's build runs as a non-root user, so the data
+    // directory has to be one it can write to.
+    minioContainer = await new GenericContainer("cgr.dev/chainguard/minio:latest")
+      .withCommand(["server", "/tmp/data", "--console-address", ":9001"])
       .withEnvironment({
         MINIO_ROOT_USER: "openkeep",
         MINIO_ROOT_PASSWORD: "openkeep123",

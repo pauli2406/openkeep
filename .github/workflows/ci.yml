@@ -58,7 +58,10 @@ jobs:
       matrix:
         # windows-2022, not `windows-latest`: the 2025 image does not ship the
         # WiX 3 toolset the MSI maker needs.
-        os: [macos-latest, windows-2022, ubuntu-latest]
+        # ubuntu-24.04, not `ubuntu-latest`: the newer image ships rpm 6, which
+        # builds in a subdirectory, and electron-installer-redhat's spec copies
+        # from a relative path and fails with `cannot stat 'usr/*'`.
+        os: [macos-latest, windows-2022, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
