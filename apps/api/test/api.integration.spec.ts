@@ -2394,13 +2394,18 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     const missingLine = csvLines.find((line) => line.includes("Verschollener Beleg"));
     expect(missingLine).toContain(",,missing-file");
 
-    // The export landed in the audit history of the exported documents only.
-    const auditedRows = await databaseService.pool.query(
-      `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
-    );
-    const auditedIds = auditedRows.rows.map((row) => row.document_id);
-    expect(auditedIds).toContain(reserved.document.id);
-    expect(auditedIds).toContain(searchable.document.id);
+    // The export landed in the audit history of the exported documents only. The
+    // audit is written after the archive is finalized, so it can land just after the
+    // response does.
+    const auditedIds = await vi.waitFor(async () => {
+      const auditedRows = await databaseService.pool.query(
+        `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
+      );
+      const ids = auditedRows.rows.map((row) => row.document_id);
+      expect(ids).toContain(reserved.document.id);
+      expect(ids).toContain(searchable.document.id);
+      return ids;
+    });
     expect(auditedIds).not.toContain(missing.document.id);
 
     const documentIds = [reserved, searchable, missing].map((entry) => entry.document.id);
