@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -13,9 +14,12 @@ import * as Sharing from "expo-sharing";
 import FileViewer from "react-native-file-viewer";
 import Pdf, { type PdfRef } from "react-native-pdf";
 import { Buffer } from "buffer";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useI18n } from "../i18n";
-import { createThemedStyles, radii, useColors } from "../theme";
-import { fonts } from "../typography";
+import { createThemedStyles, radii, raisedShadow, useColors } from "../theme";
+import { fonts, text } from "../typography";
+import { IconTile, Skeleton } from "./layout";
+import { Button, EmptyState } from "./ui";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +45,19 @@ type ViewerProps = {
   page?: number;
   onPageChange?: (page: number) => void;
   onTotalPagesChange?: (total: number) => void;
+  /**
+   * The detail screen's pane draws its own toolbar, so here the viewer is only
+   * the page: it fills its parent and brings no navigator or share button.
+   */
+  embedded?: boolean;
+  /** Percent. Only `embedded` honours it: elsewhere pinching is the only zoom. */
+  zoom?: number;
+  /** What a pinch settled on, so a toolbar can show it. Never fed back into `zoom`. */
+  onZoomSettled?: (percent: number) => void;
+  /** The local file now on screen, or null while there is none. */
+  onFileReady?: (uri: string | null) => void;
+  /** The offline copy is still being decrypted: wait for it rather than give up. */
+  localFilePending?: boolean;
 };
 
 type FileState =
@@ -96,68 +113,25 @@ function extensionForMime(mimeType: string): string {
   return map[mimeType] ?? "";
 }
 
-// ---------------------------------------------------------------------------
-// Chevron icons (simple inline SVG-like shapes via Views)
-// ---------------------------------------------------------------------------
-
-function ChevronLeft({ color, size = 18 }: { color?: string; size?: number }) {
-  const colors = useColors();
-  const stroke = color ?? colors.accent;
-  return (
-    <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
-      <View
-        style={{
-          width: size * 0.5,
-          height: size * 0.5,
-          borderLeftWidth: 2.5,
-          borderBottomWidth: 2.5,
-          borderColor: stroke,
-          transform: [{ rotate: "45deg" }],
-          marginLeft: size * 0.15,
-        }}
-      />
-    </View>
+/**
+ * Whether a local file is there. `getInfoAsync` has no browser implementation, and
+ * the visual build's offline copy is a fixture path: there it counts as present, so
+ * the offline state renders the page rather than a platform error.
+ */
+function localFileExists(uri: string) {
+  return FileSystem.getInfoAsync(uri).then(
+    (info) => info.exists,
+    () => Platform.OS === "web",
   );
 }
 
-function ChevronRight({ color, size = 18 }: { color?: string; size?: number }) {
-  const colors = useColors();
-  const stroke = color ?? colors.accent;
-  return (
-    <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
-      <View
-        style={{
-          width: size * 0.5,
-          height: size * 0.5,
-          borderRightWidth: 2.5,
-          borderTopWidth: 2.5,
-          borderColor: stroke,
-          transform: [{ rotate: "45deg" }],
-          marginRight: size * 0.15,
-        }}
-      />
-    </View>
-  );
-}
-
-function ExpandIcon({ color, size = 16 }: { color?: string; size?: number }) {
-  const colors = useColors();
-  const stroke = color ?? colors.muted;
-  return (
-    <View style={{ width: size, height: size, justifyContent: "center", alignItems: "center" }}>
-      {/* Four corner brackets to represent fullscreen/expand */}
-      <View style={{ width: size * 0.75, height: size * 0.75, position: "relative" }}>
-        {/* Top-left */}
-        <View style={{ position: "absolute", top: 0, left: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderLeftWidth: 2, borderColor: stroke }} />
-        {/* Top-right */}
-        <View style={{ position: "absolute", top: 0, right: 0, width: size * 0.3, height: size * 0.3, borderTopWidth: 2, borderRightWidth: 2, borderColor: stroke }} />
-        {/* Bottom-left */}
-        <View style={{ position: "absolute", bottom: 0, left: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: stroke }} />
-        {/* Bottom-right */}
-        <View style={{ position: "absolute", bottom: 0, right: 0, width: size * 0.3, height: size * 0.3, borderBottomWidth: 2, borderRightWidth: 2, borderColor: stroke }} />
-      </View>
-    </View>
-  );
+/** Hands a file to the OS viewer, which has the zoom and search this view lacks. */
+export function openInNativeViewer(uri: string, displayName: string) {
+  return FileViewer.open(uri, {
+    displayName,
+    showAppsSuggestions: true,
+    showOpenWithDialog: false,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -187,13 +161,13 @@ const useProgressStyles = createThemedStyles((c) => ({
   track: {
     width: 140,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radii.pill,
     backgroundColor: c.raised,
     overflow: "hidden",
   },
   fill: {
     height: "100%",
-    borderRadius: 2,
+    borderRadius: radii.pill,
     backgroundColor: c.accentFill,
   },
   label: {
@@ -242,7 +216,11 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ChevronLeft color={isFirst ? colors.border : colors.accent} size={16} />
+        <MaterialCommunityIcons
+          name="chevron-left"
+          size={20}
+          color={isFirst ? colors.faint : colors.accent}
+        />
       </Pressable>
 
       {/* Page indicator */}
@@ -263,7 +241,11 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ChevronRight color={isLast ? colors.border : colors.accent} size={16} />
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={20}
+          color={isLast ? colors.faint : colors.accent}
+        />
       </Pressable>
 
       {/* Fullscreen button */}
@@ -275,7 +257,7 @@ function PageNavigator({
         ]}
         hitSlop={8}
       >
-        <ExpandIcon color={colors.accent} size={16} />
+        <MaterialCommunityIcons name="fullscreen" size={20} color={colors.accent} />
       </Pressable>
     </View>
   );
@@ -292,7 +274,7 @@ const useNavStyles = createThemedStyles((c) => ({
   navButton: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: radii.md,
     backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -317,7 +299,7 @@ const useNavStyles = createThemedStyles((c) => ({
   fullscreenButton: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: radii.md,
     backgroundColor: c.accentSoft,
     alignItems: "center",
     justifyContent: "center",
@@ -343,6 +325,11 @@ export function DocumentViewer({
   page,
   onPageChange,
   onTotalPagesChange,
+  embedded = false,
+  zoom = 100,
+  onZoomSettled,
+  onFileReady,
+  localFilePending = false,
 }: ViewerProps) {
   const colors = useColors();
   const styles = useStyles();
@@ -357,6 +344,17 @@ export function DocumentViewer({
   const [totalPages, setTotalPages] = useState(0);
   const [loadProgress, setLoadProgress] = useState(0);
   const [openingNativeViewer, setOpeningNativeViewer] = useState(false);
+  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
+
+  // Android rebuilds the whole PDF view when `scale` changes and starts it from the
+  // `page` prop, so that prop has to say where the reader is at that moment. It is
+  // otherwise left alone: page jumps go through `setPage`, which does not reload.
+  const pdfStartPage = useRef(page ?? 1);
+  const lastZoom = useRef(zoom);
+  if (lastZoom.current !== zoom) {
+    lastZoom.current = zoom;
+    pdfStartPage.current = currentPage;
+  }
 
   const canPreview = isPdf(mimeType) || isImage(mimeType) || isText(mimeType);
 
@@ -369,6 +367,21 @@ export function DocumentViewer({
     setLoadProgress(0);
   }, [documentId, mimeType]);
 
+  // The offline copy arrives after the first render. Anything shown until then,
+  // including "not available", was a verdict on a file that had not been asked for.
+  useEffect(() => {
+    if (!localFileUri) {
+      return;
+    }
+    setFileState((current) =>
+      current.status === "ready" && current.uri === localFileUri ? current : { status: "idle" },
+    );
+  }, [localFileUri]);
+
+  useEffect(() => {
+    onFileReady?.(fileState.status === "ready" && fileState.uri ? fileState.uri : null);
+  }, [fileState, onFileReady]);
+
   // Download file to local cache for PDF/image rendering
   const downloadFile = useCallback(async () => {
     if (localFileUri && fileState.status === "ready" && fileState.uri === localFileUri) {
@@ -378,8 +391,7 @@ export function DocumentViewer({
     setFileState({ status: "loading" });
     try {
       if (localFileUri) {
-        const info = await FileSystem.getInfoAsync(localFileUri);
-        if (info.exists) {
+        if (await localFileExists(localFileUri)) {
           lastLoadedUriRef.current = localFileUri;
           setFileState({ status: "ready", uri: localFileUri });
           return;
@@ -479,6 +491,7 @@ export function DocumentViewer({
   // Auto-load on mount when previewable
   useEffect(() => {
     if (!canPreview) return;
+    if (localFilePending) return;
     if (fileState.status !== "idle") return;
     if (localFileUri && lastLoadedUriRef.current === localFileUri) return;
     if (isText(mimeType)) {
@@ -486,7 +499,7 @@ export function DocumentViewer({
     } else {
       void downloadFile();
     }
-  }, [canPreview, fileState.status, mimeType, localFileUri, fetchText, downloadFile]);
+  }, [canPreview, fileState.status, localFilePending, mimeType, localFileUri, fetchText, downloadFile]);
 
   // Fallback: share to external app
   const handleShare = useCallback(async () => {
@@ -568,6 +581,164 @@ export function DocumentViewer({
         setOpeningNativeViewer(false);
       });
   }, [documentId, fileState, openingNativeViewer, t]);
+
+  if (embedded) {
+    if (!canPreview) {
+      return (
+        <View style={styles.embeddedCentered}>
+          <IconTile size="lg">
+            <MaterialCommunityIcons
+              name="file-question-outline"
+              size={22}
+              color={colors.accentSoftInk}
+            />
+          </IconTile>
+          <Text style={styles.fallbackTitle}>{t("documentViewer.previewUnavailable")}</Text>
+          <Text style={styles.fallbackBody}>
+            {`${mimeType} ${t("documentViewer.inlinePreviewUnsupported")}`}
+          </Text>
+          <Button
+            label={t("documentViewer.shareToOpen")}
+            icon="share-variant-outline"
+            variant="secondary"
+            size="sm"
+            loading={fileState.status === "loading"}
+            onPress={() => void handleShare()}
+          />
+        </View>
+      );
+    }
+
+    if (fileState.status === "idle" || fileState.status === "loading") {
+      return (
+        <View
+          style={styles.paperSheet}
+          accessibilityLabel={t("documentViewer.loadingPreview")}
+          accessibilityState={{ busy: true }}
+        >
+          <View style={styles.paperLines}>
+            {([40, 92, 88, 94, 76] as const).map((width) => (
+              <Skeleton key={width} style={[styles.paperLine, { width: `${width}%` }]} />
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    if (fileState.status === "error") {
+      // Offline, a missing file is a fact about the copy rather than a failure.
+      return (
+        <View style={styles.embeddedCentered}>
+          {canFetchOnline ? (
+            <>
+              <IconTile size="lg">
+                <MaterialCommunityIcons name="alert-outline" size={22} color={colors.accentSoftInk} />
+              </IconTile>
+              <Text style={styles.errorText}>{fileState.message}</Text>
+              <Button
+                label={t("documentViewer.retry")}
+                variant="secondary"
+                size="sm"
+                onPress={() => {
+                  if (isText(mimeType)) void fetchText();
+                  else void downloadFile();
+                }}
+              />
+            </>
+          ) : (
+            <EmptyState icon="cloud-off-outline" title={t("documentDetail.offlineFileMissing")} />
+          )}
+        </View>
+      );
+    }
+
+    if (isPdf(mimeType)) {
+      return (
+        <View
+          style={styles.paperSheet}
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setBox({ width, height });
+          }}
+        >
+          {box ? (
+            <Pdf
+              ref={pdfRef}
+              source={{ uri: fileState.uri }}
+              style={{ width: box.width, height: box.height, backgroundColor: colors.paper }}
+              // Pages turn sideways, so a vertical drag is free to scroll the
+              // column the viewer sits in.
+              horizontal
+              enablePaging
+              enableDoubleTapZoom
+              trustAllCerts={false}
+              scale={zoom / 100}
+              minScale={0.5}
+              maxScale={5}
+              spacing={10}
+              page={pdfStartPage.current}
+              onLoadProgress={(percent) => setLoadProgress(percent)}
+              onLoadComplete={(numberOfPages) => {
+                setTotalPages(numberOfPages);
+                setLoadProgress(1);
+                onTotalPagesChange?.(numberOfPages);
+              }}
+              onPageChanged={(shownPage, numberOfPages) => {
+                setCurrentPage(shownPage);
+                setTotalPages(numberOfPages);
+                onPageChange?.(shownPage);
+                onTotalPagesChange?.(numberOfPages);
+              }}
+              onScaleChanged={(scale) => onZoomSettled?.(Math.round(scale * 100))}
+              onError={() => {
+                setFileState({ status: "error", message: t("documentViewer.pdfRenderError") });
+              }}
+              renderActivityIndicator={(progress) => <PdfProgressBar progress={progress} />}
+            />
+          ) : null}
+        </View>
+      );
+    }
+
+    if (isImage(mimeType)) {
+      const scale = zoom / 100;
+      return (
+        <View
+          style={styles.paperSheet}
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setBox({ width, height });
+          }}
+        >
+          {box ? (
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              <ScrollView
+                horizontal
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+              >
+                <Image
+                  source={{ uri: fileState.uri }}
+                  style={{ width: box.width * scale, height: box.height * scale }}
+                  resizeMode="contain"
+                />
+              </ScrollView>
+            </ScrollView>
+          ) : null}
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.paperSheet}>
+        <ScrollView nestedScrollEnabled contentContainerStyle={styles.paperText}>
+          <Text style={styles.paperTextContent} selectable>
+            {textContent ?? ""}
+          </Text>
+        </ScrollView>
+      </View>
+    );
+  }
 
   // ---- Unsupported type fallback ----
   if (!canPreview) {
@@ -746,6 +917,40 @@ export function DocumentViewer({
 // ---------------------------------------------------------------------------
 
 const useStyles = createThemedStyles((c) => ({
+  paperSheet: {
+    flex: 1,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: c.paperBorder,
+    borderRadius: radii.sm,
+    backgroundColor: c.paper,
+    ...raisedShadow(c),
+  },
+  paperLines: {
+    gap: 12,
+    padding: 24,
+  },
+  paperLine: {
+    height: 12,
+    borderRadius: radii.pill,
+    backgroundColor: c.paperBorder,
+  },
+  paperText: {
+    padding: 20,
+  },
+  paperTextContent: {
+    ...text.mono,
+    fontSize: 13,
+    lineHeight: 20,
+    color: c.paperInk,
+  },
+  embeddedCentered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+  },
   loadingContainer: {
     alignItems: "center",
     justifyContent: "center",
