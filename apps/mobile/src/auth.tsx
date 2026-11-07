@@ -31,6 +31,8 @@ type UserLanguagePreferences = {
   uiLanguage: "en" | "de";
   aiProcessingLanguage: "en" | "de";
   aiChatLanguage: "en" | "de";
+  /** Optional on the wire: the server always sends it, older clients never did. */
+  emailDigestEnabled?: boolean;
 };
 
 type User = {
@@ -38,8 +40,32 @@ type User = {
   email: string;
   displayName: string;
   isOwner: boolean;
+  twoFactorEnabled?: boolean;
   preferences: UserLanguagePreferences;
 };
+
+/** Where a sign-in goes: the server, and the Cloudflare Access pass to reach it. */
+export type ServerConnection = {
+  apiUrl: string;
+  cfAccessClientId?: string;
+  cfAccessClientSecret?: string;
+};
+
+/** A password login either finishes or asks for the second factor. */
+export type LoginResult =
+  | { requiresTwoFactor: false }
+  | { requiresTwoFactor: true; twoFactorToken: string };
+
+/** A refused auth request, with the status a screen needs to word it. */
+export class AuthRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "AuthRequestError";
+  }
+}
 
 type AuthContextValue = {
   apiUrl: string;
@@ -55,6 +81,24 @@ type AuthContextValue = {
     cfAccessClientId?: string;
     cfAccessClientSecret?: string;
   }) => Promise<void>;
+  /** Email and password. Replaces any API token this device held. */
+  login: (args: ServerConnection & { email: string; password: string }) => Promise<LoginResult>;
+  completeTwoFactorLogin: (
+    args: ServerConnection & { twoFactorToken: string; code: string },
+  ) => Promise<void>;
+  /**
+   * Creates the owner account. The session starts at once, because the rest of
+   * the wizard needs it, but `isAuthenticated` stays false until `finishSetup`:
+   * entering the app here would unmount the wizard on its first step.
+   */
+  setupOwner: (
+    args: ServerConnection & { email: string; password: string; displayName: string },
+  ) => Promise<void>;
+  finishSetup: () => void;
+  /** The owner exists and the wizard's later steps are still ahead. */
+  isCompletingSetup: boolean;
+  /** Re-reads the current user, after something on the server changed it. */
+  refreshUser: () => Promise<void>;
   updatePreferences: (preferences: UserLanguagePreferences) => Promise<void>;
   logout: () => Promise<void>;
   /** Asks the archive whether this session still works. */
@@ -155,15 +199,43 @@ async function readResponseMessage(response: Response) {
   return text;
 }
 
+/**
+ * The `/api/auth/*` routes that take no session. Everything else under that
+ * prefix needs a valid access token like any other route, so an expired one has
+ * to be refreshed there too: `/tokens`, `/2fa/*` and `/me/preferences` included.
+ */
+const SESSIONLESS_AUTH_PATHS = new Set([
+  "/api/auth/setup",
+  "/api/auth/login",
+  "/api/auth/login/2fa",
+  "/api/auth/refresh",
+  "/api/auth/logout",
+]);
+
+/**
+ * Where a 401 means "wrong code or password", not "this session is over". Mistyping
+ * a two-factor code must not sign you out of the app.
+ */
+const CREDENTIAL_CHECK_PATHS = new Set(["/api/auth/2fa/enable", "/api/auth/2fa/disable"]);
+
+function pathnameOf(path: string) {
+  return path.split("?")[0];
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [apiUrl, setApiUrlState] = useState("");
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sessionMode, setSessionMode] = useState<"none" | "online" | "offline">("none");
   const [hasStoredUser, setHasStoredUser] = useState(false);
+  const [setupWizardActive, setSetupWizardActive] = useState(false);
   const apiUrlRef = useRef("");
   const apiTokenRef = useRef("");
   const tokensRef = useRef({ accessToken: "", refreshToken: "" });
+  // The one refresh in flight. See `refreshAccessToken`.
+  const refreshInFlightRef = useRef<Promise<boolean> | null>(null);
+  // Bumped when a session ends, so a refresh answering afterwards can tell.
+  const sessionGenerationRef = useRef(0);
 
   const persistApiToken = useCallback(async (apiToken: string) => {
     apiTokenRef.current = apiToken;
@@ -213,6 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearSession = useCallback(async () => {
+    sessionGenerationRef.current += 1;
+    setSetupWizardActive(false);
     apiUrlRef.current = "";
     setApiUrlState("");
     await AsyncStorage.removeItem(API_URL_KEY);
@@ -255,51 +329,96 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refreshAccessToken = useCallback(async () => {
-    const currentApiUrl = apiUrlRef.current;
-    if (!currentApiUrl || !tokensRef.current.refreshToken) {
-      return false;
+  /**
+   * Trades the refresh token for a new pair.
+   *
+   * The API rotates refresh tokens and treats a replayed one as theft, revoking
+   * every session. Screens fire requests in parallel, so several can hit an expired
+   * access token together; they have to share one refresh, or the second would
+   * replay the token the first just rotated and sign the user out everywhere.
+   *
+   * Only the server refusing the token ends the session. A 5xx, a 429 from the auth
+   * throttle or a gateway error says nothing about it, and those throw, the same
+   * way a dropped connection does, so an offline copy stays usable.
+   */
+  const refreshAccessToken = useCallback((): Promise<boolean> => {
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
     }
 
-    const response = await withTimeout(
-      fetch(resolveUrl(currentApiUrl, "/api/auth/refresh"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...cfAccessHeaders() },
-        body: JSON.stringify({ refreshToken: tokensRef.current.refreshToken }),
-      }),
-      "Session refresh",
-    );
+    const run = async () => {
+      const currentApiUrl = apiUrlRef.current;
+      const presented = tokensRef.current.refreshToken;
+      if (!currentApiUrl || !presented) {
+        return false;
+      }
 
-    if (!response.ok) {
-      await clearSession();
-      return false;
-    }
+      const generation = sessionGenerationRef.current;
+      const response = await withTimeout(
+        fetch(resolveUrl(currentApiUrl, "/api/auth/refresh"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...cfAccessHeaders() },
+          body: JSON.stringify({ refreshToken: presented }),
+        }),
+        "Session refresh",
+      );
 
-    const payload = (await response.json()) as {
-      accessToken: string;
-      refreshToken: string;
+      // Signed out or signed in afresh while this was on its way: the answer is
+      // about a session that no longer exists, and must not touch the current one.
+      if (generation !== sessionGenerationRef.current) {
+        return false;
+      }
+
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        await clearSession();
+        return false;
+      }
+      if (!response.ok) {
+        throw new Error(`Session refresh failed with ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      await persistTokens(payload.accessToken, payload.refreshToken);
+      return true;
     };
-    await persistTokens(payload.accessToken, payload.refreshToken);
-    return true;
+
+    const inFlight = run().finally(() => {
+      refreshInFlightRef.current = null;
+    });
+    refreshInFlightRef.current = inFlight;
+    return inFlight;
   }, [clearSession, persistTokens]);
+
+  /**
+   * After a 401 on a request sent with `sentToken`: get a usable token. A parallel
+   * request may have refreshed already, in which case there is nothing to do but
+   * retry with the new one.
+   */
+  const recoverFromExpiredToken = useCallback(
+    async (sentToken: string) => {
+      if (tokensRef.current.accessToken && tokensRef.current.accessToken !== sentToken) {
+        return true;
+      }
+      return refreshAccessToken();
+    },
+    [refreshAccessToken],
+  );
 
   const authFetch = useCallback(
     async (path: string, init?: RequestInit) => {
-      if (!apiUrl) {
-        const currentApiUrl = apiUrlRef.current;
-        if (!currentApiUrl) {
-          throw new Error("Set your OpenKeep server URL first.");
-        }
-      }
-
       const currentApiUrl = apiUrlRef.current;
       if (!currentApiUrl) {
         throw new Error("Set your OpenKeep server URL first.");
       }
 
+      let sentToken = "";
       const execute = async () => {
         const headers = new Headers(init?.headers ?? {});
         const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
+        sentToken = bearerToken;
         if (bearerToken) {
           headers.set("Authorization", `Bearer ${bearerToken}`);
         }
@@ -315,19 +434,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let response = await execute();
       const isApiTokenSession = Boolean(apiTokenRef.current);
-      const isAuthRequest = path.startsWith("/api/auth/");
-      const allowRefresh = !isApiTokenSession && (!isAuthRequest || path === "/api/auth/me");
-      if (response.status === 401 && allowRefresh && (await refreshAccessToken())) {
+      const pathname = pathnameOf(path);
+      const allowRefresh = !isApiTokenSession && !SESSIONLESS_AUTH_PATHS.has(pathname);
+      if (response.status === 401 && allowRefresh && (await recoverFromExpiredToken(sentToken))) {
         response = await execute();
       }
 
-      if (response.status === 401 && (allowRefresh || isApiTokenSession)) {
+      if (
+        response.status === 401 &&
+        (allowRefresh || isApiTokenSession) &&
+        !CREDENTIAL_CHECK_PATHS.has(pathname)
+      ) {
         await clearSession();
       }
 
       return response;
     },
-    [apiUrl, clearSession, refreshAccessToken],
+    // Reads the URL from the ref, so it stays the same function when the URL changes.
+    // The bootstrap effect below depends on it through `loadCurrentUser`: a new
+    // identity here re-ran the bootstrap in the middle of every sign-in, which read
+    // the store before the tokens were in it and overwrote them with nothing.
+    [clearSession, recoverFromExpiredToken],
   );
 
   /**
@@ -341,38 +468,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Set your OpenKeep server URL first.");
       }
 
-      const headers: Record<string, string> = {};
+      const baseHeaders: Record<string, string> = {};
       if (init?.headers) {
         const h = init.headers;
         if (h instanceof Headers) {
           h.forEach((v, k) => {
-            headers[k] = v;
+            baseHeaders[k] = v;
           });
         } else if (Array.isArray(h)) {
           for (const [k, v] of h) {
-            headers[k] = v;
+            baseHeaders[k] = v;
           }
         } else {
-          Object.assign(headers, h);
+          Object.assign(baseHeaders, h);
         }
       }
 
-      const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
-      if (bearerToken) {
-        headers["Authorization"] = `Bearer ${bearerToken}`;
-      }
-      Object.assign(headers, cfAccessHeaders());
+      let sentToken = "";
+      const execute = () => {
+        const headers = { ...baseHeaders };
+        const bearerToken = apiTokenRef.current || tokensRef.current.accessToken;
+        sentToken = bearerToken;
+        if (bearerToken) {
+          headers["Authorization"] = `Bearer ${bearerToken}`;
+        }
+        Object.assign(headers, cfAccessHeaders());
 
-      // `expo/fetch` types `body` as `BodyInit | undefined` while the ambient
-      // `RequestInit` these callers use allows `null`. The wrapper passes
-      // whatever it was given straight through, so it takes the init type of the
-      // fetch it calls rather than asserting the two agree.
-      return expoFetch(resolveUrl(currentApiUrl, path), {
-        ...init,
-        headers,
-      } as Parameters<typeof expoFetch>[1]);
+        // `expo/fetch` types `body` as `BodyInit | undefined` while the ambient
+        // `RequestInit` these callers use allows `null`. The wrapper passes
+        // whatever it was given straight through, so it takes the init type of the
+        // fetch it calls rather than asserting the two agree.
+        return expoFetch(resolveUrl(currentApiUrl, path), {
+          ...init,
+          headers,
+        } as Parameters<typeof expoFetch>[1]);
+      };
+
+      const response = await execute();
+      // An access token lives for 15 minutes. A chat question asked after that has
+      // to refresh like any other request; API tokens have nothing to refresh.
+      if (
+        response.status === 401 &&
+        !apiTokenRef.current &&
+        (await recoverFromExpiredToken(sentToken))
+      ) {
+        return execute();
+      }
+      return response;
     },
-    [apiUrl],
+    [apiUrl, recoverFromExpiredToken],
   );
 
   const loadCurrentUser = useCallback(async () => {
@@ -676,6 +820,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const payload = (await response.json()) as User;
+      sessionGenerationRef.current += 1;
       await setApiUrl(nextApiUrl);
       await persistApiToken(nextApiToken);
       await persistCfAccess(cfAccessCreds.clientId, cfAccessCreds.clientSecret);
@@ -685,6 +830,164 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [clearTokens, persistApiToken, persistCfAccess, persistUser, probeServer, setApiUrl],
   );
+
+  /**
+   * Turns freshly issued tokens into the session. The user is read before anything
+   * is stored, so a failure here leaves the device as it was; setting the user last
+   * is what lets the app in, once every other piece is in place.
+   */
+  const establishPasswordSession = useCallback(
+    async (nextApiUrl: string, tokens: { accessToken: string; refreshToken: string }) => {
+      const response = await withTimeout(
+        fetch(resolveUrl(nextApiUrl, "/api/auth/me"), {
+          headers: {
+            Authorization: `Bearer ${tokens.accessToken}`,
+            ...cfAccessHeaders(),
+          },
+        }),
+        "Session restore",
+      );
+      if (!response.ok) {
+        throw new AuthRequestError(await readResponseMessage(response), response.status);
+      }
+      const payload = (await response.json()) as User;
+
+      sessionGenerationRef.current += 1;
+      await setApiUrl(nextApiUrl);
+      // The bearer prefers an API token, so a leftover one would shadow this login.
+      await clearApiToken();
+      await persistTokens(tokens.accessToken, tokens.refreshToken);
+      await persistCfAccess(cfAccessCreds.clientId, cfAccessCreds.clientSecret);
+      await persistUser(payload);
+      setSessionMode("online");
+    },
+    [clearApiToken, persistCfAccess, persistTokens, persistUser, setApiUrl],
+  );
+
+  /** POSTs to a sessionless auth route, with the Cloudflare pass but no bearer. */
+  const postAuth = useCallback(async (nextApiUrl: string, path: string, body: unknown, label: string) => {
+    const response = await withTimeout(
+      fetch(resolveUrl(nextApiUrl, path), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...cfAccessHeaders() },
+        body: JSON.stringify(body),
+      }),
+      label,
+    );
+    if (!response.ok) {
+      throw new AuthRequestError(await readResponseMessage(response), response.status);
+    }
+    return response;
+  }, []);
+
+  const applyCfAccess = useCallback((connection: ServerConnection) => {
+    // In memory before the first request, as `connect` does, so the probe and the
+    // login itself pass through Cloudflare Access.
+    cfAccessCreds = {
+      clientId: (connection.cfAccessClientId ?? "").trim(),
+      clientSecret: (connection.cfAccessClientSecret ?? "").trim(),
+    };
+  }, []);
+
+  const login = useCallback(
+    async ({
+      email,
+      password,
+      ...connection
+    }: ServerConnection & { email: string; password: string }): Promise<LoginResult> => {
+      const nextApiUrl = normalizeApiUrl(connection.apiUrl);
+      applyCfAccess(connection);
+      await probeServer(nextApiUrl);
+
+      const response = await postAuth(
+        nextApiUrl,
+        "/api/auth/login",
+        { email: email.trim(), password },
+        "Sign in",
+      );
+      const payload = (await response.json()) as {
+        accessToken?: string;
+        refreshToken?: string;
+        requiresTwoFactor?: boolean;
+        twoFactorToken?: string;
+      };
+
+      if (payload.requiresTwoFactor && payload.twoFactorToken) {
+        return { requiresTwoFactor: true, twoFactorToken: payload.twoFactorToken };
+      }
+      if (!payload.accessToken || !payload.refreshToken) {
+        throw new Error("The server sent an incomplete login response.");
+      }
+
+      await establishPasswordSession(nextApiUrl, {
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+      });
+      return { requiresTwoFactor: false };
+    },
+    [applyCfAccess, establishPasswordSession, postAuth, probeServer],
+  );
+
+  const completeTwoFactorLogin = useCallback(
+    async ({
+      twoFactorToken,
+      code,
+      ...connection
+    }: ServerConnection & { twoFactorToken: string; code: string }) => {
+      const nextApiUrl = normalizeApiUrl(connection.apiUrl);
+      applyCfAccess(connection);
+      const response = await postAuth(
+        nextApiUrl,
+        "/api/auth/login/2fa",
+        { twoFactorToken, code: code.trim() },
+        "Two-factor sign in",
+      );
+      const tokens = (await response.json()) as { accessToken: string; refreshToken: string };
+      await establishPasswordSession(nextApiUrl, tokens);
+    },
+    [applyCfAccess, establishPasswordSession, postAuth],
+  );
+
+  const setupOwner = useCallback(
+    async ({
+      email,
+      password,
+      displayName,
+      ...connection
+    }: ServerConnection & { email: string; password: string; displayName: string }) => {
+      const nextApiUrl = normalizeApiUrl(connection.apiUrl);
+      applyCfAccess(connection);
+      await probeServer(nextApiUrl);
+      const response = await postAuth(
+        nextApiUrl,
+        "/api/auth/setup",
+        { email: email.trim(), password, displayName: displayName.trim() },
+        "Setup",
+      );
+      const tokens = (await response.json()) as { accessToken: string; refreshToken: string };
+      // Before the session exists, so there is no render in which the app opens.
+      setSetupWizardActive(true);
+      try {
+        await establishPasswordSession(nextApiUrl, tokens);
+      } catch (error) {
+        setSetupWizardActive(false);
+        throw error;
+      }
+    },
+    [applyCfAccess, establishPasswordSession, postAuth, probeServer],
+  );
+
+  const finishSetup = useCallback(() => {
+    setSetupWizardActive(false);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const response = await authFetch("/api/auth/me");
+    if (!response.ok) {
+      throw new Error(await readResponseMessage(response));
+    }
+    await persistUser((await response.json()) as User);
+  }, [authFetch, persistUser]);
 
   const updatePreferences = useCallback(
     async (preferences: UserLanguagePreferences) => {
@@ -713,7 +1016,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       apiUrl,
       user,
-      isAuthenticated: Boolean(user),
+      isAuthenticated: Boolean(user) && !setupWizardActive,
       isLoading,
       isOfflineSession: sessionMode === "offline",
       openOfflineCopy,
@@ -721,6 +1024,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setApiUrl,
       probeServer,
       connect,
+      login,
+      completeTwoFactorLogin,
+      setupOwner,
+      finishSetup,
+      isCompletingSetup: setupWizardActive,
+      refreshUser,
       updatePreferences,
       logout,
       retryOfflineSession,
@@ -731,10 +1040,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       apiUrl,
       authFetch,
+      completeTwoFactorLogin,
       connect,
+      finishSetup,
       hasStoredUser,
       isLoading,
+      login,
       logout,
+      refreshUser,
+      setupOwner,
+      setupWizardActive,
       probeServer,
       retryOfflineSession,
       revalidateSession,

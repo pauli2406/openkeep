@@ -1,260 +1,192 @@
-import { Alert, Platform, Text, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
-import { useAuth } from "../auth";
-import { Button, Row, Screen, SectionHeader } from "../components/ui";
+import { useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { EmptyState, Screen } from "../components/ui";
 import { useI18n } from "../i18n";
-import { useOfflineArchive } from "../offline-archive";
-import {
-  createThemedStyles,
-  useAppearance,
-  useColors,
-  type Density,
-  type ThemePreference,
-} from "../theme";
-import Constants from "expo-constants";
+import { createThemedStyles, radii } from "../theme";
 import { text } from "../typography";
+import { ArchiveSection } from "./settings/ArchiveSection";
+import { DeviceSection } from "./settings/DeviceSection";
+import { HealthSection } from "./settings/HealthSection";
+import { LanguageSection } from "./settings/LanguageSection";
+import { ProcessingSection } from "./settings/ProcessingSection";
+import { ProvidersSection } from "./settings/ProvidersSection";
+import { SettingsHeading, useIsOffline } from "./settings/shared";
+import { TaxonomySection } from "./settings/TaxonomySection";
+
+type Destination = "general" | "taxonomy" | "providers";
 
 /**
- * Read from the config the binary was built with, not written here: a hardcoded
- * copy drifts the moment a release bumps `version` in `app.config.js`, and it did.
+ * The web's settings shell at phone width: a page heading, a row of pills and one
+ * destination below. What a phone adds to the web's General page is its own
+ * appearance and offline copy, which keep working without a connection; everything
+ * that asks the server gives way to a calm note when the server is out of reach.
  */
-const APP_VERSION = Constants.expoConfig?.version ?? "—";
-
-/** `1,8 GB` — what the read-through cache is holding. */
-function formatBytes(bytes: number) {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 export function SettingsScreen() {
   const styles = useStyles();
-  const colors = useColors();
-  const navigation = useNavigation();
-  const appearance = useAppearance();
-  const auth = useAuth();
-  const offline = useOfflineArchive();
   const { t } = useI18n();
+  const offline = useIsOffline();
+  const [destination, setDestination] = useState<Destination>("general");
 
-  /** A flat 17px glyph in `dim`, not a 36px coloured tile. */
-  const glyph = (name: string) => (
-    <MaterialCommunityIcons name={name as never} size={17} color={colors.dim} />
+  // No icons in the pills: the web drops them at phone width too, so all three fit.
+  const items: Array<{ value: Destination; label: string }> = [
+    { value: "general", label: t("settingsNav.general") },
+    { value: "taxonomy", label: t("settingsNav.taxonomy") },
+    { value: "providers", label: t("settingsNav.providers") },
+  ];
+
+  const header = (
+    <View>
+      <View style={styles.pageHeading}>
+        <Text style={styles.pageTitle} accessibilityRole="header">
+          {t("settings.title")}
+        </Text>
+        <Text style={styles.pageSubtitle}>{t("settings.subtitle")}</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.nav}
+        accessibilityRole="tablist"
+      >
+        {items.map((item) => {
+          const active = item.value === destination;
+          return (
+            <Pressable
+              key={item.value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              onPress={() => setDestination(item.value)}
+              style={[styles.navItem, active ? styles.navItemActive : null]}
+            >
+              <Text style={[styles.navText, active ? styles.navTextActive : null]}>{item.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 
-  function labelForLanguage(language: "en" | "de") {
-    return language === "de" ? t("settings.german") : t("settings.english");
-  }
-
-  function labelForAppearance(preference: ThemePreference) {
-    if (preference === "light") return t("settings.appearanceLight");
-    if (preference === "dark") return t("settings.appearanceDark");
-    return t("settings.appearanceSystem");
-  }
-
-  function labelForDensity(density: Density) {
-    return density === "compact" ? t("settings.densityCompact") : t("settings.densityStandard");
-  }
-
-  function handleSelectAppearance() {
-    // Android's Alert renders at most three buttons, and three options plus a
-    // cancel is four. There the back gesture dismisses instead.
-    const choices = [
-      { text: t("settings.appearanceSystem"), onPress: () => appearance.setPreference("system") },
-      { text: t("settings.appearanceLight"), onPress: () => appearance.setPreference("light") },
-      { text: t("settings.appearanceDark"), onPress: () => appearance.setPreference("dark") },
-    ];
-    Alert.alert(
-      t("settings.appearance"),
-      t("settings.selectAppearance"),
-      Platform.OS === "android"
-        ? choices
-        : [...choices, { text: t("settings.cancel"), style: "cancel" as const }],
-      { cancelable: true },
+  // The one list that can run to a thousand rows, so it owns the scrolling.
+  if (destination === "taxonomy" && !offline) {
+    return (
+      <Screen
+        title={t("settings.title")}
+        hideHeader
+        scroll={false}
+        padded={false}
+        contentContainerStyle={styles.flush}
+      >
+        <TaxonomySection header={header} />
+      </Screen>
     );
   }
 
-  function handleSelectDensity() {
-    Alert.alert(t("settings.density"), t("settings.selectDensity"), [
-      { text: t("settings.densityStandard"), onPress: () => appearance.setDensity("standard") },
-      { text: t("settings.densityCompact"), onPress: () => appearance.setDensity("compact") },
-      { text: t("settings.cancel"), style: "cancel" },
-    ]);
-  }
-
-  function handleSelectPreference(
-    key: "uiLanguage" | "aiProcessingLanguage" | "aiChatLanguage",
-    title: string,
-  ) {
-    const basePreferences = auth.user?.preferences ?? {
-      uiLanguage: "en",
-      aiProcessingLanguage: "en",
-      aiChatLanguage: "en",
-    };
-
-    const save = (language: "en" | "de") =>
-      void auth
-        .updatePreferences({ ...basePreferences, [key]: language })
-        .catch((error) =>
-          Alert.alert(
-            t("settings.failedToSave"),
-            error instanceof Error ? error.message : t("settings.failedToSave"),
-          ),
-        );
-
-    Alert.alert(title, t("settings.selectLanguage"), [
-      { text: t("settings.english"), onPress: () => save("en") },
-      { text: t("settings.german"), onPress: () => save("de") },
-      { text: t("settings.cancel"), style: "cancel" },
-    ]);
-  }
-
-  function handleLogout() {
-    Alert.alert(t("settings.logOutConfirmTitle"), t("settings.logOutConfirmText"), [
-      { text: t("settings.cancel"), style: "cancel" },
-      {
-        text: t("settings.logOut"),
-        style: "destructive",
-        onPress: () => void offline.clearCachedDocuments().finally(() => auth.logout()),
-      },
-    ]);
-  }
-
-  const initials = (auth.user?.displayName ?? "OK")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-
   return (
-    <Screen
-      title={t("settings.title")}
-      onBack={() => navigation.goBack()}
-      padded={false}
-    >
-      {/* Account */}
-      <Row
-        minHeight={74}
-        leading={
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials || "OK"}</Text>
-          </View>
-        }
-        title={auth.user?.displayName ?? t("settings.userFallback")}
-        meta={auth.user?.email ?? ""}
-        metaMono
-      />
-
-      <SectionHeader label={t("settings.language")} />
-      <Row
-        minHeight={50}
-        leading={glyph("translate")}
-        title={t("settings.surface")}
-        value={labelForLanguage(auth.user?.preferences.uiLanguage ?? "en")}
-        chevron
-        onPress={() => handleSelectPreference("uiLanguage", t("settings.uiLanguage"))}
-      />
-      <Row
-        minHeight={50}
-        leading={glyph("text-recognition")}
-        title={t("settings.documentsOcr")}
-        value={labelForLanguage(auth.user?.preferences.aiProcessingLanguage ?? "en")}
-        chevron
-        onPress={() =>
-          handleSelectPreference("aiProcessingLanguage", t("settings.aiProcessingLanguage"))
-        }
-      />
-      <Row
-        minHeight={50}
-        leading={glyph("message-outline")}
-        title={t("settings.chat")}
-        value={labelForLanguage(auth.user?.preferences.aiChatLanguage ?? "en")}
-        chevron
-        onPress={() => handleSelectPreference("aiChatLanguage", t("settings.aiChatLanguage"))}
-      />
-
-      <SectionHeader label={t("settings.display")} />
-      <Row
-        minHeight={50}
-        leading={glyph("weather-night")}
-        title={t("settings.appearance")}
-        value={labelForAppearance(appearance.preference)}
-        valueTone="green"
-        chevron
-        onPress={handleSelectAppearance}
-      />
-      <Row
-        minHeight={50}
-        leading={glyph("format-line-spacing")}
-        title={t("settings.density")}
-        value={labelForDensity(appearance.density)}
-        chevron
-        onPress={handleSelectDensity}
-      />
-
-      <SectionHeader label={t("settings.archive")} />
-      <Row
-        minHeight={50}
-        leading={glyph("server-network")}
-        title={t("settings.server")}
-        value={auth.apiUrl || t("settings.notConnected")}
-      />
-      <Row
-        minHeight={50}
-        leading={glyph("database-outline")}
-        title={t("settings.offlineAvailable")}
-        value={`${offline.cacheSummary.documentCount} · ${formatBytes(offline.cacheSummary.fileStorageBytes)}`}
-        chevron
-        onPress={() => navigation.navigate("OfflineArchive" as never)}
-      />
-
-      <SectionHeader label={t("settings.info")} />
-      <Row
-        minHeight={50}
-        leading={glyph("information-outline")}
-        title={t("settings.version")}
-        value={APP_VERSION}
-      />
-
-      <View style={styles.footer}>
-        <Button label={t("settings.logOut")} variant="danger" onPress={handleLogout} />
-        <Text style={styles.footerText}>
-          {`${t("settings.mobileFooter")} ${APP_VERSION}`}
-        </Text>
+    <Screen title={t("settings.title")} hideHeader padded={false}>
+      {header}
+      <View style={styles.body}>
+        {destination === "general" ? (
+          <>
+            <SettingsHeading
+              title={t("settingsNav.general")}
+              description={t("settingsNav.generalDescription")}
+            />
+            <LanguageSection />
+            <DeviceSection />
+            {offline ? (
+              <EmptyState
+                icon="cloud-off-outline"
+                title={t("settings.onlineOnlyTitle")}
+                body={t("settings.onlineOnlyBody")}
+              />
+            ) : (
+              <>
+                <HealthSection />
+                <ProcessingSection />
+                <ArchiveSection />
+              </>
+            )}
+          </>
+        ) : destination === "taxonomy" ? (
+          <>
+            <SettingsHeading
+              title={t("settingsNav.taxonomy")}
+              description={t("settingsNav.taxonomyDescription")}
+            />
+            <EmptyState
+              icon="cloud-off-outline"
+              title={t("taxonomy.onlineOnly")}
+              body={t("taxonomy.onlineOnlyBody")}
+            />
+          </>
+        ) : (
+          <>
+            <SettingsHeading
+              title={t("settingsNav.providers")}
+              description={t("settingsNav.providersDescription")}
+            />
+            {offline ? (
+              <EmptyState
+                icon="cloud-off-outline"
+                title={t("providers.onlineOnly")}
+                body={t("providers.onlineOnlyBody")}
+              />
+            ) : (
+              <ProvidersSection />
+            )}
+          </>
+        )}
       </View>
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  avatar: {
-    height: 44,
-    width: 44,
-    flexShrink: 0,
+  flush: {
+    paddingBottom: 0,
+  },
+  pageHeading: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
+  },
+  pageTitle: {
+    ...text.screenTitle,
+    color: c.ink,
+  },
+  pageSubtitle: {
+    ...text.body,
+    marginTop: 2,
+    color: c.muted,
+  },
+  nav: {
+    flexDirection: "row",
+    gap: 4,
+    paddingHorizontal: 16,
+  },
+  navItem: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
+    gap: 8,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: radii.lg,
+  },
+  navItemActive: {
     backgroundColor: c.accentSoft,
   },
-  avatarText: {
+  navText: {
+    ...text.body,
+    color: c.muted,
+  },
+  navTextActive: {
     ...text.bodyStrong,
-    fontSize: 15,
     color: c.accentSoftInk,
   },
-  footer: {
-    padding: 16,
-    gap: 14,
-  },
-  footerText: {
-    ...text.numeric,
-    fontSize: 10.5,
-    lineHeight: 14,
-    color: c.faint,
-    textAlign: "center",
+  body: {
+    gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
 }));
