@@ -1,15 +1,24 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="630" fill="#F7F0DE"/>
-  <rect x="40" y="40" width="1120" height="550" rx="32" fill="#F1E6CF"/>
-  <rect x="40" y="230" width="1120" height="170" fill="#1C4C47"/>
-  <g>
-    <rect x="112" y="154" width="168" height="168" rx="40" fill="#244F49"/>
-    <path d="M156 128H248L270 152V252L202 292L158 270L156 128Z" fill="#F7EFD9"/>
-    <path d="M174 164H250" stroke="#244F49" stroke-width="10" stroke-linecap="round"/>
-    <path d="M178 172H248V236L202 264L178 248V172Z" fill="#244F49" stroke="#F7EFD9" stroke-width="8" stroke-linejoin="round"/>
-    <path d="M270 176H288V214H270" fill="#9C5A33"/>
-    <path d="M226 128L248 152H232L214 128H226Z" fill="#F7EFD9"/>
+  <defs>
+    <linearGradient id="ok-field" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14297F"/>
+      <stop offset="0.55" stop-color="#1F55D6"/>
+      <stop offset="1" stop-color="#3FA6EE"/>
+    </linearGradient>
+    <linearGradient id="ok-mark" x1="24" y1="16" x2="232" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B3FB5"/>
+      <stop offset="0.55" stop-color="#2569E8"/>
+      <stop offset="1" stop-color="#4FB2F3"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#ok-field)"/>
+  <g transform="translate(96 150) scale(0.75)">
+    <rect width="256" height="256" rx="60" fill="#FFFFFF"/>
+    <path d="M84 48H148L196 96V192C196 201.941 187.941 210 178 210H84C74.0589 210 66 201.941 66 192V66C66 56.0589 74.0589 48 84 48Z" fill="url(#ok-mark)"/>
+    <path d="M148 48L196 96H160C153.373 96 148 90.6274 148 84V48Z" fill="#BBD6FB"/>
+    <path d="M92 48H128V118L110 104L92 118V48Z" fill="#FFFFFF"/>
   </g>
-  <text x="355" y="351" fill="#F7F0DE" font-family="Georgia, 'Times New Roman', serif" font-size="86" font-weight="700">OpenKeep</text>
-  <text x="112" y="472" fill="#1C4C47" font-family="Georgia, serif" font-size="34">Structured archives, ready to keep.</text>
+  <text x="320" y="278" fill="#FFFFFF" font-family="Geist, Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="92" font-weight="600" letter-spacing="-3">OpenKeep</text>
+  <text x="96" y="430" fill="#FFFFFF" font-family="Geist, Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="40" font-weight="500" letter-spacing="-0.5">Your documents, kept, read and ready to answer.</text>
+  <text x="96" y="488" fill="#CFE2FF" font-family="Geist, Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="28">A self-hosted, AI-assisted document archive.</text>
 </svg>
