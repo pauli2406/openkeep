@@ -1,11 +1,16 @@
 <svg width="662" height="140" viewBox="0 0 662 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="662" height="140" fill="none"/>
-  <g>
-    <path d="M24 28H84L98 44V102L54 128L26 112L24 28Z" fill="#1C4C47"/>
-    <path d="M36 46H86" stroke="#F7EFD9" stroke-width="6" stroke-linecap="round"/>
-    <path d="M38 50H84V94L54 112L38 102V50Z" fill="#1C4C47" stroke="#F7EFD9" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M96 53H108V79H96" fill="#9C5A33"/>
-    <path d="M79 28L98 44H84L72 28H79Z" fill="#1C4C47"/>
+  <defs>
+    <linearGradient id="ok-mark" x1="24" y1="16" x2="232" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B3FB5"/>
+      <stop offset="0.55" stop-color="#2569E8"/>
+      <stop offset="1" stop-color="#4FB2F3"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(14 14) scale(0.4375)">
+    <rect width="256" height="256" rx="60" fill="url(#ok-mark)"/>
+    <path d="M84 48H148L196 96V192C196 201.941 187.941 210 178 210H84C74.0589 210 66 201.941 66 192V66C66 56.0589 74.0589 48 84 48Z" fill="#FFFFFF"/>
+    <path d="M148 48L196 96H160C153.373 96 148 90.6274 148 84V48Z" fill="#BBD6FB"/>
+    <path d="M92 48H128V118L110 104L92 118V48Z" fill="url(#ok-mark)"/>
   </g>
-  <text x="142" y="92" fill="#1C4C47" font-family="Georgia, 'Times New Roman', serif" font-size="68" font-weight="700">OpenKeep</text>
+  <text x="142" y="94" fill="#16245C" font-family="Geist, Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="68" font-weight="600" letter-spacing="-2">OpenKeep</text>
 </svg>

@@ -1,28 +1,26 @@
-import * as React from "react";
+import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
-/**
- * Filter pill. The one place the design allows a 999px radius.
- * `active` is the selected state used by the filter bars.
- */
-const Chip = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }
->(({ className, active = false, type = "button", ...props }, ref) => (
-  <button
-    ref={ref}
-    type={type}
-    data-active={active ? "true" : undefined}
-    className={cn(
-      "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[var(--r-pill)] border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-[13px] [&_svg]:shrink-0",
-      active
-        ? "border-transparent bg-primary text-primary-foreground"
-        : "border-border bg-card text-foreground hover:bg-secondary",
-      className,
-    )}
-    {...props}
-  />
-));
-Chip.displayName = "Chip";
-
-export { Chip };
+/** A filter pill. `active` is the selected state used by filter bars. */
+export function Chip({
+  className,
+  active = false,
+  type = "button",
+  ...props
+}: ComponentProps<"button"> & { active?: boolean }) {
+  return (
+    <button
+      type={type}
+      aria-pressed={active}
+      data-active={active ? "true" : undefined}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        active
+          ? "border-transparent bg-brand-soft font-medium text-brand-soft-foreground"
+          : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}

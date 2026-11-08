@@ -58,6 +58,14 @@ const CsvStatusArraySchema = z.preprocess((value) => {
   return undefined;
 }, z.array(DocumentStatusSchema).optional());
 
+/** A query-string flag: `true`, `1` and `yes` turn it on. */
+const QueryBooleanSchema = z
+  .preprocess((value) => {
+    if (typeof value === "string") return ["1", "true", "yes"].includes(value.toLowerCase());
+    return value;
+  }, z.boolean())
+  .optional();
+
 const SearchDocumentsQuerySchema = z.object({
   query: z.string().trim().optional(),
   year: z.coerce.number().int().min(1970).max(2100).optional(),
@@ -71,12 +79,9 @@ const SearchDocumentsQuerySchema = z.object({
   statuses: CsvStatusArraySchema,
   tags: CsvUuidArraySchema,
   categoryIds: CsvUuidArraySchema,
-  uncategorized: z
-    .preprocess((value) => {
-      if (typeof value === "string") return ["1", "true", "yes"].includes(value.toLowerCase());
-      return value;
-    }, z.boolean())
-    .optional(),
+  uncategorized: QueryBooleanSchema,
+  /** Only documents with a due date whose task is not done: the Today queue. */
+  openTasksOnly: QueryBooleanSchema,
   amountMin: z.coerce.number().optional(),
   amountMax: z.coerce.number().optional(),
   sort: SearchDocumentsRequestSchema.shape.sort.default("createdAt"),

@@ -5,6 +5,14 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import {
+  ArchiveIcon,
+  ChevronsUpDownIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+} from "./desktop-icons";
 
 export type ArchiveSwitcherProfile = {
   id: string;
@@ -20,29 +28,12 @@ type ArchiveSwitcherProps = {
   onAdd: () => void;
   onEdit: (profile: ArchiveSwitcherProfile) => void;
   onRemove: (profile: ArchiveSwitcherProfile) => void | Promise<void>;
+  /** Span the container with a labelled trigger; the app header keeps it compact. */
+  fill?: boolean;
 };
 
 function archiveIdentity(profile: ArchiveSwitcherProfile) {
   return `${profile.label} (${profile.serverUrl})`;
-}
-
-function ArchiveGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4.75 7.25h14.5v11H4.75z" />
-      <path d="M3.75 4.75h16.5v3.5H3.75zM9 11h6" />
-    </svg>
-  );
-}
-
-function MoreGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="5" cy="12" r="1.4" />
-      <circle cx="12" cy="12" r="1.4" />
-      <circle cx="19" cy="12" r="1.4" />
-    </svg>
-  );
 }
 
 export function ArchiveSwitcher({
@@ -53,6 +44,7 @@ export function ArchiveSwitcher({
   onAdd,
   onEdit,
   onRemove,
+  fill = false,
 }: ArchiveSwitcherProps) {
   const menuId = useId();
   const titleId = useId();
@@ -214,74 +206,89 @@ export function ArchiveSwitcher({
 
   if (!activeProfile) {
     return (
-      <button
+      <Button
         type="button"
-        className="desktop-archive-switcher desktop-archive-switcher--empty"
+        variant="outline"
+        className={cn(fill && "h-11 w-full")}
         onClick={onAdd}
       >
-        <span className="desktop-archive-switcher__icon">
-          <ArchiveGlyph />
-        </span>
+        <ArchiveIcon className="size-4 text-brand" />
         <span>Add an archive</span>
-        <span aria-hidden="true">+</span>
-      </button>
+        <PlusIcon className="size-4 text-muted-foreground" />
+      </Button>
     );
   }
 
   return (
-    <div className="desktop-archive-switcher-wrap" ref={rootRef}>
-      <button
+    <div className={cn("relative", fill ? "flex w-full" : "inline-flex min-w-0")} ref={rootRef}>
+      <Button
         ref={triggerRef}
         type="button"
-        className="desktop-archive-switcher"
+        variant="outline"
+        className={cn(
+          "min-w-0 justify-start shadow-none",
+          fill ? "h-auto w-full gap-3 py-2.5 pr-3 pl-2.5 text-left" : "max-w-44 gap-2 pr-2 pl-2.5",
+        )}
         aria-haspopup="menu"
         aria-controls={menuOpen ? menuId : undefined}
         aria-expanded={menuOpen}
         onClick={() => (menuOpen ? closeMenu() : openMenu())}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className="desktop-archive-switcher__icon">
-          <ArchiveGlyph />
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center bg-brand-soft text-brand-soft-foreground",
+            fill ? "size-9 rounded-lg" : "size-6 rounded-md",
+          )}
+        >
+          <ArchiveIcon className={fill ? "size-4.5" : "size-3.5"} />
         </span>
-        <span className="desktop-archive-switcher__copy">
-          <span className="desktop-archive-switcher__eyebrow">
-            Active archive
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className={fill ? "text-xs font-normal text-muted-foreground" : "sr-only"}>
+            Active archive{" "}
           </span>
-          <strong>{activeProfile.label}</strong>
+          <span className="truncate" title={activeProfile.label}>
+            {activeProfile.label}
+          </span>
         </span>
-        <span className="desktop-archive-switcher__status" aria-hidden="true" />
-        <span className="desktop-archive-switcher__more">
-          <MoreGlyph />
-        </span>
-      </button>
+        <ChevronsUpDownIcon className="size-4 text-muted-foreground" />
+      </Button>
 
       {menuOpen ? (
         <div
           ref={menuRef}
           id={menuId}
-          className="desktop-archive-menu"
+          className="absolute top-full right-0 z-120 mt-2 w-full min-w-[min(360px,calc(100vw-28px))] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-raised animate-in fade-in-0 slide-in-from-top-1 motion-reduce:animate-none"
           role="menu"
           aria-label="Archive profiles"
           onKeyDown={handleMenuKeyDown}
         >
-          <div className="desktop-archive-menu__heading" aria-hidden="true">
+          <div
+            className="flex items-center justify-between border-b px-3.5 py-2.5 text-xs font-medium text-muted-foreground"
+            aria-hidden="true"
+          >
             <span>Your archives</span>
-            <span>{profiles.length.toString().padStart(2, "0")}</span>
+            <span className="num">{profiles.length}</span>
           </div>
-          <div className="desktop-archive-menu__profiles">
+          <div className="flex max-h-[min(390px,54vh)] flex-col gap-0.5 overflow-y-auto p-1.5">
             {profiles.map((profile) => {
               const active = profile.id === activeProfileId;
               const busy = profile.id === busyProfileId;
               const identity = archiveIdentity(profile);
               return (
                 <div
-                  className="desktop-archive-menu__profile"
-                  data-current={active || undefined}
+                  className={cn(
+                    "group/profile grid grid-cols-[minmax(0,1fr)_auto] items-center rounded-lg hover:bg-muted focus-within:bg-muted",
+                    active && "bg-brand-soft hover:bg-brand-soft focus-within:bg-brand-soft",
+                  )}
                   key={profile.id}
                 >
                   <button
                     type="button"
-                    className="desktop-archive-menu__activate"
+                    className={cn(
+                      "grid min-w-0 cursor-pointer grid-cols-[6px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg py-2 pr-2 pl-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      (busy || active) && "cursor-default",
+                    )}
                     role="menuitem"
                     data-active={active}
                     aria-current={active ? "true" : undefined}
@@ -298,20 +305,33 @@ export function ArchiveSwitcher({
                     }}
                   >
                     <span
-                      className="desktop-archive-menu__signal"
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        active ? "bg-brand" : "bg-muted-foreground/40",
+                      )}
                       aria-hidden="true"
                     />
-                    <span>
-                      <strong>{profile.label}</strong>
-                      <small>{profile.serverUrl}</small>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium">{profile.label}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {profile.serverUrl}
+                      </span>
                     </span>
-                    <span className="desktop-archive-menu__state">
+                    <span
+                      className={cn(
+                        "text-xs",
+                        active ? "font-medium text-brand" : "text-muted-foreground",
+                      )}
+                    >
                       {busy ? "Connecting…" : active ? "Active" : "Switch"}
                     </span>
                   </button>
-                  <div className="desktop-archive-menu__actions">
-                    <button
+                  <div className="flex gap-0.5 pr-1.5 opacity-0 transition-opacity group-focus-within/profile:opacity-100 group-hover/profile:opacity-100">
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-muted-foreground"
                       role="menuitem"
                       aria-label={`Edit ${identity}`}
                       onClick={() => {
@@ -320,16 +340,18 @@ export function ArchiveSwitcher({
                       }}
                     >
                       Edit
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="xs"
+                      className="text-muted-foreground hover:text-danger"
                       role="menuitem"
-                      className="desktop-archive-menu__remove"
                       aria-label={`Remove ${identity}`}
                       onClick={() => beginRemoval(profile)}
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -337,49 +359,54 @@ export function ArchiveSwitcher({
           </div>
           <button
             type="button"
-            className="desktop-archive-menu__add"
+            className="flex w-full cursor-pointer items-center gap-2.5 border-t px-3.5 py-2.5 text-left text-sm text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground"
             role="menuitem"
             onClick={() => {
               closeMenu({ restoreFocus: false });
               onAdd();
             }}
           >
-            <span aria-hidden="true">+</span>
+            <PlusIcon className="size-4" />
             Add another archive
           </button>
         </div>
       ) : null}
 
       {removing ? (
-        <div className="desktop-archive-dialog-backdrop">
+        <div className="fixed inset-0 z-300 grid place-items-center bg-overlay p-6 backdrop-blur-xs">
           <section
             ref={dialogRef}
-            className="desktop-archive-dialog"
+            className="w-full max-w-md rounded-2xl border bg-popover p-6 text-sm text-popover-foreground shadow-raised"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby={titleId}
             aria-describedby={descriptionId}
           >
-            <span className="desktop-archive-dialog__index" aria-hidden="true">
-              REMOVE / PROFILE
+            <span
+              className="flex size-9 items-center justify-center rounded-lg bg-danger-soft text-danger"
+              aria-hidden="true"
+            >
+              <TriangleAlertIcon className="size-4.5" />
             </span>
-            <h2 id={titleId}>Remove {removing.label}?</h2>
-            <p id={descriptionId}>
+            <h2 id={titleId} className="mt-4 text-lg font-semibold tracking-tight wrap-break-word">
+              Remove {removing.label}?
+            </h2>
+            <p id={descriptionId} className="mt-1.5 leading-relaxed text-muted-foreground">
               This removes the saved connection and local data for
-              <strong> {removing.serverUrl}</strong>. The remote archive and
+              <strong className="font-medium wrap-anywhere text-foreground"> {removing.serverUrl}</strong>. The remote archive and
               every document stored there remain untouched.
             </p>
-            <div className="desktop-archive-dialog__actions">
-              <button ref={cancelRef} type="button" onClick={cancelRemoval}>
+            <div className="mt-6 grid grid-cols-2 gap-2.5">
+              <Button ref={cancelRef} type="button" variant="outline" onClick={cancelRemoval}>
                 Keep archive
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="desktop-archive-dialog__confirm"
+                variant="destructive"
                 onClick={() => void confirmRemoval()}
               >
                 Remove saved archive
-              </button>
+              </Button>
             </div>
           </section>
         </div>

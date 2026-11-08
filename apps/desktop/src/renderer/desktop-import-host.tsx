@@ -6,12 +6,16 @@ import {
   type ReactNode,
 } from "react";
 import type { HostImportDelivery } from "@openkeep/web/app";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import type {
   DesktopBridge,
   DesktopImportBatch,
   DesktopProfileSummary,
   DesktopSessionState,
 } from "../shared/desktop-api";
+import { InboxIcon } from "./desktop-icons";
 
 type ImportPipeline = {
   publish: (delivery: HostImportDelivery) => void;
@@ -142,53 +146,74 @@ export function DesktopImportHost({
     <>
       {children}
       {unassigned ? (
-        <div className="desktop-import-backdrop">
+        <div className="fixed inset-0 z-280 grid place-items-center bg-overlay p-7 backdrop-blur-sm">
           <section
-            className="desktop-import-dialog"
+            className="flex max-h-full w-full max-w-xl flex-col overflow-y-auto rounded-2xl border bg-popover p-6 text-sm text-popover-foreground shadow-raised animate-in fade-in-0 zoom-in-95 motion-reduce:animate-none"
             role="dialog"
             aria-modal="true"
             aria-labelledby="desktop-import-title"
           >
-            <header>
-              <span>Incoming documents</span>
-              <span>{itemCount.toString().padStart(2, "0")}</span>
-            </header>
-            <div className="desktop-import-dialog__copy">
-              <p className="desktop-import-dialog__eyebrow">Open with OpenKeep</p>
-              <h2 id="desktop-import-title">Choose an archive</h2>
-              <p>
-                These files stay local until you choose where they belong. OpenKeep
-                will upload them through that archive’s normal processing queue.
-              </p>
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-soft-foreground">
+                <InboxIcon className="size-4.5" />
+              </span>
+              <div className="min-w-0 flex-1 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">Open with OpenKeep</p>
+                <p>Incoming documents</p>
+              </div>
+              <Badge variant="secondary" className="num">
+                {itemCount}
+              </Badge>
             </div>
-            <ul className="desktop-import-dialog__files" aria-label="Incoming files">
+            <h2 id="desktop-import-title" className="mt-5 text-xl font-semibold tracking-tight">
+              Choose an archive
+            </h2>
+            <p className="mt-1.5 leading-relaxed text-muted-foreground">
+              These files stay local until you choose where they belong. OpenKeep
+              will upload them through that archive’s normal processing queue.
+            </p>
+            <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Incoming files">
               {[...unassigned.files, ...unassigned.rejected].map((file) => (
-                <li key={file.id}>{file.name}</li>
+                <li
+                  key={file.id}
+                  className="max-w-48 truncate rounded-full border px-2.5 py-1 text-xs text-muted-foreground"
+                >
+                  {file.name}
+                </li>
               ))}
             </ul>
-            <div className="desktop-import-dialog__profiles">
+            <div className="mt-5 flex flex-col gap-2">
               {profiles.map((profile) => (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   key={profile.id}
                   disabled={Boolean(busyProfileId)}
+                  className="h-auto w-full justify-between gap-4 py-2.5 text-left font-normal shadow-none"
                   onClick={() => void chooseProfile(profile.id)}
                 >
-                  <span>
-                    <strong>{profile.label}</strong>
-                    <small>{profile.serverUrl}</small>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium">{profile.label}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {profile.serverUrl}
+                    </span>
                   </span>
-                  <span>
+                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-brand">
+                    {busyProfileId === profile.id ? <Spinner className="size-3.5" /> : null}
                     {busyProfileId === profile.id
                       ? "Connecting…"
                       : profile.id === activeProfile.id
                         ? "Import here"
                         : "Switch & import"}
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
-            {message ? <p className="desktop-import-dialog__error">{message}</p> : null}
+            {message ? (
+              <p role="alert" className="mt-3 text-sm text-danger">
+                {message}
+              </p>
+            ) : null}
           </section>
         </div>
       ) : null}

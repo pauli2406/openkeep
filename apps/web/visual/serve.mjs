@@ -50,8 +50,8 @@ const server = createServer(async (request, response) => {
       return;
     }
     response.statusCode = upstream.status;
-    response.setHeader("Content-Type", "application/json");
-    response.end(await upstream.text());
+    response.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+    response.end(Buffer.from(await upstream.arrayBuffer()));
     return;
   }
 

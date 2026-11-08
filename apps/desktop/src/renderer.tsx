@@ -1,5 +1,4 @@
 import "@openkeep/web/styles.css";
-import "./renderer/desktop-bootstrap.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { configureApiAuthMode } from "@openkeep/web/api";

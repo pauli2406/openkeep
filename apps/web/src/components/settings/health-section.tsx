@@ -1,54 +1,16 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
-  Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
-  ProviderConfig,
-  ReadinessResponse,
-  Tag,
-  WatchFolderScanResponse,
-} from "@openkeep/types";
+import type { HealthResponse, ReadinessResponse } from "@openkeep/types";
+import { Server } from "lucide-react";
 import { api } from "@/lib/api";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Server,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  } from "lucide-react";
+import { Item, ItemActions, ItemContent, ItemTitle } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
+import {
+  RetryAlert,
+  SectionCard,
+  StatusBadge,
+  formatWatchFolderFieldLabel,
+} from "./shared";
 
 export function SystemHealthSection() {
   const { t } = useI18n();
@@ -76,89 +38,78 @@ export function SystemHealthSection() {
     refetchInterval: 30000,
   });
 
+  const serverHealthy =
+    healthQuery.data?.status === "ok" || healthQuery.data?.status === "healthy";
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Server className="h-5 w-5" />
-          {t("settings.systemHealth")}
-        </CardTitle>
-        <CardDescription>{t("settings.systemHealthDescription")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Health status */}
-        {healthQuery.isLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t("settings.checkingHealth")}
-          </div>
-        )}
+    <SectionCard
+      icon={<Server />}
+      title={t("settings.systemHealth")}
+      description={t("settings.systemHealthDescription")}
+      action={
+        healthQuery.isLoading ? (
+          <Skeleton
+            className="h-5.5 w-16 rounded-full"
+            aria-label={t("settings.checkingHealth")}
+          />
+        ) : healthQuery.data ? (
+          <StatusBadge tone={serverHealthy ? "ok" : "warn"}>
+            {t("settings.server")}: <span className="capitalize">{healthQuery.data.status}</span>
+          </StatusBadge>
+        ) : null
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {healthQuery.isError ? (
+          <RetryAlert
+            message={t("settings.unableToReachServer")}
+            onRetry={() => void healthQuery.refetch()}
+          />
+        ) : null}
 
-        {healthQuery.isError && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            {t("settings.unableToReachServer")}
+        {readinessQuery.isLoading ? (
+          <div
+            className="grid gap-2 sm:grid-cols-3"
+            role="status"
+            aria-label={t("settings.runningReadinessChecks")}
+          >
+            <Skeleton className="h-11 rounded-lg" />
+            <Skeleton className="h-11 rounded-lg" />
+            <Skeleton className="h-11 rounded-lg" />
           </div>
-        )}
+        ) : null}
 
-        {healthQuery.data && (
-          <div className="flex items-center gap-3">
-            <div
-              className={`h-3 w-3 rounded-full ${
-                healthQuery.data.status === "ok" ||
-                healthQuery.data.status === "healthy"
-                  ? "bg-[var(--ok-green)]"
-                  : "bg-[var(--ok-amber)]"
-              }`}
-            />
-            <div>
-              <p className="text-sm font-medium">
-                {t("settings.server")}:{" "}
-                <span className="capitalize">{healthQuery.data.status}</span>
-              </p>
+        {readinessQuery.isError ? (
+          <RetryAlert
+            message={t("settings.failedToFetchReadiness")}
+            onRetry={() => void readinessQuery.refetch()}
+          />
+        ) : null}
+
+        {readinessQuery.data?.checks ? (
+          <div>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              {t("settings.readinessChecks")}
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {Object.entries(readinessQuery.data.checks).map(([name, healthy]) => (
+                <Item key={name} variant="outline" size="sm" className="flex-nowrap">
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="truncate font-normal">
+                      {formatWatchFolderFieldLabel(name)}
+                    </ItemTitle>
+                  </ItemContent>
+                  <ItemActions>
+                    <StatusBadge tone={healthy ? "ok" : "bad"}>
+                      {healthy ? t("settings.ok") : t("settings.fail")}
+                    </StatusBadge>
+                  </ItemActions>
+                </Item>
+              ))}
             </div>
           </div>
-        )}
-
-        {/* Readiness checks */}
-        {readinessQuery.isLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            {t("settings.runningReadinessChecks")}
-          </div>
-        )}
-
-        {readinessQuery.data && readinessQuery.data.checks && (
-          <>
-            <Separator />
-            <div>
-              <p className="mb-2 text-sm font-medium">{t("settings.readinessChecks")}</p>
-              <div className="space-y-2">
-                {Object.entries(readinessQuery.data.checks).map(
-                  ([name, healthy]) => (
-                    <div
-                      key={name}
-                      className="flex items-center justify-between rounded-md border px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        {healthy ? (
-                          <CheckCircle className="h-4 w-4 text-[var(--ok-green)]" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 text-destructive" />
-                        )}
-                        <span className="text-sm capitalize">{name}</span>
-                      </div>
-                      <Badge variant={healthy ? "success" : "destructive"}>
-                        {healthy ? t("settings.ok") : t("settings.fail")}
-                      </Badge>
-                    </div>
-                  ),
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+        ) : null}
+      </div>
+    </SectionCard>
   );
 }

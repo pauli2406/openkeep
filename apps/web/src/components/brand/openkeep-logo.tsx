@@ -1,38 +1,24 @@
 import { cn } from "@/lib/utils";
 
-type OpenKeepLogoProps = {
-  className?: string;
-  markClassName?: string;
-  wordmarkClassName?: string;
-  stacked?: boolean;
-};
-
+/** The mark and wordmark. `currentColor` carries the wordmark onto any surface. */
 export function OpenKeepLogo({
   className,
   markClassName,
   wordmarkClassName,
-  stacked = false,
-}: OpenKeepLogoProps) {
+}: {
+  className?: string;
+  markClassName?: string;
+  wordmarkClassName?: string;
+}) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center text-[color:var(--explorer-ink)]",
-        stacked ? "flex-col gap-3" : "gap-3",
-        className,
-      )}
-    >
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
       <img
         src="/brand/logo-mark.svg"
         alt=""
         aria-hidden="true"
-        className={cn("h-8 w-8 shrink-0", markClassName)}
+        className={cn("size-8 shrink-0 rounded-[10px]", markClassName)}
       />
-      <span
-        className={cn(
-          "font-bold tracking-tight text-[color:var(--explorer-ink)]",
-          wordmarkClassName,
-        )}
-      >
+      <span className={cn("text-base font-semibold tracking-tight", wordmarkClassName)}>
         OpenKeep
       </span>
     </span>

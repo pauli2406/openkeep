@@ -121,10 +121,9 @@ Chromium build these screens render bit-identical between runs; a percentage
 tolerance was loose enough that changing the entire accent colour still passed
 on most screens.
 
-**Requires network access.** `index.css` pulls Public Sans and IBM Plex Mono
-from Google Fonts, and text metrics drive every box on the page. The suite
-asserts the font actually loaded and fails with that explanation rather than
-producing thousands of unexplained pixel diffs.
+Text metrics drive every box on the page, so the suite asserts that the bundled
+Geist font actually loaded, and fails with that explanation rather than producing
+thousands of unexplained pixel diffs.
 
 Baselines are captured on Linux. Another platform rasterises text differently
 and will diff on every snapshot.

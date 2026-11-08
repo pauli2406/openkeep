@@ -73,7 +73,7 @@ Selecting a row previews that document beside the list with its extracted
 fields, so you can check it without leaving the queue. `Confirm and file`
 marks the task done and removes it from the queue.
 
-Filter the queue with the chips above it: `Open tasks`, `Overdue`,
+Filter the queue with the tiles above it: `Open tasks`, `Overdue`,
 `This month` or `Invoices`.
 
 Keyboard: `↑`/`↓` move through the queue, `Enter` opens the selected
@@ -100,7 +100,7 @@ The Review queue shows documents that need manual attention.
 ### Import
 
 The Import page lets you add files directly to the archive. It is the `Import`
-button on the right of the top bar.
+button at the top right of every screen.
 
 ### Settings
 
@@ -108,13 +108,13 @@ Settings is split into three sections, reached from its left navigation:
 `General` (language, watch folder, archive import/export, system health),
 `Tags & taxonomy`, and `AI providers`. Your account — profile, two-factor
 authentication and API tokens — lives on the `Profile` page, opened from the
-avatar menu in the top bar.
+menu under your name at the bottom of the sidebar.
 
 ## Light and Dark Appearance
 
 OpenKeep follows your operating system's light or dark setting by default.
 
-To override it, select the sun or moon icon on the right of the top bar. Your
+To override it, select the sun or moon icon at the top right. Your
 choice is remembered in that browser and applies the next time you open
 OpenKeep; until you make a choice, the app keeps following the system setting.
 

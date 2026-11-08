@@ -107,6 +107,32 @@ describe("auth smoke", () => {
     expect(localStorage.getItem("openkeep.refresh-token")).toBe("refresh-token");
   });
 
+  it("walks the first-run wizard past the moment creating the owner signs them in", async () => {
+    server.use(
+      http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),
+      http.post(apiUrl("/api/auth/setup"), () =>
+        HttpResponse.json({ accessToken: "access-token", refreshToken: "refresh-token" }),
+      ),
+      http.get(apiUrl("/api/auth/me"), () => HttpResponse.json(makeUser())),
+    );
+    mockDashboardData();
+
+    const { user } = renderApp({ route: "/setup" });
+
+    await user.type(await screen.findByLabelText(/display name/i), "Owner");
+    await user.type(screen.getByLabelText(/^email$/i), "owner@example.com");
+    await user.type(screen.getByLabelText(/^password$/i), "super-secret-pass");
+    await user.type(screen.getByLabelText(/confirm password/i), "super-secret-pass");
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(await screen.findByRole("heading", { name: "Document language" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /skip/i }));
+    expect(screen.getByRole("heading", { name: "Watch folder" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /done/i }));
+
+    expect(await screen.findByText(/sorted by/i)).toBeInTheDocument();
+  });
+
   it("restores an existing session from stored tokens on boot", async () => {
     server.use(
       http.get(apiUrl("/api/health"), () => HttpResponse.json(makeHealthResponse())),

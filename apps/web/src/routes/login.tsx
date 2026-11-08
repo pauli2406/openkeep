@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { ArrowLeftIcon } from "lucide-react";
 import { AuthPanel, FieldError } from "@/components/auth/auth-panel";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: ({ context }) => {
@@ -100,50 +103,64 @@ function LoginPage() {
         title={copy.twoFactorTitle}
         subtitle={useRecoveryCode ? copy.recoverySubtitle : copy.twoFactorSubtitle}
       >
-        <form onSubmit={handleTwoFactorSubmit} className="flex flex-col gap-3">
-          <div>
-            <Label htmlFor="code" className="text-xs text-muted-foreground">
-              {useRecoveryCode ? copy.recoveryLabel : copy.codeLabel}
-            </Label>
-            <Input
-              id="code"
-              inputMode={useRecoveryCode ? "text" : "numeric"}
-              maxLength={useRecoveryCode ? undefined : 6}
-              autoComplete="one-time-code"
-              autoFocus
-              placeholder={useRecoveryCode ? "xxxx-xxxx" : "123456"}
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              className="ok-num mt-1"
-            />
-            <FieldError>{error}</FieldError>
+        <form onSubmit={handleTwoFactorSubmit}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="code">
+                {useRecoveryCode ? copy.recoveryLabel : copy.codeLabel}
+              </FieldLabel>
+              <Input
+                id="code"
+                inputMode={useRecoveryCode ? "text" : "numeric"}
+                maxLength={useRecoveryCode ? undefined : 6}
+                autoComplete="one-time-code"
+                autoFocus
+                placeholder={useRecoveryCode ? "xxxx-xxxx" : "123456"}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                aria-invalid={Boolean(error) || undefined}
+                className={cn(
+                  "num h-11",
+                  !useRecoveryCode && "text-center text-lg tracking-[0.35em] md:text-lg",
+                )}
+              />
+              <FieldError>{error}</FieldError>
+            </Field>
+            <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? <Spinner /> : null}
+              {copy.verify}
+            </Button>
+          </FieldGroup>
+          <div className="mt-4 flex flex-col items-center gap-1">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="text-brand"
+              onClick={() => {
+                setUseRecoveryCode((current) => !current);
+                setCode("");
+                setError("");
+              }}
+            >
+              {useRecoveryCode ? copy.useTotp : copy.useRecovery}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => {
+                setTwoFactorToken(null);
+                setCode("");
+                setError("");
+              }}
+            >
+              <ArrowLeftIcon />
+              {copy.back}
+            </Button>
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {copy.verify}
-          </Button>
-          <button
-            type="button"
-            className="text-center text-xs font-semibold text-[var(--ok-accent)] hover:underline"
-            onClick={() => {
-              setUseRecoveryCode((current) => !current);
-              setCode("");
-              setError("");
-            }}
-          >
-            {useRecoveryCode ? copy.useTotp : copy.useRecovery}
-          </button>
-          <button
-            type="button"
-            className="text-center text-xs text-muted-foreground hover:underline"
-            onClick={() => {
-              setTwoFactorToken(null);
-              setCode("");
-              setError("");
-            }}
-          >
-            {copy.back}
-          </button>
         </form>
       </AuthPanel>
     );
@@ -154,48 +171,48 @@ function LoginPage() {
       title={copy.signIn}
       subtitle={copy.subtitle}
       footer={
-        <>
-          <span className="text-muted-foreground">
-            {t("login.needSetup")}{" "}
-            <Link to="/setup" className="font-semibold text-[var(--ok-accent)] hover:underline">
-              {t("login.goToSetup")}
-            </Link>
-          </span>
-        </>
+        <span className="text-muted-foreground">
+          {t("login.needSetup")}{" "}
+          <Link to="/setup" className="font-medium text-brand hover:underline">
+            {t("login.goToSetup")}
+          </Link>
+        </span>
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <div>
-          <Label htmlFor="email" className="text-xs text-muted-foreground">
-            {t("login.email")}
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1"
-          />
-        </div>
-        <div>
-          <Label htmlFor="password" className="text-xs text-muted-foreground">
-            {t("login.password")}
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="mt-1"
-          />
-          <FieldError>{error}</FieldError>
-        </div>
-        <Button type="submit" className="mt-1 w-full" disabled={isSubmitting}>
-          {isSubmitting ? t("login.signingIn") : copy.signIn}
-        </Button>
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="email">{t("login.email")}</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="username"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-10"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">{t("login.password")}</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              aria-invalid={Boolean(error) || undefined}
+              className="h-10"
+            />
+            <FieldError>{error}</FieldError>
+          </Field>
+          <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? <Spinner /> : null}
+            {isSubmitting ? t("login.signingIn") : copy.signIn}
+          </Button>
+        </FieldGroup>
       </form>
     </AuthPanel>
   );

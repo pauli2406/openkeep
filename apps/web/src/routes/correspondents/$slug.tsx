@@ -1,18 +1,39 @@
+import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Orbit } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarClock,
+  Files,
+  GitCompareArrows,
+  Sparkles,
+} from "lucide-react";
 import type {
   Category,
   CorrespondentInsightsResponse,
   CorrespondentIntelligence,
   Document,
 } from "@openkeep/types";
+import { GradientPanel, Page } from "@/components/layout/page";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import { formatRowDate } from "@/components/explorer/document-table";
 import {
   DocumentRows,
   ErrorBlock,
-  ExplorerSectionHeader,
-  LoadingBlock,
   MetricRibbon,
   MiniSparkline,
 } from "@/components/explorer/shared";
@@ -22,12 +43,15 @@ import {
   formatCurrency,
 } from "@/lib/explorer";
 import { authFetch } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { processingRefetchInterval } from "@/lib/document-processing";
 
 export const Route = createFileRoute("/correspondents/$slug")({
   component: CorrespondentDetailPage,
 });
+
+/** A radix Select item cannot carry an empty value, so "no category" needs a name. */
+const NO_CATEGORY = "__none__";
 
 function CorrespondentDetailPage() {
   const { slug } = Route.useParams();
@@ -92,21 +116,21 @@ function CorrespondentDetailPage() {
   });
 
   if (insightsQuery.isLoading) {
-    return <LoadingBlock label="Loading correspondent dossier" />;
+    return <DossierSkeleton label={t("dossier.loading")} />;
   }
 
   if (insightsQuery.isError || !insightsQuery.data) {
     return (
-      <div className="p-6 md:p-8">
+      <Page>
         <ErrorBlock
-          label="Failed to load correspondent insights."
+          label={t("dossier.loadError")}
           action={
-            <Button variant="outline" onClick={() => insightsQuery.refetch()}>
-              Retry
+            <Button variant="outline" size="sm" onClick={() => insightsQuery.refetch()}>
+              {t("dashboard.retry")}
             </Button>
           }
         />
-      </div>
+      </Page>
     );
   }
 
@@ -119,324 +143,340 @@ function CorrespondentDetailPage() {
   const orderedDocuments = [...(documentsQuery.data?.items ?? [])].sort((left, right) =>
     compareDocumentsNewestFirst(left, right),
   );
-  const smartHighlight = buildSmartHighlight(data, intelligence);
+  const smartHighlight = buildSmartHighlight(data, intelligence, t);
+  const notAvailable = t("dossier.notAvailable");
+  const insurance = intelligence?.domainInsights.insurance;
+  const categoryId = data.correspondent.categoryId ?? null;
+  const categoryName =
+    (categoriesQuery.data ?? []).find((category) => category.id === categoryId)?.name ??
+    data.correspondent.categoryName ??
+    t("dossier.categoryNone");
+  const maxTypeCount = Math.max(...data.documentTypeBreakdown.map((item) => item.count), 1);
 
   return (
-    <div className="space-y-8 p-6 md:p-8">
-      <Button variant="ghost" onClick={() => navigate({ to: "/" })}>
-        <ArrowLeft className="h-4 w-4" />
-        Back to dashboard
+    <Page width="wide">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-my-2 -ml-2 self-start text-muted-foreground"
+        onClick={() => navigate({ to: "/" })}
+      >
+        <ArrowLeft />
+        {t("dossier.back")}
       </Button>
 
-      <ExplorerSectionHeader
-        eyebrow="Correspondent Dossier"
-        title={data.correspondent.name}
-        description="A living dossier for one relationship: overview, detected changes, milestones, domain-specific signals, and the underlying document trail."
-      />
+      <GradientPanel className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 p-5 md:p-6">
+        <div className="min-w-0 flex-1 basis-80">
+          <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            {data.correspondent.name}
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-sm text-white/85">{t("dossier.description")}</p>
+        </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2 text-sm text-[color:var(--explorer-muted)]">
-          {t("dossier.category")}
-          <select
-            value={data.correspondent.categoryId ?? ""}
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <Label htmlFor="dossier-category" className="text-xs text-white/85">
+              {t("dossier.category")}
+            </Label>
+            {categoryId ? (
+              <span className="text-xs text-white/75">
+                {data.correspondent.categorySource === "manual"
+                  ? t("dossier.categorySetByYou")
+                  : t("dossier.categoryAutomatic")}
+              </span>
+            ) : null}
+          </div>
+          <Select
+            value={categoryId ?? NO_CATEGORY}
             disabled={setCategoryMutation.isPending}
-            onChange={(event) =>
+            onValueChange={(value) =>
               setCategoryMutation.mutate({
-                categoryId: event.target.value === "" ? null : event.target.value,
+                categoryId: value === NO_CATEGORY ? null : value,
               })
             }
-            className="h-8 rounded-[var(--r-md)] border border-input bg-card px-2 text-sm text-[color:var(--explorer-ink)]"
           >
-            <option value="">{t("dossier.categoryNone")}</option>
-            {(categoriesQuery.data ?? []).map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        {data.correspondent.categoryId ? (
-          <span className="text-xs text-[color:var(--explorer-muted)]">
-            {data.correspondent.categorySource === "manual"
-              ? t("dossier.categorySetByYou")
-              : t("dossier.categoryAutomatic")}
-          </span>
-        ) : null}
-        {setCategoryMutation.isError ? (
-          <span className="text-xs text-destructive">{t("dossier.categoryFailed")}</span>
-        ) : null}
-      </div>
+            <SelectTrigger
+              id="dossier-category"
+              className="h-9 w-full min-w-56 border-white/25 bg-white/15 text-white hover:bg-white/25 dark:bg-white/15 dark:hover:bg-white/25 [&_svg]:text-white/80"
+            >
+              <SelectValue>{categoryName}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_CATEGORY}>{t("dossier.categoryNone")}</SelectItem>
+              {(categoriesQuery.data ?? []).map((category) => (
+                <SelectItem key={category.id} value={category.id}>
+                  {category.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {setCategoryMutation.isError ? (
+            <Badge variant="danger" className="whitespace-normal">
+              {t("dossier.categoryFailed")}
+            </Badge>
+          ) : null}
+        </div>
+      </GradientPanel>
 
       <MetricRibbon
         items={[
           {
-            label: "Documents",
+            label: t("dossier.metricDocuments"),
             value: data.stats.documentCount.toLocaleString(),
+            icon: <Files className="text-muted-foreground" />,
           },
           smartHighlight,
           {
-            label: "Last Document",
-            value: data.stats.dateRange.to ?? "Undated",
+            label: t("dossier.metricLastDocument"),
+            value: data.stats.dateRange.to
+              ? formatRowDate(data.stats.dateRange.to)
+              : t("dossier.undated"),
             tone: "neutral",
+            icon: <CalendarClock className="text-muted-foreground" />,
           },
           {
-            label: "Detected Changes",
+            label: t("dossier.metricChanges"),
             value: String(intelligence?.changes.length ?? 0),
-            tone: "cobalt",
+            tone: "neutral",
+            icon: <GitCompareArrows className="text-muted-foreground" />,
           },
         ]}
       />
 
-      <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-          Relationship Overview
-        </p>
-        <div className="mt-4 rounded-[var(--r-lg)] bg-[color:var(--ok-raised)] px-5 py-5">
-          {intelligenceStatus === "ready" && intelligence?.overview ? (
-            <div className="space-y-4">
-              <p className="max-w-4xl text-base leading-relaxed text-[color:var(--explorer-ink)]">
-                {intelligence.overview}
-              </p>
-              {intelligence.profile ? (
-                <div className="flex flex-wrap gap-2">
-                  <Chip>{intelligence.profile.category ?? "Unknown category"}</Chip>
-                  {intelligence.profile.subcategory ? (
-                    <Chip>{intelligence.profile.subcategory}</Chip>
+      <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <Section title={t("dossier.overview")} icon={<Sparkles className="size-4 text-brand" />}>
+            <div className="px-4 pb-4 md:px-5 md:pb-5">
+              {intelligenceStatus === "ready" && intelligence?.overview ? (
+                <div className="flex flex-col gap-3.5">
+                  <p className="max-w-4xl leading-relaxed">{intelligence.overview}</p>
+                  {intelligence.profile ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="brand">
+                        {intelligence.profile.category ?? t("dossier.unknownCategory")}
+                      </Badge>
+                      {intelligence.profile.subcategory ? (
+                        <Badge variant="secondary">{intelligence.profile.subcategory}</Badge>
+                      ) : null}
+                      {(intelligence.profile.keySignals ?? []).map((signal: string) => (
+                        <Badge key={signal} variant="secondary">
+                          {signal}
+                        </Badge>
+                      ))}
+                    </div>
                   ) : null}
-                  {(intelligence.profile.keySignals ?? []).map((signal: string) => (
-                    <Chip key={signal}>{signal}</Chip>
+                </div>
+              ) : intelligenceStatus === "pending" ? (
+                <p className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                  <Spinner className="shrink-0 text-brand" aria-hidden="true" />
+                  {t("dossier.generating")}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t("dossier.noProvider")}</p>
+              )}
+            </div>
+          </Section>
+
+          <Section title={t("dossier.changes")}>
+            {(intelligence?.changes ?? []).length > 0 ? (
+              <ul className="divide-y border-t">
+                {intelligence!.changes.map((change: CorrespondentIntelligenceChange, index: number) => (
+                  <li key={`${change.title}-${index}`} className="px-4 py-3.5 md:px-5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                      <p className="text-sm font-medium">{change.title}</p>
+                      <span className="num text-xs text-muted-foreground">
+                        {change.effectiveDate ?? t("dossier.undated")}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{change.description}</p>
+                    {change.valueBefore || change.valueAfter ? (
+                      <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                        <Badge variant="secondary">{change.valueBefore ?? notAvailable}</Badge>
+                        <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground" />
+                        <Badge variant="brand">{change.valueAfter ?? notAvailable}</Badge>
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyNote label={t("dossier.noChanges")} />
+            )}
+          </Section>
+
+          {insurance ? (
+            <Section title={t("dossier.insurance")}>
+              <div className="grid gap-2 px-4 pb-4 sm:grid-cols-2 md:px-5 md:pb-5 xl:grid-cols-4">
+                <Fact
+                  label={t("dossier.policyReferences")}
+                  value={insurance.policyReferences.join(", ") || notAvailable}
+                />
+                <Fact
+                  label={t("dossier.latestPremium")}
+                  value={
+                    insurance.latestPremiumAmount != null && insurance.latestPremiumCurrency
+                      ? formatCurrency(
+                          insurance.latestPremiumAmount,
+                          insurance.latestPremiumCurrency,
+                        ) ?? notAvailable
+                      : notAvailable
+                  }
+                />
+                <Fact
+                  label={t("dossier.renewal")}
+                  value={insurance.renewalDate ?? notAvailable}
+                />
+                <Fact
+                  label={t("dossier.cancellation")}
+                  value={insurance.cancellationWindow ?? notAvailable}
+                />
+              </div>
+              {(insurance.coverageHighlights ?? []).length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 px-4 pb-4 md:px-5 md:pb-5">
+                  {insurance.coverageHighlights.map((item: string) => (
+                    <Badge key={item} variant="secondary">
+                      {item}
+                    </Badge>
                   ))}
                 </div>
               ) : null}
-            </div>
-          ) : intelligenceStatus === "pending" ? (
-            <p className="text-sm text-[color:var(--explorer-muted)]">
-              Intelligence generation is in progress. This page will refresh automatically when the dossier is ready.
-            </p>
-          ) : (
-            <p className="text-sm text-[color:var(--explorer-muted)]">
-              No LLM provider is configured for correspondent intelligence yet.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Key Changes
-          </p>
-          <div className="mt-4 space-y-3">
-            {(intelligence?.changes ?? []).length > 0 ? (
-              intelligence!.changes.map((change: CorrespondentIntelligenceChange, index: number) => (
-                <div
-                  key={`${change.title}-${index}`}
-                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">
-                      {change.title}
-                    </p>
-                    <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                      {change.effectiveDate ?? "Undated"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-[color:var(--explorer-muted)]">{change.description}</p>
-                  {(change.valueBefore || change.valueAfter) && (
-                    <p className="mt-2 text-xs text-[color:var(--explorer-muted)]">
-                      {change.valueBefore ?? "n/a"} → {change.valueAfter ?? "n/a"}
-                    </p>
-                  )}
-                </div>
-              ))
-            ) : (
-              <EmptyCard label="No major changes detected yet." />
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-                Monthly Activity
-              </p>
-              <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-                Documents per month
-              </h2>
-            </div>
-            <Orbit className="h-5 w-5 text-[color:var(--explorer-muted)]" />
-          </div>
-          <MiniSparkline data={data.timeline} className="mt-6" />
-        </section>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Current State
-          </p>
-          <div className="mt-4 space-y-3">
-            {(intelligence?.currentState ?? []).length > 0 ? (
-              intelligence!.currentState.map((fact: CorrespondentIntelligenceFact) => (
-                <div
-                  key={`${fact.label}-${fact.value}`}
-                  className="flex items-start justify-between gap-3 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
-                >
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                      {fact.label}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-[color:var(--explorer-ink)]">
-                      {fact.value}
-                    </p>
-                  </div>
-                  <span className="text-xs text-[color:var(--explorer-muted)]">{fact.asOf ?? ""}</span>
-                </div>
-              ))
-            ) : (
-              <EmptyCard label="No current-state facts available yet." />
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Timeline Highlights
-          </p>
-          <div className="mt-4 space-y-3">
-            {timelineEvents.length > 0 ? (
-              timelineEvents.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
-                <div
-                  key={`${event.title}-${index}`}
-                  className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-semibold text-[color:var(--explorer-ink)]">{event.title}</p>
-                    <span className="text-xs uppercase tracking-[0.18em] text-[color:var(--explorer-muted)]">
-                      {event.date ?? "Undated"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-[color:var(--explorer-muted)]">{event.description}</p>
-                </div>
-              ))
-            ) : (
-              <EmptyCard label="No timeline highlights available yet." />
-            )}
-          </div>
-        </section>
-      </div>
-
-      {intelligence?.domainInsights.insurance ? (
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.78),rgba(236,241,255,0.68))] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Insurance Lens
-          </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <FactPanel
-              label="Policy References"
-              value={intelligence.domainInsights.insurance.policyReferences.join(", ") || "n/a"}
-            />
-            <FactPanel
-              label="Latest Premium"
-              value={
-                intelligence.domainInsights.insurance.latestPremiumAmount != null &&
-                intelligence.domainInsights.insurance.latestPremiumCurrency
-                  ? formatCurrency(
-                      intelligence.domainInsights.insurance.latestPremiumAmount,
-                      intelligence.domainInsights.insurance.latestPremiumCurrency,
-                    ) ?? "n/a"
-                  : "n/a"
-              }
-            />
-            <FactPanel
-              label="Renewal"
-              value={intelligence.domainInsights.insurance.renewalDate ?? "n/a"}
-            />
-            <FactPanel
-              label="Cancellation"
-              value={intelligence.domainInsights.insurance.cancellationWindow ?? "n/a"}
-            />
-          </div>
-          {(intelligence.domainInsights.insurance.coverageHighlights ?? []).length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {intelligence.domainInsights.insurance.coverageHighlights.map((item: string) => (
-                <Chip key={item}>{item}</Chip>
-              ))}
-            </div>
+            </Section>
           ) : null}
-        </section>
-      ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Type Breakdown
-          </p>
-          <div className="mt-4 space-y-3">
-            {data.documentTypeBreakdown.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center justify-between rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-3"
-              >
-                <span className="text-sm font-medium text-[color:var(--explorer-ink)]">{item.name}</span>
-                <span className="ok-num text-sm text-[color:var(--explorer-muted)]">{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-          <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-            Legacy Summary
-          </p>
-          <div className="mt-4 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-4">
-            <p className="text-sm leading-relaxed text-[color:var(--explorer-muted)]">
-              {data.summary ?? intelligence?.profile?.narrative ?? "No summary available yet."}
-            </p>
-          </div>
-        </section>
-      </div>
-
-      <section className="space-y-5 rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-[color:var(--explorer-panel)] p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-              Documents
-            </p>
-            <h2 className="mt-2 ok-section-title text-[color:var(--explorer-ink)]">
-              Documents from {data.correspondent.name}
-            </h2>
-          </div>
-          <Button asChild variant="ghost">
-            <Link
-              to="/documents"
-              search={{
-                correspondentIds: [data.correspondent.id],
-                view: "list",
-              }}
-            >
-              Open in explorer
-            </Link>
-          </Button>
-        </div>
-
-        {documentsQuery.isLoading ? (
-          <LoadingBlock label="Loading correspondent documents" />
-        ) : documentsQuery.isError ? (
-          <ErrorBlock
-            label="Failed to load the document list for this correspondent."
+          <Section
+            title={t("dossier.documentsFrom").replace("{name}", data.correspondent.name)}
             action={
-              <Button variant="outline" onClick={() => documentsQuery.refetch()}>
-                Retry
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  to="/documents"
+                  search={{
+                    correspondentIds: [data.correspondent.id],
+                    view: "list",
+                  }}
+                >
+                  {t("dossier.openInExplorer")}
+                </Link>
               </Button>
             }
-          />
-        ) : (
-          <DocumentRows documents={orderedDocuments} />
-        )}
-      </section>
-    </div>
+          >
+            <div className="border-t">
+              {documentsQuery.isLoading ? (
+                <div
+                  role="status"
+                  aria-label={t("dossier.loadingDocuments")}
+                  className="flex flex-col gap-4 p-5"
+                >
+                  <Skeleton className="h-4 w-3/5" />
+                  <Skeleton className="h-4 w-2/5" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              ) : documentsQuery.isError ? (
+                <div className="p-4">
+                  <ErrorBlock
+                    label={t("dossier.documentsError")}
+                    action={
+                      <Button variant="outline" size="sm" onClick={() => documentsQuery.refetch()}>
+                        {t("dashboard.retry")}
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : (
+                <DocumentRows documents={orderedDocuments} />
+              )}
+            </div>
+          </Section>
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-5">
+          <Section title={t("dossier.activity")}>
+            <div className="px-4 pb-4 md:px-5">
+              <MiniSparkline data={data.timeline} />
+            </div>
+          </Section>
+
+          <Section title={t("dossier.currentState")}>
+            {(intelligence?.currentState ?? []).length > 0 ? (
+              <dl className="divide-y border-t">
+                {intelligence!.currentState.map((fact: CorrespondentIntelligenceFact) => (
+                  <div
+                    key={`${fact.label}-${fact.value}`}
+                    className="flex items-start justify-between gap-3 px-4 py-3 md:px-5"
+                  >
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">{fact.label}</dt>
+                      <dd className="mt-0.5 text-sm font-medium">{fact.value}</dd>
+                    </div>
+                    <span className="num shrink-0 text-xs text-muted-foreground">
+                      {fact.asOf ?? ""}
+                    </span>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <EmptyNote label={t("dossier.noCurrentState")} />
+            )}
+          </Section>
+
+          <Section title={t("dossier.timeline")}>
+            {timelineEvents.length > 0 ? (
+              <ol className="flex flex-col gap-4 px-4 pb-4 md:px-5 md:pb-5">
+                {timelineEvents.map((event: CorrespondentIntelligenceTimelineEvent, index: number) => (
+                  <li
+                    key={`${event.title}-${index}`}
+                    className="relative pl-5 not-last:before:absolute not-last:before:top-2 not-last:before:-bottom-5.5 not-last:before:left-[3.5px] not-last:before:w-px not-last:before:bg-border"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-1.5 left-0 z-10 size-2 rounded-full bg-primary ring-4 ring-card"
+                    />
+                    <span className="num block text-xs text-muted-foreground">
+                      {event.date ?? t("dossier.undated")}
+                    </span>
+                    <p className="mt-0.5 text-sm font-medium">{event.title}</p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{event.description}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <EmptyNote label={t("dossier.noTimeline")} />
+            )}
+          </Section>
+
+          <Section title={t("dossier.typeBreakdown")}>
+            {data.documentTypeBreakdown.length > 0 ? (
+              <ul className="flex flex-col gap-3 px-4 pb-4 md:px-5 md:pb-5">
+                {data.documentTypeBreakdown.map((item) => (
+                  <li key={item.name}>
+                    <div className="flex items-baseline justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate">{item.name}</span>
+                      <span className="num shrink-0 font-medium">{item.count}</span>
+                    </div>
+                    <div
+                      aria-hidden="true"
+                      className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        className="h-full rounded-full bg-gradient-action"
+                        style={{ width: `${Math.max((item.count / maxTypeCount) * 100, 3)}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyNote label={t("dossier.noTypes")} />
+            )}
+          </Section>
+
+          <Section title={t("dossier.summary")}>
+            <p className="px-4 pb-4 text-sm leading-relaxed text-muted-foreground md:px-5 md:pb-5">
+              {data.summary ?? intelligence?.profile?.narrative ?? t("dossier.noSummary")}
+            </p>
+          </Section>
+        </div>
+      </div>
+    </Page>
   );
 }
 
@@ -455,38 +495,41 @@ function compareIsoDates(left: string | null | undefined, right: string | null |
 function buildSmartHighlight(
   data: CorrespondentInsightsResponse,
   intelligence: CorrespondentIntelligence | null,
+  t: (key: TranslationKey) => string,
 ): { label: string; value: string; tone?: "neutral" | "rust" | "cobalt" } {
   const insurance = intelligence?.domainInsights.insurance;
   if (insurance?.latestPremiumAmount != null && insurance.latestPremiumCurrency) {
     return {
-      label: "Latest Premium",
-      value: formatCurrency(insurance.latestPremiumAmount, insurance.latestPremiumCurrency) ?? "n/a",
-      tone: "rust",
+      label: t("dossier.latestPremium"),
+      value:
+        formatCurrency(insurance.latestPremiumAmount, insurance.latestPremiumCurrency) ??
+        t("dossier.notAvailable"),
+      tone: "cobalt",
     };
   }
 
   const latestAmount = findCurrentStateFact(intelligence, "Latest amount");
   if (latestAmount) {
     return {
-      label: "Latest Amount",
+      label: t("dossier.latestAmount"),
       value: latestAmount,
-      tone: "rust",
+      tone: "cobalt",
     };
   }
 
   const latestDocumentType = findCurrentStateFact(intelligence, "Latest document type");
   if (latestDocumentType) {
     return {
-      label: "Latest Type",
+      label: t("dossier.latestType"),
       value: latestDocumentType,
-      tone: "rust",
+      tone: "cobalt",
     };
   }
 
   return {
-    label: "Top Type",
-    value: data.documentTypeBreakdown[0]?.name ?? "n/a",
-    tone: "rust",
+    label: t("dossier.topType"),
+    value: data.documentTypeBreakdown[0]?.name ?? t("dossier.notAvailable"),
+    tone: "cobalt",
   };
 }
 
@@ -497,29 +540,65 @@ function findCurrentStateFact(
   return intelligence?.currentState.find((fact) => fact.label.toLowerCase() === label.toLowerCase())?.value ?? null;
 }
 
-function FactPanel({ label, value }: { label: string; value: string }) {
+/** A dossier card: a titled white surface whose body sets its own padding. */
+function Section({
+  title,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div className="rounded-[var(--r-lg)] border border-[color:var(--explorer-border)] bg-card px-4 py-4">
-      <p className="ok-eyebrow text-[color:var(--explorer-muted)]">
-        {label}
-      </p>
-      <p className="mt-2 text-sm font-medium text-[color:var(--explorer-ink)]">{value}</p>
-    </div>
-  );
-}
-
-function Chip({ children }: { children: string }) {
-  return (
-    <span className="rounded-full border border-[color:var(--explorer-border)] bg-card px-3 py-1.5 ok-eyebrow text-[color:var(--explorer-ink)]">
+    <Card className="gap-0 py-0 shadow-card">
+      <div className="flex min-h-13 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 md:px-5">
+        <h2 className="flex min-w-0 items-center gap-2 font-medium">
+          {icon}
+          {title}
+        </h2>
+        {action}
+      </div>
       {children}
-    </span>
+    </Card>
   );
 }
 
-function EmptyCard({ label }: { label: string }) {
+function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-h-28 items-center justify-center rounded-[var(--r-lg)] border border-dashed border-[color:var(--explorer-border)] text-sm text-[color:var(--explorer-muted)]">
-      {label}
+    <div className="min-w-0 rounded-lg bg-muted px-3 py-2">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-sm font-medium break-words">{value}</div>
     </div>
+  );
+}
+
+function EmptyNote({ label }: { label: string }) {
+  return (
+    <Empty className="border-t px-4 py-7">
+      <EmptyHeader>
+        <EmptyDescription>{label}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
+function DossierSkeleton({ label }: { label: string }) {
+  return (
+    <Page width="wide" role="status" aria-label={label}>
+      <Skeleton className="h-8 w-40" />
+      <Skeleton className="h-32 w-full rounded-2xl" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((card) => (
+          <Skeleton key={card} className="h-20 rounded-xl" />
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <Skeleton className="h-72 rounded-xl" />
+        <Skeleton className="h-72 rounded-xl" />
+      </div>
+    </Page>
   );
 }

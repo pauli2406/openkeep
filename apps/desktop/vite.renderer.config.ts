@@ -23,7 +23,6 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "../web/src"),
-      "@openkeep/fonts": path.resolve(__dirname, "../mobile/assets/fonts"),
       "@openkeep/sdk": path.resolve(__dirname, "../../packages/sdk/src/index.ts"),
       "@openkeep/types": path.resolve(__dirname, "../../packages/types/src/index.ts"),
     },
@@ -48,8 +47,9 @@ export default defineConfig(({ command }) => ({
     fs: {
       allow: [
         path.resolve(__dirname, "../web"),
-        path.resolve(__dirname, "../mobile/assets/fonts"),
         path.resolve(__dirname, "../../packages"),
+        // The shared stylesheet's bundled fonts; the hoisted install keeps them at the root.
+        path.resolve(__dirname, "../../node_modules/@fontsource-variable"),
         __dirname,
       ],
     },

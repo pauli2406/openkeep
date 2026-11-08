@@ -11,7 +11,8 @@ folder, archive import/export, processing activity, system health), `Tags & taxo
 `AI providers`.
 
 Account management — your profile, two-factor authentication and API tokens —
-moved to the `Profile` page, opened from the avatar menu in the top bar.
+moved to the `Profile` page, opened from the menu under your name at the bottom of the
+sidebar.
 
 For operator-focused guidance outside the UI, see [Operations Overview](../operations/README.md).
 

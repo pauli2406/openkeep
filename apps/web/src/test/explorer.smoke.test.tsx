@@ -440,7 +440,8 @@ describe("explorer smoke", () => {
     expect(screen.getByText("assigned automatically")).toBeInTheDocument();
 
     // Fixing it stamps manual and the hint flips.
-    await user.selectOptions(picker, "55555555-5555-5555-5555-555555555555");
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: "Insurance" }));
     expect(await screen.findByText("set by you")).toBeInTheDocument();
     expect(patches).toEqual([
       { categoryId: "55555555-5555-5555-5555-555555555555" },

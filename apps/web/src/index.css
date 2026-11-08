@@ -4,325 +4,257 @@
    apps/desktop — would emit this stylesheet without any of the utilities the
    shared app uses. Registering the sources here keeps every host in step. */
 @source "./";
-@import "./tokens.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Bundled rather than fetched: the desktop CSP has no remote style/font origins. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "./theme.css";
 
-/* The desktop CSP intentionally has no remote style/font origins. These are
-   the same OFL-licensed files bundled by the mobile client, so both the web
-   and Electron builds keep the canonical typography without a network hop. */
-@font-face {
-  font-family: "Public Sans";
-  src: url("@openkeep/fonts/PublicSans-Regular.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
+@custom-variant dark (&:is([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-foreground: var(--brand-soft-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  --color-paper: var(--paper);
+  --color-paper-foreground: var(--paper-foreground);
+  --color-paper-border: var(--paper-border);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-stage: var(--stage);
+  --color-overlay: var(--overlay);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-action: var(--shadow-action);
+  --shadow-workspace: var(--shadow-workspace);
 }
 
-@font-face {
-  font-family: "Public Sans";
-  src: url("@openkeep/fonts/PublicSans-Medium.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
+/* The gradients, as utilities, so call sites never spell one out. */
+@utility bg-gradient-chrome {
+  background-image: var(--gradient-chrome);
 }
-
-@font-face {
-  font-family: "Public Sans";
-  src: url("@openkeep/fonts/PublicSans-SemiBold.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
+@utility bg-gradient-brand {
+  background-image: var(--gradient-brand);
 }
-
-@font-face {
-  font-family: "Public Sans";
-  src: url("@openkeep/fonts/PublicSans-Bold.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
+@utility bg-gradient-action {
+  background-image: var(--gradient-action);
 }
-
-@font-face {
-  font-family: "Public Sans";
-  src: url("@openkeep/fonts/PublicSans-Italic.ttf") format("truetype");
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
+@utility bg-gradient-wash {
+  background-image: var(--gradient-wash);
 }
-
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("@openkeep/fonts/IBMPlexMono-Regular.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
+@utility text-gradient {
+  background-image: var(--gradient-text);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }
-
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("@openkeep/fonts/IBMPlexMono-Medium.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("@openkeep/fonts/IBMPlexMono-SemiBold.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   OpenKeep design tokens (#40, shared in #124)
-
-   `--ok-*` is the single source of truth for color, and it is
-   generated from `packages/tokens` — the same module the mobile app
-   imports — into `./tokens.css`. Edit the package, then run
-   `node scripts/tokens/generate.mjs`.
-
-   Everything else in this file — the shadcn `--color-*` names, the
-   radius scale, the legacy `--explorer-*` aliases — points at those.
-   ───────────────────────────────────────────────────────────── */
-
-@theme {
-  /* shadcn/Radix primitives keep working by aliasing onto --ok-* */
-  --color-background: var(--ok-app);
-  --color-foreground: var(--ok-ink);
-  --color-card: var(--ok-panel);
-  --color-card-foreground: var(--ok-ink);
-  --color-popover: var(--ok-panel);
-  --color-popover-foreground: var(--ok-ink);
-  --color-primary: var(--ok-accent-fill);
-  --color-primary-foreground: var(--ok-accent-fill-ink);
-  --color-secondary: var(--ok-raised);
-  --color-secondary-foreground: var(--ok-ink);
-  --color-muted: var(--ok-raised);
-  /* --ok-muted, not --ok-dim: this alias carries real content
-     (card descriptions, metadata, placeholders) and --ok-dim is only
-     ~3:1 on the light surfaces. --ok-muted is 5.7-6.4:1. */
-  --color-muted-foreground: var(--ok-muted);
-  --color-accent: var(--ok-accent-soft);
-  --color-accent-foreground: var(--ok-accent-soft-ink);
-  --color-destructive: var(--ok-red);
-  --color-destructive-foreground: var(--ok-app);
-  --color-border: var(--ok-border);
-  --color-input: var(--ok-border-strong);
-  --color-ring: var(--ok-accent);
-  --color-sidebar-background: var(--ok-bar);
-  --color-sidebar-foreground: var(--ok-ink);
-  --color-sidebar-primary: var(--ok-accent-fill);
-  --color-sidebar-primary-foreground: var(--ok-accent-fill-ink);
-  --color-sidebar-accent: var(--ok-accent-soft);
-  --color-sidebar-accent-foreground: var(--ok-accent-soft-ink);
-  --color-sidebar-border: var(--ok-border);
-  --color-sidebar-ring: var(--ok-accent);
-
-  /* radii — nothing above 8px; 999px is for filter chips only */
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
-  --r-pill: 999px;
-
-  --radius-sm: var(--r-sm);
-  --radius-md: var(--r-md);
-  --radius-lg: var(--r-lg);
-  --radius-xl: var(--r-lg);
-
-  --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* Type scale (#41) — a document tool, not a marketing page.
-     secondary / table+meta / body, then three capped heading steps. */
-  --text-xs: 11.5px;
-  --text-xs--line-height: 1.45;
-  --text-sm: 12.5px;
-  --text-sm--line-height: 1.45;
-  --text-base: 13.5px;
-  --text-base--line-height: 1.5;
-  --text-lg: 15px;
-  --text-lg--line-height: 1.4;
-  --text-xl: 16px;
-  --text-xl--line-height: 1.35;
-  --text-2xl: 19px;
-  --text-2xl--line-height: 1.3;
-  --text-3xl: 19px;
-  --text-3xl--line-height: 1.3;
-  --text-4xl: 22px;
-  --text-4xl--line-height: 1.25;
-  --text-5xl: 22px;
-  --text-5xl--line-height: 1.25;
-}
-
-/* Legacy `--explorer-*` names, kept as aliases so the existing
-   components render in the new palette without being touched.
-   Issues #42–#44 replace the call sites; these go with them. */
-:root,
-[data-theme="dark"] {
-  --explorer-panel: var(--ok-panel);
-  --explorer-surface: var(--ok-panel);
-  --explorer-border: var(--ok-border);
-  --explorer-border-strong: var(--ok-border-strong);
-  --explorer-ink: var(--ok-ink);
-  --explorer-muted: var(--ok-muted);
+/* Dates, amounts, counts: tabular so columns line up, without a mono face. */
+@utility num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 @layer base {
   * {
-    @apply border-border;
-    box-sizing: border-box;
+    @apply border-border outline-ring/50;
   }
 
   html {
     min-height: 100%;
-    background: var(--ok-app);
+    background: var(--background);
   }
 
   body {
-    min-height: 100vh;
+    min-height: 100svh;
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    /* The scale has to start here, not at `text-base` — otherwise any
-       copy without an explicit size utility stays at the browser's 16px. */
-    font-size: var(--text-base);
-    line-height: 1.5;
+    font-feature-settings: "cv11", "ss03";
   }
 
   #root {
-    min-height: 100vh;
+    min-height: 100svh;
   }
 
   h1,
   h2,
   h3,
   h4 {
-    font-family: var(--font-sans);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-
-  button,
-  input,
-  select,
-  textarea {
-    font: inherit;
+    font-family: var(--font-heading);
+    letter-spacing: -0.015em;
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--ok-accent) 16%, transparent);
-    color: var(--ok-ink);
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
   }
 
-  /* ─── Type roles (#41) ───
-     The four roles the design uses by name. Everything else is a
-     plain `text-xs/sm/base` off the scale above. */
-
-  .ok-offline-banner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 6px 16px;
-    background: color-mix(in srgb, var(--ok-amber) 14%, var(--ok-bar));
-    border-bottom: 1px solid color-mix(in srgb, var(--ok-amber) 45%, var(--ok-border));
-    color: var(--ok-ink);
-    font-size: 12px;
+  /* Thin, quiet scrollbars everywhere: the chrome should not fight the content. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
   }
+}
 
-  .ok-offline-banner > span:first-child {
-    color: var(--ok-amber);
-    font-size: 9px;
-  }
-
-  .ok-page-title {
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.35;
-    letter-spacing: -0.01em;
-  }
-
-  .ok-section-title {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.4;
-    letter-spacing: -0.01em;
-  }
-
-  .ok-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--ok-dim);
-  }
-
-  /* Every date, amount, count, confidence value, checksum, ID and
-     token prefix. Tabular so columns line up. */
-  .ok-num {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum";
-  }
-
-  /* ─── Table rows (#42) ───
-     There is no Table primitive in this app; rows are composed per
-     screen. These give every screen the same density to inherit. */
-
-  .ok-row {
-    display: flex;
-    align-items: center;
-    min-height: 34px;
-    border-bottom: 1px solid var(--ok-border-soft);
-  }
-
-  /* A row carrying a second line (title + subtitle). */
-  .ok-row-2 {
-    min-height: 48px;
-  }
-
-  .ok-row:hover {
-    background: var(--ok-bar);
-  }
-
-  /* ─── Omnibar Animations ─── */
-
-  .omnibar-backdrop {
-    animation: omnibar-backdrop-in 200ms ease-out both;
-  }
-
-  .omnibar-panel {
-    animation: omnibar-panel-in 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  .omnibar-rest {
-    animation: omnibar-rest-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-
-  @keyframes omnibar-backdrop-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes omnibar-panel-in {
-    from {
-      opacity: 0;
-      transform: scale(0.96) translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
-  }
-
-  @keyframes omnibar-rest-in {
-    from {
-      opacity: 0;
-      transform: translateY(-12px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+/* Rendered markdown: chat answers, document Q&A, summaries. */
+.typeset {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.typeset > :first-child {
+  margin-top: 0;
+}
+.typeset > :last-child {
+  margin-bottom: 0;
+}
+.typeset p,
+.typeset ul,
+.typeset ol,
+.typeset blockquote,
+.typeset pre {
+  margin-block: 0.75em;
+}
+.typeset h1,
+.typeset h2,
+.typeset h3,
+.typeset h4 {
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.typeset h1 {
+  font-size: 1.3em;
+}
+.typeset h2 {
+  font-size: 1.18em;
+}
+.typeset h3,
+.typeset h4 {
+  font-size: 1.05em;
+}
+.typeset strong {
+  font-weight: 600;
+}
+.typeset a {
+  color: var(--brand);
+  text-underline-offset: 3px;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--brand) 40%, transparent);
+}
+.typeset ul {
+  list-style: disc;
+  padding-inline-start: 1.25em;
+}
+.typeset ol {
+  list-style: decimal;
+  padding-inline-start: 1.4em;
+}
+.typeset li {
+  margin-block: 0.25em;
+}
+.typeset li::marker {
+  color: var(--muted-foreground);
+}
+.typeset blockquote {
+  border-inline-start: 3px solid var(--brand-soft);
+  padding-inline-start: 0.9em;
+  color: var(--muted-foreground);
+}
+.typeset code {
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  padding: 0.1em 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+.typeset pre {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: var(--muted);
+  padding: 0.8em 1em;
+}
+.typeset pre code {
+  background: transparent;
+  padding: 0;
+}
+.typeset table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.93em;
+  font-variant-numeric: tabular-nums;
+}
+.typeset th {
+  border-bottom: 1px solid var(--border);
+  padding: 0.45em 0.7em;
+  text-align: start;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.typeset td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.45em 0.7em;
+}
+.typeset hr {
+  margin-block: 1.2em;
+  border-color: var(--border);
 }

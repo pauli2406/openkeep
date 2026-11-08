@@ -1,10 +1,63 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, Check, Loader2, Plus, Trash2, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  GitMerge,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  SearchX,
+  Tags,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
@@ -12,6 +65,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchExplorerFacets } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -23,6 +85,8 @@ import {
   mergeTaxonomy,
   updateTaxonomy,
 } from "./taxonomy-api";
+import { RetryAlert, RowsSkeleton } from "./shared";
+import { isEnterKey } from "@/lib/keyboard";
 
 /** `count` is null until the facets request lands — unknown, not zero. */
 type Row = {
@@ -36,7 +100,13 @@ type Row = {
 type QuickFilter = "all" | "unused" | "duplicates";
 type SortKey = "count" | "name";
 
-const ROW_HEIGHT = 30;
+/** A row action in progress; `targetId` preselects a suggested merge target. */
+type RowDialog =
+  | { kind: "rename"; row: Row }
+  | { kind: "merge"; row: Row; targetId: string | null }
+  | { kind: "delete"; row: Row };
+
+const ROW_HEIGHT = 44;
 
 /**
  * Client-side merge suggestions: case-insensitive matches, singular/plural
@@ -105,6 +175,10 @@ export function TaxonomyManagementSection() {
   const [bulkTargetQuery, setBulkTargetQuery] = useState("");
   const [renameValue, setRenameValue] = useState("");
   const [createValue, setCreateValue] = useState("");
+  const [rowDialog, setRowDialog] = useState<RowDialog | null>(null);
+  const [dialogName, setDialogName] = useState("");
+  const [dialogTargetId, setDialogTargetId] = useState("");
+  const [dialogTargetQuery, setDialogTargetQuery] = useState("");
   const anchorId = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -141,6 +215,38 @@ export function TaxonomyManagementSection() {
           actionFailed: "Aktion fehlgeschlagen.",
           countsUnavailable:
             "Dokumentanzahlen konnten nicht geladen werden — „Unbenutzt“ ist deaktiviert.",
+          emptyHint: "Lege oben den ersten Eintrag an.",
+          noMatches: "Nichts gefunden",
+          noMatchesHint: "Ändere den Filter, um mehr Einträge zu sehen.",
+          actionsFor: (n: string) => `Aktionen für ${n}`,
+          renameEllipsis: "Umbenennen…",
+          mergeEllipsis: "Zusammenführen…",
+          deleteEllipsis: "Löschen…",
+          renameTitle: (n: string) => `„${n}“ umbenennen`,
+          renameDescription: "Dokumente behalten ihre Zuordnung.",
+          newName: "Neuer Name",
+          mergeTitle: (n: string) => `„${n}“ zusammenführen`,
+          mergeDescription:
+            "Alle Dokumente wandern zum Ziel, danach verschwindet dieser Eintrag.",
+          mergeTarget: "Ziel",
+          mergePlaceholder: "Ziel wählen…",
+          mergeAction: "Zusammenführen",
+          deleteTitle: (n: string) => `„${n}“ löschen?`,
+          bulkDeleteTitle: (n: number) => `${n} ${n === 1 ? "Eintrag" : "Einträge"} löschen?`,
+          // Null while the counts are still loading: never claim nothing uses them.
+          bulkDeleteDescription: (count: number | null, categories: boolean) =>
+            count === null
+              ? "Das lässt sich nicht rückgängig machen."
+              : count > 0
+                ? categories
+                  ? `${count} ${count === 1 ? "Absender verliert" : "Absender verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
+                  : `${count} ${count === 1 ? "Dokument verliert" : "Dokumente verlieren"} diese Zuordnung. Das lässt sich nicht rückgängig machen.`
+                : "Davon wird nichts verwendet. Das lässt sich nicht rückgängig machen.",
+          deleteDescription: (count: number | null) =>
+            count
+              ? `Der Eintrag wird von ${count} Dokumenten entfernt. Das lässt sich nicht rückgängig machen.`
+              : "Das lässt sich nicht rückgängig machen.",
+          cancel: "Abbrechen",
         }
       : {
           tags: "Tags",
@@ -173,6 +279,40 @@ export function TaxonomyManagementSection() {
           actionFailed: "The action failed.",
           countsUnavailable:
             "Document counts could not be loaded — “Unused” is unavailable.",
+          emptyHint: "Add the first entry above.",
+          noMatches: "Nothing matches",
+          noMatchesHint: "Change the filter to see more entries.",
+          actionsFor: (n: string) => `Actions for ${n}`,
+          renameEllipsis: "Rename…",
+          mergeEllipsis: "Merge…",
+          deleteEllipsis: "Delete…",
+          renameTitle: (n: string) => `Rename “${n}”`,
+          renameDescription: "Documents stay attached to it.",
+          newName: "New name",
+          mergeTitle: (n: string) => `Merge “${n}”`,
+          mergeDescription:
+            "Every document moves to the target, then this entry goes away.",
+          mergeTarget: "Target",
+          mergePlaceholder: "Choose a target…",
+          mergeAction: "Merge",
+          deleteTitle: (n: string) => `Delete “${n}”?`,
+          bulkDeleteTitle: (n: number) => `Delete ${n} ${n === 1 ? "entry" : "entries"}?`,
+          // Null while the counts are still loading: never claim nothing uses them.
+          bulkDeleteDescription: (count: number | null, categories: boolean) =>
+            count === null
+              ? "This cannot be undone."
+              : count > 0
+                ? `${count} ${
+                    categories
+                      ? count === 1 ? "correspondent loses" : "correspondents lose"
+                      : count === 1 ? "document loses" : "documents lose"
+                  } this assignment. This cannot be undone.`
+                : "Nothing uses any of these. This cannot be undone.",
+          deleteDescription: (count: number | null) =>
+            count
+              ? `It comes off ${count} documents. This can't be undone.`
+              : "This can't be undone.",
+          cancel: "Cancel",
         };
 
   const listQuery = useQuery({
@@ -209,12 +349,20 @@ export function TaxonomyManagementSection() {
   });
   const deleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) await deleteTaxonomy(kind, id, t);
+      for (const id of ids) {
+        await deleteTaxonomy(kind, id, t);
+        // A run that stops partway has already deleted these, so a retry must
+        // carry on with what is left rather than trip over an entry that is gone.
+        setSelectedIds((current) => current.filter((entry) => entry !== id));
+        setBulkDeleteIds((current) => current?.filter((entry) => entry !== id) ?? current);
+      }
     },
     onSuccess: () => {
       setSelectedIds([]);
       invalidate();
     },
+    // The entries before a failure are gone, and the list has to say so.
+    onError: invalidate,
   });
   const renameMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) =>
@@ -291,8 +439,9 @@ export function TaxonomyManagementSection() {
   }, [allRows, filter, quick, suggestions, sortKey, sortAsc]);
 
   const maxCount = Math.max(...allRows.map((row) => row.count ?? 0), 1);
+  // Builtin entries cannot be deleted, so the sweep must not count or try them.
   const unusedCount = countsKnown
-    ? allRows.filter((row) => row.count === 0).length
+    ? allRows.filter((row) => row.count === 0 && !row.builtin).length
     : 0;
 
   const virtualizer = useVirtualizer({
@@ -331,6 +480,34 @@ export function TaxonomyManagementSection() {
     setConfirmMergeId(null);
     setQuick("all");
     setFilter("");
+    setRowDialog(null);
+  };
+
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
+  const bulkDeleteUsage = countsKnown
+    ? (bulkDeleteIds ?? []).reduce(
+        (sum, id) => sum + (allRows.find((row) => row.id === id)?.count ?? 0),
+        0,
+      )
+    : null;
+
+  // The menu item that opened a dialog is gone by the time it closes, so focus
+  // goes back to that row's menu button instead of falling to the page body.
+  const dialogRowId = useRef<string | null>(null);
+  const returnFocusToRow = (event: Event) => {
+    event.preventDefault();
+    if (!dialogRowId.current) return;
+    document
+      .querySelector<HTMLElement>(`[data-row-menu="${CSS.escape(dialogRowId.current)}"]`)
+      ?.focus();
+  };
+
+  const openRowDialog = (dialog: RowDialog) => {
+    dialogRowId.current = dialog.row.id;
+    setDialogName(dialog.kind === "rename" ? dialog.row.name : "");
+    setDialogTargetId(dialog.kind === "merge" ? (dialog.targetId ?? "") : "");
+    setDialogTargetQuery("");
+    setRowDialog(dialog);
   };
 
   const mutationError =
@@ -339,7 +516,8 @@ export function TaxonomyManagementSection() {
     renameMutation.error ??
     createMutation.error;
 
-  const selectedRows = rows.filter((row) => selectedIds.includes(row.id));
+  // From every row, not the visible ones: a filter must not hide a builtin from the check.
+  const selectedRows = allRows.filter((row) => selectedIds.includes(row.id));
   const bulkTargetNeedle = bulkTargetQuery.trim().toLowerCase();
   const bulkTargetOptions = allRows
     .filter(
@@ -352,351 +530,690 @@ export function TaxonomyManagementSection() {
   const busy =
     mergeMutation.isPending || deleteMutation.isPending || renameMutation.isPending;
 
+  const dialogSourceId = rowDialog?.row.id ?? null;
+  const dialogTargetNeedle = dialogTargetQuery.trim().toLowerCase();
+  const dialogTargetOptions = allRows
+    .filter(
+      (row) =>
+        row.id !== dialogSourceId &&
+        (row.id === dialogTargetId ||
+          dialogTargetNeedle === "" ||
+          row.name.toLowerCase().includes(dialogTargetNeedle)),
+    )
+    // The selected target stays first, so the cap can never leave the Select
+    // blank while Merge still acts on it.
+    .sort((a, b) => Number(b.id === dialogTargetId) - Number(a.id === dialogTargetId))
+    .slice(0, 50);
+
+  const sortIcon = (key: SortKey) =>
+    sortKey === key ? (
+      sortAsc ? (
+        <ArrowUp className="size-3" />
+      ) : (
+        <ArrowDown className="size-3" />
+      )
+    ) : null;
+  const ariaSort = (key: SortKey) =>
+    sortKey === key ? (sortAsc ? "ascending" : "descending") : undefined;
+  const hasNarrowing = filter.trim() !== "" || quick !== "all";
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const paddingTop = virtualItems[0]?.start ?? 0;
+  const paddingBottom =
+    virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0);
+
   return (
-    <div className="rounded-[var(--r-lg)] border bg-card">
-      {/* Kind switcher + filters */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b bg-[var(--ok-bar)] px-3 py-2">
-        {(
-          [
-            ["tags", copy.tags],
-            ["correspondents", copy.correspondents],
-            ["document-types", copy.types],
-            ["categories", copy.categories],
-          ] as Array<[TaxonomyKind, string]>
-        ).map(([value, label]) => (
-          <Chip key={value} active={kind === value} onClick={() => switchKind(value)}>
-            {label}
-            {kind === value ? <span className="ok-num"> {allRows.length}</span> : null}
-          </Chip>
-        ))}
-        <Input
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder={copy.filter}
-          className="ml-2 h-[26px] w-40"
-        />
-        {(
-          [
-            ["all", copy.all],
-            ["unused", copy.unused],
-            ["duplicates", copy.duplicates],
-          ] as Array<[QuickFilter, string]>
-        ).map(([value, label]) => (
-          <Chip
-            key={value}
-            active={quick === value}
-            // "Unused" is derived from document counts; without them every
-            // entry would look unused.
-            disabled={value === "unused" && !countsKnown}
-            onClick={() => setQuick(value)}
-          >
-            {label}
-          </Chip>
-        ))}
-        <div className="ml-auto flex items-center gap-1.5">
-          <Input
-            value={createValue}
-            onChange={(event) => setCreateValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && createValue.trim()) {
-                createMutation.mutate(createValue.trim());
-              }
-            }}
-            placeholder={copy.newEntry}
-            className="h-[26px] w-36"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!createValue.trim() || createMutation.isPending}
-            onClick={() => createMutation.mutate(createValue.trim())}
-          >
-            <Plus />
-            {copy.add}
-          </Button>
-        </div>
+    <Tabs
+      value={kind}
+      onValueChange={(value) => switchKind(value as TaxonomyKind)}
+      className="gap-4"
+    >
+      {/* A scrolling row, so all four kinds stay reachable on a phone. */}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <TabsList>
+          {(
+            [
+              ["tags", copy.tags],
+              ["correspondents", copy.correspondents],
+              ["document-types", copy.types],
+              ["categories", copy.categories],
+            ] as Array<[TaxonomyKind, string]>
+          ).map(([value, label]) => (
+            <TabsTrigger key={value} value={value} className="px-2.5">
+              {label}
+              {kind === value ? (
+                <span className="num text-xs text-muted-foreground">{allRows.length}</span>
+              ) : null}
+            </TabsTrigger>
+          ))}
+        </TabsList>
       </div>
 
-      {/* Bulk bar / unused sweep */}
-      {selectedIds.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 border-b bg-accent px-3 py-1.5">
-          <span className="text-sm text-accent-foreground">
-            <span className="ok-num font-semibold">{selectedIds.length}</span>{" "}
-            {copy.selected}
-          </span>
-          {kind !== "categories" ? (
-          <>
-          <Select value={bulkTargetId} onValueChange={setBulkTargetId}>
-            <SelectTrigger className="h-[26px] w-52">
-              <SelectValue placeholder={copy.bulkMerge} />
-            </SelectTrigger>
-            <SelectContent>
-              {/* Filter the list rather than truncating it: with 1000 entries
-                  a flat top-50 makes most merge targets unreachable. */}
-              <div className="p-1">
-                <Input
-                  value={bulkTargetQuery}
-                  onChange={(event) => setBulkTargetQuery(event.target.value)}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  placeholder={copy.filter}
-                  className="h-[26px]"
-                />
-              </div>
-              {bulkTargetOptions.map((row) => (
-                <SelectItem key={row.id} value={row.id}>
-                  {row.name}
-                </SelectItem>
-              ))}
-              {bulkTargetOptions.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {copy.empty}
-                </p>
-              ) : null}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!bulkTargetId || busy}
-            onClick={async () => {
-              for (const id of selectedIds) {
-                await mergeMutation.mutateAsync({ sourceId: id, targetId: bulkTargetId });
-              }
-              setSelectedIds([]);
-              setBulkTargetId("");
-            }}
-          >
-            {busy ? <Loader2 className="animate-spin" /> : <Check />}
-            {copy.bulkMerge}
-          </Button>
-          </>
-          ) : null}
-          {selectedIds.length === 1 ? (
-            <>
-              <Input
-                value={renameValue}
-                onChange={(event) => setRenameValue(event.target.value)}
-                placeholder={selectedRows[0]?.name ?? copy.rename}
-                className="h-[26px] w-40"
+      <TabsContent value={kind}>
+        <Card className="gap-0 py-0 shadow-card">
+          {/* Filters + quick add */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b px-4 py-3">
+            <InputGroup className="w-full sm:w-44">
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder={copy.filter}
               />
+            </InputGroup>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(
+                [
+                  ["all", copy.all],
+                  ["unused", copy.unused],
+                  ["duplicates", copy.duplicates],
+                ] as Array<[QuickFilter, string]>
+              ).map(([value, label]) => (
+                <Chip
+                  key={value}
+                  active={quick === value}
+                  // "Unused" is derived from document counts; without them every
+                  // entry would look unused.
+                  disabled={value === "unused" && !countsKnown}
+                  onClick={() => setQuick(value)}
+                >
+                  {label}
+                </Chip>
+              ))}
+            </div>
+            {/* Categories are a fixed vocabulary: the API has no create for them. */}
+            {kind === "categories" ? null : (
+            <div className="flex w-full items-center gap-2 lg:ml-auto lg:w-auto">
+              <Input
+                value={createValue}
+                onChange={(event) => setCreateValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (isEnterKey(event) && createValue.trim()) {
+                    createMutation.mutate(createValue.trim());
+                  }
+                }}
+                placeholder={copy.newEntry}
+                aria-label={copy.newEntry}
+                className="min-w-0 flex-1 lg:w-32 lg:flex-none"
+              />
+              <Button
+                variant="outline"
+                disabled={!createValue.trim() || createMutation.isPending}
+                onClick={() => createMutation.mutate(createValue.trim())}
+              >
+                {createMutation.isPending ? <Spinner /> : <Plus />}
+                {copy.add}
+              </Button>
+            </div>
+            )}
+          </div>
+
+          {/* Bulk bar / unused sweep */}
+          {selectedIds.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 border-b bg-brand-soft px-4 py-2.5">
+              <span className="text-sm text-brand-soft-foreground">
+                <span className="num font-semibold">{selectedIds.length}</span>{" "}
+                {copy.selected}
+              </span>
+              {kind !== "categories" ? (
+                <>
+                  <Select value={bulkTargetId} onValueChange={setBulkTargetId}>
+                    <SelectTrigger size="sm" className="w-48 bg-background dark:bg-background">
+                      <SelectValue placeholder={copy.bulkMerge} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {/* Filter the list rather than truncating it: with 1000 entries
+                          a flat top-50 makes most merge targets unreachable. */}
+                      <div className="p-1">
+                        <Input
+                          value={bulkTargetQuery}
+                          onChange={(event) => setBulkTargetQuery(event.target.value)}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          placeholder={copy.filter}
+                          className="h-7"
+                        />
+                      </div>
+                      {bulkTargetOptions.map((row) => (
+                        <SelectItem key={row.id} value={row.id}>
+                          {row.name}
+                        </SelectItem>
+                      ))}
+                      {bulkTargetOptions.length === 0 ? (
+                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                          {copy.empty}
+                        </p>
+                      ) : null}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!bulkTargetId || busy}
+                    onClick={async () => {
+                      for (const id of selectedIds) {
+                        try {
+                          await mergeMutation.mutateAsync({ sourceId: id, targetId: bulkTargetId });
+                        } catch {
+                          // The error shows under the bar; what merged already has
+                          // left the selection, so a retry carries on from here.
+                          return;
+                        }
+                        setSelectedIds((current) => current.filter((entry) => entry !== id));
+                      }
+                      setBulkTargetId("");
+                    }}
+                  >
+                    {busy ? <Spinner /> : <Check />}
+                    {copy.bulkMerge}
+                  </Button>
+                </>
+              ) : null}
+              {selectedIds.length === 1 ? (
+                <>
+                  <Input
+                    value={renameValue}
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    placeholder={selectedRows[0]?.name ?? copy.rename}
+                    className="h-7 w-40 bg-background dark:bg-background"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!renameValue.trim() || busy}
+                    onClick={() =>
+                      renameMutation.mutate({ id: selectedIds[0], name: renameValue.trim() })
+                    }
+                  >
+                    {copy.rename}
+                  </Button>
+                </>
+              ) : null}
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!renameValue.trim() || busy}
+                className="text-destructive hover:text-destructive"
+                disabled={busy || selectedRows.some((row) => row.builtin)}
+                title={
+                  selectedRows.some((row) => row.builtin) ? copy.builtinUndeletable : undefined
+                }
+                onClick={() => setBulkDeleteIds(selectedIds)}
+              >
+                <Trash2 />
+                {copy.del}
+              </Button>
+              {selectedRows.some((row) => row.builtin) ? (
+                <span className="max-w-72 text-xs text-muted-foreground">
+                  {copy.builtinUndeletable}
+                </span>
+              ) : null}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => setSelectedIds([])}
+              >
+                <X />
+                {copy.clear}
+              </Button>
+            </div>
+          ) : quick === "unused" && unusedCount > 0 ? (
+            <div className="flex items-center border-b bg-warning-soft px-4 py-2.5">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
                 onClick={() =>
-                  renameMutation.mutate({ id: selectedIds[0], name: renameValue.trim() })
+                  setBulkDeleteIds(
+                    allRows.filter((row) => row.count === 0 && !row.builtin).map((row) => row.id),
+                  )
                 }
               >
+                <Trash2 />
+                {copy.deleteAllUnused(unusedCount)}
+              </Button>
+            </div>
+          ) : null}
+
+          {/* A failed create, rename, merge or delete used to leave no trace at
+              all — the list simply did not change. */}
+          {mutationError && !rowDialog && !bulkDeleteIds ? (
+            <div className="border-b px-4 py-2.5">
+              <RetryAlert
+                message={
+                  mutationError instanceof Error ? mutationError.message : copy.actionFailed
+                }
+              />
+            </div>
+          ) : null}
+          {!countsKnown && facetsQuery.isError ? (
+            <p className="border-b bg-warning-soft px-4 py-2 text-xs text-warning">
+              {copy.countsUnavailable}
+            </p>
+          ) : null}
+
+          {listQuery.isLoading ? (
+            <RowsSkeleton rows={6} className="p-4" />
+          ) : listQuery.isError ? (
+            <div className="p-4">
+              <RetryAlert message={copy.loadError} onRetry={() => void listQuery.refetch()} />
+            </div>
+          ) : rows.length === 0 ? (
+            <Empty className="py-14">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  {hasNarrowing ? <SearchX /> : <Tags />}
+                </EmptyMedia>
+                <EmptyTitle>{hasNarrowing ? copy.noMatches : copy.empty}</EmptyTitle>
+                <EmptyDescription>
+                  {hasNarrowing ? copy.noMatchesHint : copy.emptyHint}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            /* Virtualised rows — never all 1000 at once. This is a bare table,
+               not <Table>, so the header can stick inside this scroller. */
+            <div ref={listRef} className="max-h-[32rem] overflow-auto">
+              <table data-slot="table" className="w-full table-fixed text-sm">
+                <TableHeader className="sticky top-0 z-10 bg-card shadow-[inset_0_-1px_0_var(--border)]">
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableHead className="w-11 pl-4" />
+                    <TableHead aria-sort={ariaSort("name")}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex items-center gap-1 text-xs hover:text-foreground",
+                          sortKey === "name" ? "text-foreground" : "text-muted-foreground",
+                        )}
+                        onClick={() => {
+                          setSortKey("name");
+                          setSortAsc(sortKey === "name" ? !sortAsc : true);
+                        }}
+                      >
+                        {copy.name}
+                        {sortIcon("name")}
+                      </button>
+                    </TableHead>
+                    <TableHead aria-sort={ariaSort("count")} className="w-24 text-right sm:w-36">
+                      <button
+                        type="button"
+                        className={cn(
+                          "ml-auto flex items-center gap-1 text-xs hover:text-foreground",
+                          sortKey === "count" ? "text-foreground" : "text-muted-foreground",
+                        )}
+                        onClick={() => {
+                          setSortKey("count");
+                          setSortAsc(sortKey === "count" ? !sortAsc : false);
+                        }}
+                      >
+                        {sortIcon("count")}
+                        {kind === "categories" ? copy.correspondentsCount : copy.docs}
+                      </button>
+                    </TableHead>
+                    <TableHead className="hidden w-52 text-right text-xs font-medium text-muted-foreground md:table-cell">
+                      {copy.suggestion}
+                    </TableHead>
+                    <TableHead className="w-12 pr-3" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paddingTop > 0 ? (
+                    <tr aria-hidden="true" style={{ height: paddingTop }}>
+                      <td colSpan={5} />
+                    </tr>
+                  ) : null}
+                  {virtualItems.map((virtualRow) => {
+                    const row = rows[virtualRow.index];
+                    const target = suggestions.get(row.id);
+                    const selected = selectedIds.includes(row.id);
+                    return (
+                      <TableRow
+                        key={row.id}
+                        data-state={selected ? "selected" : undefined}
+                        style={{ height: ROW_HEIGHT }}
+                        className={cn(selected && "bg-brand-soft hover:bg-brand-soft")}
+                      >
+                        <TableCell className="py-0 pl-4">
+                          <Checkbox
+                            aria-label={row.name}
+                            checked={selected}
+                            className="align-middle"
+                            onClick={(event) => toggleRow(virtualRow.index, event.shiftKey)}
+                          />
+                        </TableCell>
+                        <TableCell className="py-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium">{row.name}</span>
+                            {row.builtin ? (
+                              <Badge variant="secondary" className="shrink-0">
+                                {copy.builtinBadge}
+                              </Badge>
+                            ) : null}
+                            {kind === "correspondents" && row.categoryName ? (
+                              <span className="hidden truncate text-xs text-muted-foreground sm:inline">
+                                {row.categoryName}
+                              </span>
+                            ) : null}
+                            {target ? (
+                              /* The suggestion column gives way on a phone; the
+                                 row menu still offers the merge. */
+                              <GitMerge
+                                aria-hidden="true"
+                                className="size-3.5 shrink-0 text-warning md:hidden"
+                              />
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-0">
+                          <div className="flex items-center justify-end gap-2.5">
+                            <span
+                              aria-hidden="true"
+                              className="hidden h-1 w-14 overflow-hidden rounded-full bg-muted sm:block"
+                            >
+                              <span
+                                className="block h-full rounded-full bg-brand"
+                                style={{
+                                  width: `${((row.count ?? 0) / maxCount) * 100}%`,
+                                }}
+                              />
+                            </span>
+                            <span className="num w-8 text-right text-muted-foreground">
+                              {row.count ?? "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden py-0 text-right md:table-cell">
+                          {target ? (
+                            confirmMergeId === row.id ? (
+                              <Button
+                                size="xs"
+                                disabled={busy}
+                                onClick={() => {
+                                  mergeMutation.mutate({
+                                    sourceId: row.id,
+                                    targetId: target.id,
+                                  });
+                                  setConfirmMergeId(null);
+                                }}
+                              >
+                                <Check />
+                                {copy.confirmMerge}
+                              </Button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmMergeId(row.id)}
+                                className="inline-flex h-5.5 max-w-full items-center rounded-full bg-warning-soft px-2 text-xs font-medium text-warning outline-none hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50"
+                              >
+                                <span className="truncate">{copy.mergeInto(target.name)}</span>
+                              </button>
+                            )
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="py-0 pr-3 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                data-row-menu={row.id}
+                                aria-label={copy.actionsFor(row.name)}
+                                className="text-muted-foreground"
+                              >
+                                <MoreHorizontal />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="min-w-44">
+                              <DropdownMenuItem
+                                onSelect={() => openRowDialog({ kind: "rename", row })}
+                              >
+                                <Pencil />
+                                {copy.renameEllipsis}
+                              </DropdownMenuItem>
+                              {kind !== "categories" ? (
+                                <DropdownMenuItem
+                                  onSelect={() =>
+                                    openRowDialog({
+                                      kind: "merge",
+                                      row,
+                                      targetId: target?.id ?? null,
+                                    })
+                                  }
+                                >
+                                  <GitMerge />
+                                  {target ? copy.mergeInto(target.name) : copy.mergeEllipsis}
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={row.builtin}
+                                title={row.builtin ? copy.builtinUndeletable : undefined}
+                                onSelect={() => openRowDialog({ kind: "delete", row })}
+                              >
+                                <Trash2 />
+                                {copy.deleteEllipsis}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {paddingBottom > 0 ? (
+                    <tr aria-hidden="true" style={{ height: paddingBottom }}>
+                      <td colSpan={5} />
+                    </tr>
+                  ) : null}
+                </TableBody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </TabsContent>
+
+      {/* Rename */}
+      <Dialog
+        open={rowDialog?.kind === "rename"}
+        onOpenChange={(open) => {
+          if (!open) setRowDialog(null);
+        }}
+      >
+        <DialogContent onCloseAutoFocus={returnFocusToRow}>
+          <DialogHeader>
+            <DialogTitle>{copy.renameTitle(rowDialog?.row.name ?? "")}</DialogTitle>
+            <DialogDescription>{copy.renameDescription}</DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const name = dialogName.trim();
+              if (!rowDialog || !name) return;
+              renameMutation.mutate(
+                { id: rowDialog.row.id, name },
+                { onSuccess: () => setRowDialog(null) },
+              );
+            }}
+          >
+            <Field>
+              <FieldLabel htmlFor="taxonomy-rename">{copy.newName}</FieldLabel>
+              <Input
+                id="taxonomy-rename"
+                value={dialogName}
+                onChange={(event) => setDialogName(event.target.value)}
+                autoFocus
+              />
+            </Field>
+            {renameMutation.error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {renameMutation.error instanceof Error
+                  ? renameMutation.error.message
+                  : copy.actionFailed}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRowDialog(null)}>
+                {copy.cancel}
+              </Button>
+              <Button type="submit" disabled={!dialogName.trim() || busy}>
+                {renameMutation.isPending ? <Spinner /> : null}
                 {copy.rename}
               </Button>
-            </>
-          ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-[var(--ok-red)]"
-            disabled={busy || selectedRows.some((row) => row.builtin)}
-            title={
-              selectedRows.some((row) => row.builtin) ? copy.builtinUndeletable : undefined
-            }
-            onClick={() => deleteMutation.mutate(selectedIds)}
-          >
-            <Trash2 />
-            {copy.del}
-          </Button>
-          {selectedRows.some((row) => row.builtin) ? (
-            <span className="max-w-72 text-xs text-muted-foreground">
-              {copy.builtinUndeletable}
-            </span>
-          ) : null}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="ml-auto"
-            onClick={() => setSelectedIds([])}
-          >
-            <X />
-            {copy.clear}
-          </Button>
-        </div>
-      ) : quick === "unused" && unusedCount > 0 ? (
-        <div className="flex items-center border-b bg-[var(--ok-amber-soft)] px-3 py-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              deleteMutation.mutate(
-                allRows.filter((row) => row.count === 0).map((row) => row.id),
-              )
-            }
-          >
-            <Trash2 />
-            {copy.deleteAllUnused(unusedCount)}
-          </Button>
-        </div>
-      ) : null}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Column header */}
-      <div className="flex h-8 items-center gap-3 border-b bg-[var(--ok-bar)] px-3">
-        <span className="w-3 flex-shrink-0" />
-        <button
-          type="button"
-          className={cn(
-            "ok-eyebrow inline-flex items-center gap-1 hover:text-foreground",
-            sortKey === "name" && "text-foreground",
-          )}
-          onClick={() => {
-            setSortKey("name");
-            setSortAsc(sortKey === "name" ? !sortAsc : true);
-          }}
-        >
-          {copy.name}
-          {sortKey === "name" ? (
-            sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "ok-eyebrow ml-auto inline-flex w-20 items-center justify-end gap-1 hover:text-foreground",
-            sortKey === "count" && "text-foreground",
-          )}
-          onClick={() => {
-            setSortKey("count");
-            setSortAsc(sortKey === "count" ? !sortAsc : false);
-          }}
-        >
-          {kind === "categories" ? copy.correspondentsCount : copy.docs}
-          {sortKey === "count" ? (
-            sortAsc ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-          ) : null}
-        </button>
-        <span className="ok-eyebrow w-56 flex-shrink-0 text-right">
-          {copy.suggestion}
-        </span>
-      </div>
-
-      {/* A failed create, rename, merge or delete used to leave no trace at
-          all — the list simply did not change. */}
-      {mutationError ? (
-        <p className="border-b bg-[var(--ok-red-soft)] px-3 py-1.5 text-sm text-[var(--ok-red)]">
-          {mutationError instanceof Error ? mutationError.message : copy.actionFailed}
-        </p>
-      ) : null}
-      {!countsKnown && facetsQuery.isError ? (
-        <p className="border-b bg-[var(--ok-amber-soft)] px-3 py-1.5 text-xs text-[var(--ok-amber)]">
-          {copy.countsUnavailable}
-        </p>
-      ) : null}
-
-      {/* Virtualised rows — never all 1000 at once */}
-      {listQuery.isLoading ? (
-        <div className="flex h-40 items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : listQuery.isError ? (
-        <p className="px-3 py-6 text-center text-sm text-[var(--ok-red)]">
-          {copy.loadError}
-        </p>
-      ) : rows.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-          {copy.empty}
-        </p>
-      ) : (
-        <div ref={listRef} className="overflow-auto" style={{ maxHeight: 420 }}>
-          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const row = rows[virtualRow.index];
-              const target = suggestions.get(row.id);
-              const selected = selectedIds.includes(row.id);
-              return (
-                <div
-                  key={row.id}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: ROW_HEIGHT,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  className={cn(
-                    "flex items-center gap-3 border-b border-[var(--ok-border-soft)] px-3",
-                    selected && "bg-accent",
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={row.name}
-                    checked={selected}
-                    onClick={(event) => toggleRow(virtualRow.index, event.shiftKey)}
-                    onChange={() => {}}
-                    className="h-3 w-3 flex-shrink-0 accent-[var(--ok-accent)]"
-                  />
-                  <span
-                    aria-hidden="true"
-                    className="h-2 w-2 flex-shrink-0 rounded-full bg-[var(--ok-accent)]"
-                    style={{
-                      opacity:
-                        row.count == null
-                          ? 0.15
-                          : row.count === 0
-                            ? 0.15
-                            : 0.3 + 0.7 * (row.count / maxCount),
-                    }}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {row.name}
-                    {row.builtin ? (
-                      <span className="ml-2 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                        {copy.builtinBadge}
-                      </span>
-                    ) : null}
-                    {kind === "correspondents" && row.categoryName ? (
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {row.categoryName}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="ok-num w-20 flex-shrink-0 text-right text-sm text-muted-foreground">
-                    {row.count ?? "—"}
-                  </span>
-                  <span className="flex w-56 flex-shrink-0 items-center justify-end gap-1">
-                    {target ? (
-                      confirmMergeId === row.id ? (
-                        <Button
-                          size="sm"
-                          className="h-[22px]"
-                          disabled={busy}
-                          onClick={() => {
-                            mergeMutation.mutate({
-                              sourceId: row.id,
-                              targetId: target.id,
-                            });
-                            setConfirmMergeId(null);
-                          }}
-                        >
-                          <Check />
-                          {copy.confirmMerge}
-                        </Button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmMergeId(row.id)}
-                          className="max-w-full truncate rounded-[var(--r-sm)] bg-[var(--ok-amber-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-amber)] hover:brightness-95"
-                        >
-                          {copy.mergeInto(target.name)}
-                        </button>
-                      )
-                    ) : null}
-                  </span>
-                </div>
-              );
-            })}
+      {/* Merge */}
+      <Dialog
+        open={rowDialog?.kind === "merge"}
+        onOpenChange={(open) => {
+          if (!open) setRowDialog(null);
+        }}
+      >
+        <DialogContent onCloseAutoFocus={returnFocusToRow}>
+          <DialogHeader>
+            <DialogTitle>{copy.mergeTitle(rowDialog?.row.name ?? "")}</DialogTitle>
+            <DialogDescription>{copy.mergeDescription}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-5">
+            <Field>
+              <FieldLabel htmlFor="taxonomy-merge-target">{copy.mergeTarget}</FieldLabel>
+              <Select value={dialogTargetId} onValueChange={setDialogTargetId}>
+                <SelectTrigger id="taxonomy-merge-target" className="w-full">
+                  <SelectValue placeholder={copy.mergePlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="p-1">
+                    <Input
+                      value={dialogTargetQuery}
+                      onChange={(event) => setDialogTargetQuery(event.target.value)}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      placeholder={copy.filter}
+                      className="h-7"
+                    />
+                  </div>
+                  {dialogTargetOptions.map((row) => (
+                    <SelectItem key={row.id} value={row.id}>
+                      {row.name}
+                    </SelectItem>
+                  ))}
+                  {dialogTargetOptions.length === 0 ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">{copy.empty}</p>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </Field>
+            {mergeMutation.error ? (
+              <p className="text-sm text-destructive" role="alert">
+                {mergeMutation.error instanceof Error
+                  ? mergeMutation.error.message
+                  : copy.actionFailed}
+              </p>
+            ) : null}
           </div>
-        </div>
-      )}
-    </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRowDialog(null)}>
+              {copy.cancel}
+            </Button>
+            <Button
+              disabled={!dialogTargetId || busy}
+              onClick={() => {
+                if (!rowDialog) return;
+                mergeMutation.mutate(
+                  { sourceId: rowDialog.row.id, targetId: dialogTargetId },
+                  { onSuccess: () => setRowDialog(null) },
+                );
+              }}
+            >
+              {mergeMutation.isPending ? <Spinner /> : <GitMerge />}
+              {copy.mergeAction}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete several at once, from the selection or the unused sweep */}
+      <AlertDialog
+        open={bulkDeleteIds !== null}
+        onOpenChange={(open) => {
+          if (!open) setBulkDeleteIds(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{copy.bulkDeleteTitle(bulkDeleteIds?.length ?? 0)}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {copy.bulkDeleteDescription(bulkDeleteUsage, kind === "categories")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteMutation.error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : copy.actionFailed}
+            </p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{copy.cancel}</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                if (!bulkDeleteIds) return;
+                deleteMutation.mutate(bulkDeleteIds, {
+                  onSuccess: () => setBulkDeleteIds(null),
+                });
+              }}
+            >
+              {deleteMutation.isPending ? <Spinner /> : <Trash2 />}
+              {copy.del}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete */}
+      <AlertDialog
+        open={rowDialog?.kind === "delete"}
+        onOpenChange={(open) => {
+          if (!open) setRowDialog(null);
+        }}
+      >
+        <AlertDialogContent onCloseAutoFocus={returnFocusToRow}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{copy.deleteTitle(rowDialog?.row.name ?? "")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {copy.deleteDescription(rowDialog?.row.count ?? null)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteMutation.error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : copy.actionFailed}
+            </p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel>{copy.cancel}</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                if (!rowDialog) return;
+                deleteMutation.mutate([rowDialog.row.id], {
+                  onSuccess: () => setRowDialog(null),
+                });
+              }}
+            >
+              {deleteMutation.isPending ? <Spinner /> : <Trash2 />}
+              {copy.del}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Tabs>
   );
 }

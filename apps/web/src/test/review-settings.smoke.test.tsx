@@ -451,7 +451,7 @@ describe("settings smoke", () => {
 
     // One list with a kind switcher, not three stacked cards.
     expect(
-      await screen.findByRole("button", { name: "Correspondents" }),
+      await screen.findByRole("tab", { name: "Correspondents" }),
     ).toBeInTheDocument();
 
     await user.type(await screen.findByPlaceholderText("New entry…"), "Urgent");
@@ -479,11 +479,16 @@ describe("settings smoke", () => {
 
     // The list opens on tags; switch kinds, select the row, then act on the
     // selection through the bulk bar.
-    await user.click(await screen.findByRole("button", { name: "Correspondents" }));
+    await user.click(await screen.findByRole("tab", { name: "Correspondents" }));
     await user.click(await screen.findByRole("checkbox", { name: "Acme Corp" }));
     expect(screen.getByText("selected")).toHaveTextContent("1 selected");
 
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // Bulk deletion is permanent, so it asks first and nothing has happened yet.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(deleteCalls).toEqual([]);
+    await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     await waitFor(() => {
       expect(deleteCalls).toEqual(["2"]);

@@ -9,7 +9,7 @@ This guide covers the most common tasks in OpenKeep.
 
 ## Import Documents
 
-Select `Import` in the top bar and either:
+Select `Import` at the top right and either:
 
 - drag files into the drop zone
 - click the drop zone to choose files manually
@@ -55,7 +55,8 @@ omnibar. Start typing and it offers, in order:
 - the screens themselves
 
 Use the arrow keys to move, `Enter` to go, and `Cmd+Enter` to open in a new
-tab. `Esc` closes it.
+tab. `Esc` steps back one level at a time, and closes the omnibar once there is
+nothing left to step back from.
 
 Type `>` first to switch to command mode, which lists actions such as
 importing a document or toggling the theme rather than archive content.
@@ -140,18 +141,19 @@ The sidebar's own `Clear` resets everything too.
 
 From any list, search result, correspondent page, or exploration surface, open a document to view its detail page.
 
-The document detail page is two columns: the document itself on the left, its
-metadata in a rail on the right.
+The document detail page is two panes: the document itself on the left, with zoom
+and page navigation, and an inspector on the right. On narrow screens the inspector
+moves below the document.
 
-The left column has tabs — preview (with zoom and page navigation), OCR text,
-intelligence, Q&A, raw details, and audit history. The top bar carries the
-download actions and, when the document needs review, a `Confirm` button.
+The inspector has tabs: `Fields`, `Intelligence`, `Q&A`, `OCR Text` and `History`.
+The header carries the document's status and its main action, which is `Resolve
+Review` when it needs review and `Download` otherwise. The `⋯` menu next to it holds
+the remaining downloads, requeue, reprocess and delete.
 
-The right rail shows the extracted fields as a list. Select any value to edit
-it in place; changed values turn amber, and a single `Save` bar appears at the
-bottom of the rail. Below the fields sit the reason a document needs review, a
-collapsible processing summary (parse provider, embedding, confidence), and the
-reprocess and delete actions.
+`Fields` shows the extracted fields as a list. Select any value to edit it in place;
+a single `Save` bar appears at the bottom. Alongside the fields sit the reason a
+document needs review, a processing summary (parse provider, embedding, confidence),
+the raw metadata and any email provenance.
 
 ## Work Through Today
 
