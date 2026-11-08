@@ -348,12 +348,20 @@ export function TaxonomyManagementSection() {
   });
   const deleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) await deleteTaxonomy(kind, id, t);
+      for (const id of ids) {
+        await deleteTaxonomy(kind, id, t);
+        // A run that stops partway has already deleted these, so a retry must
+        // carry on with what is left rather than trip over an entry that is gone.
+        setSelectedIds((current) => current.filter((entry) => entry !== id));
+        setBulkDeleteIds((current) => current?.filter((entry) => entry !== id) ?? current);
+      }
     },
     onSuccess: () => {
       setSelectedIds([]);
       invalidate();
     },
+    // The entries before a failure are gone, and the list has to say so.
+    onError: invalidate,
   });
   const renameMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) =>
@@ -684,9 +692,15 @@ export function TaxonomyManagementSection() {
                     disabled={!bulkTargetId || busy}
                     onClick={async () => {
                       for (const id of selectedIds) {
-                        await mergeMutation.mutateAsync({ sourceId: id, targetId: bulkTargetId });
+                        try {
+                          await mergeMutation.mutateAsync({ sourceId: id, targetId: bulkTargetId });
+                        } catch {
+                          // The error shows under the bar; what merged already has
+                          // left the selection, so a retry carries on from here.
+                          return;
+                        }
+                        setSelectedIds((current) => current.filter((entry) => entry !== id));
                       }
-                      setSelectedIds([]);
                       setBulkTargetId("");
                     }}
                   >
