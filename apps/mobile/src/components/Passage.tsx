@@ -127,7 +127,7 @@ const useStyles = createThemedStyles((c) => ({
     color: c.paperInk,
   },
   paperTextHit: {
-    color: c.highlightRule,
+    color: c.highlightInk,
   },
   hitLine: {
     backgroundColor: c.highlight,
@@ -136,6 +136,6 @@ const useStyles = createThemedStyles((c) => ({
     paddingHorizontal: 5,
     paddingVertical: 4,
     marginVertical: 3,
-    borderRadius: 2,
+    borderRadius: radii.sm,
   },
 }));

@@ -257,6 +257,11 @@ the same `.ipa` without touching the EAS build allowance. It costs you the runne
 wall clock and pinning an Xcode version instead. Note that this economics flips if
 the repository ever becomes private, where macOS minutes are billed at 10×.
 
+
+### Xcode 27 and iOS 27
+
+An app built with the iOS 27 SDK that has not adopted the `UIScene` lifecycle is terminated by UIKit at launch. Expo SDK 54's `AppDelegate` has not, so a local build with Xcode 27 crashes on startup, whatever the code does. EAS picks the build image for the SDK, so releases are not affected today, but moving to the iOS 27 SDK means upgrading Expo first.
+
 ## Rollback
 
 There is no rollback for a binary that has shipped. What you can do:

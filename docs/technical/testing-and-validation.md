@@ -237,6 +237,8 @@ going wrong:
 | `passage` | prefix matching stays opt-in for chat quotes; review evidence needs the full value; the cited page is searched first |
 | `i18n` | both locales carry the same keys, once each, and every literal `t()` key resolves |
 | `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
+| `auth-session` | password sessions refresh everywhere, one refresh at a time, and only a rejected token ends the session |
+| `review-queue`, `import-queue` | the whole review queue, its bulk rule, and each upload's stages |
 | `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
 | `review-outbox` | a confirm held for the undo window survives a kill: written down before the window opens, replayed once on the next launch, kept when the send fails, refused for another account, and dropped once too old to be meaningful |
 | `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |

@@ -218,6 +218,8 @@ export type DocumentMetadata = {
   reviewEvidence?: ReviewEvidence;
   manual?: ManualOverrides;
   intelligence?: DocumentIntelligence;
+  /** Set when the document arrived through the mail inbox. */
+  email?: { from?: string; subject?: string | null; receivedAt?: string | null };
   // Legacy/simple fields (kept for backward compatibility)
   summary?: string;
 };
@@ -468,11 +470,28 @@ export type AnswerQueryResponse = {
 export type AnswerHistoryTurn = { role: "user" | "assistant"; content: string };
 
 export type FacetsResponse = {
-  correspondents: Array<{ id: string; name: string; slug: string; count: number }>;
+  correspondents: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    count: number;
+    /** The type most of this correspondent's filtered documents carry. */
+    dominantTypeName?: string | null;
+  }>;
   documentTypes: Array<{ id: string; name: string; slug: string; count: number }>;
   tags: Array<{ id: string; name: string; slug: string; count: number }>;
+  /** Server-side only: the offline mirror knows no correspondent categories. */
+  categories?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    count: number;
+    topCorrespondents: string[];
+  }>;
+  uncategorizedCount?: number;
   statuses: Array<{ status: string; count: number }>;
   years: Array<{ year: number; count: number }>;
+  amountRange?: { min: number | null; max: number | null } | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -496,33 +515,96 @@ export function taxonomyQueryKey(apiUrl: string, kind: TaxonomyKind) {
   return ["taxonomies", apiUrl, kind] as const;
 }
 
+export type DocumentSortField = "title" | "issueDate" | "createdAt" | "dueDate";
+export type SortDirection = "asc" | "desc";
+
+/** What the Documents screen can narrow by: the web explorer's filter set. */
+export type DocumentFilters = {
+  query?: string;
+  year?: number;
+  statuses?: string[];
+  documentTypeIds?: string[];
+  correspondentIds?: string[];
+  categoryIds?: string[];
+  uncategorized?: boolean;
+  tags?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: number;
+  amountMax?: number;
+};
+
 /**
  * The Documents screen's server query, as a pure function so the shape is
- * testable without rendering. `categoryId` is only ever passed while online —
- * the offline mirror stores documents, not correspondent categories, so the
- * caller drops the filter there instead of silently misapplying it.
+ * testable without rendering. List filters go out as repeated keys, which the
+ * API accepts. Category filters are only ever passed while online: the offline
+ * mirror stores documents, not correspondent categories, so the caller drops
+ * them there instead of silently misapplying them.
+ *
+ * `filter`, `oldestFirst` and `currentYear` are the older chip vocabulary; an
+ * explicit `sort` or `year` wins over them.
  */
-export function buildDocumentsSearchParams(input: {
-  query: string;
-  filter: "all" | "review" | "due" | "year";
-  oldestFirst: boolean;
-  currentYear: number;
-  pageSize: number;
-  categoryId?: string | null;
-}): string {
+export function buildDocumentsSearchParams(
+  input: Omit<DocumentFilters, "query"> & {
+    query?: string;
+    pageSize: number;
+    page?: number;
+    sort?: DocumentSortField;
+    direction?: SortDirection;
+    filter?: "all" | "review" | "due" | "year";
+    oldestFirst?: boolean;
+    currentYear?: number;
+    categoryId?: string | null;
+  },
+): string {
   const search = new URLSearchParams();
-  search.set("page", "1");
+  search.set("page", String(input.page ?? 1));
   search.set("pageSize", String(input.pageSize));
-  if (input.query.trim()) {
-    search.set("query", input.query.trim());
+
+  const query = input.query?.trim();
+  if (query) {
+    search.set("query", query);
   }
-  if (input.filter === "year") {
-    search.set("year", String(input.currentYear));
+
+  const year = input.year ?? (input.filter === "year" ? input.currentYear : undefined);
+  if (year !== undefined) {
+    search.set("year", String(year));
   }
-  if (input.categoryId) {
-    search.set("categoryIds", input.categoryId);
+
+  const lists: Array<[string, string[] | undefined]> = [
+    ["statuses", input.statuses],
+    ["documentTypeIds", input.documentTypeIds],
+    ["correspondentIds", input.correspondentIds],
+    ["categoryIds", input.categoryId ? [...(input.categoryIds ?? []), input.categoryId] : input.categoryIds],
+    ["tags", input.tags],
+  ];
+  for (const [key, values] of lists) {
+    for (const value of values ?? []) {
+      search.append(key, value);
+    }
   }
-  if (input.filter === "due") {
+
+  if (input.uncategorized) {
+    search.set("uncategorized", "true");
+  }
+  if (input.dateFrom) {
+    search.set("dateFrom", input.dateFrom);
+  }
+  if (input.dateTo) {
+    search.set("dateTo", input.dateTo);
+  }
+  // Not truthiness: an amountMin of 0 is a real filter.
+  if (input.amountMin !== undefined) {
+    search.set("amountMin", String(input.amountMin));
+  }
+  if (input.amountMax !== undefined) {
+    search.set("amountMax", String(input.amountMax));
+  }
+
+  if (input.sort) {
+    search.set("sort", input.sort);
+    search.set("direction", input.direction ?? "desc");
+  } else if (input.filter === "due") {
     search.set("sort", "dueDate");
     search.set("direction", "asc");
   } else {
@@ -634,6 +716,9 @@ export type CorrespondentInsightsResponse = {
     summary?: string | null;
     summaryGeneratedAt?: string | null;
     intelligenceGeneratedAt?: string | null;
+    categoryId?: string | null;
+    categoryName?: string | null;
+    categorySource?: "deterministic" | "llm" | "manual" | null;
   };
   summaryStatus: CorrespondentSummaryStatus;
   summary: string | null;
@@ -830,9 +915,23 @@ export async function responseToMessage(response: Response) {
   return text;
 }
 
+function exportsDirectory() {
+  return `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}exports/`;
+}
+
+/**
+ * Decrypted copies handed to the share sheet live in one folder, so they can be
+ * removed: the share sheet gives no reliable moment to delete a file after use, so
+ * this runs on launch and on sign-out instead.
+ */
+export async function purgeExports() {
+  await FileSystem.deleteAsync(exportsDirectory(), { idempotent: true });
+}
+
 export async function saveDownloadToFile(response: Response, filename: string) {
   const arrayBuffer = await response.arrayBuffer();
-  const uri = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}${filename}`;
+  await FileSystem.makeDirectoryAsync(exportsDirectory(), { intermediates: true });
+  const uri = `${exportsDirectory()}${filename}`;
   await FileSystem.writeAsStringAsync(uri, Buffer.from(arrayBuffer).toString("base64"), {
     encoding: FileSystem.EncodingType.Base64,
   });

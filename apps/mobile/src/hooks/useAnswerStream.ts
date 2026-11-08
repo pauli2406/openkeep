@@ -16,8 +16,14 @@ export type StreamState = {
   answerText: string;
   citations: AnswerCitation[];
   searchResults: Array<{
-    document: { id: string; title: string };
+    document: {
+      id: string;
+      title: string;
+      correspondent?: { name: string } | null;
+      documentType?: { name: string } | null;
+    };
     score: number;
+    matchedChunks?: Array<{ text: string }>;
   }>;
   structuredData: AnswerQueryResponse["structuredData"];
   /** Label of the tool the agent is currently running, for a progress line. */

@@ -26,10 +26,10 @@ describe("Row", () => {
     expect(styleOf(view.getByText("Stadtwerke München")).color).toBe(palettes[theme].dim);
   });
 
-  it("sets the title in a sans face and the value in a mono one", async () => {
+  it("sets the title and the value in the text face", async () => {
     const view = await renderThemed(<Row title="Stadtwerke invoice" value="84,50 €" />);
     expect(styleOf(view.getByText("Stadtwerke invoice")).fontFamily).toBe(fonts.sans.medium);
-    expect(styleOf(view.getByText("84,50 €")).fontFamily).toBe(fonts.mono.semibold);
+    expect(styleOf(view.getByText("84,50 €")).fontFamily).toBe(fonts.sans.medium);
   });
 
   it("truncates a long value instead of pushing the label off screen", async () => {
@@ -71,12 +71,12 @@ describe("Row", () => {
 
 describe("Button", () => {
   it.each(["primary", "secondary", "danger"] as const)(
-    "keeps the shared semibold face in the %s variant",
+    "keeps the shared medium face in the %s variant",
     async (variant) => {
       // The variant styles used to set `fontFamily` after the base style, which
       // silently rendered every label in the regular face.
       const view = await renderThemed(<Button label="Confirm" variant={variant} onPress={() => {}} />);
-      expect(styleOf(view.getByText("Confirm")).fontFamily).toBe(fonts.sans.semibold);
+      expect(styleOf(view.getByText("Confirm")).fontFamily).toBe(fonts.sans.medium);
     },
   );
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +44,9 @@ export function useDocumentSummary(
 ) {
   const [state, setState] = useState<SummaryStreamState>(INITIAL_STATE);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Leaving the screen ends the stream: nobody is reading it any more.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const generate = useCallback(
     async (force = false) => {

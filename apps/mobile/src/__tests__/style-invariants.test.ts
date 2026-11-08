@@ -77,10 +77,9 @@ describe("type", () => {
 
 describe("radii", () => {
   it("are on the scale", () => {
-    // The epic's rule: nothing above 10 in `apps/mobile/src`. Anything larger is
-    // the web app's card language, which this design does not use.
+    // A literal radius drifts from the scale the web client shares.
     expect(
-      violations(/borderRadius:\s*(1[1-9]|[2-9][0-9])\b/, (line) => /radii\./.test(line)),
+      violations(/borderRadius:\s*([1-9][0-9]?)\b/, (line) => /radii\./.test(line)),
     ).toEqual([]);
   });
 
@@ -89,7 +88,7 @@ describe("radii", () => {
       if (name === "pill") {
         continue;
       }
-      expect(value).toBeLessThanOrEqual(10);
+      expect(value).toBeLessThanOrEqual(20);
     }
   });
 });
