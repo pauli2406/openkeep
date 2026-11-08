@@ -211,16 +211,20 @@ export function DashboardScreen() {
     queryKey: ["documents", "deadlines", auth.apiUrl, shouldUseCache],
     queryFn: async () => {
       if (shouldUseCache) {
+        // The local copy has no open-task filter, so take all of it and let the
+        // filter below do that; a page could otherwise be all completed tasks.
         return offline.queryCachedDocuments({
           query: "",
           reviewOnly: false,
-          pageSize: 100,
+          pageSize: 100_000,
           sort: "dueDate" as const,
           direction: "asc" as const,
         });
       }
       const response = await auth.authFetch(
-        "/api/documents?sort=dueDate&direction=asc&page=1&pageSize=100",
+        // Filtered on the server: otherwise a page of completed deadlines would
+        // push every open one past the limit.
+        "/api/documents?openTasksOnly=true&sort=dueDate&direction=asc&page=1&pageSize=100",
       );
       if (!response.ok) {
         throw new Error(await responseToMessage(response));
