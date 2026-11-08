@@ -41,6 +41,7 @@ import {
   formatDateTime,
   labelize,
 } from "./shared";
+import { useOfflineArchive } from "../../offline-archive";
 
 function SourceHead({
   icon,
@@ -355,6 +356,7 @@ export function ArchiveSection() {
   const colors = useColors();
   const auth = useAuth();
   const queryClient = useQueryClient();
+  const offline = useOfflineArchive();
   const { t, language } = useI18n();
   const focused = useIsFocused();
   const [dryRun, setDryRun] = useState(true);
@@ -402,8 +404,14 @@ export function ArchiveSection() {
         { mode, snapshot: parsed.snapshot },
         t("settings.importArchiveFailed"),
       ),
-    // Everything may have changed, so nothing on any screen can be trusted.
-    onSuccess: () => {
+    // Everything may have changed, so nothing on any screen can be trusted. A
+    // replacement removes documents the offline copy still holds, which would come
+    // back the moment the phone went offline, so that copy goes too; documents
+    // return to it as they are opened again.
+    onSuccess: async () => {
+      if (mode === "replace") {
+        await offline.clearCachedDocuments().catch(() => {});
+      }
       void queryClient.invalidateQueries();
     },
   });

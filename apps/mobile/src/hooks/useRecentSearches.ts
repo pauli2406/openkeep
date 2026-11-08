@@ -32,9 +32,9 @@ function emitChange() {
   }
 }
 
-// Forget what is in memory too, and load the scope afresh next time it is used.
+// Forget what is in memory too. The scope stays active, so searches made after the
+// clear are still saved; its stored list is gone, so there is nothing to reload.
 onLocalHistoryCleared(() => {
-  activeScope = null;
   items = EMPTY;
   emitChange();
 });
