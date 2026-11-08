@@ -235,9 +235,24 @@ export function TaxonomySection({ header }: { header: ReactNode }) {
     onSuccess: () => setSheet(null),
     onSettled: invalidate,
   });
+  // A bulk action that stops partway has already merged or deleted the entries before
+  // the failure. Each one leaves the pending action as it completes, so a retry
+  // carries on with what is left instead of tripping over an entry that is gone.
+  const markDone = useCallback((id: string) => {
+    setSelectedIds((current) => current.filter((entry) => entry !== id));
+    setSheet((current) =>
+      current && (current.kind === "merge" || current.kind === "bulkDelete")
+        ? { ...current, ids: current.ids.filter((entry) => entry !== id) }
+        : current,
+    );
+  }, []);
+
   const mergeMutation = useMutation({
     mutationFn: async ({ ids, target }: { ids: string[]; target: string }) => {
-      for (const id of ids) await mergeTaxonomyEntry(auth.authFetch, kind, id, target, fallback);
+      for (const id of ids) {
+        await mergeTaxonomyEntry(auth.authFetch, kind, id, target, fallback);
+        markDone(id);
+      }
     },
     onSuccess: (_data, { ids }) => {
       setSelectedIds((current) => current.filter((id) => !ids.includes(id)));
@@ -247,7 +262,10 @@ export function TaxonomySection({ header }: { header: ReactNode }) {
   });
   const deleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      for (const id of ids) await deleteTaxonomyEntry(auth.authFetch, kind, id, fallback);
+      for (const id of ids) {
+        await deleteTaxonomyEntry(auth.authFetch, kind, id, fallback);
+        markDone(id);
+      }
     },
     onSuccess: (_data, ids) => {
       setSelectedIds((current) => current.filter((id) => !ids.includes(id)));
