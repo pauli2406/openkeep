@@ -63,7 +63,7 @@ function MonthDocuments({
     queryKey: ["documents", "timeline-month", year, month, search],
     enabled: bounds !== null,
     initialPageParam: 1,
-    getNextPageParam: (last, pages) =>
+    getNextPageParam: (last: SearchDocumentsResponse, pages: SearchDocumentsResponse[]) =>
       pages.length * MONTH_PAGE_SIZE < last.total ? pages.length + 1 : undefined,
     queryFn: ({ pageParam }): Promise<SearchDocumentsResponse> =>
       bounds
