@@ -8,6 +8,7 @@ import {
   parseConversations,
   type Conversation,
 } from "./conversations";
+import { onLocalHistoryCleared } from "../../local-history";
 
 /**
  * Conversations hold quotes from documents, so they belong to one account on one
@@ -46,6 +47,16 @@ export function useConversations() {
       cancelled = true;
     };
   }, [key]);
+
+  // Clearing local history must empty the open thread list too, or the next
+  // question would write the deleted conversations straight back.
+  useEffect(
+    () =>
+      onLocalHistoryCleared(() => {
+        setConversations([]);
+      }),
+    [],
+  );
 
   const commit = useCallback((next: Conversation[]) => {
     setConversations(next);

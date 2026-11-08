@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useAuth } from "../auth";
 import { offlineCacheScope } from "../offline-scope";
+import { onLocalHistoryCleared } from "../local-history";
 
 const STORAGE_KEY = "openkeep.mobile.recent-searches";
 const MAX_ITEMS = 8;
@@ -30,6 +31,13 @@ function emitChange() {
     listener();
   }
 }
+
+// Forget what is in memory too, and load the scope afresh next time it is used.
+onLocalHistoryCleared(() => {
+  activeScope = null;
+  items = EMPTY;
+  emitChange();
+});
 
 function subscribe(listener: () => void) {
   listeners = [...listeners, listener];
