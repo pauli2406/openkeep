@@ -1,41 +1,7 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
-  Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
-  ProviderConfig,
-  ReadinessResponse,
-  Tag,
-  UserLanguagePreferences,
-  WatchFolderScanResponse,
-} from "@openkeep/types";
-import { api, authFetch, getApiErrorMessage } from "@/lib/api";
+import type { UserLanguagePreferences } from "@openkeep/types";
+import { Languages } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -43,11 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Brain,
-} from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/use-auth";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { SectionCard, SettingRow } from "./shared";
+
+type LanguageField = "uiLanguage" | "aiProcessingLanguage" | "aiChatLanguage";
 
 export function LanguagePreferencesSection() {
   const auth = useAuth();
@@ -87,102 +56,87 @@ export function LanguagePreferencesSection() {
     }
   }
 
+  const languageRows: Array<{ field: LanguageField; label: string; hint: string }> = [
+    {
+      field: "uiLanguage",
+      label: t("settings.uiLanguage"),
+      hint: t("settings.uiLanguageHint"),
+    },
+    {
+      field: "aiProcessingLanguage",
+      label: t("settings.aiProcessingLanguage"),
+      hint: t("settings.aiProcessingLanguageHint"),
+    },
+    {
+      field: "aiChatLanguage",
+      label: t("settings.aiChatLanguage"),
+      hint: t("settings.aiChatLanguageHint"),
+    },
+  ];
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Brain className="h-5 w-5" />
-          {t("settings.languagePreferences")}
-        </CardTitle>
-        <CardDescription>{t("settings.languagePreferencesDescription")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2">
-            <Label>{t("settings.uiLanguage")}</Label>
-            <Select
-              value={preferences.uiLanguage}
-              onValueChange={(value: "en" | "de") =>
-                setPreferences((current) => ({ ...current, uiLanguage: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">{t("settings.english")}</SelectItem>
-                <SelectItem value="de">{t("settings.german")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("settings.aiProcessingLanguage")}</Label>
-            <Select
-              value={preferences.aiProcessingLanguage}
-              onValueChange={(value: "en" | "de") =>
-                setPreferences((current) => ({ ...current, aiProcessingLanguage: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">{t("settings.english")}</SelectItem>
-                <SelectItem value="de">{t("settings.german")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t("settings.aiChatLanguage")}</Label>
-            <Select
-              value={preferences.aiChatLanguage}
-              onValueChange={(value: "en" | "de") =>
-                setPreferences((current) => ({ ...current, aiChatLanguage: value }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="en">{t("settings.english")}</SelectItem>
-                <SelectItem value="de">{t("settings.german")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <label className="flex items-start gap-3 rounded-[var(--r-md)] border border-input bg-card px-4 py-3">
-          <input
-            type="checkbox"
-            className="mt-0.5 h-4 w-4"
-            checked={preferences.emailDigestEnabled ?? false}
-            onChange={(event) =>
-              setPreferences((current) => ({
-                ...current,
-                emailDigestEnabled: event.target.checked,
-              }))
-            }
-          />
-          <span>
-            <span className="block text-sm font-medium">{t("settings.emailDigest")}</span>
-            <span className="block text-sm text-muted-foreground">
-              {t("settings.emailDigestDescription")}
-            </span>
-          </span>
-        </label>
-
-        <div className="flex items-center gap-3">
+    <SectionCard
+      icon={<Languages />}
+      title={t("settings.languagePreferences")}
+      description={t("settings.languagePreferencesDescription")}
+      footer={
+        <>
           <Button onClick={() => void handleSave()} disabled={isSaving}>
+            {isSaving ? <Spinner /> : null}
             {isSaving ? t("settings.saving") : t("settings.savePreferences")}
           </Button>
           {statusMessage ? (
-            <p className={`text-sm ${statusTone === "destructive" ? "text-destructive" : "text-muted-foreground"}`}>
+            <p
+              role={statusTone === "destructive" ? "alert" : "status"}
+              className={cn(
+                "text-sm",
+                statusTone === "destructive" ? "text-destructive" : "text-success",
+              )}
+            >
               {statusMessage}
             </p>
           ) : null}
-        </div>
-      </CardContent>
-    </Card>
+        </>
+      }
+    >
+      <div className="divide-y">
+        {languageRows.map((row) => (
+          <SettingRow
+            key={row.field}
+            label={row.label}
+            description={row.hint}
+            htmlFor={`preference-${row.field}`}
+          >
+            <Select
+              value={preferences[row.field]}
+              onValueChange={(value: "en" | "de") =>
+                setPreferences((current) => ({ ...current, [row.field]: value }))
+              }
+            >
+              <SelectTrigger id={`preference-${row.field}`} className="w-full sm:w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">{t("settings.english")}</SelectItem>
+                <SelectItem value="de">{t("settings.german")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingRow>
+        ))}
+        <SettingRow
+          label={t("settings.emailDigest")}
+          description={t("settings.emailDigestDescription")}
+          htmlFor="preference-email-digest"
+        >
+          <Switch
+            id="preference-email-digest"
+            checked={preferences.emailDigestEnabled ?? false}
+            onCheckedChange={(checked) =>
+              setPreferences((current) => ({ ...current, emailDigestEnabled: checked }))
+            }
+          />
+        </SettingRow>
+      </div>
+    </SectionCard>
   );
 }
-

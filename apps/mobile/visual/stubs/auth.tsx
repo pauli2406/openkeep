@@ -21,6 +21,7 @@ const USER = {
   email: "you@example.com",
   displayName: "You",
   isOwner: true,
+  twoFactorEnabled: typeof window !== "undefined" && window.location.search.includes("twoFactor=1"),
   preferences: {
     uiLanguage: "en" as const,
     aiProcessingLanguage: "de" as const,
@@ -43,12 +44,22 @@ export function useAuth() {
     setApiUrl: async () => {},
     probeServer: async () => {},
     connect: async () => {},
+    // `?twoFactorLogin=1` answers the sign-in with the second step.
+    login: async () =>
+      typeof window !== "undefined" && window.location.search.includes("twoFactorLogin=1")
+        ? { requiresTwoFactor: true as const, twoFactorToken: "two-factor-token" }
+        : { requiresTwoFactor: false as const },
+    completeTwoFactorLogin: async () => {},
+    setupOwner: async () => {},
+    finishSetup: () => {},
+    isCompletingSetup: false,
+    refreshUser: async () => {},
     updatePreferences: async () => {},
     logout: async () => {},
     revalidateSession: async () => "online" as const,
     retryOfflineSession: async () => true,
     openOfflineCopy: async () => true,
-    authFetch: (path: string) => visualAuthFetch(path),
-    streamFetch: () => visualStreamFetch(),
+    authFetch: (path: string, init?: RequestInit) => visualAuthFetch(path, init),
+    streamFetch: (path: string, init?: RequestInit) => visualStreamFetch(path, init),
   };
 }

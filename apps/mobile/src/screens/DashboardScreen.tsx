@@ -1,211 +1,177 @@
 import { useNavigation } from "@react-navigation/native";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { Pressable, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { useAuth } from "../auth";
-import { AvatarButton } from "../components/AvatarButton";
-import {
-  EmptyState,
-  ErrorCard,
-  Metric,
-  Notice,
-  Panel,
-  Row,
-  Screen,
-  SectionHeader,
-  type RowDot,
-} from "../components/ui";
-import { documentRowState } from "../document-processing";
-import { useDashboardInsights } from "../hooks/useDashboardInsights";
-import { useI18n } from "../i18n";
+import { GradientPanel, Skeleton } from "../components/layout";
+import { EmptyState, ErrorCard, Notice, Panel, Pill, Screen } from "../components/ui";
+import { useI18n, type TranslationKey } from "../i18n";
+import { processingRefetchInterval } from "../document-processing";
 import { useOfflineArchive } from "../offline-archive";
 import type { AppStackParamList } from "../../App";
-import { createThemedStyles, useColors } from "../theme";
-import { text } from "../typography";
+import { createThemedStyles, radii, useColors } from "../theme";
+import { fonts, tabular, text } from "../typography";
 import {
   formatCurrency,
-  formatShortDate,
   responseToMessage,
   titleForDocument,
   type ArchiveDocument,
-  type DashboardInsights,
+  type SearchDocumentsResponse,
 } from "../lib";
+import { queryAllCachedDocuments } from "../offline-pages";
 
-type DeadlineItem = DashboardInsights["upcomingDeadlines"][number];
 type Translate = ReturnType<typeof useI18n>["t"];
+type TaskFilter = "open" | "overdue" | "month" | "invoices";
 
-/** Anything further out than this belongs on Documents, not on Today. */
-const THIS_WEEK_DAYS = 7;
-const RECENT_LIMIT = 5;
+/** A queue row derived from a document with a due date. */
+type Task = {
+  document: ArchiveDocument;
+  daysUntilDue: number;
+  isOverdue: boolean;
+  due: Date | null;
+  taskLabel: string;
+};
 
-// ---------------------------------------------------------------------------
-// Formatting
-// ---------------------------------------------------------------------------
-
-/** `4 T über` / `28.03.` — short enough to sit at the end of a row. */
-function dueLabel(item: DeadlineItem, t: Translate) {
-  if (item.isOverdue) {
-    return `${Math.abs(item.daysUntilDue)}${t("dashboard.tasks.overdueDays")}`;
+/** Parse `YYYY-MM-DD` in local time; `new Date(str)` treats it as UTC. */
+function parseDateOnly(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const fallback = new Date(value);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
   }
-  if (item.daysUntilDue === 0) {
-    return t("today.dueToday");
-  }
-  if (item.daysUntilDue === 1) {
-    return t("today.dueTomorrow");
-  }
-  return formatShortDate(item.dueDate);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-/** `06:15` today, `gestern` yesterday, `24.02.` before that. */
-function arrivedLabel(iso: string | null | undefined, t: Translate) {
-  if (!iso) {
-    return "";
+/** Mirrors the API's buildTaskLabel, as the web client does. */
+function taskLabelKey(typeName: string | null | undefined, isOverdue: boolean): TranslationKey {
+  const normalized = typeName?.trim().toLowerCase() ?? "";
+  if (normalized.includes("invoice") || normalized.includes("bill")) {
+    return isOverdue ? "today.action.payNow" : "today.action.pay";
   }
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return "";
+  if (normalized.includes("contract") || normalized.includes("legal")) {
+    return isOverdue ? "today.action.respondNow" : "today.action.respond";
   }
-
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-
-  if (date.getTime() >= startOfToday.getTime()) {
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  if (normalized.includes("insurance")) {
+    return isOverdue ? "today.action.reviewNow" : "today.action.review";
   }
-
-  const startOfYesterday = new Date(startOfToday);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  if (date.getTime() >= startOfYesterday.getTime()) {
-    return t("today.yesterday");
-  }
-
-  return formatShortDate(iso);
+  return isOverdue ? "today.action.handleNow" : "today.action.handle";
 }
 
-function documentMeta(document: ArchiveDocument, t: Translate) {
-  const state = documentRowState(document);
-  if (state === "failed") {
-    return t("state.failed");
-  }
-  if (state === "processing" || state === "queued") {
-    // No metadata has been extracted yet, so there is nothing to show here. The
-    // design shows a stage next to this ("wird verarbeitet · OCR") but
-    // `ProcessingJobSummary` carries no stage field, so the label stands alone.
-    return state === "queued" ? t("state.queued") : t("state.processing");
-  }
-
-  const correspondent = document.correspondent?.name ?? t("documents.unfiled");
-  const type = document.documentType?.name;
-  return type ? `${correspondent} · ${type}` : correspondent;
+function toTask(document: ArchiveDocument, t: Translate): Task {
+  const due = parseDateOnly(document.dueDate ?? "");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysUntilDue = due ? Math.round((due.getTime() - today.getTime()) / 86_400_000) : 0;
+  const isOverdue = daysUntilDue < 0;
+  return {
+    document,
+    due,
+    daysUntilDue,
+    isOverdue,
+    taskLabel: t(taskLabelKey(document.documentType?.name, isOverdue)),
+  };
 }
 
-function documentDot(document: ArchiveDocument): RowDot {
-  switch (documentRowState(document)) {
-    case "failed":
-      return "red";
-    case "processing":
-    case "queued":
-      return "faint";
-    default:
-      return document.reviewStatus === "pending" ? "amber" : "green";
-  }
+function greetingKey(hour: number): TranslationKey {
+  if (hour < 11) return "today.greeting.morning";
+  if (hour < 18) return "today.greeting.afternoon";
+  return "today.greeting.evening";
 }
 
-// ---------------------------------------------------------------------------
-// Number strip
-// ---------------------------------------------------------------------------
-
-/**
- * Four numbers, one divided row. Every value comes from the insights payload —
- * `Neu` is the current month's entry in `monthlyActivity`, since there is no
- * "new documents" stat.
- */
-function NumberStrip({
-  data,
-  dueCount,
-  onReview,
-  onDocuments,
+/** The summary tile in the hero. It is also the queue's filter. */
+function FilterTile({
+  label,
+  count,
+  icon,
+  active,
+  onPress,
 }: {
-  data: DashboardInsights;
-  /** What the groups below actually show — the payload caps its lists at six. */
-  dueCount: number;
-  onReview: () => void;
-  onDocuments: () => void;
+  label: string;
+  count: number;
+  icon: string;
+  active: boolean;
+  onPress: () => void;
 }) {
   const styles = useStyles();
-  const { t } = useI18n();
-
-  // `monthlyActivity` is grouped from real document months and is not
-  // zero-filled, so the last point can be an earlier month. A month with no
-  // arrivals means zero, not "the last month that had some".
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const latest = (data.monthlyActivity ?? []).at(-1);
-  const newThisMonth = latest?.month === currentMonth ? latest.count : 0;
-
+  const colors = useColors();
+  const ink = active ? colors.tileActiveInk : colors.onGradient;
   return (
-    <View style={styles.numberStrip}>
-      <Metric
-        label={t("today.stat.review")}
-        value={data.stats.pendingReview}
-        tone={data.stats.pendingReview > 0 ? "amber" : "ink"}
-        onPress={onReview}
-      />
-      <Metric label={t("today.stat.due")} value={dueCount} onPress={onDocuments} />
-      <Metric label={t("today.stat.new")} value={newThisMonth} onPress={onDocuments} />
-      <Metric
-        label={t("today.stat.total")}
-        value={data.stats.totalDocuments.toLocaleString()}
-        onPress={onDocuments}
-      />
-    </View>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[styles.tile, active ? styles.tileActive : null]}
+    >
+      <View style={styles.tileHead}>
+        <Text style={[styles.tileLabel, { color: ink }]} numberOfLines={1}>
+          {label}
+        </Text>
+        <MaterialCommunityIcons name={icon as never} size={15} color={ink} />
+      </View>
+      <Text style={[styles.tileCount, { color: ink }]}>{count}</Text>
+    </Pressable>
   );
 }
 
-// ---------------------------------------------------------------------------
-// What needs you
-// ---------------------------------------------------------------------------
-
 /** Tap opens the document; a swipe left completes the task. */
 function TaskRow({
-  item,
+  task,
   onOpen,
   onComplete,
   busy,
+  last,
 }: {
-  item: DeadlineItem;
+  task: Task;
   onOpen: () => void;
   onComplete?: () => void;
   busy: boolean;
+  last: boolean;
 }) {
   const styles = useStyles();
   const colors = useColors();
   const { t } = useI18n();
+  const { document } = task;
 
   const row = (
-    <Row
-      dot={item.isOverdue ? "red" : "amber"}
+    <Pressable
+      accessibilityRole="button"
       accessibilityActions={
         onComplete ? [{ name: "done", label: t("dashboard.tasks.done") }] : undefined
       }
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "done") {
-          onComplete?.();
-        }
+        if (event.nativeEvent.actionName === "done") onComplete?.();
       }}
-      title={item.title}
-      meta={
-        item.documentTypeName
-          ? `${item.correspondentName ?? t("dashboard.tasks.unfiled")} · ${item.documentTypeName}`
-          : (item.correspondentName ?? t("dashboard.tasks.unfiled"))
-      }
-      value={formatCurrency(item.amount, item.currency ?? "EUR")}
-      valueMeta={dueLabel(item, t)}
-      minHeight={66}
       onPress={onOpen}
-    />
+      style={({ pressed }) => [
+        styles.row,
+        last ? null : styles.rowRule,
+        pressed ? styles.rowPressed : null,
+      ]}
+    >
+      <View style={styles.dueCell}>
+        <Pill
+          tone={task.isOverdue ? "bad" : "outline"}
+          label={task.isOverdue ? `-${Math.abs(task.daysUntilDue)}d` : `${task.daysUntilDue}d`}
+        />
+      </View>
+      <View style={styles.rowBody}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {titleForDocument(document)}
+        </Text>
+        <Text style={styles.rowMeta} numberOfLines={1}>
+          <Text style={task.isOverdue ? styles.rowOverdue : null}>{task.taskLabel}</Text>
+          {" · "}
+          {document.correspondent?.name ?? t("documents.unfiled")}
+          {document.documentType?.name ? ` · ${document.documentType.name}` : ""}
+        </Text>
+      </View>
+      <Text style={styles.rowAmount} numberOfLines={1}>
+        {document.amount != null ? formatCurrency(document.amount, document.currency ?? "EUR") : "—"}
+      </Text>
+    </Pressable>
   );
 
   if (!onComplete) {
@@ -228,27 +194,59 @@ function TaskRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Today
-// ---------------------------------------------------------------------------
-
 export function DashboardScreen() {
   const styles = useStyles();
-  const colors = useColors();
   const auth = useAuth();
   const { t } = useI18n();
   const offline = useOfflineArchive();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const queryClient = useQueryClient();
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TaskFilter>("open");
   const shouldUseCache = offline.shouldUseCache || auth.isOfflineSession;
 
-  const insightsQuery = useDashboardInsights();
+  // The insights endpoint caps deadlines at 6 overdue + 6 upcoming, which is not
+  // a queue. Take them from the documents endpoint sorted by due date, as the
+  // web client does.
+  const queueQuery = useQuery({
+    // The cache revision is in the key so an eviction or a refill rereads the copy.
+    queryKey: [
+      "documents",
+      "deadlines",
+      auth.apiUrl,
+      shouldUseCache,
+      shouldUseCache ? offline.cacheSummary.revision : null,
+    ],
+    queryFn: async () => {
+      if (shouldUseCache) {
+        // The local copy has no open-task filter, so take all of it and let the
+        // filter below do that; a page could otherwise be all completed tasks.
+        return queryAllCachedDocuments(offline.queryCachedDocuments, {
+          query: "",
+          reviewOnly: false,
+          sort: "dueDate" as const,
+          direction: "asc" as const,
+        });
+      }
+      const response = await auth.authFetch(
+        // Filtered on the server: otherwise a page of completed deadlines would
+        // push every open one past the limit.
+        "/api/documents?openTasksOnly=true&sort=dueDate&direction=asc&page=1&pageSize=100",
+      );
+      if (!response.ok) {
+        throw new Error(await responseToMessage(response));
+      }
+      return (await response.json()) as SearchDocumentsResponse;
+    },
+    refetchInterval: shouldUseCache
+      ? false
+      : (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+  });
 
   const completeMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      setBusyTaskId(documentId);
-      const response = await auth.authFetch(`/api/documents/${documentId}`, {
+    mutationFn: async (document: ArchiveDocument) => {
+      setBusyTaskId(document.id);
+      const response = await auth.authFetch(`/api/documents/${document.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskCompletedAt: new Date().toISOString() }),
@@ -256,183 +254,279 @@ export function DashboardScreen() {
       if (!response.ok) {
         throw new Error(await responseToMessage(response));
       }
+      // Resolve the review too, when there is one to resolve.
+      if (document.reviewStatus === "pending") {
+        await auth.authFetch(`/api/documents/${document.id}/review/resolve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      }
     },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        // Completing a task also resolves its review, and the Review tab stays
+        // mounted, so its queue has to hear about it.
+        queryClient.invalidateQueries({ queryKey: ["review"] }),
       ]);
     },
     onSettled: () => setBusyTaskId(null),
   });
 
-  const data = insightsQuery.data;
-
-  const overdue: DeadlineItem[] = (data?.overdueItems ?? []).map((item) => ({
-    ...item,
-    isOverdue: true as const,
-  }));
-  const overdueKeys = new Set(overdue.map((item) => `${item.documentId}:${item.dueDate}`));
-  const thisWeek = (data?.upcomingDeadlines ?? []).filter(
-    (item) =>
-      !overdueKeys.has(`${item.documentId}:${item.dueDate}`) &&
-      item.daysUntilDue <= THIS_WEEK_DAYS,
+  const allTasks = useMemo(
+    () =>
+      (queueQuery.data?.items ?? [])
+        .filter((document) => document.dueDate && !document.taskCompletedAt)
+        .map((document) => toTask(document, t))
+        .sort((a, b) => a.daysUntilDue - b.daysUntilDue),
+    [queueQuery.data, t],
   );
 
-  const openDocument = (documentId: string, title: string) =>
-    navigation.navigate("DocumentDetail", { documentId, title });
+  const groups = useMemo(() => {
+    // Calendar month, matching the API's current-month semantics.
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      open: allTasks,
+      overdue: allTasks.filter((task) => task.isOverdue),
+      month: allTasks.filter((task) => task.due !== null && task.due >= start && task.due <= end),
+      invoices: allTasks.filter((task) => {
+        const name = (task.document.documentType?.name ?? "").toLowerCase();
+        return name.includes("invoice") || name.includes("bill") || name.includes("rechnung");
+      }),
+    } satisfies Record<TaskFilter, Task[]>;
+  }, [allTasks]);
 
-  const completeTask = shouldUseCache ? undefined : (id: string) => completeMutation.mutate(id);
+  const tasks = groups[filter];
+  const overdueCount = groups.overdue.length;
+  const firstName = auth.user?.displayName?.split(/\s+/)[0];
+  const greeting = t(greetingKey(new Date().getHours()));
+  const summary =
+    allTasks.length === 0
+      ? t("today.summary.allClear")
+      : (overdueCount > 0 ? t("today.summary.open") : t("today.summary.openOnly"))
+          .replace("{open}", String(allTasks.length))
+          .replace("{overdue}", String(overdueCount));
 
-  const groups: Array<{ label: string; items: DeadlineItem[] }> = [
-    { label: t("today.overdue"), items: overdue },
-    { label: t("today.thisWeek"), items: thisWeek },
-  ].filter((group) => group.items.length > 0);
+  const complete = shouldUseCache
+    ? undefined
+    : (document: ArchiveDocument) => completeMutation.mutate(document);
 
   return (
     <Screen
-      title={t("today.brand")}
-      leading={<Image source={require("../../assets/icon.png")} style={styles.logoMark} />}
-      right={
-        <>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("today.correspondents")}
-            onPress={() => navigation.navigate("Correspondents")}
-            hitSlop={12}
-          >
-            <MaterialCommunityIcons
-              name="account-multiple-outline"
-              size={18}
-              color={colors.muted}
-            />
-          </Pressable>
-          <AvatarButton />
-        </>
-      }
+      title={t("tabs.today")}
+      hideHeader
       notice={shouldUseCache ? <Notice label={t("state.offline")} /> : undefined}
-      padded={false}
     >
-      {insightsQuery.isLoading ? (
-        <View style={styles.gutter}>
-          <Panel padded>
-            <Text style={styles.loadingText}>{t("dashboard.screen.loading")}</Text>
-          </Panel>
+      <GradientPanel>
+        <Text accessibilityRole="header" style={styles.greeting}>
+          {firstName ? `${greeting}, ${firstName}` : greeting}
+        </Text>
+        <Text style={styles.summary}>{summary}</Text>
+        <View style={styles.tiles}>
+          <View style={styles.tilesRow}>
+            <FilterTile
+              label={t("today.openTasks")}
+              count={groups.open.length}
+              icon="format-list-checks"
+              active={filter === "open"}
+              onPress={() => setFilter("open")}
+            />
+            <FilterTile
+              label={t("today.overdue")}
+              count={groups.overdue.length}
+              icon="alert-outline"
+              active={filter === "overdue"}
+              onPress={() => setFilter("overdue")}
+            />
+          </View>
+          <View style={styles.tilesRow}>
+            <FilterTile
+              label={t("today.thisMonth")}
+              count={groups.month.length}
+              icon="calendar-month-outline"
+              active={filter === "month"}
+              onPress={() => setFilter("month")}
+            />
+            <FilterTile
+              label={t("today.invoices")}
+              count={groups.invoices.length}
+              icon="receipt-text-outline"
+              active={filter === "invoices"}
+              onPress={() => setFilter("invoices")}
+            />
+          </View>
         </View>
-      ) : null}
+      </GradientPanel>
 
-      {insightsQuery.isError ? (
-        <View style={styles.gutter}>
-          <ErrorCard
-            message={t("dashboard.screen.loadError")}
-            onRetry={() => insightsQuery.refetch()}
-          />
-        </View>
-      ) : null}
-
-      {data ? (
-        <>
-          <NumberStrip
-            data={data}
-            dueCount={overdue.length + thisWeek.length}
-            onReview={() => navigation.navigate("Home", { screen: "Review" } as never)}
-            onDocuments={() => navigation.navigate("Home", { screen: "Documents" } as never)}
-          />
-
-          {groups.length === 0 ? (
-            <EmptyState title={t("today.nothingDue")} />
+      {queueQuery.isError ? (
+        <ErrorCard
+          message={t("dashboard.screen.loadError")}
+          onRetry={() => queueQuery.refetch()}
+        />
+      ) : (
+        <Panel style={styles.card}>
+          <View style={styles.cardHead}>
+            <Text style={styles.cardTitle}>{t("today.task")}</Text>
+            <Text style={styles.cardMeta} numberOfLines={1}>
+              {t("today.sorted").replace("{count}", String(tasks.length))}
+            </Text>
+          </View>
+          {queueQuery.isLoading ? (
+            <View style={styles.loading}>
+              {[0, 1, 2, 3].map((row) => (
+                <Skeleton key={row} style={styles.loadingRow} />
+              ))}
+            </View>
+          ) : tasks.length === 0 ? (
+            <EmptyState icon="check-circle-outline" title={t("today.nothingDue")} />
           ) : (
-            groups.map((group) => (
-              <View key={group.label}>
-                <SectionHeader label={group.label} count={group.items.length} />
-                {group.items.map((item) => (
-                  <TaskRow
-                    key={`${item.documentId}:${item.dueDate}`}
-                    item={item}
-                    busy={busyTaskId === item.documentId}
-                    onOpen={() => openDocument(item.documentId, item.title)}
-                    onComplete={completeTask ? () => completeTask(item.documentId) : undefined}
-                  />
-                ))}
-              </View>
+            tasks.map((task, index) => (
+              <TaskRow
+                key={task.document.id}
+                task={task}
+                last={index === tasks.length - 1}
+                busy={busyTaskId === task.document.id}
+                onOpen={() =>
+                  navigation.navigate("DocumentDetail", {
+                    documentId: task.document.id,
+                    title: titleForDocument(task.document),
+                  })
+                }
+                onComplete={complete ? () => complete(task.document) : undefined}
+              />
             ))
           )}
+        </Panel>
+      )}
 
-          {completeMutation.isError ? (
-            <View style={styles.gutter}>
-              <ErrorCard
-                message={
-                  completeMutation.error instanceof Error
-                    ? completeMutation.error.message
-                    : t("dashboard.screen.completeFailed")
-                }
-              />
-            </View>
-          ) : null}
-
-          <SectionHeader
-            label={t("today.recentlyAdded")}
-            right={
-              <Pressable
-                onPress={() => navigation.navigate("Home", { screen: "Documents" } as never)}
-                hitSlop={12}
-              >
-                <Text style={styles.headerLink}>{t("today.allDocuments")}</Text>
-              </Pressable>
-            }
-          />
-          {data.recentDocuments.length === 0 ? (
-            <EmptyState
-              title={t("dashboard.screen.noDocumentsTitle")}
-              body={t("dashboard.screen.noDocumentsBody")}
-            />
-          ) : (
-            data.recentDocuments.slice(0, RECENT_LIMIT).map((document) => {
-              const state = documentRowState(document);
-              return (
-                <Row
-                  key={document.id}
-                  dot={documentDot(document)}
-                  pulse={state === "processing" || state === "queued"}
-                  tone={state === "failed" ? "bad" : "default"}
-                  title={titleForDocument(document)}
-                  meta={documentMeta(document, t)}
-                  valueMeta={arrivedLabel(document.createdAt, t)}
-                  onPress={() => openDocument(document.id, titleForDocument(document))}
-                />
-              );
-            })
-          )}
-        </>
+      {completeMutation.isError ? (
+        <ErrorCard
+          message={
+            completeMutation.error instanceof Error
+              ? completeMutation.error.message
+              : t("dashboard.screen.completeFailed")
+          }
+        />
       ) : null}
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  gutter: {
-    padding: 16,
+  greeting: {
+    ...text.screenTitle,
+    color: c.onGradient,
   },
-  logoMark: {
-    width: 19,
-    height: 19,
-    borderRadius: 4,
+  summary: {
+    ...text.body,
+    marginTop: 4,
+    color: c.onGradientMuted,
   },
-  loadingText: {
-    ...text.meta,
-    color: c.muted,
+  tiles: {
+    marginTop: 16,
+    gap: 10,
   },
-  numberStrip: {
+  tilesRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 10,
+  },
+  tile: {
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+    padding: 14,
+    borderRadius: radii.lg,
+    backgroundColor: c.tile,
+  },
+  tileActive: {
+    backgroundColor: c.tileActive,
+  },
+  tileHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  tileLabel: {
+    ...text.bodyStrong,
+    flex: 1,
+  },
+  tileCount: {
+    ...text.statValue,
+  },
+  card: {
+    overflow: "hidden",
+  },
+  cardHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
   },
-  headerLink: {
-    ...text.smallStrong,
-    color: c.accent,
+  cardTitle: {
+    ...text.bodyStrong,
+    color: c.ink,
+  },
+  cardMeta: {
+    ...text.small,
+    flexShrink: 1,
+    color: c.muted,
+  },
+  loading: {
+    gap: 14,
+    padding: 16,
+  },
+  loadingRow: {
+    height: 36,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 60,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: c.panel,
+  },
+  rowRule: {
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  rowPressed: {
+    backgroundColor: c.bar,
+  },
+  dueCell: {
+    width: 50,
+    alignItems: "center",
+  },
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    ...text.rowTitle,
+    color: c.ink,
+  },
+  rowMeta: {
+    ...text.meta,
+    color: c.muted,
+  },
+  rowOverdue: {
+    fontFamily: fonts.sans.medium,
+    color: c.red,
+  },
+  rowAmount: {
+    ...text.amount,
+    ...tabular,
+    color: c.ink,
   },
   swipeAction: {
     flexDirection: "row",

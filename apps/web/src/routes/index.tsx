@@ -1,11 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ExternalLink, RotateCw } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  CalendarDays,
+  Check,
+  CircleCheckBig,
+  FileSearch,
+  ListTodo,
+  ReceiptText,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { GradientPanel, Page } from "@/components/layout/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Chip } from "@/components/ui/chip";
+import { Card } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Kbd } from "@/components/ui/kbd";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBlock, LoadingBlock } from "@/components/explorer/shared";
+import { useAuth } from "@/hooks/use-auth";
 import { api, authFetch, getApiErrorMessage } from "@/lib/api";
 import { processingRefetchInterval } from "@/lib/document-processing";
 import { fetchFilteredDocuments, formatCurrency } from "@/lib/explorer";
@@ -98,7 +113,7 @@ function formatDate(value: string | null | undefined): string {
   });
 }
 
-/** One cell of the extracted-fields grid; `attention` tints it amber. */
+/** One cell of the extracted-fields grid; `attention` flags what to look at. */
 function Field({
   label,
   value,
@@ -111,22 +126,50 @@ function Field({
   return (
     <div
       className={cn(
-        "rounded-[var(--r-md)] border px-2.5 py-1.5",
-        attention
-          ? "border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)]"
-          : "border-border bg-card",
+        "min-w-0 rounded-lg px-3 py-2",
+        attention ? "bg-warning-soft" : "bg-muted",
       )}
     >
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div
-        className={cn(
-          "truncate text-sm",
-          attention ? "ok-num text-[var(--ok-amber)]" : "text-foreground",
-        )}
-      >
-        {value}
+      <div className={cn("text-xs", attention ? "text-warning" : "text-muted-foreground")}>
+        {label}
       </div>
+      <div className="num mt-0.5 truncate text-sm font-medium">{value}</div>
     </div>
+  );
+}
+
+/** The summary tile in the hero. It is also the queue's filter. */
+function FilterTile({
+  label,
+  count,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  icon: LucideIcon;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex min-w-0 flex-col gap-3 rounded-xl p-3.5 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-white/50",
+        active
+          ? "bg-white text-[color:var(--brand)] shadow-raised dark:bg-white/20 dark:text-white"
+          : "bg-white/12 text-white hover:bg-white/20",
+      )}
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-medium">{label}</span>
+        <Icon className="size-4 shrink-0 opacity-80" />
+      </span>
+      <span className="num text-3xl font-semibold tracking-tight">{count}</span>
+    </button>
   );
 }
 
@@ -199,56 +242,59 @@ function TaskPreview({ documentId }: { documentId: string }) {
   const isImage = previewQuery.data?.type.startsWith("image/");
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b px-3.5">
-        <span className="ok-section-title min-w-0 flex-1 truncate">
-          {doc?.title ?? "—"}
-        </span>
-        {needsReview ? <Badge variant="warn">{t("today.needsReview")}</Badge> : null}
-        <button
-          type="button"
+    <div className="flex h-full min-h-0 flex-col overflow-auto">
+      <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
+        <span className="min-w-0 flex-1 truncate font-medium">{doc?.title ?? "—"}</span>
+        {needsReview ? <Badge variant="warning">{t("today.needsReview")}</Badge> : null}
+        <Button
+          variant="ghost"
+          size="icon-sm"
           aria-label={t("today.openDocument")}
-          className="text-muted-foreground transition-colors hover:text-foreground"
-          onClick={() =>
-            navigate({ to: "/documents/$documentId", params: { documentId } })
-          }
+          className="text-muted-foreground"
+          onClick={() => navigate({ to: "/documents/$documentId", params: { documentId } })}
         >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+          <ArrowUpRight />
+        </Button>
       </div>
 
-      {/* A scan is a scan: paper stays light, the frame darkens. */}
-      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-[var(--ok-sunken)] p-5">
+      {/* A scan is a scan: paper stays white, the stage around it takes the theme. */}
+      <div className="flex min-h-56 flex-1 items-start justify-center overflow-auto bg-stage p-4">
         {previewUrl && isImage ? (
           <img
             src={previewUrl}
             alt=""
-            className="max-w-full rounded-[var(--r-sm)] border border-[var(--ok-paper-border)] bg-[var(--ok-paper)]"
+            className="max-w-full rounded-md border border-paper-border bg-paper shadow-card"
           />
         ) : previewUrl ? (
           <iframe
             src={previewUrl}
             title={doc?.title ?? ""}
-            className="h-full min-h-[420px] w-full rounded-[var(--r-sm)] border border-[var(--ok-paper-border)] bg-[var(--ok-paper)]"
+            className="h-full min-h-[320px] w-full rounded-md border border-paper-border bg-paper shadow-card"
           />
+        ) : previewQuery.isLoading ? (
+          <Skeleton className="h-full min-h-[320px] w-full" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
-            {previewQuery.isLoading ? "…" : t("today.previewUnavailable")}
-          </div>
+          <Empty className="h-full">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FileSearch />
+              </EmptyMedia>
+              <EmptyDescription>{t("today.previewUnavailable")}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t px-3.5 py-3">
-        <div className="ok-eyebrow mb-2">{t("today.extractedFields")}</div>
+      <div className="shrink-0 border-t p-4">
+        <div className="mb-2.5 text-xs font-medium text-muted-foreground">
+          {t("today.extractedFields")}
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <Field
             label={t("dashboard.correspondent")}
             value={doc?.correspondent?.name ?? t("dashboard.unfiled")}
           />
-          <Field
-            label={t("today.documentType")}
-            value={doc?.documentType?.name ?? "—"}
-          />
+          <Field label={t("today.documentType")} value={doc?.documentType?.name ?? "—"} />
           <Field label={t("today.issueDate")} value={formatDate(doc?.issueDate)} />
           <Field
             label={t("dashboard.deadline")}
@@ -270,25 +316,20 @@ function TaskPreview({ documentId }: { documentId: string }) {
           />
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <Button
-            onClick={() => confirmMutation.mutate()}
-            disabled={confirmMutation.isPending}
-          >
+        <div className="mt-3.5 flex flex-wrap items-center gap-2">
+          <Button onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending}>
             <Check />
             {t("today.confirmAndFile")}
           </Button>
           <Button
             variant="outline"
-            onClick={() =>
-              navigate({ to: "/documents/$documentId", params: { documentId } })
-            }
+            onClick={() => navigate({ to: "/documents/$documentId", params: { documentId } })}
           >
-            <RotateCw />
             {t("today.openDocument")}
           </Button>
-          <span className="ok-num ml-auto text-[10.5px] text-muted-foreground">
-            ↵ {t("today.openHint")} · ⇥ {t("today.nextHint")}
+          <span className="ml-auto hidden items-center gap-1.5 text-xs text-muted-foreground xl:flex">
+            <Kbd>↵</Kbd> {t("today.openHint")}
+            <Kbd>⇥</Kbd> {t("today.nextHint")}
           </span>
         </div>
       </div>
@@ -296,8 +337,15 @@ function TaskPreview({ documentId }: { documentId: string }) {
   );
 }
 
+function greetingKey(hour: number) {
+  if (hour < 11) return "today.greeting.morning" as const;
+  if (hour < 18) return "today.greeting.afternoon" as const;
+  return "today.greeting.evening" as const;
+}
+
 function TodayPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<TaskFilter>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -310,6 +358,9 @@ function TodayPage() {
     queryKey: ["documents", "deadlines"],
     queryFn: () =>
       fetchFilteredDocuments({
+        // Filtered on the server: otherwise a page of completed deadlines would
+        // push every open one past the limit.
+        openTasksOnly: true,
         sort: "dueDate",
         direction: "asc",
         page: 1,
@@ -327,37 +378,29 @@ function TodayPage() {
       .sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }, [insightsQuery.data]);
 
-  const tasks = useMemo(() => {
-    switch (filter) {
-      case "overdue":
-        return allTasks.filter((item) => item.isOverdue);
-      case "month": {
-        // Calendar month, matching the API's current-month semantics —
-        // not "within 31 days", which would sweep in old overdue items.
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        return allTasks.filter((item) => {
-          const due = parseDateOnly(item.dueDate);
-          return due !== null && due >= start && due <= end;
-        });
-      }
-      case "invoices":
-        // Same family the API's invoiceOnly predicate recognises.
-        return allTasks.filter((item) => {
-          const name = (item.documentTypeName ?? "").toLowerCase();
-          return (
-            name.includes("invoice") ||
-            name.includes("bill") ||
-            name.includes("rechnung")
-          );
-        });
-      default:
-        return allTasks;
-    }
-  }, [allTasks, filter]);
+  const groups = useMemo(() => {
+    // Calendar month, matching the API's current-month semantics —
+    // not "within 31 days", which would sweep in old overdue items.
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      open: allTasks,
+      overdue: allTasks.filter((item) => item.isOverdue),
+      month: allTasks.filter((item) => {
+        const due = parseDateOnly(item.dueDate);
+        return due !== null && due >= start && due <= end;
+      }),
+      // Same family the API's invoiceOnly predicate recognises.
+      invoices: allTasks.filter((item) => {
+        const name = (item.documentTypeName ?? "").toLowerCase();
+        return name.includes("invoice") || name.includes("bill") || name.includes("rechnung");
+      }),
+    } satisfies Record<TaskFilter, TaskItem[]>;
+  }, [allTasks]);
 
-  const overdueCount = allTasks.filter((item) => item.isOverdue).length;
+  const tasks = groups[filter];
+  const overdueCount = groups.overdue.length;
 
   // Keep a selection so the right rail always has something to show.
   useEffect(() => {
@@ -423,120 +466,155 @@ function TodayPage() {
     );
   }
 
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Filter strip */}
-      <div className="flex h-11 flex-shrink-0 items-center gap-2 border-b px-4">
-        <Chip active={filter === "open"} onClick={() => setFilter("open")}>
-          {t("today.openTasks")}
-        </Chip>
-        <Chip active={filter === "overdue"} onClick={() => setFilter("overdue")}>
-          {t("today.overdue")} · <span className="ok-num">{overdueCount}</span>
-        </Chip>
-        <Chip active={filter === "month"} onClick={() => setFilter("month")}>
-          {t("today.thisMonth")}
-        </Chip>
-        <Chip active={filter === "invoices"} onClick={() => setFilter("invoices")}>
-          {t("today.invoices")}
-        </Chip>
-        <span className="ml-auto text-xs text-muted-foreground">
-          {t("today.sortedBy")}{" "}
-          <span className="font-semibold text-foreground">{t("today.dueDate")}</span> ·{" "}
-          <span className="ok-num">{tasks.length}</span> {t("today.openCount")}
-        </span>
-      </div>
+  const firstName = user?.displayName?.split(/\s+/)[0];
+  const greeting = t(greetingKey(new Date().getHours()));
+  const summary =
+    allTasks.length === 0
+      ? t("today.summary.allClear")
+      : (overdueCount > 0 ? t("today.summary.open") : t("today.summary.openOnly"))
+          .replace("{open}", String(allTasks.length))
+          .replace("{overdue}", String(overdueCount));
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_minmax(340px,480px)]">
+  return (
+    <Page width="wide" className="min-h-full lg:h-full">
+      <GradientPanel className="shrink-0 p-5 md:p-6">
+        <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+          {firstName ? `${greeting}, ${firstName}` : greeting}
+        </h1>
+        <p className="mt-1 text-sm text-white/85 md:text-base">{summary}</p>
+        <div className="mt-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          <FilterTile
+            label={t("today.openTasks")}
+            count={groups.open.length}
+            icon={ListTodo}
+            active={filter === "open"}
+            onClick={() => setFilter("open")}
+          />
+          <FilterTile
+            label={t("today.overdue")}
+            count={groups.overdue.length}
+            icon={AlertTriangle}
+            active={filter === "overdue"}
+            onClick={() => setFilter("overdue")}
+          />
+          <FilterTile
+            label={t("today.thisMonth")}
+            count={groups.month.length}
+            icon={CalendarDays}
+            active={filter === "month"}
+            onClick={() => setFilter("month")}
+          />
+          <FilterTile
+            label={t("today.invoices")}
+            count={groups.invoices.length}
+            icon={ReceiptText}
+            active={filter === "invoices"}
+            onClick={() => setFilter("invoices")}
+          />
+        </div>
+      </GradientPanel>
+
+      {/* On a short window the page scrolls rather than squeezing the queue away. */}
+      <div className="grid flex-1 grid-cols-1 gap-5 lg:min-h-[480px] lg:grid-cols-[minmax(0,1fr)_minmax(360px,460px)]">
         {/* Left: what needs you */}
-        <div ref={listRef} className="min-h-0 overflow-auto">
-          <div className="flex h-8 items-center border-b bg-[var(--ok-bar)] px-4">
-            <span className="ok-eyebrow w-16">{t("today.due")}</span>
-            <span className="ok-eyebrow flex-1">{t("dashboard.document")}</span>
-            <span className="ok-eyebrow w-40">{t("today.task")}</span>
-            <span className="ok-eyebrow w-24 text-right">{t("dashboard.amount")}</span>
+        <Card className="min-h-0 gap-0 py-0 shadow-card">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">
+            <h2 className="font-medium">{t("today.task")}</h2>
+            <span className="text-xs text-muted-foreground">
+              {t("today.sortedBy")} {t("today.dueDate")} ·{" "}
+              <span className="num">{tasks.length}</span> {t("today.openCount")}
+            </span>
           </div>
 
-          {tasks.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              {t("today.nothingDue")}
-            </div>
-          ) : (
-            tasks.map((item) => {
-              const active = item.documentId === selectedId;
-              return (
-                <button
-                  key={item.documentId}
-                  type="button"
-                  onClick={() => {
-                    // The preview rail is hidden below lg, so on narrow
-                    // screens a tap has to go straight to the document.
-                    if (
-                      typeof window !== "undefined" &&
-                      !window.matchMedia("(min-width: 1024px)").matches
-                    ) {
+          <div ref={listRef} className="min-h-0 flex-1 overflow-auto p-1.5">
+            {tasks.length === 0 ? (
+              <Empty className="py-16">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <CircleCheckBig />
+                  </EmptyMedia>
+                  <EmptyTitle>{t("today.nothingDue")}</EmptyTitle>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              tasks.map((item) => {
+                const active = item.documentId === selectedId;
+                return (
+                  <button
+                    key={item.documentId}
+                    type="button"
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => {
+                      // The preview rail is hidden below lg, so on narrow
+                      // screens a tap has to go straight to the document.
+                      if (
+                        typeof window !== "undefined" &&
+                        !window.matchMedia("(min-width: 1024px)").matches
+                      ) {
+                        navigate({
+                          to: "/documents/$documentId",
+                          params: { documentId: item.documentId },
+                        });
+                        return;
+                      }
+                      setSelectedId(item.documentId);
+                    }}
+                    onDoubleClick={() =>
                       navigate({
                         to: "/documents/$documentId",
                         params: { documentId: item.documentId },
-                      });
-                      return;
+                      })
                     }
-                    setSelectedId(item.documentId);
-                  }}
-                  onDoubleClick={() =>
-                    navigate({
-                      to: "/documents/$documentId",
-                      params: { documentId: item.documentId },
-                    })
-                  }
-                  className={cn(
-                    "ok-row ok-row-2 w-full px-4 text-left",
-                    active && "bg-accent shadow-[inset_2px_0_0_var(--ok-accent)]",
-                  )}
-                >
-                  <span
                     className={cn(
-                      "ok-num w-16 text-sm",
-                      item.isOverdue
-                        ? "font-semibold text-[var(--ok-red)]"
-                        : "text-muted-foreground",
+                      "flex w-full items-center gap-3.5 rounded-lg px-2.5 py-2.5 text-left transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50",
+                      active && "bg-brand-soft hover:bg-brand-soft",
                     )}
                   >
-                    {dueLabel(item)}
-                  </span>
-                  <span className="min-w-0 flex-1 pr-3">
-                    <span className="block truncate text-sm text-foreground">
-                      {item.title}
+                    <Badge
+                      variant={item.isOverdue ? "danger" : "secondary"}
+                      className="num w-12 shrink-0"
+                    >
+                      {dueLabel(item)}
+                    </Badge>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{item.title}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        <span className={cn(item.isOverdue && "font-medium text-danger")}>
+                          {item.taskLabel}
+                        </span>
+                        {" · "}
+                        {item.correspondentName ?? t("dashboard.unfiled")}
+                        {item.documentTypeName ? ` · ${item.documentTypeName}` : ""}
+                      </span>
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {item.correspondentName ?? t("dashboard.unfiled")}
-                      {item.documentTypeName ? ` · ${item.documentTypeName}` : ""}
+                    <span className="num w-20 shrink-0 text-right text-sm font-medium">
+                      {item.amount != null
+                        ? (formatCurrency(item.amount, item.currency ?? "EUR") ?? "—")
+                        : "—"}
                     </span>
-                  </span>
-                  <span className="w-40 truncate text-sm text-muted-foreground">
-                    {item.taskLabel}
-                  </span>
-                  <span className="ok-num w-24 text-right text-sm text-foreground">
-                    {item.amount != null
-                      ? (formatCurrency(item.amount, item.currency ?? "EUR") ?? "—")
-                      : "—"}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </Card>
 
         {/* Right: live preview of the selection */}
-        <div className="hidden min-h-0 border-l lg:block">
+        <Card className="hidden min-h-0 gap-0 py-0 shadow-card lg:flex">
           {selectedId ? (
             <TaskPreview key={selectedId} documentId={selectedId} />
           ) : (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
-              {t("today.selectPrompt")}
-            </div>
+            <Empty className="h-full">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <FileSearch />
+                </EmptyMedia>
+                <EmptyDescription>{t("today.selectPrompt")}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
-        </div>
+        </Card>
       </div>
-    </div>
+    </Page>
   );
 }

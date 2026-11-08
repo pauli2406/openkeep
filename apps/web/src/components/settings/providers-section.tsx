@@ -4,7 +4,23 @@ import type {
   HealthResponse,
   ProcessingStatusResponse,
 } from "@openkeep/types";
-import { Loader2 } from "lucide-react";
+import { BrainCircuit, FileScan, ListChecks, MessageSquareText } from "lucide-react";
+import type { ReactNode } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -12,6 +28,12 @@ import {
   CHAT_PROVIDER_LABELS,
   EMBEDDING_PROVIDER_LABELS,
   PARSE_PROVIDER_LABELS,
+  RetryAlert,
+  SectionCard,
+  StatTile,
+  StatusBadge,
+  StatusDot,
+  type StatusTone,
 } from "./shared";
 
 type Tone =
@@ -30,23 +52,14 @@ type ProviderRow = {
   tone: Tone;
 };
 
-function StatusDot({ tone }: { tone: Tone }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "h-2 w-2 flex-shrink-0 rounded-full",
-        tone === "failed"
-          ? "bg-[var(--ok-red)]"
-          : tone === "incomplete"
-            ? "bg-[var(--ok-amber)]"
-            : tone === "unconfigured"
-              ? "bg-[var(--ok-border-strong)]"
-              : "bg-[var(--ok-green)]",
-      )}
-    />
-  );
-}
+const TONE_DOT: Record<Tone, StatusTone> = {
+  active: "brand",
+  fallback: "warn",
+  available: "ok",
+  incomplete: "warn",
+  unconfigured: "muted",
+  failed: "bad",
+};
 
 function jobDuration(startedAt: string | null, finishedAt: string | null): number | null {
   if (!startedAt || !finishedAt) return null;
@@ -156,8 +169,14 @@ export function AiProvidersSection() {
 
   if (healthQuery.isLoading || providersQuery.isLoading || statusQuery.isLoading) {
     return (
-      <div className="flex h-40 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      <div className="flex flex-col gap-5" role="status" aria-label={t("root.loading")}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
+            <Skeleton key={index} className="h-20 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-52 rounded-xl" />
+        <Skeleton className="h-52 rounded-xl" />
       </div>
     );
   }
@@ -167,7 +186,16 @@ export function AiProvidersSection() {
   const status = statusQuery.data;
 
   if (!cfg || !providers || !status) {
-    return <p className="py-6 text-center text-sm text-[var(--ok-red)]">{copy.loadError}</p>;
+    return (
+      <RetryAlert
+        message={copy.loadError}
+        onRetry={() => {
+          void healthQuery.refetch();
+          void providersQuery.refetch();
+          void statusQuery.refetch();
+        }}
+      />
+    );
   }
 
   // ---- the four numbers ----
@@ -260,17 +288,20 @@ export function AiProvidersSection() {
     title: string;
     sub: string;
     summary: string;
+    icon: ReactNode;
     rows: ProviderRow[];
   }> = [
     {
       title: copy.parsing,
       sub: copy.parsingSub,
+      icon: <FileScan />,
       summary: copy.activeSummary(providers.activeParseProvider),
       rows: parseRows,
     },
     {
       title: copy.embeddings,
       sub: copy.embeddingsSub,
+      icon: <BrainCircuit />,
       summary: providers.activeEmbeddingProvider
         ? copy.activeSummary(providers.activeEmbeddingProvider)
         : copy.none,
@@ -279,6 +310,7 @@ export function AiProvidersSection() {
     {
       title: copy.chat,
       sub: copy.chatSub,
+      icon: <MessageSquareText />,
       summary: providers.activeChatProvider
         ? copy.activeSummary(providers.activeChatProvider)
         : copy.none,
@@ -286,169 +318,148 @@ export function AiProvidersSection() {
     },
   ];
 
+  // Active and fallback both imply "available", so each tile carries one pill.
   const badgeFor = (tone: Tone) =>
     tone === "active" ? (
-      <span className="rounded-[var(--r-sm)] bg-accent px-[7px] py-px text-[11px] font-semibold text-accent-foreground">
-        {copy.active}
-      </span>
+      <Badge>{copy.active}</Badge>
     ) : tone === "fallback" ? (
-      <span className="rounded-[var(--r-sm)] bg-[var(--ok-amber-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-amber)]">
-        {copy.fallback}
-      </span>
-    ) : null;
-
-  const availabilityFor = (tone: Tone) =>
-    tone === "incomplete" ? (
-      <span className="rounded-[var(--r-sm)] bg-[var(--ok-amber-soft)] px-[7px] py-px text-[11px] font-semibold text-[var(--ok-amber)]">
-        {copy.incomplete}
-      </span>
+      <Badge variant="warning">{copy.fallback}</Badge>
+    ) : tone === "incomplete" ? (
+      <Badge variant="warning">{copy.incomplete}</Badge>
     ) : tone === "unconfigured" ? (
-      <span className="rounded-[var(--r-sm)] border px-[7px] py-px text-[11px] font-semibold text-muted-foreground">
+      <Badge variant="outline" className="text-muted-foreground">
         {copy.notConfigured}
-      </span>
+      </Badge>
     ) : (
-      <span className="rounded-[var(--r-sm)] border px-[7px] py-px text-[11px] font-semibold text-muted-foreground">
-        {copy.available}
-      </span>
+      <Badge variant="success">{copy.available}</Badge>
     );
 
   return (
-    <div className="space-y-4">
-      {/* The four numbers */}
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        {[
-          {
-            label: copy.processingQueue,
-            value: String(status.queues.processing.depth),
-            note: null,
-          },
-          {
-            label: copy.embeddingQueue,
-            value: String(status.queues.embedding.depth),
-            note: providers.activeEmbeddingProvider,
-          },
-          {
-            label: copy.failedToday,
-            value: String(failedToday),
-            note: null,
-            bad: failedToday > 0,
-          },
-          {
-            label: copy.avgPerDoc,
-            value: avgSeconds != null ? `${avgSeconds}s` : "—",
-            note: null,
-          },
-        ].map((stat) => (
-          <div key={stat.label} className="rounded-[var(--r-lg)] border bg-card px-3 py-2.5">
-            <p className="text-xs text-muted-foreground">{stat.label}</p>
-            <p
-              className={cn(
-                "ok-num mt-0.5 text-xl font-semibold",
-                "bad" in stat && stat.bad && "text-[var(--ok-red)]",
-              )}
-            >
-              {stat.value}
-            </p>
-            {stat.note ? (
-              <p className="ok-num truncate text-xs text-muted-foreground">{stat.note}</p>
-            ) : null}
-          </div>
-        ))}
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile label={copy.processingQueue} value={status.queues.processing.depth} />
+        <StatTile
+          label={copy.embeddingQueue}
+          value={status.queues.embedding.depth}
+          note={providers.activeEmbeddingProvider}
+        />
+        <StatTile
+          label={copy.failedToday}
+          value={failedToday}
+          tone={failedToday > 0 ? "danger" : "default"}
+        />
+        <StatTile
+          label={copy.avgPerDoc}
+          value={avgSeconds != null ? `${avgSeconds}s` : "—"}
+        />
       </div>
 
-      {/* Grouped provider panels */}
       {groups.map((group) => (
-        <div key={group.title} className="overflow-hidden rounded-[var(--r-lg)] border bg-card">
-          <div className="flex items-center gap-2 border-b bg-[var(--ok-bar)] px-3.5 py-2">
-            <div className="min-w-0">
-              <p className="ok-section-title">{group.title}</p>
-              <p className="text-xs text-muted-foreground">{group.sub}</p>
-            </div>
-            <span className="ok-num ml-auto flex-shrink-0 text-xs text-muted-foreground">
-              {group.summary}
-            </span>
-          </div>
-          {group.rows.map((row) => (
-            <div
-              key={row.id}
-              className="flex items-center gap-3 border-b border-[var(--ok-border-soft)] px-3.5 py-2.5 last:border-b-0"
-            >
-              <StatusDot tone={row.tone} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{row.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{row.note}</p>
+        <SectionCard
+          key={group.title}
+          icon={group.icon}
+          title={group.title}
+          description={group.sub}
+          action={
+            <span className="font-mono text-xs text-muted-foreground">{group.summary}</span>
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2">
+            {group.rows.map((row) => (
+              <div
+                key={row.id}
+                className={cn(
+                  "flex min-w-0 flex-col gap-3 rounded-xl border p-3.5",
+                  row.tone === "active" &&
+                    "border-transparent bg-brand-soft ring-2 ring-brand/40",
+                  row.tone === "unconfigured" && "bg-muted/40",
+                )}
+              >
+                <div className="flex items-start gap-2.5">
+                  <StatusDot tone={TONE_DOT[row.tone]} className="mt-1.5" />
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={cn(
+                        "truncate text-sm font-medium",
+                        row.tone === "unconfigured" && "text-muted-foreground",
+                        row.tone === "active" && "text-brand-soft-foreground",
+                      )}
+                    >
+                      {row.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{row.note}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 pl-[1.125rem]">
+                  <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                    {row.model ?? "—"}
+                  </span>
+                  {badgeFor(row.tone)}
+                </div>
               </div>
-              <span className="ok-num hidden w-52 flex-shrink-0 truncate text-sm text-muted-foreground md:block">
-                {row.model ?? "—"}
-              </span>
-              <span className="flex w-44 flex-shrink-0 items-center justify-end gap-1.5">
-                {badgeFor(row.tone)}
-                {availabilityFor(row.tone)}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </SectionCard>
       ))}
 
-      {/* Recent jobs */}
-      <div className="overflow-hidden rounded-[var(--r-lg)] border bg-card">
-        <div className="border-b bg-[var(--ok-bar)] px-3.5 py-2">
-          <p className="ok-section-title">{copy.recentJobs}</p>
-          <p className="text-xs text-muted-foreground">{copy.recentJobsSub}</p>
+      <Card className="gap-0 py-0 shadow-card">
+        <div className="border-b px-5 py-4">
+          <h3 className="font-medium">{copy.recentJobs}</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">{copy.recentJobsSub}</p>
         </div>
         {status.recentJobs.length === 0 ? (
-          <p className="px-3.5 py-4 text-center text-sm text-muted-foreground">
-            {copy.noJobs}
-          </p>
+          <Empty className="py-10">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ListChecks />
+              </EmptyMedia>
+              <EmptyDescription>{copy.noJobs}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          status.recentJobs.slice(0, 8).map((job) => {
-            const duration = jobDuration(job.startedAt, job.finishedAt);
-            return (
-              <div
-                key={job.id}
-                className="flex items-center gap-3 border-b border-[var(--ok-border-soft)] px-3.5 py-2 last:border-b-0"
-              >
-                <StatusDot
-                  tone={
-                    job.status === "failed"
-                      ? "failed"
-                      : job.status === "completed"
-                        ? "available"
-                        : "active"
-                  }
-                />
-                <span className="ok-num min-w-0 flex-1 truncate text-sm">
-                  {job.documentId.slice(0, 8)}
-                </span>
-                <span className="ok-num hidden w-44 flex-shrink-0 truncate text-xs text-muted-foreground sm:block">
-                  {job.queueName}
-                </span>
-                <span className="ok-num w-16 flex-shrink-0 text-right text-xs text-muted-foreground">
-                  {duration != null ? `${(duration / 1000).toFixed(1)}s` : copy.running}
-                </span>
-                <span
-                  className={cn(
-                    "w-24 flex-shrink-0 text-right text-[11px] font-semibold",
-                    job.status === "failed"
-                      ? "text-[var(--ok-red)]"
-                      : job.status === "completed"
-                        ? "text-[var(--ok-green)]"
-                        : "text-muted-foreground",
-                  )}
-                >
-                  {job.status === "failed"
-                    ? copy.failed
-                    : job.status === "completed"
-                      ? copy.done
-                      : job.status === "running"
-                        ? copy.running
-                        : copy.queued}
-                </span>
-              </div>
-            );
-          })
+          <Table>
+            <TableBody>
+              {status.recentJobs.slice(0, 8).map((job) => {
+                const duration = jobDuration(job.startedAt, job.finishedAt);
+                return (
+                  <TableRow key={job.id}>
+                    <TableCell className="pl-5 font-mono text-xs">
+                      {job.documentId.slice(0, 8)}
+                    </TableCell>
+                    <TableCell className="hidden font-mono text-xs text-muted-foreground sm:table-cell">
+                      {job.queueName}
+                    </TableCell>
+                    <TableCell className="num text-right text-xs text-muted-foreground">
+                      {duration != null ? `${(duration / 1000).toFixed(1)}s` : copy.running}
+                    </TableCell>
+                    <TableCell className="w-px pr-5 text-right">
+                      <StatusBadge
+                        tone={
+                          job.status === "failed"
+                            ? "bad"
+                            : job.status === "completed"
+                              ? "ok"
+                              : job.status === "running"
+                                ? "brand"
+                                : "muted"
+                        }
+                      >
+                        {job.status === "failed"
+                          ? copy.failed
+                          : job.status === "completed"
+                            ? copy.done
+                            : job.status === "running"
+                              ? copy.running
+                              : copy.queued}
+                      </StatusBadge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

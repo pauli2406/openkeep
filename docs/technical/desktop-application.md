@@ -322,12 +322,12 @@ app's `@/` alias identically, and desktop builds are the guard against alias dri
 The host also supplies its runtime platform so shared omnibar labels render `Cmd` on
 macOS and `Ctrl` on Windows/Linux without branching the component tree.
 
-Public Sans and IBM Plex Mono are compiled from the OFL-licensed font files already
-owned by the mobile workspace. Both Vite builds fingerprint and bundle those files;
-desktop does not weaken its CSP or rely on Google Fonts for visual parity.
+Geist is bundled from the OFL-licensed `@fontsource-variable` packages. Both Vite builds
+fingerprint and bundle those files, so desktop does not weaken its CSP or rely on a font CDN
+for visual parity.
 
 The optional host-shell accessory seam adds only the archive-profile control to the
-authenticated top bar. Today, the document explorer and its list/timeline/group
+authenticated workspace header. Today, the document explorer and its list/timeline/group
 views, the omnibar, and correspondent dossiers remain the exact web route modules.
 Browser history and deep links continue through TanStack Router at the trusted
 `openkeep://app` origin; the custom protocol returns the application entry point only

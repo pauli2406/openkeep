@@ -1,14 +1,17 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentAskCitation } from "../lib";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type QaStreamStatus = "idle" | "streaming" | "done" | "error";
+/** `loading` until the first event arrives, so the two read as different steps. */
+export type QaStreamStatus = "idle" | "loading" | "streaming" | "error";
 
 export type QaStreamState = {
   status: QaStreamStatus;
+  /** The turn in flight, and the failed one until it is retried. */
+  question: string | null;
   answerText: string;
   citations: DocumentAskCitation[];
   errorMessage: string | null;
@@ -16,6 +19,7 @@ export type QaStreamState = {
 
 const INITIAL_STATE: QaStreamState = {
   status: "idle",
+  question: null,
   answerText: "",
   citations: [],
   errorMessage: null,
@@ -30,16 +34,36 @@ const INITIAL_STATE: QaStreamState = {
 // SSE events:
 //   citations     → { citations: DocumentAskCitation[] }
 //   answer-token  → { text: string }
-//   done          → { status, answer, citations }
+//   done          → { status, answer, citations, historyEntryId }
 //   error         → { message: string }
 // ---------------------------------------------------------------------------
+
+export type QaAnsweredTurn = {
+  question: string;
+  answer: string;
+  citations: DocumentAskCitation[];
+  /** The persisted entry, when the server reported one. */
+  historyEntryId: string | null;
+  status: "answered" | "insufficient_evidence";
+};
 
 export function useDocumentQa(
   streamFetch: (path: string, init?: RequestInit) => Promise<Response>,
   documentId: string,
+  /**
+   * A finished turn leaves this hook for the persisted history, so the thread
+   * only ever shows one copy of it. The server has already saved the entry by
+   * the time the `done` event arrives.
+   */
+  onAnswered?: (turn: QaAnsweredTurn) => void,
 ) {
   const [state, setState] = useState<QaStreamState>(INITIAL_STATE);
   const abortRef = useRef<AbortController | null>(null);
+  const onAnsweredRef = useRef(onAnswered);
+  onAnsweredRef.current = onAnswered;
+
+  // Leaving the screen ends the stream: nobody is reading it any more.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const ask = useCallback(
     async (question: string) => {
@@ -48,11 +72,26 @@ export function useDocumentQa(
       abortRef.current = controller;
 
       setState({
-        status: "streaming",
+        status: "loading",
+        question,
         answerText: "",
         citations: [],
         errorMessage: null,
       });
+
+      // Mirrors what `setState` accumulates, because the turn is reported outside it.
+      let answer = "";
+      let citations: DocumentAskCitation[] = [];
+      let finished = false;
+
+      const finish = (
+        historyEntryId: string | null,
+        status: QaAnsweredTurn["status"],
+      ) => {
+        finished = true;
+        onAnsweredRef.current?.({ question, answer, citations, historyEntryId, status });
+        setState(INITIAL_STATE);
+      };
 
       try {
         const response = await streamFetch(
@@ -86,27 +125,26 @@ export function useDocumentQa(
                 const parsed = JSON.parse(data);
 
                 if (currentEvent === "citations") {
-                  setState((s) => ({
-                    ...s,
-                    citations: parsed.citations ?? [],
-                  }));
+                  citations = parsed.citations ?? [];
+                  setState((s) => ({ ...s, status: "streaming", citations }));
                 } else if (currentEvent === "answer-token") {
-                  setState((s) => ({
-                    ...s,
-                    answerText: s.answerText + (parsed.text ?? ""),
-                  }));
+                  answer += parsed.text ?? "";
+                  setState((s) => ({ ...s, status: "streaming", answerText: answer }));
                 } else if (currentEvent === "done") {
-                  setState((s) => ({
-                    ...s,
-                    status: "done",
-                    citations: parsed.citations ?? s.citations,
-                    answerText: parsed.answer ?? s.answerText,
-                  }));
+                  answer = parsed.answer ?? answer;
+                  citations = parsed.citations ?? citations;
+                  finish(
+                    typeof parsed.historyEntryId === "string" ? parsed.historyEntryId : null,
+                    parsed.status === "insufficient_evidence"
+                      ? "insufficient_evidence"
+                      : "answered",
+                  );
                 } else if (currentEvent === "error") {
+                  finished = true;
                   setState((s) => ({
                     ...s,
                     status: "error",
-                    errorMessage: parsed.message ?? "Unknown error",
+                    errorMessage: parsed.message ?? null,
                   }));
                 }
               } catch {
@@ -135,13 +173,15 @@ export function useDocumentQa(
           processLines(buffer.split("\n"));
         }
 
-        // Safety fallback: force done if stream ended without done event
-        setState((s) => {
-          if (s.status === "streaming") {
-            return { ...s, status: "done" };
+        // The stream ended without a `done` event. What arrived is still an answer;
+        // nothing at all is a failure, and the screen says so in its own words.
+        if (!finished) {
+          if (answer) {
+            finish(null, "answered");
+          } else {
+            setState((s) => ({ ...s, status: "error", errorMessage: null }));
           }
-          return s;
-        });
+        }
       } catch (err: unknown) {
         if (
           err instanceof DOMException && err.name === "AbortError"
@@ -154,22 +194,17 @@ export function useDocumentQa(
         setState((s) => ({
           ...s,
           status: "error",
-          errorMessage: err instanceof Error ? err.message : "Stream failed",
+          errorMessage: err instanceof Error ? err.message : null,
         }));
       }
     },
     [streamFetch, documentId],
   );
 
-  const cancel = useCallback(() => {
-    abortRef.current?.abort();
-    setState((s) => ({ ...s, status: s.status === "idle" ? "idle" : "done" }));
-  }, []);
-
   const reset = useCallback(() => {
     abortRef.current?.abort();
     setState(INITIAL_STATE);
   }, []);
 
-  return { ...state, ask, cancel, reset };
+  return { ...state, ask, reset };
 }

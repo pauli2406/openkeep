@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../auth";
-import { Button, Pill, Row, Screen, SectionHeader } from "../components/ui";
+import { Chip, IconTile } from "../components/layout";
+import { Button, Panel, Pill, Screen, SectionHeader } from "../components/ui";
 import { useI18n } from "../i18n";
 import { formatShortDate, parseArchiveDate } from "../lib";
+import { clearLocalHistory } from "../local-history";
 import { useOfflineArchive } from "../offline-archive";
 import { OFFLINE_CACHE_LIMIT_CHOICES } from "../offline-metadata-store";
 import { createThemedStyles, radii, useColors } from "../theme";
@@ -78,7 +80,7 @@ export function OfflineArchiveScreen() {
         text: t("offline.deleteCopy"),
         style: "destructive",
         onPress: () =>
-          void offline.clearCachedDocuments().catch((error) =>
+          void Promise.all([offline.clearCachedDocuments(), clearLocalHistory()]).catch((error) =>
             Alert.alert(
               t("settings.clearCacheFailed"),
               error instanceof Error ? error.message : t("settings.clearCacheFailed"),
@@ -110,11 +112,13 @@ export function OfflineArchiveScreen() {
   ];
 
   return (
-    <Screen title={t("offline.title")} onBack={() => navigation.goBack()} padded={false}>
+    <Screen
+      title={t("offline.title")}
+      onBack={() => navigation.goBack()}
+    >
       {/* Connection — a statement, not a switch */}
-      <Row
-        minHeight={74}
-        leading={
+      <Panel padded>
+        <View style={styles.connection}>
           <View style={[styles.badge, usingCopy ? styles.badgeOffline : styles.badgeOnline]}>
             <MaterialCommunityIcons
               name={usingCopy ? "wifi-off" : "wifi"}
@@ -122,36 +126,16 @@ export function OfflineArchiveScreen() {
               color={usingCopy ? colors.amber : colors.green}
             />
           </View>
-        }
-        title={usingCopy ? t("offline.disconnected") : t("offline.connected")}
-        meta={usingCopy ? t("offline.usingCopy") : t("offline.autoSwitch")}
-        titleNumberOfLines={1}
-      />
-
-      {/* Exactly what CacheSummary exposes */}
-      <View style={styles.statStrip}>
-        {stats.map((stat, index) => (
-          <View
-            key={stat.label}
-            style={[styles.statCell, index < stats.length - 1 ? styles.statCellDivided : null]}
-          >
-            <Text style={styles.statValue} numberOfLines={1}>
-              {stat.value}
+          <View style={styles.connectionText}>
+            <Text style={styles.connectionTitle}>
+              {usingCopy ? t("offline.disconnected") : t("offline.connected")}
             </Text>
-            <Text style={styles.statLabel} numberOfLines={1}>
-              {stat.label}
+            <Text style={styles.connectionBody}>
+              {usingCopy ? t("offline.usingCopy") : t("offline.autoSwitch")}
             </Text>
           </View>
-        ))}
-      </View>
-
-      {offline.quarantinedCount > 0 ? (
-        <Text style={styles.repairNote}>{t("offline.repaired")}</Text>
-      ) : null}
-
-
-      {auth.isOfflineSession ? (
-        <View style={styles.limitRow}>
+        </View>
+        {auth.isOfflineSession ? (
           <Button
             label={t("offline.retry")}
             loading={retrying}
@@ -161,8 +145,22 @@ export function OfflineArchiveScreen() {
               void auth.retryOfflineSession().finally(() => setRetrying(false));
             }}
           />
-        </View>
-      ) : null}
+        ) : null}
+      </Panel>
+
+      {/* Exactly what CacheSummary exposes */}
+      <View style={styles.stats}>
+        {stats.map((stat) => (
+          <View key={stat.label} style={styles.stat}>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              {stat.label}
+            </Text>
+            <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+              {stat.value}
+            </Text>
+          </View>
+        ))}
+      </View>
 
       {offline.cacheDisabledReason ? (
         <Text style={styles.disabledNote}>
@@ -170,38 +168,47 @@ export function OfflineArchiveScreen() {
         </Text>
       ) : null}
 
-      <SectionHeader label={t("offline.limitTitle")} />
-      <View style={styles.limitRow}>
-        {OFFLINE_CACHE_LIMIT_CHOICES.map((choice) => {
-          const active = choice === offline.maxBytes;
-          return (
-            <Pressable
-              key={choice}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => void offline.setMaxBytes(choice)}
-              style={[styles.chip, active ? styles.chipActive : styles.chipIdle]}
-            >
-              <Text style={[styles.chipText, active ? styles.chipTextActive : null]}>
-                {formatBytes(choice)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={styles.repairNote}>{t("offline.limitBody")}</Text>
+      {offline.quarantinedCount > 0 ? (
+        <Text style={styles.note}>{t("offline.repaired")}</Text>
+      ) : null}
 
-      <SectionHeader label={t("offline.perDocument")} />
-      {parts.map((part) => (
-        <Row
-          key={part.title}
-          leading={
-            <MaterialCommunityIcons name={part.icon as never} size={17} color={colors.dim} />
-          }
-          title={part.title}
-          meta={part.body}
-        />
-      ))}
+      <Panel padded>
+        <Text style={styles.cardTitle} accessibilityRole="header">
+          {t("offline.limitTitle")}
+        </Text>
+        <View style={styles.limits}>
+          {OFFLINE_CACHE_LIMIT_CHOICES.map((choice) => (
+            <Chip
+              key={choice}
+              label={formatBytes(choice)}
+              active={choice === offline.maxBytes}
+              onPress={() => void offline.setMaxBytes(choice)}
+            />
+          ))}
+        </View>
+        <Text style={styles.cardNote}>{t("offline.limitBody")}</Text>
+      </Panel>
+
+      <View>
+        <SectionHeader label={t("offline.perDocument")} />
+        <Panel>
+          {parts.map((part, index) => (
+            <View key={part.title} style={[styles.part, index > 0 ? styles.partRule : null]}>
+              <IconTile size="sm">
+                <MaterialCommunityIcons
+                  name={part.icon as never}
+                  size={15}
+                  color={colors.accentSoftInk}
+                />
+              </IconTile>
+              <View style={styles.partText}>
+                <Text style={styles.partTitle}>{part.title}</Text>
+                <Text style={styles.partBody}>{part.body}</Text>
+              </View>
+            </View>
+          ))}
+        </Panel>
+      </View>
 
       {/* No full download, and no setting that pretends there is one */}
       <View style={styles.callout}>
@@ -210,75 +217,62 @@ export function OfflineArchiveScreen() {
       </View>
 
       {/* Only the answers need the server; searching the local copy does not */}
-      <Row
-        leading={<MaterialCommunityIcons name="flag-off-outline" size={17} color={colors.dim} />}
-        title={t("offline.chatAndSearch")}
-        meta={t("offline.chatAndSearchBody")}
-        accessory={<Pill label={t("offline.onlineOnly")} tone="outline" />}
-      />
-      <Row
-        leading={<MaterialCommunityIcons name="magnify" size={17} color={colors.dim} />}
-        title={t("offline.cachedSearch")}
-        meta={t("offline.cachedSearchBody")}
-      />
+      <Panel>
+        <View style={styles.part}>
+          <IconTile size="sm">
+            <MaterialCommunityIcons name="flag-off-outline" size={15} color={colors.accentSoftInk} />
+          </IconTile>
+          <View style={styles.partText}>
+            <Text style={styles.partTitle}>{t("offline.chatAndSearch")}</Text>
+            <Text style={styles.partBody}>{t("offline.chatAndSearchBody")}</Text>
+          </View>
+          <Pill label={t("offline.onlineOnly")} tone="outline" />
+        </View>
+        <View style={[styles.part, styles.partRule]}>
+          <IconTile size="sm">
+            <MaterialCommunityIcons name="magnify" size={15} color={colors.accentSoftInk} />
+          </IconTile>
+          <View style={styles.partText}>
+            <Text style={styles.partTitle}>{t("offline.cachedSearch")}</Text>
+            <Text style={styles.partBody}>{t("offline.cachedSearchBody")}</Text>
+          </View>
+        </View>
+      </Panel>
 
       <View style={styles.footer}>
         <Button label={t("offline.deleteCopy")} variant="danger" onPress={confirmClear} />
-        <Text style={styles.footerNote}>{t("offline.deleteNote")}</Text>
+        <Text style={styles.note}>{t("offline.deleteNote")}</Text>
       </View>
     </Screen>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  chip: {
-    flexShrink: 0,
-    borderRadius: radii.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    minHeight: 44,
-    justifyContent: "center",
-  },
-  chipIdle: {
-    borderWidth: 1,
-    borderColor: c.borderStrong,
-  },
-  chipActive: {
-    backgroundColor: c.accentFill,
-  },
-  chipText: {
-    ...text.meta,
-    color: c.muted,
-  },
-  chipTextActive: {
-    ...text.metaStrong,
-    color: c.accentFillInk,
-  },
-  limitRow: {
+  connection: {
     flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    alignItems: "center",
+    gap: 12,
   },
-  disabledNote: {
-    ...text.small,
-    color: c.muted,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+  connectionText: {
+    flex: 1,
+    minWidth: 0,
   },
-  repairNote: {
-    ...text.small,
+  connectionTitle: {
+    ...text.bodyStrong,
+    color: c.ink,
+  },
+  connectionBody: {
+    ...text.meta,
+    marginTop: 2,
     color: c.muted,
-    paddingHorizontal: 16,
-    paddingTop: 12,
   },
   badge: {
-    height: 44,
     width: 44,
+    height: 44,
     flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 9,
+    borderRadius: radii.lg,
   },
   badgeOnline: {
     backgroundColor: c.greenSoft,
@@ -286,38 +280,83 @@ const useStyles = createThemedStyles((c) => ({
   badgeOffline: {
     backgroundColor: c.amberSoft,
   },
-  statStrip: {
+  stats: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    gap: 10,
   },
-  statCell: {
+  stat: {
     flex: 1,
     minWidth: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    gap: 3,
-  },
-  statCellDivided: {
-    borderRightWidth: 1,
-    borderRightColor: c.borderSoft,
-  },
-  statValue: {
-    ...text.statValue,
-    color: c.ink,
+    padding: 12,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   statLabel: {
     ...text.small,
-    color: c.faint,
+    color: c.muted,
+  },
+  statValue: {
+    ...text.barTitle,
+    marginTop: 4,
+    color: c.ink,
+  },
+  note: {
+    ...text.small,
+    textAlign: "center",
+    color: c.muted,
+  },
+  disabledNote: {
+    ...text.meta,
+    padding: 12,
+    borderRadius: radii.xl,
+    backgroundColor: c.amberSoft,
+    color: c.amber,
+  },
+  cardTitle: {
+    ...text.bodyStrong,
+    color: c.ink,
+  },
+  cardNote: {
+    ...text.meta,
+    color: c.muted,
+  },
+  limits: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  part: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  partRule: {
+    borderTopWidth: 1,
+    borderTopColor: c.border,
+  },
+  partText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  partTitle: {
+    ...text.rowTitle,
+    color: c.ink,
+  },
+  partBody: {
+    ...text.meta,
+    marginTop: 2,
+    color: c.muted,
   },
   callout: {
     flexDirection: "row",
     gap: 10,
-    margin: 16,
+    padding: 12,
     borderRadius: radii.xl,
     backgroundColor: c.accentSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
   },
   calloutText: {
     ...text.meta,
@@ -325,12 +364,6 @@ const useStyles = createThemedStyles((c) => ({
     color: c.accentSoftInk,
   },
   footer: {
-    padding: 16,
     gap: 10,
-  },
-  footerNote: {
-    ...text.small,
-    color: c.faint,
-    textAlign: "center",
   },
 }));

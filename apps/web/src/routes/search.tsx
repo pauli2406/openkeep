@@ -1,13 +1,55 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { Copy, FileSearch, Loader2, Plus, Send } from "lucide-react";
+import {
+  ArrowUpIcon,
+  CircleCheckIcon,
+  CopyIcon,
+  FileSearchIcon,
+  FileTextIcon,
+  HistoryIcon,
+  LoaderCircleIcon,
+  PlusIcon,
+  SearchIcon,
+  Sparkles,
+  TriangleAlertIcon,
+} from "lucide-react";
 import type { AnswerCitation, HealthProvidersResponse } from "@openkeep/types";
+import { AnswerMarkdown } from "@/components/chat/answer-markdown";
+import { Sources } from "@/components/chat/sources";
+import { IconTile } from "@/components/layout/page";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
-import { Chip } from "@/components/ui/chip";
-import { useAnswerStream, linkifyCitations } from "@/hooks/use-answer-stream";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupText,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
+import { Message, MessageAvatar, MessageContent, MessageFooter } from "@/components/ui/message";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
+import { useAnswerStream } from "@/hooks/use-answer-stream";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
 import { api, authFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/explorer";
@@ -15,6 +57,7 @@ import { useI18n } from "@/lib/i18n";
 import { useOfflineReadOnly } from "@/lib/host-shell";
 import { cn } from "@/lib/utils";
 import { createObjectUrlLease } from "@/lib/object-url";
+import { isEnterKey } from "@/lib/keyboard";
 
 type SearchParams = { q?: string };
 
@@ -66,16 +109,6 @@ function persistConversations(conversations: Conversation[]) {
 }
 
 /** One source pill per document instead of one per retrieved chunk. */
-function groupCitationsByDocument(citations: AnswerCitation[]): AnswerCitation[][] {
-  const groups = new Map<string, AnswerCitation[]>();
-  for (const citation of citations) {
-    const group = groups.get(citation.documentId) ?? [];
-    group.push(citation);
-    groups.set(citation.documentId, group);
-  }
-  return [...groups.values()];
-}
-
 function relativeAge(at: number, language: string): string {
   const days = Math.round((Date.now() - at) / 86_400_000);
   if (days < 1) return language === "de" ? "jetzt" : "now";
@@ -100,9 +133,15 @@ function ChatPage() {
   // mid-stream must not append the turn to whatever is selected when it lands.
   const pendingTarget = useRef<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<AnswerCitation | null>(null);
-  const [hoveredDocId, setHoveredDocId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
+  const [citationSheetOpen, setCitationSheetOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const isWide = useMediaQuery("(min-width: 1280px)");
+  const composerRef = useRef<HTMLFormElement>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  // The composer moves when the first question leaves the empty state, which
+  // remounts it. Whoever was typing keeps typing.
+  const refocusComposer = useRef(false);
   const startedFromParam = useRef<string | null>(null);
 
   const copy =
@@ -130,6 +169,18 @@ function ChatPage() {
           document: "Dokument",
           page: "S.",
           furtherMatches: (n: number) => `Weitere Treffer (${n})`,
+          usedSources: (n: number) => `${n} ${n === 1 ? "Quelle" : "Quellen"} verwendet`,
+          searching: "Durchsuche dein Archiv",
+          copyAnswer: "Antwort kopieren",
+          history: "Verlauf",
+          noConversations: "Noch keine Unterhaltungen.",
+          newOne: "Neu",
+          starters: [
+            "Welche Rechnungen sind überfällig?",
+            "Welche Verträge laufen bald aus?",
+            "Was steht diesen Monat an?",
+            "Welche Dokumente muss ich noch prüfen?",
+          ],
         }
       : {
           newConversation: "New conversation",
@@ -153,6 +204,18 @@ function ChatPage() {
           document: "Document",
           page: "p.",
           furtherMatches: (n: number) => `Further matches (${n})`,
+          usedSources: (n: number) => `Used ${n} ${n === 1 ? "source" : "sources"}`,
+          searching: "Searching your archive",
+          copyAnswer: "Copy answer",
+          history: "History",
+          noConversations: "No conversations yet.",
+          newOne: "New",
+          starters: [
+            "Which invoices are overdue?",
+            "Which contracts expire soon?",
+            "What is due this month?",
+            "Which documents still need review?",
+          ],
         };
 
   const providersQuery = useQuery({
@@ -294,11 +357,6 @@ function ChatPage() {
     };
   }, [selectedCitation?.documentId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keep the thread pinned to the bottom while streaming.
-  useEffect(() => {
-    threadRef.current?.scrollTo?.({ top: threadRef.current.scrollHeight });
-  }, [active?.turns.length, stream.answerText]);
-
   const chatModel = providersQuery.data?.activeChatProvider ?? null;
 
   const followUps = useMemo(
@@ -309,398 +367,491 @@ function ChatPage() {
     [recentSearches, active],
   );
 
-  const renderAnswer = (text: string, citations: AnswerCitation[]) => (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        a: ({ href, children, title }) => {
-          if (href?.startsWith("/documents/")) {
-            const documentId = href.replace("/documents/", "");
-            return (
-              <button
-                type="button"
-                title={title}
-                onMouseEnter={() => setHoveredDocId(documentId)}
-                onMouseLeave={() => setHoveredDocId(null)}
-                onClick={() => {
-                  const citation = citations.find(
-                    (entry) => entry.documentId === documentId,
-                  );
-                  if (citation) setSelectedCitation(citation);
-                }}
-                className="ok-num mx-0.5 inline-flex items-center rounded-[var(--r-sm)] bg-accent px-1.5 py-0.5 text-[11px] font-bold text-accent-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                {children}
-              </button>
-            );
-          }
-          return (
-            <a href={href} target="_blank" rel="noopener noreferrer">
-              {children}
-            </a>
-          );
-        },
-        table: ({ children, ...props }) => (
-          <div className="overflow-x-auto">
-            <table {...props}>{children}</table>
-          </div>
-        ),
-      }}
-    >
-      {linkifyCitations(text, citations, [])}
-    </Markdown>
+  const openCitation = (citation: AnswerCitation) => {
+    setSelectedCitation(citation);
+    if (!isWide) setCitationSheetOpen(true);
+  };
+
+  const startNewConversation = () => {
+    setActiveId(null);
+    setSelectedCitation(null);
+    setHistoryOpen(false);
+  };
+
+  const conversationList = (
+    <>
+      <div className="flex flex-col gap-0.5 p-2">
+        {conversations.length === 0 ? (
+          <p className="px-2.5 py-2 text-sm text-muted-foreground">{copy.noConversations}</p>
+        ) : null}
+        {conversations.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            aria-current={entry.id === activeId ? "true" : undefined}
+            onClick={() => {
+              setActiveId(entry.id);
+              setSelectedCitation(entry.turns.at(-1)?.citations[0] ?? null);
+              setHistoryOpen(false);
+            }}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50",
+              entry.id === activeId && "bg-brand-soft font-medium text-brand-soft-foreground",
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+            <span className="num shrink-0 text-xs text-muted-foreground">
+              {relativeAge(entry.at, language)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
   );
 
-  return (
-    <div className="grid h-full min-h-0 grid-cols-1 md:grid-cols-[212px_minmax(0,1.25fr)] xl:grid-cols-[212px_minmax(0,1.25fr)_minmax(0,1fr)]">
-      {/* Conversation rail */}
-      <div className="hidden min-h-0 flex-col border-r bg-[var(--ok-bar)] md:flex">
-        <div className="flex-shrink-0 p-2.5">
-          <Button
-            className="w-full"
-            onClick={() => {
-              setActiveId(null);
-              setSelectedCitation(null);
-            }}
-          >
-            <Plus />
-            {copy.newConversation}
-          </Button>
-        </div>
-        <p className="ok-eyebrow flex-shrink-0 px-3 pb-1">{copy.recent}</p>
-        <div className="min-h-0 flex-1 overflow-auto">
-          {conversations.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => {
-                setActiveId(entry.id);
-                setSelectedCitation(
-                  entry.turns.at(-1)?.citations[0] ?? null,
-                );
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 border-b border-[var(--ok-border-soft)] px-3 py-2 text-left",
-                entry.id === activeId &&
-                  "bg-accent shadow-[inset_2px_0_0_var(--ok-accent)]",
-              )}
-            >
-              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
-                {entry.title}
-              </span>
-              <span className="ok-num flex-shrink-0 text-[10.5px] text-muted-foreground">
-                {relativeAge(entry.at, language)}
-              </span>
-            </button>
-          ))}
-        </div>
-        <p className="flex-shrink-0 border-t px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
-          {copy.privacyNote}
-        </p>
-      </div>
-
-      {/* Thread */}
-      <div className="flex min-h-0 flex-col">
-        <div className="flex h-10 flex-shrink-0 items-center gap-2 border-b px-4">
-          <span className="min-w-0 truncate text-sm font-semibold">
-            {active?.title ?? pendingQuestion ?? copy.emptyTitle}
+  const citationPanel = selectedCitation ? (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-center gap-2.5 border-b px-4 py-3 pe-12 xl:pe-4">
+        <span className="num flex size-5.5 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-soft-foreground">
+          {selectedCitation.index ?? 1}
+        </span>
+        <span className="min-w-0 truncate text-sm font-medium">
+          {selectedCitation.documentTitle}
+        </span>
+        {selectedCitation.pageFrom ? (
+          <span className="num ml-auto shrink-0 text-xs text-muted-foreground">
+            {copy.page} {selectedCitation.pageFrom}
+            {selectedCitation.pageTo && selectedCitation.pageTo !== selectedCitation.pageFrom
+              ? `–${selectedCitation.pageTo}`
+              : ""}
           </span>
-          {active ? (
-            <span className="ok-num flex-shrink-0 text-xs text-muted-foreground">
-              {copy.turns(active.turns.length)}
-            </span>
-          ) : null}
-        </div>
-
-        <div ref={threadRef} className="min-h-0 flex-1 overflow-auto px-5 py-4">
-          {!active && !pendingQuestion ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-              <FileSearch className="h-6 w-6" />
-              <p className="text-sm font-semibold text-foreground">{copy.emptyTitle}</p>
-              <p className="max-w-sm text-sm">{copy.emptyBody}</p>
-            </div>
-          ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-4">
-              {(active?.turns ?? []).map((turn, turnIndex) => (
-                <div key={turnIndex} className="flex flex-col gap-3">
-                  <div className="ml-auto max-w-[75%] rounded-[var(--r-lg)] bg-primary px-3.5 py-2 text-sm text-primary-foreground">
-                    {turn.question}
-                  </div>
-                  <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground prose-p:my-1.5 prose-strong:text-foreground">
-                    {renderAnswer(turn.answer, turn.citations)}
-                  </div>
-
-                  {turn.structuredRows && turn.structuredRows.length > 0 ? (
-                    <div className="overflow-hidden rounded-[var(--r-md)] border">
-                      <div className="flex h-7 items-center border-b bg-[var(--ok-bar)] px-2.5">
-                        <span className="ok-eyebrow">
-                          {turn.structuredTitle ?? copy.document}
-                        </span>
-                      </div>
-                      {turn.structuredRows.map((row, rowIndex) => (
-                        <div
-                          key={rowIndex}
-                          className="flex items-center gap-3 border-b border-[var(--ok-border-soft)] px-2.5 py-1.5 last:border-b-0"
-                        >
-                          <span className="min-w-0 flex-1 truncate text-sm">
-                            {row.title}
-                          </span>
-                          <span className="ok-num flex-shrink-0 text-xs text-muted-foreground">
-                            {row.date ?? ""}
-                          </span>
-                          <span className="ok-num w-20 flex-shrink-0 text-right text-sm">
-                            {row.amount ?? "—"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {turn.citations.length > 0
-                    ? (() => {
-                        // Legacy payloads have no `used` flag — treat them as used.
-                        const usedCitations = turn.citations.filter(
-                          (citation) => citation.used !== false,
-                        );
-                        const unusedCitations = turn.citations.filter(
-                          (citation) => citation.used === false,
-                        );
-                        const renderGroups = (groups: AnswerCitation[][]) =>
-                          groups.map((group) => {
-                            const first = group[0]!;
-                            const pages = [
-                              ...new Set(
-                                group
-                                  .map((citation) => citation.pageFrom)
-                                  .filter((page): page is number => page != null),
-                              ),
-                            ];
-                            return (
-                              <button
-                                key={`${first.documentId}-${first.index ?? 0}`}
-                                type="button"
-                                onClick={() => setSelectedCitation(first)}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border bg-card px-2.5 py-1 text-xs transition-colors hover:bg-secondary",
-                                  selectedCitation != null &&
-                                    group.includes(selectedCitation) &&
-                                    "border-[var(--ok-accent)] bg-accent",
-                                  hoveredDocId === first.documentId &&
-                                    "border-[var(--ok-amber)] bg-[var(--ok-amber-soft)]",
-                                )}
-                              >
-                                <span className="flex items-center gap-0.5">
-                                  {group.map((citation, badgeIndex) => (
-                                    <span
-                                      key={citation.index ?? badgeIndex}
-                                      className="ok-num flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground"
-                                    >
-                                      {citation.index ?? badgeIndex + 1}
-                                    </span>
-                                  ))}
-                                </span>
-                                <span className="max-w-[180px] truncate">
-                                  {first.documentTitle}
-                                </span>
-                                {pages.length > 0 ? (
-                                  <span className="ok-num text-[10.5px] text-muted-foreground">
-                                    {copy.page}
-                                    {pages.join(",")}
-                                  </span>
-                                ) : null}
-                              </button>
-                            );
-                          });
-
-                        return (
-                          <div className="flex flex-col gap-1.5">
-                            {usedCitations.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {renderGroups(groupCitationsByDocument(usedCitations))}
-                              </div>
-                            ) : null}
-                            {unusedCitations.length > 0 ? (
-                              <details>
-                                <summary className="cursor-pointer select-none text-xs text-muted-foreground hover:text-foreground">
-                                  {copy.furtherMatches(unusedCitations.length)}
-                                </summary>
-                                <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                  {renderGroups(groupCitationsByDocument(unusedCitations))}
-                                </div>
-                              </details>
-                            ) : null}
-                          </div>
-                        );
-                      })()
-                    : null}
-                </div>
-              ))}
-
-              {/* The streaming turn */}
-              {pendingQuestion ? (
-                <div className="flex flex-col gap-3">
-                  <div className="ml-auto max-w-[75%] rounded-[var(--r-lg)] bg-primary px-3.5 py-2 text-sm text-primary-foreground">
-                    {pendingQuestion}
-                  </div>
-                  {stream.searchResults.length > 0 || stream.status === "searching" ? (
-                    <p className="ok-num flex items-center gap-2 text-xs text-muted-foreground">
-                      {copy.searched(stream.searchResults.length)}
-                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ok-green)]" />
-                    </p>
-                  ) : null}
-                  {stream.toolStatus ? (
-                    <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      {stream.toolStatus}
-                    </p>
-                  ) : null}
-                  {stream.answerText ? (
-                    <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground prose-p:my-1.5">
-                      {renderAnswer(stream.answerText, stream.citations)}
-                      <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-[var(--r-pill)] bg-[var(--ok-accent)]" />
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {[92, 88, 94, 60].map((width, skeletonIndex) => (
-                        <span
-                          key={skeletonIndex}
-                          className="h-2 animate-pulse rounded-[var(--r-pill)] bg-secondary"
-                          style={{ width: `${width}%` }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-
-        {/* Composer */}
-        <div className="flex-shrink-0 border-t px-4 py-3">
-          <div className="mx-auto max-w-3xl">
-            {followUps.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {followUps.map((entry) => (
-                  <Chip key={entry.query} onClick={() => ask(entry.query)}>
-                    {entry.query}
-                  </Chip>
-                ))}
-              </div>
-            ) : null}
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    if (!offlineReadOnly) ask(draft);
-                  }
-                }}
-                placeholder={copy.placeholder}
-                rows={1}
-                className="max-h-40 min-h-[38px] flex-1 resize-y rounded-[var(--r-md)] border border-input bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <Button
-                size="icon"
-                onClick={() => ask(draft)}
-                disabled={!draft.trim() || pendingQuestion !== null || offlineReadOnly}
-                aria-label={offlineReadOnly ? t("offline.askDisabled") : copy.sendHint}
-              >
-                {pendingQuestion ? <Loader2 className="animate-spin" /> : <Send />}
-              </Button>
-            </div>
-            <div className="mt-1.5 flex items-center justify-between">
-              <span className="ok-num text-[10.5px] text-muted-foreground">
-                {copy.sendHint}
-              </span>
-              {chatModel ? (
-                <span className="ok-num text-[10.5px] text-muted-foreground">
-                  {chatModel} · {copy.onlyText}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        ) : null}
       </div>
-
-      {/* Citation preview */}
-      <div className="hidden min-h-0 flex-col border-l xl:flex">
-        {selectedCitation ? (
-          <>
-            <div className="flex h-10 flex-shrink-0 items-center gap-2 border-b px-3.5">
-              <span className="ok-num flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                {selectedCitation.index ?? 1}
-              </span>
-              <span className="min-w-0 truncate text-sm font-semibold">
-                {selectedCitation.documentTitle}
-              </span>
-              {selectedCitation.pageFrom ? (
-                <span className="ok-num ml-auto flex-shrink-0 text-xs text-muted-foreground">
-                  {copy.page} {selectedCitation.pageFrom}
-                  {selectedCitation.pageTo &&
-                  selectedCitation.pageTo !== selectedCitation.pageFrom
-                    ? `–${selectedCitation.pageTo}`
-                    : ""}
-                </span>
-              ) : null}
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto bg-[var(--ok-sunken)] p-4">
-              {previewUrl ? (
-                <iframe
-                  key={selectedCitation.documentId}
-                  src={`${previewUrl}#page=${selectedCitation.pageFrom ?? 1}`}
-                  title={selectedCitation.documentTitle}
-                  className="h-full min-h-[320px] w-full rounded-[var(--r-sm)] border border-[var(--ok-paper-border)] bg-[var(--ok-paper)]"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
-              )}
-            </div>
-            <div className="flex-shrink-0 border-t px-3.5 py-3">
-              <p className="ok-eyebrow mb-1.5">{copy.citedPassage}</p>
-              <blockquote className="rounded-[var(--r-md)] border border-[var(--ok-highlight-rule)]/30 bg-[var(--ok-highlight)] px-3 py-2 text-sm text-[var(--ok-paper-ink)]">
-                „{selectedCitation.quote}"
-              </blockquote>
-              <div className="mt-2 flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    navigate({
-                      to: "/documents/$documentId",
-                      params: { documentId: selectedCitation.documentId },
-                      hash: selectedCitation.pageFrom
-                        ? `page-${selectedCitation.pageFrom}`
-                        : undefined,
-                    })
-                  }
-                >
-                  <FileSearch />
-                  {copy.findInDocument}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    void navigator.clipboard.writeText(selectedCitation.quote)
-                  }
-                >
-                  <Copy />
-                  {copy.copyQuote}
-                </Button>
-              </div>
-            </div>
-          </>
+      <div className="min-h-0 flex-1 overflow-auto bg-stage p-4">
+        {previewUrl ? (
+          <iframe
+            key={selectedCitation.documentId}
+            src={`${previewUrl}#page=${selectedCitation.pageFrom ?? 1}`}
+            title={selectedCitation.documentTitle}
+            className="h-full min-h-[320px] w-full rounded-md border border-paper-border bg-paper shadow-card"
+          />
         ) : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground">
-            {copy.privacyNote}
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            <Spinner />
           </div>
         )}
       </div>
+      <div className="shrink-0 border-t p-4">
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{copy.citedPassage}</p>
+        <blockquote className="rounded-lg bg-highlight px-3 py-2.5 text-sm text-highlight-foreground">
+          „{selectedCitation.quote}"
+        </blockquote>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              setCitationSheetOpen(false);
+              navigate({
+                to: "/documents/$documentId",
+                params: { documentId: selectedCitation.documentId },
+                hash: selectedCitation.pageFrom
+                  ? `page-${selectedCitation.pageFrom}`
+                  : undefined,
+              });
+            }}
+          >
+            <FileSearchIcon />
+            {copy.findInDocument}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void navigator.clipboard.writeText(selectedCitation.quote)}
+          >
+            <CopyIcon />
+            {copy.copyQuote}
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const composer = (
+    <form
+      ref={composerRef}
+      className="w-full"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (offlineReadOnly) return;
+        refocusComposer.current = true;
+        ask(draft);
+      }}
+    >
+      <InputGroup className="h-auto rounded-2xl bg-card shadow-raised has-[textarea:focus-visible]:border-ring has-[textarea:focus-visible]:ring-3 has-[textarea:focus-visible]:ring-ring/30 dark:bg-card">
+        <InputGroupTextarea
+          ref={composerInputRef}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (isEnterKey(event) && !event.shiftKey) {
+              event.preventDefault();
+              composerRef.current?.requestSubmit();
+            }
+          }}
+          placeholder={copy.placeholder}
+          aria-label={copy.placeholder}
+          rows={1}
+          className="max-h-40 min-h-12 px-4 pt-3.5 text-[0.95rem] md:text-[0.95rem]"
+        />
+        <InputGroupAddon align="block-end" className="gap-2 px-3 pb-2.5">
+          <InputGroupText className="min-w-0 truncate text-xs">
+            {chatModel ? `${chatModel} · ${copy.onlyText}` : copy.onlyText}
+          </InputGroupText>
+          <InputGroupText className="ml-auto hidden text-xs sm:inline">
+            {copy.sendHint}
+          </InputGroupText>
+          <InputGroupButton
+            type="submit"
+            size="icon-sm"
+            variant="default"
+            className="ml-auto rounded-full sm:ml-0"
+            disabled={!draft.trim() || pendingQuestion !== null || offlineReadOnly}
+            aria-label={offlineReadOnly ? t("offline.askDisabled") : copy.sendHint}
+          >
+            {pendingQuestion ? <LoaderCircleIcon className="animate-spin" /> : <ArrowUpIcon />}
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </form>
+  );
+
+  const suggestionRow = (items: string[]) => (
+    <div className="flex scroll-fade-x scrollbar-none gap-2 overflow-x-auto overscroll-x-contain">
+      {items.map((item) => (
+        <Button
+          key={item}
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-full font-normal text-muted-foreground shadow-none"
+          disabled={offlineReadOnly || pendingQuestion !== null}
+          onClick={() => ask(item)}
+        >
+          {item}
+        </Button>
+      ))}
+    </div>
+  );
+
+  const isEmpty = !active && !pendingQuestion;
+
+  useEffect(() => {
+    if (!refocusComposer.current) return;
+    refocusComposer.current = false;
+    composerInputRef.current?.focus();
+  }, [isEmpty]);
+
+  return (
+    <div className="flex h-full min-h-0">
+      {/* Conversations */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r bg-muted/40 md:flex">
+        <div className="shrink-0 p-3">
+          <Button variant="outline" className="w-full justify-start" onClick={startNewConversation}>
+            <PlusIcon />
+            {copy.newConversation}
+          </Button>
+        </div>
+        <p className="shrink-0 px-4.5 pb-1 text-xs font-medium text-muted-foreground">
+          {copy.recent}
+        </p>
+        <div className="min-h-0 flex-1 overflow-auto">{conversationList}</div>
+        <p className="shrink-0 border-t p-4 text-xs leading-relaxed text-muted-foreground">
+          {copy.privacyNote}
+        </p>
+      </aside>
+
+      {/* Thread */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {!isEmpty ? (
+          <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3 md:px-6">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground md:hidden"
+              aria-label={copy.history}
+              onClick={() => setHistoryOpen(true)}
+            >
+              <HistoryIcon />
+            </Button>
+            <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
+              {active?.title ?? pendingQuestion}
+            </h1>
+            {active ? (
+              <span className="num shrink-0 text-xs text-muted-foreground">
+                {copy.turns(active.turns.length)}
+              </span>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground md:hidden"
+              onClick={startNewConversation}
+            >
+              <PlusIcon />
+              {copy.newOne}
+            </Button>
+          </div>
+        ) : null}
+
+        {isEmpty ? (
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-auto bg-gradient-wash p-4 md:p-8">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="absolute top-3 left-3 text-muted-foreground md:hidden"
+              aria-label={copy.history}
+              onClick={() => setHistoryOpen(true)}
+            >
+              <HistoryIcon />
+            </Button>
+            <div className="flex w-full max-w-2xl flex-col gap-5">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <IconTile size="lg" tone="solid">
+                  <Sparkles />
+                </IconTile>
+                <h1 className="text-gradient text-3xl font-semibold tracking-tight md:text-4xl">
+                  {copy.emptyTitle}
+                </h1>
+                <p className="max-w-md text-muted-foreground">{copy.emptyBody}</p>
+              </div>
+              {composer}
+              {suggestionRow([
+                ...new Set([...followUps.map((entry) => entry.query), ...copy.starters]),
+              ])}
+            </div>
+          </div>
+        ) : (
+          <>
+            <MessageScrollerProvider key={activeId ?? "pending"} autoScroll>
+              <MessageScroller className="min-h-0 flex-1">
+                <MessageScrollerViewport>
+                  <MessageScrollerContent
+                    aria-busy={pendingQuestion !== null}
+                    className="mx-auto w-full max-w-3xl gap-7 px-4 py-6 md:px-6"
+                  >
+                    {(active?.turns ?? []).map((turn, turnIndex) => {
+                      // Legacy payloads have no `used` flag — treat them as used.
+                      const used = turn.citations.filter((c) => c.used !== false);
+                      const unused = turn.citations.filter((c) => c.used === false);
+                      return (
+                        <MessageScrollerItem
+                          key={turnIndex}
+                          messageId={`turn-${turnIndex}`}
+                          scrollAnchor
+                          className="flex flex-col gap-5"
+                        >
+                          <Message align="end">
+                            <MessageContent>
+                              <Bubble align="end">
+                                <BubbleContent className="rounded-2xl rounded-br-md bg-gradient-action px-4 py-2.5">
+                                  {turn.question}
+                                </BubbleContent>
+                              </Bubble>
+                            </MessageContent>
+                          </Message>
+                          <Message className="gap-3">
+                            <MessageAvatar className="self-start">
+                              <IconTile size="sm" tone="solid">
+                                <Sparkles />
+                              </IconTile>
+                            </MessageAvatar>
+                            <MessageContent className="min-w-0 flex-1 gap-3">
+                              <AnswerMarkdown
+                                text={turn.answer}
+                                citations={turn.citations}
+                                onCitationSelect={openCitation}
+                              />
+
+                              {turn.structuredRows && turn.structuredRows.length > 0 ? (
+                                <div className="overflow-hidden rounded-xl border bg-card shadow-card">
+                                  <div className="border-b bg-muted/60 px-3.5 py-2 text-xs font-medium text-muted-foreground">
+                                    {turn.structuredTitle ?? copy.document}
+                                  </div>
+                                  {turn.structuredRows.map((row, rowIndex) => (
+                                    <div
+                                      key={rowIndex}
+                                      className="flex items-center gap-3 border-b px-3.5 py-2 last:border-b-0"
+                                    >
+                                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                        {row.title}
+                                      </span>
+                                      <span className="num shrink-0 text-xs text-muted-foreground">
+                                        {row.date ?? ""}
+                                      </span>
+                                      <span className="num w-20 shrink-0 text-right text-sm">
+                                        {row.amount ?? "—"}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {used.length > 0 ? (
+                                <Sources
+                                  citations={used}
+                                  label={copy.usedSources(used.length)}
+                                  defaultOpen
+                                  selected={selectedCitation}
+                                  pageLabel={copy.page}
+                                  onSelect={openCitation}
+                                />
+                              ) : null}
+                              {unused.length > 0 ? (
+                                <Sources
+                                  citations={unused}
+                                  label={copy.furtherMatches(unused.length)}
+                                  selected={selectedCitation}
+                                  pageLabel={copy.page}
+                                  onSelect={openCitation}
+                                />
+                              ) : null}
+
+                              <MessageFooter>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="text-muted-foreground"
+                                  aria-label={copy.copyAnswer}
+                                  onClick={() => void navigator.clipboard.writeText(turn.answer)}
+                                >
+                                  <CopyIcon />
+                                </Button>
+                              </MessageFooter>
+                            </MessageContent>
+                          </Message>
+                        </MessageScrollerItem>
+                      );
+                    })}
+
+                    {/* The streaming turn */}
+                    {pendingQuestion ? (
+                      <MessageScrollerItem
+                        messageId="streaming"
+                        scrollAnchor
+                        className="flex flex-col gap-5"
+                      >
+                        <Message align="end">
+                          <MessageContent>
+                            <Bubble align="end">
+                              <BubbleContent className="rounded-2xl rounded-br-md bg-gradient-action px-4 py-2.5">
+                                {pendingQuestion}
+                              </BubbleContent>
+                            </Bubble>
+                          </MessageContent>
+                        </Message>
+                        <Message className="gap-3">
+                          <MessageAvatar className="self-start">
+                            <IconTile size="sm" tone="solid">
+                              <Sparkles />
+                            </IconTile>
+                          </MessageAvatar>
+                          <MessageContent className="min-w-0 flex-1 gap-3">
+                            <Trace>
+                              {stream.status === "searching" ? (
+                                <TraceLine status="running">
+                                  <TraceIcon>
+                                    <SearchIcon />
+                                  </TraceIcon>
+                                  <TraceTitle>{copy.searching}</TraceTitle>
+                                </TraceLine>
+                              ) : stream.searchResults.length > 0 ? (
+                                <TraceLine>
+                                  <TraceIcon>
+                                    <CircleCheckIcon />
+                                  </TraceIcon>
+                                  <TraceTitle>{copy.searched(stream.searchResults.length)}</TraceTitle>
+                                </TraceLine>
+                              ) : null}
+                              {stream.toolStatus ? (
+                                <TraceLine status="running">
+                                  <TraceIcon>
+                                    <LoaderCircleIcon className="animate-spin" />
+                                  </TraceIcon>
+                                  <TraceTitle>{stream.toolStatus}</TraceTitle>
+                                </TraceLine>
+                              ) : null}
+                            </Trace>
+                            {stream.answerText ? (
+                              <AnswerMarkdown
+                                text={stream.answerText}
+                                citations={stream.citations}
+                                onCitationSelect={openCitation}
+                              />
+                            ) : (
+                              <div className="flex flex-col gap-2 pt-1">
+                                {[92, 88, 94, 60].map((width) => (
+                                  <Skeleton
+                                    key={width}
+                                    className="h-3 rounded-full"
+                                    style={{ width: `${width}%` }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {stream.lowConfidence ? (
+                              <p className="flex items-center gap-1.5 text-xs text-warning">
+                                <TriangleAlertIcon className="size-3.5" />
+                                {copy.insufficient}
+                              </p>
+                            ) : null}
+                          </MessageContent>
+                        </Message>
+                      </MessageScrollerItem>
+                    ) : null}
+                  </MessageScrollerContent>
+                </MessageScrollerViewport>
+                <MessageScrollerButton />
+              </MessageScroller>
+            </MessageScrollerProvider>
+
+            {/* Composer */}
+            <div className="shrink-0 px-4 pt-1 pb-4 md:px-6">
+              <div className="mx-auto flex max-w-3xl flex-col gap-2.5">
+                {followUps.length > 0
+                  ? suggestionRow(followUps.map((entry) => entry.query))
+                  : null}
+                {composer}
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* The cited passage */}
+      {isWide && selectedCitation ? (
+        <aside className="flex w-[400px] shrink-0 flex-col border-l">{citationPanel}</aside>
+      ) : null}
+      {!isWide ? (
+        <Sheet open={citationSheetOpen && selectedCitation !== null} onOpenChange={setCitationSheetOpen}>
+          <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{copy.citedPassage}</SheetTitle>
+            </SheetHeader>
+            {citationPanel}
+          </SheetContent>
+        </Sheet>
+      ) : null}
+
+      {/* Conversations on narrow screens */}
+      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+        <SheetContent side="left" className="w-72 gap-0 p-0">
+          <SheetHeader className="border-b">
+            <SheetTitle>{copy.history}</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-auto">{conversationList}</div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

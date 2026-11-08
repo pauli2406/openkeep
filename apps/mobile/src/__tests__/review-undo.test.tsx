@@ -142,7 +142,7 @@ describe("confirming a review", () => {
   it("offers an undo and sends nothing yet", async () => {
     const view = await renderReview();
 
-    fireEvent.press(view.getByText("Confirm"));
+    fireEvent.press(view.getByText("Confirm and file"));
 
     await waitFor(() => expect(view.getByText("Undo")).toBeTruthy());
     expect(resolveCalls()).toHaveLength(0);
@@ -156,7 +156,7 @@ describe("confirming a review", () => {
   it("sends the resolve exactly once when the window closes", async () => {
     const view = await renderReview();
 
-    fireEvent.press(view.getByText("Confirm"));
+    fireEvent.press(view.getByText("Confirm and file"));
     await waitFor(() => expect(view.getByText("Undo")).toBeTruthy());
     view.unmount();
 
@@ -168,7 +168,7 @@ describe("confirming a review", () => {
   it("sends nothing at all when the confirm is taken back", async () => {
     const view = await renderReview();
 
-    fireEvent.press(view.getByText("Confirm"));
+    fireEvent.press(view.getByText("Confirm and file"));
     await waitFor(() => expect(view.getByText("Undo")).toBeTruthy());
     fireEvent.press(view.getByText("Undo"));
 
@@ -186,7 +186,7 @@ describe("confirming a review", () => {
     // one-item queue it appeared exactly never.
     const view = await renderReview();
 
-    fireEvent.press(view.getByText("Confirm"));
+    fireEvent.press(view.getByText("Confirm and file"));
 
     await waitFor(() => expect(view.getByText("Undo")).toBeTruthy());
   });
@@ -206,7 +206,7 @@ describe("the document card", () => {
 
     // Climb from inside the card to Swipeable's overflow-hidden container,
     // remembering the wrapper directly beneath it — the transform carrier.
-    let wrapper = view.getByText("Confirm");
+    let wrapper = view.getByText("Confirm and file");
     let container = wrapper.parent;
     while (container && StyleSheet.flatten(container.props.style)?.overflow !== "hidden") {
       wrapper = container;

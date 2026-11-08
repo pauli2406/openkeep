@@ -1,10 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import type {
   DesktopBridge,
   DesktopProfileSummary,
   DesktopProfilesSnapshot,
   DesktopSessionState,
 } from "../shared/desktop-api";
+import { DesktopAuthSurface } from "./desktop-auth-surface";
+import { ArrowRightIcon, ChevronRightIcon } from "./desktop-icons";
 
 type ConnectionScreenProps = {
   bridge?: DesktopBridge;
@@ -139,56 +147,44 @@ export function ConnectionScreen({
 
   if (unavailable && !editing) {
     return (
-      <main className="desktop-connect-shell">
-        <section className="desktop-connect-panel" aria-labelledby="connect-title">
-          <div className="desktop-connect-mark" aria-hidden="true">
-            <img src="/brand/logo-mark.svg" alt="" />
-          </div>
-          <div className="desktop-connect-copy">
-            <p className="desktop-connect-eyebrow">ARCHIVE UNAVAILABLE</p>
-            <h1 id="connect-title">We could not reach {unavailable.profile.label}</h1>
-            <p>{message || unavailable.message}</p>
-          </div>
-          <div className="desktop-connect-actions">
-            <button type="button" onClick={() => void retry()} disabled={status === "checking"}>
-              {status === "checking" ? "Retrying…" : "Retry connection"}
-            </button>
-            <button type="button" className="desktop-secondary-button" onClick={() => setEditing(true)}>
-              Edit connection
-            </button>
-          </div>
-          <footer>
-            <span className="desktop-connect-status-dot desktop-connect-status-dot--warning" aria-hidden="true" />
-            <span>Credentials remain encrypted for retry</span>
-          </footer>
-        </section>
-      </main>
+      <DesktopAuthSurface
+        labelledBy="connect-title"
+        title={<>We could not reach {unavailable.profile.label}</>}
+        description={message || unavailable.message}
+        footerTone="warning"
+        footer={<span>Credentials remain encrypted for retry</span>}
+      >
+        <div className="grid grid-cols-2 gap-2.5">
+          <Button type="button" size="lg" onClick={() => void retry()} disabled={status === "checking"}>
+            {status === "checking" ? <Spinner /> : null}
+            {status === "checking" ? "Retrying…" : "Retry connection"}
+          </Button>
+          <Button type="button" variant="outline" size="lg" onClick={() => setEditing(true)}>
+            Edit connection
+          </Button>
+        </div>
+      </DesktopAuthSurface>
     );
   }
 
   return (
-    <main className="desktop-connect-shell">
-      <section className="desktop-connect-panel" aria-labelledby="connect-title">
-        <div className="desktop-connect-mark" aria-hidden="true">
-          <img src="/brand/logo-mark.svg" alt="" />
-        </div>
-
-        <div className="desktop-connect-copy">
-          <p className="desktop-connect-eyebrow">OPENKEEP · DESKTOP</p>
-          <h1 id="connect-title">
-            {editingProfile ? "Edit archive connection" : "Connect your archive"}
-          </h1>
-          <p>
-            Use an API token from your OpenKeep profile. Credentials are encrypted by
-            your operating system and never enter the web interface.
-          </p>
-        </div>
-
-        <form className="desktop-connect-form" onSubmit={(event) => void connect(event)}>
-          <label htmlFor="profile-label">Profile name</label>
-          <div className="desktop-connect-control">
-            <span aria-hidden="true">Aa</span>
-            <input
+    <DesktopAuthSurface
+      labelledBy="connect-title"
+      title={editingProfile ? "Edit archive connection" : "Connect your archive"}
+      description="Use an API token from your OpenKeep profile. Credentials are encrypted by your operating system and never enter the web interface."
+      footer={
+        <>
+          <span>{version || "Desktop runtime"}</span>
+          <span aria-hidden="true">·</span>
+          <span>OS-encrypted credentials</span>
+        </>
+      }
+    >
+      <form onSubmit={(event) => void connect(event)}>
+        <FieldGroup className="gap-4">
+          <Field>
+            <FieldLabel htmlFor="profile-label">Profile name</FieldLabel>
+            <Input
               id="profile-label"
               name="profile-label"
               value={label}
@@ -196,13 +192,13 @@ export function ConnectionScreen({
               placeholder="Home archive"
               maxLength={120}
               disabled={status === "checking"}
+              className="h-10"
             />
-          </div>
+          </Field>
 
-          <label htmlFor="server-url">Archive address</label>
-          <div className="desktop-connect-control">
-            <span aria-hidden="true">↗</span>
-            <input
+          <Field>
+            <FieldLabel htmlFor="server-url">Archive address</FieldLabel>
+            <Input
               id="server-url"
               name="server-url"
               type="url"
@@ -217,18 +213,24 @@ export function ConnectionScreen({
               }}
               placeholder="https://archive.example.com"
               disabled={status === "checking"}
+              className="h-10"
             />
-          </div>
+          </Field>
 
-          <div className="desktop-connect-label-row">
-            <label htmlFor="api-token">API token</label>
-            <button type="button" onClick={() => setRevealToken((current) => !current)}>
-              {revealToken ? "Hide" : "Reveal"}
-            </button>
-          </div>
-          <div className="desktop-connect-control">
-            <span aria-hidden="true">⌁</span>
-            <input
+          <Field>
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabel htmlFor="api-token">API token</FieldLabel>
+              <Button
+                type="button"
+                variant="link"
+                size="xs"
+                className="h-auto px-0 text-brand"
+                onClick={() => setRevealToken((current) => !current)}
+              >
+                {revealToken ? "Hide" : "Reveal"}
+              </Button>
+            </div>
+            <Input
               id="api-token"
               name="api-token"
               type={revealToken ? "text" : "password"}
@@ -240,84 +242,95 @@ export function ConnectionScreen({
               placeholder="Paste an OpenKeep API token"
               disabled={status === "checking"}
               required
+              className="h-10 font-mono placeholder:font-sans"
             />
-          </div>
+          </Field>
 
-          <details className="desktop-connect-advanced" open={cfOpen} onToggle={(event) => setCfOpen(event.currentTarget.open)}>
-            <summary>Cloudflare Access <span>Optional</span></summary>
-            <div className="desktop-connect-advanced-fields">
-              <label htmlFor="cf-client-id">Client ID</label>
-              <input
-                id="cf-client-id"
-                value={cfAccessClientId}
-                onChange={(event) => setCfAccessClientId(event.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-                disabled={status === "checking"}
-                placeholder="xxxxxxxx.access"
-              />
-              <label htmlFor="cf-client-secret">Client secret</label>
-              <input
-                id="cf-client-secret"
-                type="password"
-                value={cfAccessClientSecret}
-                onChange={(event) => setCfAccessClientSecret(event.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-                disabled={status === "checking"}
-              />
-            </div>
-          </details>
+          <Collapsible open={cfOpen} onOpenChange={setCfOpen} className="rounded-lg border">
+            <CollapsibleTrigger className="group/advanced flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50">
+              <ChevronRightIcon className="size-4 text-muted-foreground transition-transform group-data-open/advanced:rotate-90" />
+              Cloudflare Access
+              <Badge variant="secondary" className="ml-auto font-normal">
+                Optional
+              </Badge>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <FieldGroup className="gap-3 border-t p-3">
+                <Field>
+                  <FieldLabel htmlFor="cf-client-id">Client ID</FieldLabel>
+                  <Input
+                    id="cf-client-id"
+                    value={cfAccessClientId}
+                    onChange={(event) => setCfAccessClientId(event.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    disabled={status === "checking"}
+                    placeholder="xxxxxxxx.access"
+                    className="h-9 font-mono"
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="cf-client-secret">Client secret</FieldLabel>
+                  <Input
+                    id="cf-client-secret"
+                    type="password"
+                    value={cfAccessClientSecret}
+                    onChange={(event) => setCfAccessClientSecret(event.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    disabled={status === "checking"}
+                    className="h-9 font-mono"
+                  />
+                </Field>
+              </FieldGroup>
+            </CollapsibleContent>
+          </Collapsible>
 
           {message ? (
-            <p id="connection-error" className="desktop-connect-error" role="alert">
+            <p id="connection-error" className="text-sm text-danger" role="alert">
               {message}
             </p>
           ) : (
-            <p id="connection-note" className="desktop-connect-note">
+            <p id="connection-note" className="text-xs text-muted-foreground">
               HTTPS is recommended. Localhost HTTP is available for development.
             </p>
           )}
 
-          <button type="submit" disabled={status === "checking"}>
-            <span>
+          <div className="flex flex-col gap-2">
+            <Button type="submit" size="lg" className="w-full" disabled={status === "checking"}>
+              {status === "checking" ? <Spinner /> : null}
               {status === "checking"
                 ? "Verifying archive"
                 : allowInsecureHttp
                   ? "Connect over plaintext HTTP"
                   : "Connect archive"}
-            </span>
-            <span aria-hidden="true">{status === "checking" ? "···" : "→"}</span>
-          </button>
-          {editingProfile && label.trim() !== editingProfile.label ? (
-            <button
-              type="button"
-              className="desktop-secondary-button"
-              onClick={() => void renameProfile()}
-              disabled={status === "checking" || !label.trim()}
-            >
-              Save profile name only
-            </button>
-          ) : null}
-          {onCancel ? (
-            <button
-              type="button"
-              className="desktop-secondary-button"
-              onClick={onCancel}
-              disabled={status === "checking"}
-            >
-              Cancel
-            </button>
-          ) : null}
-        </form>
-
-        <footer>
-          <span className="desktop-connect-status-dot" aria-hidden="true" />
-          <span>{version || "Desktop runtime"}</span>
-          <span aria-hidden="true">·</span>
-          <span>OS-encrypted credentials</span>
-        </footer>
-      </section>
-    </main>
+              {status === "checking" ? null : <ArrowRightIcon className="size-4" />}
+            </Button>
+            {editingProfile && label.trim() !== editingProfile.label ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => void renameProfile()}
+                disabled={status === "checking" || !label.trim()}
+              >
+                Save profile name only
+              </Button>
+            ) : null}
+            {onCancel ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={onCancel}
+                disabled={status === "checking"}
+              >
+                Cancel
+              </Button>
+            ) : null}
+          </div>
+        </FieldGroup>
+      </form>
+    </DesktopAuthSurface>
   );
 }

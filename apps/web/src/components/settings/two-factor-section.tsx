@@ -1,33 +1,7 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ArchiveImportResult,
-  ArchiveSnapshot,
-  ArchiveSnapshot as ArchiveSnapshotType,
-  Correspondent,
-  Document,
-  DocumentType,
-  HealthProvidersResponse,
-  HealthResponse,
-  ProcessingStatusResponse,
-  ProviderConfig,
-  ReadinessResponse,
-  Tag,
-  WatchFolderScanResponse,
-} from "@openkeep/types";
+import { Check, Copy, ShieldCheck, ShieldOff } from "lucide-react";
 import { authFetch, readApiErrorMessage } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,31 +11,25 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Copy,
-  Shield,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  } from "lucide-react";
+import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/hooks/use-auth";
-import { useI18n, type AppLanguage } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
+import { SecretBlock, SectionCard, ShownOnceNote, StatusBadge } from "./shared";
 
-async function postAuthJson(path: string, body: unknown): Promise<Record<string, unknown>> {
+async function postAuthJson(
+  path: string,
+  body: unknown,
+  fallbackError: string,
+): Promise<Record<string, unknown>> {
   const res = await authFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await readApiErrorMessage(res, "Request failed"));
+    throw new Error(await readApiErrorMessage(res, fallbackError));
   }
   try {
     return (await res.json()) as Record<string, unknown>;
@@ -72,6 +40,7 @@ async function postAuthJson(path: string, body: unknown): Promise<Record<string,
 
 export function TwoFactorSection() {
   const auth = useAuth();
+  const { t } = useI18n();
   const enabled = auth.user?.twoFactorEnabled ?? false;
 
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -90,12 +59,13 @@ export function TwoFactorSection() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [codesCopied, setCodesCopied] = useState(false);
 
   async function startEnrollment() {
     setError("");
     setBusy(true);
     try {
-      const data = await postAuthJson("/api/auth/2fa/setup", {});
+      const data = await postAuthJson("/api/auth/2fa/setup", {}, t("twoFactor.requestFailed"));
       setSetupData({
         secret: String(data.secret),
         qrDataUrl: String(data.qrDataUrl),
@@ -104,7 +74,7 @@ export function TwoFactorSection() {
       setStep("enrolling");
       setEnrollOpen(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start enrollment");
+      setError(err instanceof Error ? err.message : t("twoFactor.startFailed"));
     } finally {
       setBusy(false);
     }
@@ -119,13 +89,13 @@ export function TwoFactorSection() {
       const data = await postAuthJson("/api/auth/2fa/enable", {
         enrollmentToken: setupData.enrollmentToken,
         code: code.trim(),
-      });
+      }, t("twoFactor.requestFailed"));
       setRecoveryCodes((data.recoveryCodes as string[]) ?? []);
       setStep("codes");
       setCode("");
       await auth.refreshUser();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid authentication code");
+      setError(err instanceof Error ? err.message : t("twoFactor.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -139,13 +109,13 @@ export function TwoFactorSection() {
       await postAuthJson("/api/auth/2fa/disable", {
         password,
         code: disableCode.trim(),
-      });
+      }, t("twoFactor.requestFailed"));
       await auth.refreshUser();
       setDisableOpen(false);
       setPassword("");
       setDisableCode("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to disable two-factor");
+      setError(err instanceof Error ? err.message : t("twoFactor.disableFailed"));
     } finally {
       setBusy(false);
     }
@@ -158,6 +128,7 @@ export function TwoFactorSection() {
       setSetupData(null);
       setCode("");
       setRecoveryCodes([]);
+      setCodesCopied(false);
       setError("");
     }
   }
@@ -172,29 +143,20 @@ export function TwoFactorSection() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Shield className="h-5 w-5" />
-          Two-Factor Authentication
-        </CardTitle>
-        <CardDescription>
-          Protect your account with a time-based one-time code (TOTP) from an
-          authenticator app in addition to your password.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            {enabled ? (
-              <Badge variant="success">Enabled</Badge>
-            ) : (
-              <Badge variant="secondary">Disabled</Badge>
-            )}
+    <SectionCard
+      headingLevel="h2"
+      title={t("twoFactor.title")}
+      description={t("twoFactor.description")}
+      icon={enabled ? <ShieldCheck /> : <ShieldOff />}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
+            <StatusBadge tone={enabled ? "ok" : "muted"}>
+              {enabled ? t("twoFactor.enabled") : t("twoFactor.disabled")}
+            </StatusBadge>
             <span className="text-sm text-muted-foreground">
-              {enabled
-                ? "Two-factor authentication is active on your account."
-                : "Add a second factor for stronger protection."}
+              {enabled ? t("twoFactor.enabledHint") : t("twoFactor.disabledHint")}
             </span>
           </div>
 
@@ -202,42 +164,42 @@ export function TwoFactorSection() {
             <Dialog open={disableOpen} onOpenChange={handleDisableOpenChange}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                  Disable
+                  {t("twoFactor.disable")}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Disable two-factor authentication</DialogTitle>
-                  <DialogDescription>
-                    Confirm with your password and a current code (or a recovery code).
-                  </DialogDescription>
+                  <DialogTitle>{t("twoFactor.disableTitle")}</DialogTitle>
+                  <DialogDescription>{t("twoFactor.disableDescription")}</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={confirmDisable} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="disable-password">Password</Label>
-                    <Input
-                      id="disable-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="disable-code">Authentication code</Label>
-                    <Input
-                      id="disable-code"
-                      autoComplete="one-time-code"
-                      placeholder="123456"
-                      value={disableCode}
-                      onChange={(e) => setDisableCode(e.target.value)}
-                      required
-                    />
-                  </div>
-                  {error && <p className="text-sm text-destructive">{error}</p>}
+                <form onSubmit={confirmDisable} className="flex flex-col gap-5">
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="disable-password">{t("twoFactor.password")}</FieldLabel>
+                      <Input
+                        id="disable-password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="disable-code">{t("twoFactor.authCode")}</FieldLabel>
+                      <Input
+                        id="disable-code"
+                        autoComplete="one-time-code"
+                        placeholder="123456"
+                        value={disableCode}
+                        onChange={(e) => setDisableCode(e.target.value)}
+                        required
+                      />
+                    </Field>
+                  </FieldGroup>
+                  {error ? <FieldError>{error}</FieldError> : null}
                   <DialogFooter>
                     <Button type="submit" variant="destructive" disabled={busy}>
-                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disable"}
+                      {busy ? <Spinner /> : t("twoFactor.disable")}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -245,103 +207,96 @@ export function TwoFactorSection() {
             </Dialog>
           ) : (
             <Button size="sm" onClick={() => void startEnrollment()} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enable"}
+              {busy ? <Spinner /> : t("twoFactor.enable")}
             </Button>
           )}
         </div>
 
-        {!enabled && error && !enrollOpen && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {!enabled && error && !enrollOpen ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
 
-        <Dialog open={enrollOpen} onOpenChange={handleEnrollOpenChange}>
-          <DialogContent>
-            {step === "enrolling" && setupData ? (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Set up two-factor authentication</DialogTitle>
-                  <DialogDescription>
-                    Scan the QR code with your authenticator app, then enter the
-                    6-digit code to confirm.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="flex justify-center">
-                    {/* QR is a data URL generated by the server */}
-                    <img
-                      src={setupData.qrDataUrl}
-                      alt="TOTP QR code"
-                      className="h-48 w-48 rounded-md border bg-card p-2"
+      <Dialog open={enrollOpen} onOpenChange={handleEnrollOpenChange}>
+        <DialogContent>
+          {step === "enrolling" && setupData ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("twoFactor.setupTitle")}</DialogTitle>
+                <DialogDescription>{t("twoFactor.setupDescription")}</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-5">
+                <div className="flex justify-center">
+                  {/* QR is a data URL generated by the server. It stays on paper
+                      in dark mode, because scanners need the contrast. */}
+                  <img
+                    src={setupData.qrDataUrl}
+                    alt={t("twoFactor.qrAlt")}
+                    className="size-48 rounded-lg border border-paper-border bg-paper p-2"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t("twoFactor.manualSecret")}
+                  </p>
+                  <SecretBlock value={setupData.secret} />
+                </div>
+                <form onSubmit={confirmEnable} className="flex flex-col gap-5">
+                  <Field>
+                    <FieldLabel htmlFor="enable-code">{t("twoFactor.codeLabel")}</FieldLabel>
+                    <Input
+                      id="enable-code"
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      required
                     />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Or enter this secret manually
-                    </Label>
-                    <code className="block break-all rounded-md border bg-muted p-2 text-xs">
-                      {setupData.secret}
-                    </code>
-                  </div>
-                  <form onSubmit={confirmEnable} className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="enable-code">6-digit code</Label>
-                      <Input
-                        id="enable-code"
-                        autoComplete="one-time-code"
-                        placeholder="123456"
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        required
-                      />
-                    </div>
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-                    <DialogFooter>
-                      <Button type="submit" disabled={busy}>
-                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm & enable"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
+                  </Field>
+                  {error ? <FieldError>{error}</FieldError> : null}
+                  <DialogFooter>
+                    <Button type="submit" disabled={busy}>
+                      {busy ? <Spinner /> : t("twoFactor.confirmEnable")}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </div>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>{t("twoFactor.recoveryTitle")}</DialogTitle>
+                <DialogDescription>{t("twoFactor.recoveryDescription")}</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-brand-soft p-3 font-mono text-sm text-brand-soft-foreground ring-1 ring-brand/25">
+                  {recoveryCodes.map((rc) => (
+                    <span key={rc}>{rc}</span>
+                  ))}
                 </div>
-              </>
-            ) : (
-              <>
-                <DialogHeader>
-                  <DialogTitle>Save your recovery codes</DialogTitle>
-                  <DialogDescription>
-                    Store these somewhere safe. Each code works once and lets you
-                    sign in if you lose access to your authenticator.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted p-3 font-mono text-sm">
-                    {recoveryCodes.map((rc) => (
-                      <span key={rc}>{rc}</span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2 rounded-md border border-[var(--ok-amber)]/30 bg-[var(--ok-amber-soft)] px-3 py-2 text-sm text-[var(--ok-amber)]">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    These codes are shown only once.
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigator.clipboard.writeText(recoveryCodes.join("\n"))}
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy codes
-                  </Button>
-                </div>
-                <DialogFooter>
-                  <Button onClick={() => handleEnrollOpenChange(false)}>
-                    <CheckCircle className="h-4 w-4" />
-                    Done
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+                <ShownOnceNote>{t("twoFactor.recoveryOnce")}</ShownOnceNote>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(recoveryCodes.join("\n"));
+                    setCodesCopied(true);
+                  }}
+                >
+                  {codesCopied ? <Check /> : <Copy />}
+                  {codesCopied ? t("twoFactor.copied") : t("twoFactor.copyCodes")}
+                </Button>
+                <Button onClick={() => handleEnrollOpenChange(false)}>
+                  {t("settings.done")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </SectionCard>
   );
 }

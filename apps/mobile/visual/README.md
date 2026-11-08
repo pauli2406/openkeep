@@ -21,8 +21,8 @@ pnpm --filter @openkeep/mobile test:visual:local     # skip the container (see b
 - the modules with no browser implementation → small stubs: the PDF view, the OS
   scanner, the file viewer, blob storage, SQLite, secure storage, `pdf-lib`.
 
-Playwright then walks the app the way a person would — tapping tabs, rows, the
-avatar, the scan button — and captures each screen.
+Playwright then walks the app the way a person would — opening the menu, tapping rows,
+the import button — and captures each screen.
 
 ## What a green run means
 

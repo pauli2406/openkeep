@@ -1,9 +1,9 @@
 /**
  * OpenKeep mobile theming (#104, shared in #124)
  *
- * The palette itself now lives in `@openkeep/tokens`, which the web client
- * generates its `--ok-*` properties from — so a colour changes in one place and
- * both clients follow. This module is what turns it into React Native styles.
+ * The palette lives in `@openkeep/tokens`, generated from the web client's
+ * `theme.css`, so a colour changes in one place and both clients follow. This
+ * module is what turns it into React Native styles.
  *
  * Colours are read through `useColors()` / `createThemedStyles()` so a theme
  * change re-renders. A module-level `import { colors }` cannot do that, which is
@@ -33,6 +33,28 @@ import { palettes, radii, type Palette, type ThemeName } from "@openkeep/tokens"
 export { palettes, radii };
 export type { ThemeName };
 export type Colors = Palette;
+
+/** Soft blue-tinted elevation, the web's `shadow-card`. */
+export function cardShadow(c: Colors): ViewStyle {
+  return {
+    shadowColor: c.shadow,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  };
+}
+
+/** The web's `shadow-raised`, for sheets and anything floating. */
+export function raisedShadow(c: Colors): ViewStyle {
+  return {
+    shadowColor: c.shadow,
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  };
+}
 
 /** What the user chose. `system` follows the OS. */
 export type ThemePreference = ThemeName | "system";

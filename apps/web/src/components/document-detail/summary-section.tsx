@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
+import { IconTile } from "@/components/layout/page";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { authFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { consumeJsonSseResponse, isAbortError } from "@/lib/sse-stream";
@@ -140,24 +144,23 @@ export function DocumentSummarySection({
   const streaming = state.status === "loading" || state.status === "streaming";
 
   return (
-    <div className="space-y-2 rounded-md border p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium">
+    <section className="flex flex-col gap-3 rounded-xl bg-brand-soft/60 p-4">
+      <div className="flex items-center gap-2.5">
+        <IconTile size="sm" tone="solid">
+          <Sparkles />
+        </IconTile>
+        <h3 className="min-w-0 flex-1 truncate text-sm font-medium">
           {t("documentDetail.generatedSummary")}
-        </p>
+        </h3>
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-xs"
+          size="xs"
+          className="text-muted-foreground"
           disabled={streaming}
           onClick={() => void streamSummary(true)}
         >
-          {streaming ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RotateCcw className="h-3.5 w-3.5" />
-          )}
+          {streaming ? <Spinner /> : <RotateCcw />}
           {streaming
             ? t("documentDetail.summaryGenerating")
             : t("documentDetail.summaryRegenerate")}
@@ -165,26 +168,27 @@ export function DocumentSummarySection({
       </div>
 
       {state.error ? (
-        <div className="flex items-start gap-2 rounded-md bg-[var(--ok-amber-soft)] px-2.5 py-2 text-xs text-[var(--ok-amber)]">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>{state.error}</span>
-        </div>
+        <Alert variant="destructive">
+          <AlertTriangle />
+          <AlertDescription>{state.error}</AlertDescription>
+        </Alert>
       ) : null}
 
       {state.text ? (
-        <div className="prose prose-sm max-w-none text-sm prose-p:my-1 prose-ul:my-1">
+        <div className="typeset text-sm">
           <Markdown>{state.text}</Markdown>
           {state.status === "streaming" ? (
-            <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-full bg-[var(--ok-accent)]" />
+            <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-full bg-brand" />
           ) : null}
         </div>
       ) : streaming ? (
         <div
-          className="space-y-1.5"
+          className="flex flex-col gap-2"
           aria-label={t("documentDetail.summaryGenerating")}
         >
-          <span className="block h-2 animate-pulse rounded bg-secondary" />
-          <span className="block h-2 w-4/5 animate-pulse rounded bg-secondary" />
+          <Skeleton className="h-3 w-full rounded-full" />
+          <Skeleton className="h-3 w-11/12 rounded-full" />
+          <Skeleton className="h-3 w-3/5 rounded-full" />
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">—</p>
@@ -196,6 +200,6 @@ export function DocumentSummarySection({
           {state.model ? ` / ${state.model}` : ""}
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

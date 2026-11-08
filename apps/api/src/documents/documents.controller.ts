@@ -124,6 +124,7 @@ export class DocumentsController {
           uncategorized: query.uncategorized,
           amountMin: query.amountMin,
           amountMax: query.amountMax,
+          openTasksOnly: query.openTasksOnly,
         },
         sort: query.sort,
         direction: query.direction,

@@ -197,7 +197,7 @@ describe("desktop shared-app parity", () => {
 
     await user.click(screen.getByRole("button", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(/2 selected items/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: /\b2\b/ })).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: /delete now/i }));
 
     await waitFor(() => {
@@ -237,10 +237,10 @@ describe("desktop shared-app parity", () => {
     const { user } = renderDesktopArchive({ route: "/documents" });
     expect(await screen.findByRole("heading", { name: "Documents" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Timeline" }));
+    await user.click(screen.getByRole("radio", { name: "Timeline" }));
     expect(await screen.findByRole("button", { name: /aug 2026/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Groups" }));
+    await user.click(screen.getByRole("radio", { name: "Groups" }));
     const group = (await screen.findAllByRole("button", { name: /acme corp/i })).find(
       (candidate) => candidate.textContent?.includes("Invoice"),
     );
@@ -358,15 +358,17 @@ describe("desktop shared-app parity", () => {
     );
 
     const { user } = renderDesktopArchive({ route: "/documents" });
-    expect(await screen.findByText("Loading filtered documents")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("status", { name: "Loading documents" }),
+    ).toBeInTheDocument();
 
     expect(
-      await screen.findByText(/Failed to load the filtered archive list/),
+      await screen.findByText(/Could not load the documents/),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(
-      await screen.findByText("No documents match the current explorer filters."),
+      await screen.findByText("No documents match the current filters."),
     ).toBeInTheDocument();
   });
 

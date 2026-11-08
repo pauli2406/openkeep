@@ -121,10 +121,9 @@ Chromium build these screens render bit-identical between runs; a percentage
 tolerance was loose enough that changing the entire accent colour still passed
 on most screens.
 
-**Requires network access.** `index.css` pulls Public Sans and IBM Plex Mono
-from Google Fonts, and text metrics drive every box on the page. The suite
-asserts the font actually loaded and fails with that explanation rather than
-producing thousands of unexplained pixel diffs.
+Text metrics drive every box on the page, so the suite asserts that the bundled
+Geist font actually loaded, and fails with that explanation rather than producing
+thousands of unexplained pixel diffs.
 
 Baselines are captured on Linux. Another platform rasterises text differently
 and will diff on every snapshot.
@@ -238,6 +237,8 @@ going wrong:
 | `passage` | prefix matching stays opt-in for chat quotes; review evidence needs the full value; the cited page is searched first |
 | `i18n` | both locales carry the same keys, once each, and every literal `t()` key resolves |
 | `style-invariants` | no colour literals, no `fontWeight`, only bundled font faces, radii on the scale |
+| `auth-session` | password sessions refresh everywhere, one refresh at a time, and only a rejected token ends the session |
+| `review-queue`, `import-queue` | the whole review queue, its bulk rule, and each upload's stages |
 | `primitives` | `Row`, `Button`, `Screen`, `Notice`, `Pill` resolve to palette tokens in **both** themes; no tap target under 44pt at any density |
 | `review-outbox` | a confirm held for the undo window survives a kill: written down before the window opens, replayed once on the next launch, kept when the send fails, refused for another account, and dropped once too old to be meaningful |
 | `review-undo` | confirming a review is held for the undo window and sent once; taking it back sends nothing at all |

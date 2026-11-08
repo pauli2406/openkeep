@@ -4,6 +4,7 @@ import { LanguagePreferencesSection } from "@/components/settings/language-secti
 import { ArchiveOperationsSection } from "@/components/settings/archive-section";
 import { SystemHealthSection } from "@/components/settings/health-section";
 import { ProcessingActivitySection } from "@/components/settings/processing-section";
+import { SettingsHeading } from "@/components/settings/shared";
 
 export const Route = createFileRoute("/settings/")({
   component: GeneralSettingsPage,
@@ -12,14 +13,15 @@ export const Route = createFileRoute("/settings/")({
 function GeneralSettingsPage() {
   const { t } = useI18n();
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-5">
-      {/* Section cards render a div title, so each destination needs its own
-          page heading for assistive technology. */}
-      <h1 className="ok-page-title">{t("settingsNav.general")}</h1>
+    <div className="flex flex-col gap-5">
+      <SettingsHeading
+        title={t("settingsNav.general")}
+        description={t("settingsNav.generalDescription")}
+      />
       <LanguagePreferencesSection />
-      <ArchiveOperationsSection />
-      <ProcessingActivitySection />
       <SystemHealthSection />
+      <ProcessingActivitySection />
+      <ArchiveOperationsSection />
     </div>
   );
 }

@@ -1,21 +1,28 @@
 ---
 title: Mobile App
-description: How the redesigned OpenKeep mobile app is organised, what each tab does, and what still works without a connection.
+description: How the OpenKeep mobile app is organised, what it adds to the web app, and what still works without a connection.
 ---
 
 # Mobile App
 
-The mobile app is a companion to the web app, not a copy of it. It is built for
-the three things you do away from a desk: capture a document, clear the review
-queue, and look something up.
+The mobile app looks and works like the web app at phone width: the same screens,
+the same features and the same blue-and-white design. On top of that it adds what only
+a phone can do: the document scanner, swipe gestures and an encrypted offline copy.
 
-The screens described here match the redesigned app. Where a name differs from
-the web app it is called out.
+Where this page does not describe a screen in detail, the
+[Core Workflows](./core-workflows.md) and [Settings and Admin](./settings-and-admin.md)
+guides for the web app apply.
 
 ## Connecting
 
-On first run the app asks for your archive URL and an API token. Create the
-token in the web app under `Settings` -> `API tokens`.
+On first run the app asks for your archive URL, then your email and password. If two-factor
+authentication is on, it asks for the code next, and a recovery code works there too.
+
+You can sign in with an API token instead. Create one under `Profile` -> `API tokens`. If
+your archive sits behind Cloudflare Access, the connect screen also takes its service token.
+
+A new archive has no owner yet. Choose `Need to set up?` to create the owner and walk through
+the same setup as on the web.
 
 If the archive cannot be reached and you have opened documents on this device
 before, the connect screen also offers `Open the offline copy`. That row only
@@ -23,51 +30,53 @@ appears when there is a signed-in session to restore; after a sign-out or an
 expired token you have to connect again, even if cached documents are still on
 the device.
 
-## The Five Places
+## Getting Around
+
+The button at the top left opens the menu, with the same destinations as the web app's
+sidebar:
 
 | Where | What it is for |
 |---|---|
-| Today | What needs attention: due tasks, review count, what arrived |
-| Documents | The archive as a dense list with filter chips and search |
-| Review | One uncertain document at a time, confirm or skip |
+| Today | The queue of open deadlines, filtered by the tiles above it |
+| Documents | The archive as a list, timeline or groups, with filters and bulk actions |
+| Review | One uncertain document at a time |
+| Taxes | One calendar year, assembled the way an accountant thinks |
 | Chat | Questions about the whole archive, with citations |
-| Scan button | Capture or import a new document |
+| Settings | Language, appearance, taxonomy, AI providers, system health, archive |
+| Profile | Your name at the bottom of the menu: two-factor, API tokens, export, sign out |
 
-`Chat` is the mobile name for what the web app calls `Search`. It is the same
-hybrid and structured search, presented as a conversation.
+The header stays on every one of them. Its search field opens the omnibar, which works as on
+the web. The sun or moon switches the theme, and the blue button opens import.
 
-Settings sits behind the avatar in the `Today` bar rather than in the tab bar.
-
-The scan button floats above the tab bar on `Today` and `Documents`. It is
-hidden on `Review`, where confirm and skip are the primary actions, and on
-`Chat`, where the message composer occupies that corner.
+Swipe a task on `Today` to the left to complete it. Completing a task also resolves its review.
 
 ## Capture a Document
 
-The scan button opens the operating system's own document scanner — the same one
-your camera app uses — so edge detection, perspective correction and multi-page
-capture behave the way you already expect. The app never shows its own
-viewfinder.
+The import screen offers `Scan` and `Choose files`. `Scan` opens the operating system's own
+document scanner, so edge detection, perspective correction and multi-page capture behave the
+way you already expect.
 
-After scanning you land on the import draft:
+Scanned pages become one PDF. Below them sits an optional title; everything else is read off
+the document. One chosen file waits on this draft as well, while several files upload straight
+away.
 
-- captured pages as a list, with a thumbnail and size for each
-- an optional title; everything else is read off the document
-- `Images from files` and `Choose a PDF` for importing instead of scanning
-- one primary `Upload` action, pinned to the bottom
-
-Multiple captured pages are combined into a single PDF before upload.
+Each upload gets its own row showing how far it has come: upload, OCR, extraction, embedding.
+A failed row can be retried. A file already in the archive is flagged as a duplicate, with
+`Open original` next to it.
 
 ## Work Through Review
 
 Review shows one document at a time rather than a list.
 
-1. The page itself sits at the top; tapping it opens the reader full screen.
-2. Below it are only the fields that need confirming, each with the confidence
-   the pipeline recorded.
-3. `Show in document` jumps the reader to the line the value was read from.
-4. `Confirm` accepts the document, `Skip` moves on without changing anything.
-   Swiping the card to the left also skips.
+1. The strip at the top shows your place in the queue. Its chips narrow the queue to one
+   reason, and `Queue` lists everything waiting.
+2. The page itself comes next; tapping it opens the reader full screen.
+3. Below it are the fields, each with the confidence the pipeline recorded. Correct a value
+   right there.
+4. `Show in document` jumps the reader to the line the value was read from.
+5. `Confirm and file` saves your corrections and accepts the document. `Skip` moves on without
+   changing anything, and swiping the card to the left also skips. `Reprocess` runs the document
+   through the pipeline again.
 
 After either action a `Back` bar appears for a few seconds. Confirming is not
 sent to the server until that window closes, so taking it back is instant and
@@ -80,17 +89,23 @@ failed conversion, empty OCR, an unsupported format — the field list says
 `no field evidence` rather than `all clear`, because there is nothing there to
 confirm.
 
-Editing values rather than just confirming them happens on the document page,
-under `Details`.
+The queue also offers bulk confirm for documents held back only by low confidence, as on the
+web.
 
 ## Browse and Act in Bulk
 
-`Documents` is a dense list. The chips above it filter to review, due, this year
-and unfiled; the search field searches titles, senders and types.
+`Documents` switches between `List`, `Timeline` and `Groups`. The filter button opens a sheet
+with status, year, type, correspondent, category, tag, date range and amount range, each with its
+count; active filters appear as chips you can remove. The sort button orders by title, issue date,
+date added or due date.
 
-Long-press any row to enter selection mode. The bar at the bottom then offers:
+Long-press any row to enter selection mode. `Select all` takes the whole list, and the bar
+at the bottom then offers:
 
-- `Add tag` — pick one tag to add to everything selected
+- `Tag` — add or remove one tag on everything selected
+- `Type` — set one document type
+- `Export` — share the files
+- `Reprocess` — run them through the pipeline again
 - `Mark done` — complete the task on each selected document
 - `Delete` — with a confirmation step
 
@@ -99,38 +114,33 @@ you picked, not to what the list happens to show. If part of a bulk action
 fails, the successful part is applied and the failures stay selected so a retry
 touches only those. Selection is cleared when you leave the tab.
 
-### Filter by Category
-
-The chip row ends with a `Category` chip. Tapping it opens a sheet with the
-archive's life-domain categories; picking one narrows the list to documents
-whose sender belongs to that domain, and the count strip names the active
-category. Tap the active chip to clear it.
-
-The chip is online-only: the offline mirror stores documents, not sender
-categories, so offline the chip disables and an active category filter is
-dropped rather than silently misapplied.
-
+`Timeline`, `Groups` and the category filter are online-only: the offline copy stores documents,
+not sender categories.
 
 ## Read a Document
 
-A document opens on four tabs:
+The page sits at the top with page and zoom controls, and below it are the same tabs as on the web:
 
 | Tab | Contents |
 |---|---|
-| Document | Amount, due and issue date, then the page at readable size |
-| Details | Every field as a row, with a confidence badge where the value is uncertain, plus tags and file facts |
-| Questions | Ask about this document alone |
-| History | The recognised text and the audit trail |
+| Fields | Every field, editable in place, with confidence and locks; tags, the review reason, processing facts, raw metadata and email provenance |
+| Intelligence | The AI summary and everything the pipeline extracted |
+| Q&A | Ask about this document alone; a citation jumps to its page |
+| OCR Text | The recognised text |
+| History | The audit trail |
 
-Tapping any field row on `Details` opens the edit sheet. Cancelling it discards
-the changes. The overflow menu in the bar holds `Reprocess document` — with a
-parser choice when more than one is configured — and `Delete document`.
+Fields you change turn amber, and `Save` appears at the bottom. Saving locks those fields against
+reprocessing, and the lock next to a field releases it again. The header holds the document's main
+action, and its `⋯` menu holds both downloads, requeue, reprocess and delete.
 
 ## Ask the Archive
 
-`Chat` keeps the thread of questions and answers. Each answer carries numbered
-sources; tapping one opens the cited document at the cited page with the quoted
-passage highlighted. Answers based on weak evidence say so.
+`Chat` looks like the web's. Each answer carries numbered sources; tapping one shows the quoted
+passage, and `Find in document` opens the page with that passage highlighted. Answers based on weak
+evidence say so.
+
+Conversations are saved on the device, up to twenty per account, and the history button reopens them.
+They are stored unencrypted, unlike the offline copy.
 
 A new question is refused while the previous answer is still streaming, so no
 question is left without an answer.
@@ -154,7 +164,7 @@ The copy belongs to the account and the archive it came from. Signing in as
 someone else, or pointing the app at another archive, never shows you the
 previous copy.
 
-`Settings` -> `Offline` shows what is stored:
+`Settings` -> `Available offline` shows what is stored:
 
 - how many documents are cached and how much file storage they use
 - when a document was last written to the copy — a time today, a date before that
@@ -173,11 +183,11 @@ copy and says so on that screen rather than failing to open the list; it comes
 back the next time you open the document online. A document deleted from the
 archive leaves the copy the next time you open it.
 
-What works from the local copy: browsing, every filter chip including due and
-the current year, sorting by newest or oldest, searching titles, senders
-and recognised text, opening a document with its page and text, the correspondent
+What works from the local copy: browsing, the filters except category, sorting, searching titles,
+senders and recognised text, opening a document with its page and text, the correspondent
 list, and seeing which documents were pending review. AI answers, uploads, edits,
-review actions, reprocessing and deleting all need the archive.
+review actions, reprocessing, deleting, taxes and everything under `Settings` that reads the server
+need the archive.
 
 When you opened the local copy from the connect screen, the app keeps checking
 whether the archive is back — every half minute, and straight away when the
@@ -196,7 +206,7 @@ immediately and remembered. Density adjusts row heights for smaller screens.
 
 ## Related Documents
 
-- [Getting Started](./getting-started.md) for the web app orientation
+- [Getting Started](./getting-started.md) for an orientation that applies here too
 - [Review and Corrections](./review-and-corrections.md) for the full review model
 - [Search and AI](./search-and-ai.md) for how to judge an answer
 - [Mobile Document Cache](../technical/mobile-offline-sync.md) for what the cache stores

@@ -87,7 +87,9 @@ beforeAll(() => {
 
   Object.defineProperty(window, "matchMedia", {
     writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
+    // A plain function: vi.restoreAllMocks() would strip a vi.fn() implementation
+    // and leave the shell's media queries reading from undefined.
+    value: (query: string) => ({
       matches: false,
       media: query,
       onchange: null,
@@ -96,7 +98,7 @@ beforeAll(() => {
       addListener: vi.fn(),
       removeListener: vi.fn(),
       dispatchEvent: vi.fn(),
-    })),
+    }),
   });
 
   Object.defineProperty(window, "scrollTo", {

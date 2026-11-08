@@ -1,11 +1,14 @@
 import { X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { ExplorerFacets, ExplorerSearch } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
+import { statusLabel } from "./shared";
 
 type Chip = { key: string; label: string; clear: Partial<ExplorerSearch> };
 
 /**
- * Active filters as removable chips above the table. `Clear all` appears
+ * Active filters as removable badges above the results. `Clear all` appears
  * once more than one filter is set.
  */
 export function ActiveFilters({
@@ -42,7 +45,7 @@ export function ActiveFilters({
   for (const status of search.statuses ?? []) {
     chips.push({
       key: `status:${status}`,
-      label: status,
+      label: statusLabel(status, t),
       clear: { statuses: (search.statuses ?? []).filter((s) => s !== status) },
     });
   }
@@ -105,22 +108,30 @@ export function ActiveFilters({
   if (chips.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       {chips.map((chip) => (
-        <button
+        <Badge
           key={chip.key}
-          type="button"
-          onClick={() => onSearchChange({ ...chip.clear, page: undefined })}
-          className="inline-flex items-center gap-1 rounded-[var(--r-pill)] border bg-card px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-secondary"
+          asChild
+          variant="brand"
+          className="h-7 cursor-pointer gap-1.5 pr-1.5 pl-2.5 outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          <span className="max-w-[220px] truncate">{chip.label}</span>
-          <X className="h-3 w-3 text-muted-foreground" />
-        </button>
+          <button
+            type="button"
+            aria-label={`${t("filters.remove")}: ${chip.label}`}
+            onClick={() => onSearchChange({ ...chip.clear, page: undefined })}
+          >
+            <span className="max-w-[220px] truncate">{chip.label}</span>
+            <X />
+          </button>
+        </Badge>
       ))}
 
       {chips.length > 1 ? (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
+          className="text-brand"
           onClick={() =>
             onSearchChange({
               query: undefined,
@@ -138,10 +149,9 @@ export function ActiveFilters({
               page: undefined,
             })
           }
-          className="ml-1 text-xs font-semibold text-[var(--ok-accent)] hover:underline"
         >
           {t("filters.clearAll")}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

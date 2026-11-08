@@ -4,12 +4,13 @@ import tailwindcss from "@tailwindcss/vite";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "node:path";
 
+const apiTarget = process.env.OPENKEEP_API_PROXY ?? "http://localhost:3000";
+
 export default defineConfig({
   plugins: [TanStackRouterVite(), react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@openkeep/fonts": path.resolve(__dirname, "../mobile/assets/fonts"),
     },
   },
   build: {
@@ -33,9 +34,9 @@ export default defineConfig({
           }
           if (
             id.includes("node_modules/@radix-ui/") ||
+            id.includes("node_modules/radix-ui/") ||
             id.includes("node_modules/class-variance-authority") ||
-            id.includes("node_modules/clsx") ||
-            id.includes("node_modules/tailwind-merge")
+            id.includes("node_modules/cn/")
           ) {
             return "vendor-ui";
           }
@@ -48,19 +49,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    fs: {
-      allow: [
-        path.resolve(__dirname, "."),
-        path.resolve(__dirname, "../mobile/assets/fonts"),
-      ],
-    },
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: apiTarget,
         changeOrigin: true,
       },
       "/docs": {
-        target: "http://localhost:3000",
+        target: apiTarget,
         changeOrigin: true,
       },
     },

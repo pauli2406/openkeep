@@ -7,10 +7,8 @@ import { text } from "../typography";
 import { PulsingDot } from "./ui";
 
 /**
- * A document still in the pipeline. This used to be an uppercase pill over an
- * indeterminate bar, with hardcoded English labels; #120 makes it the same
- * pulsing dot and lower-case line the row treatment uses, so the two never
- * disagree about what "processing" looks like.
+ * A document still in the pipeline: the web client's info badge, with a dot that
+ * breathes where the web has a spinner.
  */
 export function DocumentProcessingIndicator({
   document,
@@ -24,29 +22,38 @@ export function DocumentProcessingIndicator({
     return null;
   }
 
-  const label = documentRowState(document) === "queued" ? t("state.queued") : t("state.processing");
+  const label =
+    documentRowState(document) === "queued" ? t("documents.queued") : t("documents.processing");
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.badge}>
       <PulsingDot style={styles.dot} />
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   );
 }
 
 const useStyles = createThemedStyles((c) => ({
-  wrap: {
+  badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
+    gap: 6,
     alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: c.infoSoft,
   },
   dot: {
-    backgroundColor: c.accent,
+    width: 6,
+    height: 6,
+    backgroundColor: c.info,
     borderRadius: radii.pill,
   },
   label: {
-    ...text.meta,
-    color: c.dim,
+    ...text.smallStrong,
+    color: c.info,
   },
 }));

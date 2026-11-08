@@ -344,10 +344,10 @@ async function main() {
     await page.evaluate(() => document.fonts.ready.then(() => true));
 
     const fontLoaded = await page.evaluate(() =>
-      document.fonts.check('600 16px "Public Sans"'),
+      document.fonts.check('600 16px "Geist Variable"'),
     );
     if (!fontLoaded) {
-      throw new Error("Public Sans did not load — the screenshots would be off-brand");
+      throw new Error("Geist did not load — the screenshots would be off-brand");
     }
 
     // Same gate the visual suite uses: nothing still fetching, nothing spinning.

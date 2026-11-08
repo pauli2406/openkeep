@@ -1,14 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { File as FileIcon, Loader2, Upload as UploadIcon } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  CircleCheckBig,
+  CloudOff,
+  Copy,
+  File as FileIcon,
+  FileText,
+  FolderSync,
+  ScanText,
+  Search,
+  Sparkles,
+  Upload as UploadIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   IMPORT_MAX_BYTES,
   importExtensions,
   importMimeTypes,
 } from "@openkeep/types";
+import { IconTile, Page, PageHeader } from "@/components/layout/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 import { api, authFetch } from "@/lib/api";
 import {
   useHostImports,
@@ -56,8 +73,8 @@ function isFinished(stage: Stage): boolean {
   return stage === "done" || stage === "duplicate" || stage === "failed";
 }
 
-/** The four-segment stage bar; the active stage carries the accent. */
-function StageBar({ item }: { item: QueuedFile }) {
+/** How far along a file is, or what became of it. */
+function RowStatus({ item }: { item: QueuedFile }) {
   const { t } = useI18n();
   const labels: Record<"upload" | "ocr" | "extract" | "embed", string> = {
     upload: t("import.stageUpload"),
@@ -68,57 +85,102 @@ function StageBar({ item }: { item: QueuedFile }) {
 
   if (item.stage === "duplicate") {
     return (
-      <div className="w-44">
-        <div className="h-[3px] rounded-[var(--r-pill)] bg-[var(--ok-amber)]" />
-        <p className="mt-1 text-xs text-muted-foreground">
-          {t("import.alreadyInArchive")}
-        </p>
-      </div>
+      <p className="mt-1 text-xs text-warning">
+        {t("import.alreadyInArchive")}
+        {item.duplicateOfId ? (
+          <>
+            {" · "}
+            <Link
+              to="/documents/$documentId"
+              params={{ documentId: item.duplicateOfId }}
+              className="font-medium underline underline-offset-2"
+            >
+              {t("import.openOriginal")}
+            </Link>
+          </>
+        ) : null}
+      </p>
     );
   }
   if (item.stage === "failed") {
     return (
-      <div className="w-44">
-        <div className="h-[3px] rounded-[var(--r-pill)] bg-[var(--ok-red)]" />
-        <p className="mt-1 truncate text-xs text-[var(--ok-red)]" title={item.errorMessage}>
-          {item.errorMessage ?? t("import.failed")}
-        </p>
-      </div>
+      <p className="mt-1 text-xs break-words text-danger">
+        {item.errorMessage ?? t("import.failed")}
+      </p>
     );
   }
   if (item.stage === "done") {
-    return (
-      <div className="w-44">
-        <div className="h-[3px] rounded-[var(--r-pill)] bg-[var(--ok-green)]" />
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {item.typeName
-            ? `${t("import.filedAs")} ${item.typeName}`
-            : t("import.done")}
-        </p>
-      </div>
-    );
+    return item.typeName ? (
+      <p className="mt-1 truncate text-xs text-muted-foreground">
+        {`${t("import.filedAs")} ${item.typeName}`}
+      </p>
+    ) : null;
   }
 
-  const activeIndex = STAGE_ORDER.indexOf(item.stage);
+  const stepIndex = STAGE_ORDER.indexOf(item.stage);
   return (
-    <div className="w-44">
-      <div className="flex gap-0.5">
-        {STAGE_ORDER.map((stage, index) => (
-          <span
-            key={stage}
-            className={cn(
-              "h-[3px] flex-1 rounded-[var(--r-pill)]",
-              index < activeIndex
-                ? "bg-[var(--ok-accent)]/45"
-                : index === activeIndex
-                  ? "bg-[var(--ok-accent)]"
-                  : "bg-[var(--ok-border)]",
-            )}
-          />
-        ))}
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{labels[item.stage]}</p>
+    <div className="mt-2 flex items-center gap-2.5">
+      <Progress
+        value={((stepIndex + 0.5) / STAGE_ORDER.length) * 100}
+        aria-label={labels[item.stage]}
+        className="h-1.5 flex-1"
+      />
+      <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
+        {labels[item.stage]}
+      </span>
     </div>
+  );
+}
+
+/** The tile at the head of a row carries the row's outcome at a glance. */
+function RowIcon({ stage }: { stage: Stage }) {
+  if (stage === "done") {
+    return (
+      <IconTile className="bg-success-soft text-success">
+        <CircleCheckBig />
+      </IconTile>
+    );
+  }
+  if (stage === "failed") {
+    return (
+      <IconTile className="bg-danger-soft text-danger">
+        <AlertTriangle />
+      </IconTile>
+    );
+  }
+  if (stage === "duplicate") {
+    return (
+      <IconTile className="bg-warning-soft text-warning">
+        <Copy />
+      </IconTile>
+    );
+  }
+  return (
+    <IconTile>
+      <FileIcon />
+    </IconTile>
+  );
+}
+
+function PipelineStep({
+  icon: Icon,
+  title,
+  hint,
+}: {
+  icon: LucideIcon;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <li className="flex min-w-0 items-start gap-3 sm:flex-col sm:gap-2.5">
+      <IconTile size="sm">
+        <Icon />
+      </IconTile>
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{title}</div>
+        <div className="text-xs text-muted-foreground">{hint}</div>
+      </div>
+    </li>
   );
 }
 
@@ -416,83 +478,76 @@ function ImportPage() {
     .reduce((sum, entry) => sum + entry.imported, 0);
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="ok-page-title">{t("import.title")}</h1>
-      <p className="mt-0.5 text-sm text-muted-foreground">{t("import.subtitle")}</p>
+    <Page width="narrow">
+      <PageHeader
+        icon={<UploadIcon />}
+        title={t("import.title")}
+        description={t("import.subtitle")}
+      />
 
       {/* Drop zone — replaced by a notice while the archive is an offline copy */}
       {offlineReadOnly ? (
         <div
           role="status"
-          className="mt-4 flex h-40 w-full flex-col items-center justify-center gap-1.5 rounded-[var(--r-lg)] border border-dashed border-[var(--ok-border-strong)] bg-[var(--ok-bar)]"
+          className="flex min-h-64 w-full flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed bg-muted/50 p-8 text-center"
         >
-          <UploadIcon className="h-5 w-5 text-muted-foreground" />
-          <p className="max-w-md text-center text-sm text-muted-foreground">
+          <IconTile size="lg">
+            <CloudOff />
+          </IconTile>
+          <p className="max-w-md text-sm text-muted-foreground">
             {t("offline.uploadDisabled")}
           </p>
         </div>
       ) : (
-      <button
-        type="button"
-        onClick={() => {
-          if (hostImports) {
-            void hostImports.pickFiles().then(addHostDelivery);
-          } else {
-            fileInputRef.current?.click();
-          }
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          setIsDragging(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setIsDragging(false);
-          if (event.dataTransfer.files.length > 0) addFiles(event.dataTransfer.files);
-        }}
-        className={cn(
-          "mt-4 flex h-40 w-full flex-col items-center justify-center gap-1.5 rounded-[var(--r-lg)] border border-dashed transition-colors",
-          isDragging
-            ? "border-[var(--ok-accent)] bg-accent"
-            : "border-[var(--ok-border-strong)] bg-[var(--ok-bar)] hover:border-[var(--ok-accent)]/50",
-        )}
-      >
-        <UploadIcon className="h-5 w-5 text-[var(--ok-accent)]" />
-        <p className="text-sm font-semibold">
-          {t("import.dropHere")}{" "}
-          <span className="text-[var(--ok-accent)]">{t("import.browse")}</span>
-        </p>
-        {watchQuery.data?.configuredPath ? (
-          <p className="text-xs text-muted-foreground">
-            {t("import.watchNote")}{" "}
-            <span className="ok-num">{watchQuery.data.configuredPath}</span>{" "}
-            {t("import.watchNoteTail")}
-            {lastScan ? (
-              <>
-                {" · "}
-                {t("import.lastScan")}{" "}
-                <span className="ok-num">
-                  {new Date(lastScan.scannedAt).toLocaleTimeString("de-DE", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </>
-            ) : null}
-            {pickedUpToday > 0 ? (
-              <>
-                {" · "}
-                <span className="ok-num">{pickedUpToday}</span>{" "}
-                {t("import.pickedUpToday")}
-              </>
-            ) : null}
-          </p>
-        ) : null}
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (hostImports) {
+              void hostImports.pickFiles().then(addHostDelivery);
+            } else {
+              fileInputRef.current?.click();
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            if (event.dataTransfer.files.length > 0) addFiles(event.dataTransfer.files);
+          }}
+          className={cn(
+            // Children ignore the pointer, or crossing them fires dragleave and the zone flickers.
+            "group flex min-h-64 w-full cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-8 text-center transition-all outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-72 [&>*]:pointer-events-none",
+            isDragging
+              ? "border-primary bg-brand-soft shadow-raised"
+              : "border-brand/25 bg-gradient-wash hover:border-brand/60 hover:shadow-card",
+          )}
+        >
+          <IconTile
+            tone="solid"
+            className={cn(
+              "size-14 rounded-2xl transition-transform [&_svg]:size-7",
+              isDragging ? "scale-110" : "group-hover:-translate-y-0.5",
+            )}
+          >
+            <UploadIcon />
+          </IconTile>
+          <span className="flex flex-col gap-1">
+            <span className="text-lg font-medium tracking-tight">
+              {t("import.dropHere")}{" "}
+              <span className="text-brand underline-offset-4 group-hover:underline">
+                {t("import.browse")}
+              </span>
+            </span>
+            <span className="text-sm text-muted-foreground">{t("import.dropHint")}</span>
+          </span>
+        </button>
       )}
       <input
         ref={fileInputRef}
@@ -508,15 +563,53 @@ function ImportPage() {
         className="hidden"
       />
 
+      {watchQuery.data?.configuredPath ? (
+        <Card size="sm" className="flex-row items-center gap-3 px-4 shadow-card">
+          <IconTile>
+            <FolderSync />
+          </IconTile>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm">
+              {t("import.watchNote")}{" "}
+              <span className="font-mono text-xs break-all">
+                {watchQuery.data.configuredPath}
+              </span>{" "}
+              {t("import.watchNoteTail")}
+            </p>
+            {lastScan || pickedUpToday > 0 ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {lastScan ? (
+                  <>
+                    {t("import.lastScan")}{" "}
+                    <span className="num">
+                      {new Date(lastScan.scannedAt).toLocaleTimeString("de-DE", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </>
+                ) : null}
+                {lastScan && pickedUpToday > 0 ? " · " : null}
+                {pickedUpToday > 0 ? (
+                  <>
+                    <span className="num">{pickedUpToday}</span> {t("import.pickedUpToday")}
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
       {/* Queue */}
       {queue.length > 0 ? (
         <>
-          <div className="mt-4 overflow-hidden rounded-[var(--r-lg)] border">
-            <div className="flex items-center gap-2 border-b bg-[var(--ok-bar)] px-3 py-2">
-              <span className="ok-eyebrow">{t("import.queue")}</span>
-              <span className="ok-num text-xs text-muted-foreground">
+          <Card className="gap-0 py-0 shadow-card">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-3">
+              <h2 className="font-medium">{t("import.queue")}</h2>
+              <Badge variant="secondary" className="num">
                 {queue.length}
-              </span>
+              </Badge>
               <span className="text-xs text-muted-foreground">
                 {[
                   counts.processing
@@ -534,83 +627,80 @@ function ImportPage() {
                   .join(" · ")}
               </span>
               {counts.done + counts.duplicate > 0 ? (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="ml-auto"
                   onClick={() =>
                     setQueue((current) =>
                       current.filter((item) => !isFinished(item.stage) || item.stage === "failed"),
                     )
                   }
-                  className="ml-auto text-xs font-semibold text-foreground hover:underline"
                 >
                   {t("import.clearFinished")}
-                </button>
+                </Button>
               ) : null}
             </div>
 
-            {queue.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-4 border-b border-[var(--ok-border-soft)] px-3 py-2.5 last:border-b-0"
-              >
-                <FileIcon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  {item.documentId && (item.stage === "done" || item.stage === "duplicate") ? (
-                    <Link
-                      to="/documents/$documentId"
-                      params={{ documentId: item.documentId }}
-                      className="block truncate text-sm text-foreground hover:underline"
-                    >
-                      {item.file.name}
-                    </Link>
-                  ) : (
-                    <p className="truncate text-sm text-foreground">{item.file.name}</p>
-                  )}
-                  <p className="ok-num text-xs text-muted-foreground">
-                    {formatFileSize(item.file.size)}
-                  </p>
-                </div>
-                {item.pageCount != null ? (
-                  <span className="ok-num hidden flex-shrink-0 text-sm text-muted-foreground sm:block">
-                    {item.pageCount}{" "}
-                    {item.pageCount === 1 ? t("import.page") : t("import.pages")}
-                  </span>
-                ) : null}
-                <StageBar item={item} />
-                <div className="w-24 flex-shrink-0 text-right">
-                  {item.stage === "failed" ? (
-                    <Button variant="outline" size="sm" onClick={() => void retry(item)}>
-                      {t("import.retry")}
-                    </Button>
-                  ) : item.stage === "done" && item.needsReview ? (
-                    <Link to="/review">
-                      <Badge variant="warn">{t("import.review")}</Badge>
-                    </Link>
-                  ) : item.stage === "done" ? (
-                    <Badge variant="soft">{t("import.done")}</Badge>
-                  ) : item.stage === "duplicate" ? (
-                    item.duplicateOfId ? (
-                      <Link
-                        to="/documents/$documentId"
-                        params={{ documentId: item.duplicateOfId }}
-                      >
-                        <Badge variant="warn">{t("import.duplicate")}</Badge>
-                      </Link>
-                    ) : (
-                      <Badge variant="warn">{t("import.duplicate")}</Badge>
-                    )
-                  ) : (
-                    <Badge variant="secondary">
-                      <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
-                      {t("import.processing")}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+            <ul className="divide-y">
+              {queue.map((item) => (
+                <li key={item.id} className="flex items-start gap-3 px-4 py-3">
+                  <RowIcon stage={item.stage} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        {item.documentId &&
+                        (item.stage === "done" || item.stage === "duplicate") ? (
+                          <Link
+                            to="/documents/$documentId"
+                            params={{ documentId: item.documentId }}
+                            className="block truncate text-sm font-medium hover:underline"
+                          >
+                            {item.file.name}
+                          </Link>
+                        ) : (
+                          <p className="truncate text-sm font-medium">{item.file.name}</p>
+                        )}
+                        <p className="num text-xs text-muted-foreground">
+                          {formatFileSize(item.file.size)}
+                          {item.pageCount != null ? (
+                            <>
+                              {" · "}
+                              {item.pageCount}{" "}
+                              {item.pageCount === 1 ? t("import.page") : t("import.pages")}
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {item.stage === "failed" ? (
+                          <Button variant="outline" size="sm" onClick={() => void retry(item)}>
+                            {t("import.retry")}
+                          </Button>
+                        ) : item.stage === "done" && item.needsReview ? (
+                          <Badge variant="warning" asChild>
+                            <Link to="/review">{t("import.review")}</Link>
+                          </Badge>
+                        ) : item.stage === "done" ? (
+                          <Badge variant="success">{t("import.done")}</Badge>
+                        ) : item.stage === "duplicate" ? (
+                          <Badge variant="warning">{t("import.duplicate")}</Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            <Spinner aria-hidden="true" />
+                            {t("import.processing")}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <RowStatus item={item} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
 
-          <div className="mt-3 flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -625,7 +715,32 @@ function ImportPage() {
             </Button>
           </div>
         </>
-      ) : null}
-    </div>
+      ) : offlineReadOnly ? null : (
+        <section aria-label={t("import.stepsTitle")}>
+          <ol className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <PipelineStep
+              icon={FileText}
+              title={t("import.stageUpload")}
+              hint={t("import.stepUploadHint")}
+            />
+            <PipelineStep
+              icon={ScanText}
+              title={t("import.stageOcr")}
+              hint={t("import.stepOcrHint")}
+            />
+            <PipelineStep
+              icon={Sparkles}
+              title={t("import.stageExtract")}
+              hint={t("import.stepExtractHint")}
+            />
+            <PipelineStep
+              icon={Search}
+              title={t("import.stageEmbed")}
+              hint={t("import.stepEmbedHint")}
+            />
+          </ol>
+        </section>
+      )}
+    </Page>
   );
 }

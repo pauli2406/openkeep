@@ -68,6 +68,28 @@ export function createReviewOutbox({
     await storage.removeItem(STORAGE_KEY);
   }
 
+  /**
+   * Holding and releasing go through one queue, so a check-then-delete cannot
+   * interleave with a newer hold landing in between.
+   */
+  let queue: Promise<unknown> = Promise.resolve();
+  function serialize<T>(task: () => Promise<T>): Promise<T> {
+    const next = queue.then(task, task);
+    queue = next.catch(() => {});
+    return next;
+  }
+
+  /**
+   * Forgets the held confirm only if it is still this document's. A send that
+   * finishes after a newer confirm was held must not erase the newer one.
+   */
+  async function releaseIfHeld(documentId: string) {
+    const pending = await read();
+    if (pending?.documentId === documentId) {
+      await release();
+    }
+  }
+
   async function read(): Promise<PendingConfirm | null> {
     let raw: string | null = null;
     try {
@@ -126,7 +148,13 @@ export function createReviewOutbox({
     return "sent";
   }
 
-  return { hold, release, read, flush };
+  return {
+    hold: (entry: { documentId: string; scope: string }) => serialize(() => hold(entry)),
+    release: () => serialize(release),
+    releaseIfHeld: (documentId: string) => serialize(() => releaseIfHeld(documentId)),
+    read,
+    flush,
+  };
 }
 
 export type ReviewOutbox = ReturnType<typeof createReviewOutbox>;

@@ -256,16 +256,18 @@ describe("document detail smoke", () => {
 
     await user.click(screen.getByRole("tab", { name: /history/i }));
     expect(await screen.findByText("Document Updated")).toBeInTheDocument();
-    expect(screen.getByText("Owner")).toBeInTheDocument();
+    // Scoped to the panel: the app shell names the signed-in user "Owner" too.
+    expect(within(screen.getByRole("tabpanel")).getByText("Owner")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: /intelligence/i }));
     expect(await screen.findByText("Document Intelligence")).toBeInTheDocument();
     expect(screen.getByText("Invoice for March services with payment due at month end.")).toBeInTheDocument();
     expect(screen.getByText("llm_structured_extraction / mistral")).toBeInTheDocument();
 
-    // Two OCR providers are available, so the rail's Reprocess opens the
-    // provider picker instead of firing straight away.
-    await user.click(screen.getByRole("button", { name: /^reprocess$/i }));
+    // Two OCR providers are available, so the header menu's Reprocess opens
+    // the provider picker instead of firing straight away.
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^reprocess$/i }));
     const reprocessDialog = await screen.findByRole("dialog");
     await user.click(
       within(reprocessDialog).getByRole("combobox", { name: /ocr provider/i }),
@@ -612,7 +614,8 @@ describe("document detail smoke", () => {
       (await screen.findAllByText("March Invoice"))[0],
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+    await user.click(screen.getByRole("button", { name: /more actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^delete$/i }));
     const dialog = await screen.findByRole("dialog");
     await user.click(
       within(dialog).getByRole("button", { name: /delete permanently/i }),
