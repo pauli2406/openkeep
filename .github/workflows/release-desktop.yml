@@ -140,7 +140,8 @@ jobs:
             arch: x64
             smoke: true
           - name: Linux x64
-            os: ubuntu-latest
+            # Pinned for rpm: see the matching note in ci.yml.
+            os: ubuntu-24.04
             arch: x64
             smoke: true
     runs-on: ${{ matrix.os }}

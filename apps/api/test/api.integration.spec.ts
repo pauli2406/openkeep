@@ -148,10 +148,11 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
       .withWaitStrategy(Wait.forLogMessage("database system is ready to accept connections"))
       .start();
 
-    minioContainer = await new GenericContainer(
-      "minio/minio:RELEASE.2025-02-18T16-25-55Z",
-    )
-      .withCommand(["server", "/data", "--console-address", ":9001"])
+    // minio/minio left Docker Hub in September 2026, and quay.io now refuses
+    // anonymous pulls. Chainguard's build runs as a non-root user, so the data
+    // directory has to be one it can write to.
+    minioContainer = await new GenericContainer("cgr.dev/chainguard/minio:latest")
+      .withCommand(["server", "/tmp/data", "--console-address", ":9001"])
       .withEnvironment({
         MINIO_ROOT_USER: "openkeep",
         MINIO_ROOT_PASSWORD: "openkeep123",
@@ -2393,13 +2394,18 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     const missingLine = csvLines.find((line) => line.includes("Verschollener Beleg"));
     expect(missingLine).toContain(",,missing-file");
 
-    // The export landed in the audit history of the exported documents only.
-    const auditedRows = await databaseService.pool.query(
-      `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
-    );
-    const auditedIds = auditedRows.rows.map((row) => row.document_id);
-    expect(auditedIds).toContain(reserved.document.id);
-    expect(auditedIds).toContain(searchable.document.id);
+    // The export landed in the audit history of the exported documents only. The
+    // audit is written after the archive is finalized, so it can land just after the
+    // response does.
+    const auditedIds = await vi.waitFor(async () => {
+      const auditedRows = await databaseService.pool.query(
+        `SELECT document_id FROM audit_events WHERE event_type = 'document.tax_year_exported'`,
+      );
+      const ids = auditedRows.rows.map((row) => row.document_id);
+      expect(ids).toContain(reserved.document.id);
+      expect(ids).toContain(searchable.document.id);
+      return ids;
+    });
     expect(auditedIds).not.toContain(missing.document.id);
 
     const documentIds = [reserved, searchable, missing].map((entry) => entry.document.id);
