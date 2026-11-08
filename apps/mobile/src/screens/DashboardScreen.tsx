@@ -260,6 +260,9 @@ export function DashboardScreen() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
         queryClient.invalidateQueries({ queryKey: ["documents"] }),
+        // Completing a task also resolves its review, and the Review tab stays
+        // mounted, so its queue has to hear about it.
+        queryClient.invalidateQueries({ queryKey: ["review"] }),
       ]);
     },
     onSettled: () => setBusyTaskId(null),
