@@ -557,6 +557,25 @@ export function monthBounds(year: number, month: number): { start: string; end: 
 }
 
 /**
+ * One month of the timeline, narrowed by any active date filter. The month's count
+ * already honours that filter, so its documents must too: March 15–20 opens to
+ * those six days, not the whole of March. Dates are `YYYY-MM-DD`, which compare as
+ * strings.
+ */
+export function monthDateRange(
+  year: number,
+  month: number,
+  dateFrom?: string | null,
+  dateTo?: string | null,
+): { dateFrom: string; dateTo: string } {
+  const bounds = monthBounds(year, month);
+  return {
+    dateFrom: dateFrom && dateFrom > bounds.start ? dateFrom : bounds.start,
+    dateTo: dateTo && dateTo < bounds.end ? dateTo : bounds.end,
+  };
+}
+
+/**
  * Months with a deadline that has passed unpaid, keyed `year-month`. Read off
  * the date parts: `new Date("2026-03-01")` is UTC midnight, which is February in
  * any zone west of Greenwich.

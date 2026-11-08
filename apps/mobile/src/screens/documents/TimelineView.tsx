@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   fetchDocumentsPage,
-  monthBounds,
+  monthDateRange,
   unpaidByMonth,
   type AuthFetch,
   type DocumentsTimelineResponse,
@@ -36,12 +36,12 @@ function MonthDocuments({
 }) {
   const styles = useStyles();
   const { t } = useI18n();
-  const bounds = monthBounds(year, month);
+  const range = monthDateRange(year, month, filters.dateFrom, filters.dateTo);
   const documentsQuery = useQuery({
     queryKey: ["documents", "timeline-month", apiUrl, year, month, filters],
     queryFn: () =>
       fetchDocumentsPage(authFetch, {
-        filters: { ...filters, dateFrom: bounds.start, dateTo: bounds.end },
+        filters: { ...filters, ...range },
         sort: { field: "issueDate", direction: "desc" },
         page: 1,
         pageSize: 50,

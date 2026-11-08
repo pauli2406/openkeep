@@ -14,6 +14,7 @@ import {
   formatRowDate,
   matchesCachedFilters,
   monthBounds,
+  monthDateRange,
   nextDocumentsPage,
   parseFilterAmount,
   parseFilterDate,
@@ -494,5 +495,29 @@ describe("presentation", () => {
   it("formats a date-only value as its own calendar day", () => {
     expect(formatRowDate("2026-03-14")).toBe("14.03.2026");
     expect(formatRowDate(null)).toBe("—");
+  });
+});
+
+describe("monthDateRange", () => {
+  it("keeps the whole month when no date filter is active", () => {
+    expect(monthDateRange(2026, 3)).toEqual({ dateFrom: "2026-03-01", dateTo: "2026-03-31" });
+  });
+
+  it("narrows the month to an active date filter inside it", () => {
+    expect(monthDateRange(2026, 3, "2026-03-15", "2026-03-20")).toEqual({
+      dateFrom: "2026-03-15",
+      dateTo: "2026-03-20",
+    });
+  });
+
+  it("keeps the month's own edge when the filter reaches past it", () => {
+    expect(monthDateRange(2026, 3, "2026-02-10", "2026-03-20")).toEqual({
+      dateFrom: "2026-03-01",
+      dateTo: "2026-03-20",
+    });
+    expect(monthDateRange(2026, 3, "2026-03-15", null)).toEqual({
+      dateFrom: "2026-03-15",
+      dateTo: "2026-03-31",
+    });
   });
 });
