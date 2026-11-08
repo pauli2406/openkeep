@@ -37,6 +37,11 @@ jest.mock("../offline-archive", () => ({
 jest.mock("@react-navigation/native", () => ({
   ...jest.requireActual("@react-navigation/native"),
   useNavigation: () => ({ navigate: mockNavigate }),
+  // No navigator in this render: run the focus effect once, as a first focus would.
+  useFocusEffect: (effect: () => void) => {
+    const { useEffect } = jest.requireActual("react");
+    useEffect(effect, [effect]);
+  },
   useScrollToTop: () => {},
 }));
 

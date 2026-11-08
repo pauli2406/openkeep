@@ -177,3 +177,36 @@ describe("replaying after a kill", () => {
     expect(await outbox.read()).toBeNull();
   });
 });
+
+describe("releasing after a send", () => {
+  it("keeps a newer confirm that was held while an older one was sending", async () => {
+    const storage = createStorage();
+    const outbox = createReviewOutbox({ storage, now: () => HELD_AT });
+
+    // A is held, its window closes and its send starts; B is confirmed before
+    // A's request comes back, and replaces the held entry.
+    await outbox.hold({ documentId: "doc-a", scope: "scope" });
+    await outbox.hold({ documentId: "doc-b", scope: "scope" });
+
+    // A's send succeeds now. Releasing must not take B's entry with it.
+    await outbox.releaseIfHeld("doc-a");
+    expect((await outbox.read())?.documentId).toBe("doc-b");
+
+    await outbox.releaseIfHeld("doc-b");
+    expect(await outbox.read()).toBeNull();
+  });
+
+  it("does not let a release slip between a check and a newer hold", async () => {
+    const storage = createStorage();
+    const outbox = createReviewOutbox({ storage, now: () => HELD_AT });
+    await outbox.hold({ documentId: "doc-a", scope: "scope" });
+
+    // Issued together, as the screen does: the release is queued first, so it
+    // removes A, and B's hold lands after it.
+    await Promise.all([
+      outbox.releaseIfHeld("doc-a"),
+      outbox.hold({ documentId: "doc-b", scope: "scope" }),
+    ]);
+    expect((await outbox.read())?.documentId).toBe("doc-b");
+  });
+});

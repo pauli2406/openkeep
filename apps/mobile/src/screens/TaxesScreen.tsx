@@ -1,6 +1,6 @@
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -53,6 +53,15 @@ export function TaxesScreen() {
     queryFn: () => fetchTaxYear(auth.authFetch, year),
     enabled: !shouldUseCache,
   });
+
+  // The tab stays mounted, so a document edited or deleted elsewhere would leave
+  // stale totals here. Coming back to the screen fetches the report again.
+  const refetchTaxYear = taxYearQuery.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldUseCache) void refetchTaxYear();
+    }, [refetchTaxYear, shouldUseCache]),
+  );
 
   // Only offer years that actually hold documents, plus the one in view.
   const facetsQuery = useQuery({

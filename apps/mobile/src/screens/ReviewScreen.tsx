@@ -691,7 +691,9 @@ export function ReviewScreen() {
     if (documentId) {
       // Only a confirm the server took may leave the outbox. If this fails, signing
       // out mid-window being the likely case, the next open sends it again.
-      void resolveMutation.mutateAsync(documentId).then(() => outbox.release(), () => {});
+      void resolveMutation
+        .mutateAsync(documentId)
+        .then(() => outbox.releaseIfHeld(documentId), () => {});
     }
   }, [resolveMutation, outbox]);
 
