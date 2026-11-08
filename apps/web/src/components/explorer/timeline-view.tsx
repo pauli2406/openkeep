@@ -62,8 +62,12 @@ function MonthDocuments({
       bounds
         ? fetchFilteredDocuments({
             ...search,
-            dateFrom: bounds.start,
-            dateTo: bounds.end,
+            // The month's count already honours an active date filter, so its
+            // documents must too: March 15–20 opens to those days, not all of March.
+            // `YYYY-MM-DD` dates compare as strings.
+            dateFrom:
+              search.dateFrom && search.dateFrom > bounds.start ? search.dateFrom : bounds.start,
+            dateTo: search.dateTo && search.dateTo < bounds.end ? search.dateTo : bounds.end,
             page: 1,
             pageSize: 50,
           })
