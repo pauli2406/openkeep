@@ -21,6 +21,7 @@ import {
   type ArchiveDocument,
   type SearchDocumentsResponse,
 } from "../lib";
+import { queryAllCachedDocuments } from "../offline-pages";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 type TaskFilter = "open" | "overdue" | "month" | "invoices";
@@ -208,15 +209,21 @@ export function DashboardScreen() {
   // a queue. Take them from the documents endpoint sorted by due date, as the
   // web client does.
   const queueQuery = useQuery({
-    queryKey: ["documents", "deadlines", auth.apiUrl, shouldUseCache],
+    // The cache revision is in the key so an eviction or a refill rereads the copy.
+    queryKey: [
+      "documents",
+      "deadlines",
+      auth.apiUrl,
+      shouldUseCache,
+      shouldUseCache ? offline.cacheSummary.revision : null,
+    ],
     queryFn: async () => {
       if (shouldUseCache) {
         // The local copy has no open-task filter, so take all of it and let the
         // filter below do that; a page could otherwise be all completed tasks.
-        return offline.queryCachedDocuments({
+        return queryAllCachedDocuments(offline.queryCachedDocuments, {
           query: "",
           reviewOnly: false,
-          pageSize: 100_000,
           sort: "dueDate" as const,
           direction: "asc" as const,
         });

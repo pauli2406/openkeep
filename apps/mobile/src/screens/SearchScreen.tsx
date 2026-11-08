@@ -53,6 +53,7 @@ import { text } from "../typography";
 import { formatShortDate, titleForDocument, type AnswerCitation } from "../lib";
 import { useAnswerStream } from "../hooks/useAnswerStream";
 import { useRecentSearches } from "../hooks/useRecentSearches";
+import { queryAllCachedDocuments } from "../offline-pages";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -251,8 +252,8 @@ export function SearchScreen() {
   const cachedList = useQuery({
     queryKey: ["cached-ids", offline.cacheSummary.revision],
     enabled: shouldUseCache,
-    // Every document, not the default page: one past it is still on the device.
-    queryFn: () => offline.queryCachedDocuments({ pageSize: 100_000 }),
+    // Every document, not the first page: one past it is still on the device.
+    queryFn: () => queryAllCachedDocuments(offline.queryCachedDocuments, {}),
   });
   const cachedIds = useMemo(
     () => new Set((cachedList.data?.items ?? []).map((document) => document.id)),
