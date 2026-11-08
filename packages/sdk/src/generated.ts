@@ -1692,6 +1692,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -1747,6 +1749,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -1813,6 +1817,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -1846,6 +1852,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -3198,6 +3206,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -4024,6 +4034,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };
@@ -4393,6 +4405,8 @@ export interface components {
                 status?: "pending" | "processing" | "ready" | "failed";
                 statuses?: ("pending" | "processing" | "ready" | "failed")[];
                 tags?: string[];
+                categoryIds?: string[];
+                uncategorized?: boolean;
                 amountMin?: number;
                 amountMax?: number;
             };

@@ -3748,6 +3748,23 @@ describe.skipIf(!shouldRun)("API integration (Postgres + MinIO)", () => {
     expect(response.body.structuredData.items[0]?.referenceNumber).toBe("OPEN-APR-2026");
     expect(response.body.answer).toContain("1");
     expect(response.body.answer).toContain("89,00");
+
+    // The Today queue asks the list for open tasks only, so completed deadlines
+    // can never fill its page and hide the open ones behind them.
+    const queue = await request(app.getHttpServer())
+      .get("/api/documents?openTasksOnly=true&sort=dueDate&direction=asc&pageSize=100")
+      .set("Authorization", `Bearer ${accessToken}`);
+    expect(queue.status).toBe(200);
+    const queueTitles = queue.body.items.map((item: { title: string }) => item.title);
+    expect(queueTitles).toContain("Electricity invoice current month");
+    expect(queueTitles).toContain("Water invoice June 2025");
+    expect(queueTitles).not.toContain("Completed internet invoice current month");
+    expect(
+      queue.body.items.every(
+        (item: { dueDate: string | null; taskCompletedAt: string | null }) =>
+          item.dueDate !== null && item.taskCompletedAt === null,
+      ),
+    ).toBe(true);
   });
 
   it("answers pending review questions from structured review state", async () => {

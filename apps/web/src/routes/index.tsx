@@ -358,6 +358,9 @@ function TodayPage() {
     queryKey: ["documents", "deadlines"],
     queryFn: () =>
       fetchFilteredDocuments({
+        // Filtered on the server: otherwise a page of completed deadlines would
+        // push every open one past the limit.
+        openTasksOnly: true,
         sort: "dueDate",
         direction: "asc",
         page: 1,

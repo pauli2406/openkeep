@@ -23,6 +23,8 @@ export type ExplorerSearch = {
   tags?: string[];
   amountMin?: number;
   amountMax?: number;
+  /** Only documents with a due date whose task is not done. */
+  openTasksOnly?: boolean;
   page?: number;
   pageSize?: number;
   sort?: string;
@@ -142,6 +144,7 @@ export function explorerSearchToParams(search: ExplorerSearch): URLSearchParams 
   setParam(params, "uncategorized", search.uncategorized ? "true" : undefined);
   setParam(params, "amountMin", search.amountMin);
   setParam(params, "amountMax", search.amountMax);
+  setParam(params, "openTasksOnly", search.openTasksOnly ? "true" : undefined);
   setParam(params, "page", search.page);
   setParam(params, "pageSize", search.pageSize);
   setParam(params, "sort", search.sort);
