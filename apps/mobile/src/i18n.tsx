@@ -7,6 +7,7 @@ import {
 
 const messages = {
   en: {
+    "timeline.showMore": "Show more ({shown} of {total})",
     "auth.errorServerUrlRequired": "Enter your OpenKeep server URL.",
     "documents.pickerLoadError": "Could not load this list.",
     "documents.processing": "Processing",
@@ -1055,6 +1056,7 @@ const messages = {
     "correspondent.screen.noDocumentsTitle": "No documents",
   },
   de: {
+    "timeline.showMore": "Mehr anzeigen ({shown} von {total})",
     "auth.errorServerUrlRequired": "Gib die URL deines OpenKeep-Servers ein.",
     "documents.pickerLoadError": "Diese Liste konnte nicht geladen werden.",
     "documents.processing": "Wird verarbeitet",

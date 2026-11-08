@@ -313,6 +313,21 @@ export function ScanScreen() {
   // next file, so clearing the list stops the uploads rather than hiding their rows.
   const cancelRef = useRef(new AbortController());
 
+  // The queue belongs to the session that started it. `authFetch` reads the current
+  // server and credentials on every call, so work left running into a new sign-in
+  // would upload the rest into that archive. Leaving the screen, or the session
+  // changing under it, stops what has not started; nothing tracks it afterwards.
+  const sessionKey = `${auth.apiUrl}|${auth.user?.id ?? ""}`;
+  const sessionRef = useRef(sessionKey);
+  useEffect(() => {
+    if (sessionRef.current === sessionKey) return;
+    sessionRef.current = sessionKey;
+    cancelRef.current.abort();
+    cancelRef.current = new AbortController();
+    setQueue([]);
+  }, [sessionKey]);
+  useEffect(() => () => cancelRef.current.abort(), []);
+
   // Sizes come from the filesystem, once per draft page.
   useEffect(() => {
     let cancelled = false;

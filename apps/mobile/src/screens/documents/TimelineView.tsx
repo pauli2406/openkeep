@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   fetchDocumentsPage,
@@ -16,7 +16,10 @@ import { useI18n } from "../../i18n";
 import { formatCurrency, titleForDocument, type ArchiveDocument, type DocumentFilters } from "../../lib";
 import { createThemedStyles, radii, useColors } from "../../theme";
 import { tabular, text } from "../../typography";
+import { fill } from "../settings/shared";
 import { CardList, CategoryDot, Meter } from "./parts";
+
+const MONTH_PAGE_SIZE = 50;
 
 /** Documents for one month, revealed when its card is opened. */
 function MonthDocuments({
@@ -37,16 +40,25 @@ function MonthDocuments({
   const styles = useStyles();
   const { t } = useI18n();
   const range = monthDateRange(year, month, filters.dateFrom, filters.dateTo);
-  const documentsQuery = useQuery({
+  // Paged, because the month's count covers all of it and a fixed first page would
+  // leave the rest unreachable from here.
+  const documentsQuery = useInfiniteQuery({
     queryKey: ["documents", "timeline-month", apiUrl, year, month, filters],
-    queryFn: () =>
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
       fetchDocumentsPage(authFetch, {
         filters: { ...filters, ...range },
         sort: { field: "issueDate", direction: "desc" },
-        page: 1,
-        pageSize: 50,
+        page: pageParam,
+        pageSize: MONTH_PAGE_SIZE,
       }),
-    refetchInterval: (query) => processingRefetchInterval(query.state.data, (data) => data?.items),
+    getNextPageParam: (last, pages) =>
+      pages.length * MONTH_PAGE_SIZE < last.total ? pages.length + 1 : undefined,
+    refetchInterval: (query) =>
+      processingRefetchInterval(
+        query.state.data,
+        (data) => data?.pages.flatMap((page) => page.items) ?? [],
+      ),
   });
 
   if (documentsQuery.isLoading) {
@@ -72,7 +84,8 @@ function MonthDocuments({
     );
   }
 
-  const items = documentsQuery.data?.items ?? [];
+  const items = documentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = documentsQuery.data?.pages[0]?.total ?? items.length;
   if (items.length === 0) {
     return <Text style={styles.monthEmpty}>{t("timeline.emptyMonth")}</Text>;
   }
@@ -95,6 +108,17 @@ function MonthDocuments({
           </Text>
         </Pressable>
       ))}
+      {documentsQuery.hasNextPage ? (
+        <View style={styles.monthMore}>
+          <Button
+            label={fill(t("timeline.showMore"), { shown: items.length, total })}
+            variant="ghost"
+            size="sm"
+            loading={documentsQuery.isFetchingNextPage}
+            onPress={() => void documentsQuery.fetchNextPage()}
+          />
+        </View>
+      ) : null}
     </CardList>
   );
 }
@@ -380,6 +404,10 @@ const useStyles = createThemedStyles((c) => ({
   monthErrorText: {
     ...text.meta,
     color: c.red,
+  },
+  monthMore: {
+    alignItems: "center",
+    paddingVertical: 6,
   },
   monthEmpty: {
     ...text.meta,
