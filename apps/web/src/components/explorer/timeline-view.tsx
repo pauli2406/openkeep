@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CalendarRange, ChevronDown } from "lucide-react";
-import type { DocumentsTimelineResponse } from "@openkeep/types";
+import type { DocumentsTimelineResponse, SearchDocumentsResponse } from "@openkeep/types";
 import { CategoryDot } from "@/components/layout/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ function monthBounds(year: number, month: number) {
   };
 }
 
+const MONTH_PAGE_SIZE = 50;
+
 /** Documents for one month, revealed when its section is opened. */
 function MonthDocuments({
   year,
@@ -55,10 +57,15 @@ function MonthDocuments({
 }) {
   const { t } = useI18n();
   const bounds = monthBounds(year, month);
-  const documentsQuery = useQuery({
+  // Paged, because the month's count covers all of it and a fixed first page would
+  // leave the rest unreachable from here.
+  const documentsQuery = useInfiniteQuery({
     queryKey: ["documents", "timeline-month", year, month, search],
     enabled: bounds !== null,
-    queryFn: () =>
+    initialPageParam: 1,
+    getNextPageParam: (last, pages) =>
+      pages.length * MONTH_PAGE_SIZE < last.total ? pages.length + 1 : undefined,
+    queryFn: ({ pageParam }): Promise<SearchDocumentsResponse> =>
       bounds
         ? fetchFilteredDocuments({
             ...search,
@@ -68,12 +75,14 @@ function MonthDocuments({
             dateFrom:
               search.dateFrom && search.dateFrom > bounds.start ? search.dateFrom : bounds.start,
             dateTo: search.dateTo && search.dateTo < bounds.end ? search.dateTo : bounds.end,
-            page: 1,
-            pageSize: 50,
+            page: pageParam,
+            pageSize: MONTH_PAGE_SIZE,
           })
         : Promise.reject(new Error("Invalid month")),
     refetchInterval: (query) =>
-      processingRefetchInterval(query.state.data, (data) => data?.items),
+      processingRefetchInterval(query.state.data, (data) =>
+        data?.pages.flatMap((page) => page.items),
+      ),
   });
 
   if (documentsQuery.isLoading) {
@@ -106,7 +115,8 @@ function MonthDocuments({
     );
   }
 
-  const items = documentsQuery.data?.items ?? [];
+  const items = documentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = documentsQuery.data?.pages[0]?.total ?? items.length;
   if (items.length === 0) {
     return (
       <p className="border-t px-4 py-3 text-sm text-muted-foreground">
@@ -116,6 +126,7 @@ function MonthDocuments({
   }
 
   return (
+    <>
     <ul className="divide-y border-t">
       {items.map((document) => {
         const amount =
@@ -147,6 +158,21 @@ function MonthDocuments({
         );
       })}
     </ul>
+    {documentsQuery.hasNextPage ? (
+      <div className="flex justify-center border-t px-4 py-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={documentsQuery.isFetchingNextPage}
+          onClick={() => void documentsQuery.fetchNextPage()}
+        >
+          {t("timeline.showMore")
+            .replace("{shown}", String(items.length))
+            .replace("{total}", String(total))}
+        </Button>
+      </div>
+    ) : null}
+    </>
   );
 }
 

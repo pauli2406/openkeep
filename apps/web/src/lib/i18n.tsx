@@ -8,6 +8,7 @@ import {
 export type AppLanguage = "en" | "de";
 
 export type TranslationKey =
+  | "timeline.showMore"
   | "taxes.groupsHeading"
   | "import.stepsTitle"
   | "import.stepEmbedHint"
@@ -832,6 +833,7 @@ export type TranslationKey =
 
 const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
   en: {
+    "timeline.showMore": "Show more ({shown} of {total})",
     "taxes.groupsHeading": "By document type",
     "import.stepsTitle": "What happens to each file",
     "import.stepEmbedHint": "Makes it searchable",
@@ -1658,6 +1660,7 @@ const messages: Record<AppLanguage, Record<TranslationKey, string>> = {
     "documentDetail.ask": "Ask",
   },
   de: {
+    "timeline.showMore": "Mehr anzeigen ({shown} von {total})",
     "taxes.groupsHeading": "Nach Dokumententyp",
     "import.stepsTitle": "Was mit jeder Datei passiert",
     "import.stepEmbedHint": "Macht es durchsuchbar",
