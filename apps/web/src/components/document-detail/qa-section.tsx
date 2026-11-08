@@ -44,6 +44,7 @@ import {
 import { authFetch } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { consumeJsonSseResponse, isAbortError } from "@/lib/sse-stream";
+import { isEnterKey } from "@/lib/keyboard";
 
 /** A document-scoped citation: it never names a document, this one is implied. */
 type QaCitation = {
@@ -275,7 +276,7 @@ export function DocumentQaSection({
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (isEnterKey(event) && !event.shiftKey) {
               event.preventDefault();
               composerRef.current?.requestSubmit();
             }

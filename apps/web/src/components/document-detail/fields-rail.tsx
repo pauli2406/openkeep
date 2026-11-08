@@ -52,6 +52,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatCurrency } from "@/lib/explorer";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { isEnterKey } from "@/lib/keyboard";
 
 export const EMPTY_SELECT_VALUE = "__none__";
 
@@ -429,7 +430,7 @@ export function FieldsRail({
                   autoFocus
                   value={form.title}
                   onChange={(event) => onFormChange({ title: event.target.value })}
-                  onKeyDown={(event) => event.key === "Enter" && close()}
+                  onKeyDown={(event) => isEnterKey(event) && close()}
                   className="h-8"
                 />
               )}
@@ -560,7 +561,7 @@ export function FieldsRail({
                   type="date"
                   value={form.issueDate}
                   onChange={(event) => onFormChange({ issueDate: event.target.value })}
-                  onKeyDown={(event) => event.key === "Enter" && close()}
+                  onKeyDown={(event) => isEnterKey(event) && close()}
                   className="h-8"
                 />
               )}
@@ -579,7 +580,7 @@ export function FieldsRail({
                   type="date"
                   value={form.dueDate}
                   onChange={(event) => onFormChange({ dueDate: event.target.value })}
-                  onKeyDown={(event) => event.key === "Enter" && close()}
+                  onKeyDown={(event) => isEnterKey(event) && close()}
                   className="h-8"
                 />
               )}
@@ -605,7 +606,7 @@ export function FieldsRail({
                     inputMode="decimal"
                     value={form.amount}
                     onChange={(event) => onFormChange({ amount: event.target.value })}
-                    onKeyDown={(event) => event.key === "Enter" && close()}
+                    onKeyDown={(event) => isEnterKey(event) && close()}
                     className="num h-8"
                   />
                   <Input
@@ -615,7 +616,7 @@ export function FieldsRail({
                     onChange={(event) =>
                       onFormChange({ currency: event.target.value.toUpperCase() })
                     }
-                    onKeyDown={(event) => event.key === "Enter" && close()}
+                    onKeyDown={(event) => isEnterKey(event) && close()}
                     className="num h-8 w-16"
                   />
                 </div>
@@ -636,7 +637,7 @@ export function FieldsRail({
                   onChange={(event) =>
                     onFormChange({ referenceNumber: event.target.value })
                   }
-                  onKeyDown={(event) => event.key === "Enter" && close()}
+                  onKeyDown={(event) => isEnterKey(event) && close()}
                   className="num h-8"
                 />
               )}
@@ -754,7 +755,7 @@ export function FieldsRail({
                       type="date"
                       value={form.expiryDate}
                       onChange={(event) => onFormChange({ expiryDate: event.target.value })}
-                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      onKeyDown={(event) => isEnterKey(event) && close()}
                       className="h-8"
                     />
                   )}
@@ -770,7 +771,7 @@ export function FieldsRail({
                       autoFocus
                       value={form.holderName}
                       onChange={(event) => onFormChange({ holderName: event.target.value })}
-                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      onKeyDown={(event) => isEnterKey(event) && close()}
                       className="h-8"
                     />
                   )}
@@ -788,7 +789,7 @@ export function FieldsRail({
                       onChange={(event) =>
                         onFormChange({ issuingAuthority: event.target.value })
                       }
-                      onKeyDown={(event) => event.key === "Enter" && close()}
+                      onKeyDown={(event) => isEnterKey(event) && close()}
                       className="h-8"
                     />
                   )}

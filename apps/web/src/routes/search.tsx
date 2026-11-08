@@ -57,6 +57,7 @@ import { useI18n } from "@/lib/i18n";
 import { useOfflineReadOnly } from "@/lib/host-shell";
 import { cn } from "@/lib/utils";
 import { createObjectUrlLease } from "@/lib/object-url";
+import { isEnterKey } from "@/lib/keyboard";
 
 type SearchParams = { q?: string };
 
@@ -492,7 +493,7 @@ function ChatPage() {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (isEnterKey(event) && !event.shiftKey) {
               event.preventDefault();
               composerRef.current?.requestSubmit();
             }

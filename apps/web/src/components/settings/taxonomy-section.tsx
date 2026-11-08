@@ -86,6 +86,7 @@ import {
   updateTaxonomy,
 } from "./taxonomy-api";
 import { RetryAlert, RowsSkeleton } from "./shared";
+import { isEnterKey } from "@/lib/keyboard";
 
 /** `count` is null until the facets request lands — unknown, not zero. */
 type Row = {
@@ -629,7 +630,7 @@ export function TaxonomyManagementSection() {
                 value={createValue}
                 onChange={(event) => setCreateValue(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && createValue.trim()) {
+                  if (isEnterKey(event) && createValue.trim()) {
                     createMutation.mutate(createValue.trim());
                   }
                 }}

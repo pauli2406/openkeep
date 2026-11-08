@@ -72,6 +72,7 @@ import {
 import { usePrimaryModifierLabel } from "@/lib/host-shell";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { isEnterKey } from "@/lib/keyboard";
 
 type Translate = (key: TranslationKey) => string;
 
@@ -459,7 +460,7 @@ export function Omnibar() {
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) e.stopPropagation();
 
     if (screen !== "zero-state") {
-      if (e.key === "Enter") {
+      if (isEnterKey(e)) {
         e.preventDefault();
         submitQuery(query);
       }
@@ -471,13 +472,13 @@ export function Omnibar() {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIndex((index) => Math.max(index - 1, 0));
-    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    } else if (isEnterKey(e) && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       // ⌘↵: ask the archive with the raw query (new tab when a row offers one).
       const row = paletteRows[selectedIndex];
       if (row?.newTab) row.newTab();
       else submitQuery(query);
-    } else if (e.key === "Enter") {
+    } else if (isEnterKey(e)) {
       e.preventDefault();
       const row = paletteRows[selectedIndex];
       if (row) row.run();
