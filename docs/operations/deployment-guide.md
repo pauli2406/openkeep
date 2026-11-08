@@ -53,6 +53,21 @@ Responsibilities:
 - object storage for original files
 - object storage for generated searchable PDFs
 
+The image is `pgsty/silo`, a community-maintained fork of MinIO. MinIO stopped
+publishing images: `minio/minio` is gone from Docker Hub and `quay.io/minio/minio`
+refuses anonymous pulls, so a fresh install with the old image fails at the first pull.
+
+The fork is a drop-in replacement:
+
+- it reads the existing data directory as it is,
+- it runs as root like the old image, so volume ownership does not change,
+- it speaks the same `MINIO_*` variables, accepts `server /data` and ships `mc`, which the
+  healthcheck uses.
+
+Updating an existing stack is a redeploy. Take a backup first, as for any storage change
+(see [Backup, Restore, and Portability](./backup-restore-and-portability.md)). Keep the
+tag pinned: a moving tag on a single-maintainer fork is not something to pick up unread.
+
 ### `migrate`
 
 Responsibilities:
